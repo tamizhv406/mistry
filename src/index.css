@@ -2045,5 +2045,26 @@ input:focus, select:focus, textarea:focus {
 .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 1rem; }
 .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.5rem; }
 
+/* Mobile Touch Target Standards (>=48px) & Viewport Safety */
+@media (max-width: 768px) {
+  .btn,
+  button.btn-primary,
+  button.btn-outline,
+  button.btn-danger,
+  button.btn-secondary,
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav button,
+  .quick-action-btn,
+  .touch-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
 
-
+  /* Table overflow containers for phone viewports */
+  .table-responsive,
+  .table-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

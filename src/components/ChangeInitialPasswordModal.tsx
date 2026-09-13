@@ -110,14 +110,17 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label style={{ fontWeight: 600 }}>New Private Password</label>
+              <label htmlFor="init-new-password" style={{ fontWeight: 600 }}>New Private Password (புதிய கடவுச்சொல்)</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
+                  id="init-new-password"
+                  name="new-password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Min 8 characters (letters + numbers)"
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
                   style={{ paddingLeft: '42px', paddingRight: '42px' }}
                   autoFocus
                 />
@@ -132,6 +135,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
                     color: '#64748b',
                     padding: '4px',
                   }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -139,14 +143,17 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
             </div>
 
             <div className="form-group">
-              <label style={{ fontWeight: 600 }}>Confirm New Password</label>
+              <label htmlFor="init-confirm-password" style={{ fontWeight: 600 }}>Confirm New Password (கடவுச்சொல் உறுதிப்படுத்தல்)</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
+                  id="init-confirm-password"
+                  name="confirm-new-password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Re-enter your password"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
                   style={{ paddingLeft: '42px' }}
                 />
               </div>
@@ -158,7 +165,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
               disabled={loading || !newPassword || !confirmPassword}
               style={{ width: '100%', marginTop: '6px' }}
             >
-              {loading ? 'Securing Account...' : 'Set Password & Enter Dashboard'}
+              {loading ? 'Securing Account...' : 'Set Password & Enter Dashboard / புதிய கடவுச்சொல் அமைத்து தொடரவும்'}
             </button>
           </form>
         </div>

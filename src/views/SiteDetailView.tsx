@@ -189,6 +189,82 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
 
   return (
     <div className="main-wrapper">
+      {/* Prominent Super Admin Inspection Banner */}
+      {onReturnToAdmin && (
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            backgroundColor: '#1e1b4b',
+            borderBottom: '2px solid #6366f1',
+            borderRadius: '12px',
+            color: '#ffffff',
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+            boxShadow: '0 8px 20px -4px rgba(79, 70, 229, 0.35)',
+            marginBottom: '18px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ffffff',
+                flexShrink: 0,
+              }}
+            >
+              <ShieldCheck size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <span>Inspecting Site: <strong>{site.name}</strong></span>
+                <span style={{ backgroundColor: 'rgba(99, 102, 241, 0.35)', color: '#c7d2fe', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                  Admin View / அட்மின் பார்வை
+                </span>
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                Super Admin Active Inspection — All project modifications are audit-logged
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={onReturnToAdmin}
+            style={{
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              color: '#ffffff',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.4)',
+              minHeight: '44px',
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>← Return to Admin Dashboard (அட்மின் முகப்புக்குத் திரும்பு)</span>
+          </button>
+        </div>
+      )}
+
       {/* Back Button and Quick Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -214,7 +290,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               onClick={onReturnToAdmin}
             >
               <ShieldCheck size={16} />
-              <span>Return to Admin Dashboard (அட்மின் முகப்பு)</span>
+              <span>Admin Dashboard (அட்மின் முகப்பு)</span>
             </button>
           )}
         </div>

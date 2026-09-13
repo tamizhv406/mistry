@@ -227,14 +227,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         {!isRegister ? (
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-group">
-              <label>Username / Mobile Number / Email</label>
+              <label htmlFor="login-identifier">Username / Mobile Number / Email (பயனர் பெயர் / கைபேசி)</label>
               <div style={{ position: 'relative' }}>
                 <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
+                  id="login-identifier"
+                  name="username"
                   type="text"
                   placeholder="e.g. admin or 98401 23456"
                   value={identifier}
                   onChange={e => setIdentifier(e.target.value)}
+                  autoComplete="username"
                   style={{ paddingLeft: '42px' }}
                   autoFocus
                 />
@@ -242,14 +245,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label>Password</label>
+              <label htmlFor="login-password">Password (கடவுச்சொல்)</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
+                  id="login-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   style={{ paddingLeft: '42px', paddingRight: '42px' }}
                 />
                 <button
@@ -272,8 +278,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
             {/* Remember & Forgot Password Option */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#475569' }}>
+              <label htmlFor="login-remember" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#475569' }}>
                 <input
+                  id="login-remember"
+                  name="remember"
                   type="checkbox"
                   checked={remember}
                   onChange={e => setRemember(e.target.checked)}
@@ -295,7 +303,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   padding: '2px 0',
                 }}
               >
-                Forgot Password?
+                Forgot Password? (கடவுச்சொல் மறந்ததா?)
               </button>
             </div>
 
@@ -305,7 +313,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               style={{ width: '100%', marginTop: '6px' }}
             >
-              {loading ? 'Verifying...' : 'Sign In to Site Portal'}
+              {loading ? 'Verifying...' : 'Sign In to Site Portal / உள்நுழைக'}
               <ArrowRight size={18} />
             </button>
 
@@ -314,7 +322,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.88rem' }}
                 onClick={() => setIsRegister(true)}
               >
-                New contractor? Register Account
+                New contractor? Register Account (புதிய கணக்கு தொடங்குக)
               </span>
             </div>
 
@@ -347,7 +355,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 }}
               >
                 <HardHat size={16} color="#d97706" />
-                <span>👷 One-Tap Demo Contractor Login (mistry_velu)</span>
+                <span>👷 Demo Contractor Login / மாதிரி மேஸ்திரி (mistry_velu)</span>
               </button>
             </div>
           </form>
@@ -355,40 +363,49 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           /* REGISTRATION FORM */
           <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label>Full Name</label>
+              <label htmlFor="reg-fullname">Full Name (முழு பெயர்)</label>
               <input
+                id="reg-fullname"
+                name="name"
                 type="text"
                 placeholder="e.g. R. Velu Mistry"
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
+                autoComplete="name"
                 autoFocus
               />
             </div>
 
             <div className="form-group">
-              <label>Username <span className="required">*</span></label>
+              <label htmlFor="reg-username">Username (பயனர் பெயர்) <span className="required">*</span></label>
               <input
+                id="reg-username"
+                name="username"
                 type="text"
                 placeholder="e.g. velumistry"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
+                autoComplete="username"
               />
             </div>
 
             <div className="form-grid-2">
               <div className="form-group">
-                <label>Mobile Number</label>
+                <label htmlFor="reg-mobile">Mobile Number (கைபேசி எண்)</label>
                 <input
+                  id="reg-mobile"
+                  name="tel"
                   type="tel"
                   placeholder="e.g. 98401 23456"
                   value={mobile}
                   onChange={e => setMobile(e.target.value)}
+                  autoComplete="tel"
                 />
               </div>
 
               <div className="form-group">
-                <label>Trade / Specialization</label>
-                <select value={role} onChange={e => setRole(e.target.value as any)}>
+                <label htmlFor="reg-role">Trade / Specialization (பணி)</label>
+                <select id="reg-role" name="role" value={role} onChange={e => setRole(e.target.value as any)}>
                   <option value="Mistry">Head Mistry (தலைமை மேஸ்திரி)</option>
                   <option value="Contractor">Civil Contractor (ஒப்பந்ததாரர்)</option>
                   <option value="Mason">Mason (கொத்தனார்)</option>
@@ -397,12 +414,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label>Password (Min 8 chars, letters & numbers) <span className="required">*</span></label>
+              <label htmlFor="reg-password">Password (கடவுச்சொல் - Min 8 chars) <span className="required">*</span></label>
               <input
+                id="reg-password"
+                name="new-password"
                 type="password"
                 placeholder="Choose a safe password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
+                autoComplete="new-password"
               />
             </div>
 
@@ -412,7 +432,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               style={{ width: '100%', marginTop: '8px' }}
             >
-              {loading ? 'Creating Profile...' : 'Create Account & Log In'}
+              {loading ? 'Creating Profile...' : 'Create Account & Log In / கணக்கு தொடங்குக'}
             </button>
 
             <div style={{ textAlign: 'center', marginTop: '8px' }}>
@@ -420,7 +440,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 style={{ color: 'var(--primary)', fontWeight: 600, fontSize: '0.88rem', cursor: 'pointer' }}
                 onClick={() => setIsRegister(false)}
               >
-                Already registered? Back to Login
+                Already registered? Back to Login (உள்நுழைவுக்குச் செல்க)
               </span>
             </div>
           </form>

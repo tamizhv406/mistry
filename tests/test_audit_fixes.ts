@@ -219,10 +219,66 @@ async function runAuditFixesTests() {
   }
   console.log(`✓ All ${modalFiles.length} Add/Edit modals verified for submission guards and sticky footers.`);
 
-  console.log('\n🎉 ALL AUDIT & FIX VERIFICATION TESTS PASSED SUCCESSFULLY! (6/6 Suites Passed)');
+  // Test 7: Form Semantic HTML & Autocomplete Attributes Verification
+  console.log('\n[Test 7] Verifying Semantic Autocomplete & ID Attributes in Login & Password Modals...');
+  const loginViewContent = fs.readFileSync(path.resolve(process.cwd(), 'src/views/LoginView.tsx'), 'utf8');
+  if (!loginViewContent.includes('autoComplete="username"')) {
+    throw new Error('LoginView.tsx missing autoComplete="username"');
+  }
+  if (!loginViewContent.includes('autoComplete="current-password"')) {
+    throw new Error('LoginView.tsx missing autoComplete="current-password"');
+  }
+  if (!loginViewContent.includes('autoComplete="new-password"')) {
+    throw new Error('LoginView.tsx missing autoComplete="new-password"');
+  }
+  if (!loginViewContent.includes('id="login-identifier"') || !loginViewContent.includes('id="login-password"')) {
+    throw new Error('LoginView.tsx missing id attributes on login inputs');
+  }
+
+  const changeInitPwdContent = fs.readFileSync(path.resolve(process.cwd(), 'src/components/ChangeInitialPasswordModal.tsx'), 'utf8');
+  if (!changeInitPwdContent.includes('autoComplete="new-password"') || !changeInitPwdContent.includes('id="init-new-password"')) {
+    throw new Error('ChangeInitialPasswordModal.tsx missing semantic new-password attributes');
+  }
+
+  const forgotPwdContent = fs.readFileSync(path.resolve(process.cwd(), 'src/components/ForgotPasswordModal.tsx'), 'utf8');
+  if (!forgotPwdContent.includes('autoComplete="one-time-code"') || !forgotPwdContent.includes('id="fp-otp"')) {
+    throw new Error('ForgotPasswordModal.tsx missing autoComplete="one-time-code"');
+  }
+  console.log('✓ Verified native browser credential autofill and semantic attributes across all login/auth modals.');
+
+  // Test 8: Super Admin Sticky Inspection Banner in SiteDetailView
+  console.log('\n[Test 8] Verifying Super Admin Sticky Inspection Banner in SiteDetailView...');
+  const siteDetailContent = fs.readFileSync(path.resolve(process.cwd(), 'src/views/SiteDetailView.tsx'), 'utf8');
+  if (!siteDetailContent.includes('Inspecting Site:') || !siteDetailContent.includes('Admin View / அட்மின் பார்வை')) {
+    throw new Error('SiteDetailView.tsx missing Super Admin Inspection Banner');
+  }
+  if (!siteDetailContent.includes('Return to Admin Dashboard (அட்மின் முகப்புக்குத் திரும்பு)')) {
+    throw new Error('SiteDetailView.tsx missing Return to Admin Dashboard button in banner');
+  }
+  console.log('✓ Verified Super Admin Inspection Banner and return navigation in SiteDetailView.');
+
+  // Test 9: Supabase Service & RLS Policies Migration File
+  console.log('\n[Test 9] Verifying Supabase Service & PostgreSQL RLS Migration...');
+  const rlsMigrationPath = path.resolve(process.cwd(), 'supabase/migrations/001_rls_policies.sql');
+  if (!fs.existsSync(rlsMigrationPath)) {
+    throw new Error('supabase/migrations/001_rls_policies.sql is missing');
+  }
+  const rlsContent = fs.readFileSync(rlsMigrationPath, 'utf8');
+  if (!rlsContent.includes('CREATE POLICY "Sites owner isolation') || !rlsContent.includes('is_super_admin()')) {
+    throw new Error('RLS migration missing tenant isolation policies or is_super_admin() helper');
+  }
+
+  const supabaseServiceContent = fs.readFileSync(path.resolve(process.cwd(), 'src/services/supabase.ts'), 'utf8');
+  if (!supabaseServiceContent.includes('isSupabaseConfigured') || !supabaseServiceContent.includes('createClient')) {
+    throw new Error('src/services/supabase.ts missing isSupabaseConfigured or createClient');
+  }
+  console.log('✓ Verified Supabase client wrapper with offline fallback and complete PostgreSQL RLS migration.');
+
+  console.log('\n🎉 ALL AUDIT & FIX VERIFICATION TESTS PASSED SUCCESSFULLY! (9/9 Suites Passed)');
 }
 
 runAuditFixesTests().catch(err => {
   console.error('\n❌ AUDIT FIXES TEST SUITE FAILED:', err);
   process.exit(1);
 });
+

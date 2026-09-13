@@ -1,6 +1,7 @@
 import { db } from '../db/db';
 import type { User, UserRole } from '../db/types';
 import { normalizeIndianPhone, validatePasswordStrength } from './otpService';
+import { remoteAdminResetPassword, isSupabaseConfigured } from './supabase';
 
 const SESSION_KEY = 'building_mistry_auth_user';
 
@@ -401,6 +402,15 @@ export async function adminResetUserPassword(
     mustChangePassword: true,
     updatedAt: new Date().toISOString(),
   });
+
+  // If remote Supabase backend is configured and user has an email, trigger remote update
+  if (isSupabaseConfigured() && target.email) {
+    try {
+      await remoteAdminResetPassword(target.email, newTemporaryPassword);
+    } catch (remoteErr) {
+      console.warn('[AdminReset] Remote Supabase password update warning:', remoteErr);
+    }
+  }
 
   await db.logSecurityAudit(
     'ADMIN_RESET_USER_PASSWORD',

@@ -279,7 +279,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </p>
 
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>Mobile Number (கைபேசி எண்)</label>
+                <label htmlFor="fp-mobile" style={{ fontWeight: 600 }}>Mobile Number (கைபேசி எண்)</label>
                 <div style={{ position: 'relative' }}>
                   <span
                     style={{
@@ -295,10 +295,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                     +91
                   </span>
                   <input
+                    id="fp-mobile"
+                    name="tel"
                     type="tel"
                     placeholder="98401 23456"
                     value={mobile}
                     onChange={e => setMobile(e.target.value)}
+                    autoComplete="tel"
                     style={{ paddingLeft: '48px', fontSize: '1rem', letterSpacing: '0.5px' }}
                     autoFocus
                   />
@@ -315,7 +318,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   onClick={handleResetState}
                   style={{ flex: 1 }}
                 >
-                  Cancel
+                  Cancel (ரத்து)
                 </button>
                 <button
                   type="submit"
@@ -323,7 +326,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   disabled={loading}
                   style={{ flex: 1 }}
                 >
-                  {loading ? 'Sending Code...' : 'Request OTP'}
+                  {loading ? 'Sending Code...' : 'Request OTP / OTP பெறுக'}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -338,13 +341,16 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </p>
 
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>6-Digit OTP Code</label>
+                <label htmlFor="fp-otp" style={{ fontWeight: 600 }}>6-Digit OTP Code (சரிபார்ப்பு குறியீடு)</label>
                 <input
+                  id="fp-otp"
+                  name="one-time-code"
                   type="text"
                   maxLength={6}
                   placeholder="• • • • • •"
                   value={otp}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                  autoComplete="one-time-code"
                   style={{
                     textAlign: 'center',
                     fontSize: '1.4rem',
@@ -379,7 +385,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   }}
                 >
                   <RefreshCw size={14} className={loading ? 'spin' : ''} />
-                  <span>{cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend Code'}</span>
+                  <span>{cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend Code / மறுஅனுப்பு'}</span>
                 </button>
               </div>
 
@@ -390,7 +396,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   onClick={() => setStep(1)}
                   style={{ flex: 1 }}
                 >
-                  Back
+                  Back (பின்செல்க)
                 </button>
                 <button
                   type="submit"
@@ -398,7 +404,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   disabled={loading || otp.length !== 6}
                   style={{ flex: 1 }}
                 >
-                  {loading ? 'Verifying...' : 'Verify OTP'}
+                  {loading ? 'Verifying...' : 'Verify OTP / OTP சரிபார்க்க'}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -413,14 +419,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </p>
 
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>New Password (புதிய கடவுச்சொல்)</label>
+                <label htmlFor="fp-new-password" style={{ fontWeight: 600 }}>New Password (புதிய கடவுச்சொல்)</label>
                 <div style={{ position: 'relative' }}>
                   <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                   <input
+                    id="fp-new-password"
+                    name="new-password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="At least 8 chars with letters & numbers"
                     value={newPassword}
                     onChange={e => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
                     style={{ paddingLeft: '42px', paddingRight: '42px' }}
                     autoFocus
                   />
@@ -435,6 +444,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                       color: '#64748b',
                       padding: '4px',
                     }}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -453,14 +463,17 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </div>
 
               <div className="form-group">
-                <label style={{ fontWeight: 600 }}>Confirm New Password (மீண்டும் உறுதி செய்க)</label>
+                <label htmlFor="fp-confirm-password" style={{ fontWeight: 600 }}>Confirm New Password (மீண்டும் உறுதி செய்க)</label>
                 <div style={{ position: 'relative' }}>
                   <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                   <input
+                    id="fp-confirm-password"
+                    name="confirm-new-password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Repeat new password"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
                     style={{ paddingLeft: '42px' }}
                   />
                 </div>
@@ -477,7 +490,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword || !pwdStrength.valid}
                 style={{ width: '100%', marginTop: '6px' }}
               >
-                {loading ? 'Updating Password...' : 'Save New Password & Continue'}
+                {loading ? 'Updating Password...' : 'Save New Password & Continue / புதிய கடவுச்சொல் சேமிக்க'}
               </button>
             </form>
           )}
@@ -512,7 +525,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 onClick={handleResetState}
                 style={{ width: '100%' }}
               >
-                Return to Sign In
+                Return to Sign In / உள்நுழைவுக்குத் திரும்பு
               </button>
             </div>
           )}
