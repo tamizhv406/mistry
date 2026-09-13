@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ArrowUpRight } from 'lucide-react';
+import { SITE_VISUAL } from '../../utils/constructionVisuals';
+import { getCategoryFallback, type FallbackCategory } from './SafeImage';
 
 export interface InteractiveHoverItem {
   id: string;
@@ -11,6 +13,8 @@ export interface InteractiveHoverItem {
   icon?: React.ReactNode;
   imageUrl: string;
   imageAlt?: string;
+  fallbackCategory?: FallbackCategory;
+  fallbackSrc?: string;
   badge?: string;
   badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
   stats?: {
@@ -38,6 +42,15 @@ export const InteractiveHoverCard: React.FC<InteractiveHoverCardProps> = ({
   aspectRatio = 'video',
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [imgSrc, setImgSrc] = useState(item.imageUrl);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setImgSrc(item.imageUrl);
+    setHasError(false);
+  }, [item.imageUrl]);
+
+  const fallback = item.fallbackSrc || getCategoryFallback(item.fallbackCategory);
 
   const aspectClass =
     aspectRatio === 'square'
@@ -79,12 +92,19 @@ export const InteractiveHoverCard: React.FC<InteractiveHoverCardProps> = ({
       {/* Visual Image Container */}
       <div className={`relative w-full ${aspectClass} overflow-hidden bg-slate-950 border-b border-slate-800/50`}>
         <motion.img
-          src={item.imageUrl}
+          src={hasError || !imgSrc ? fallback : imgSrc}
           alt={item.imageAlt || item.title}
           animate={{ scale: isHovered ? 1.08 : 1 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}
           className="h-full w-full object-cover object-center transition-opacity duration-300"
           loading="lazy"
+          onError={e => {
+            if (!hasError) {
+              setHasError(true);
+            } else {
+              e.currentTarget.src = SITE_VISUAL;
+            }
+          }}
         />
 
         {/* Ambient Dark Overlay */}

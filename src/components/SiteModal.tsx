@@ -10,6 +10,7 @@ import {
 } from '../utils/voiceParser';
 import { VoiceInputField } from './VoiceInputField';
 import { compressImageFile, SITE_VISUAL } from '../utils/constructionVisuals';
+import { SafeImage } from './ui/SafeImage';
 
 interface SiteModalProps {
   isOpen: boolean;
@@ -421,9 +422,11 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                  <img
+                  <SafeImage
                     src={imageUrl || SITE_VISUAL}
                     alt="Site Preview"
+                    fallbackCategory="site"
+                    fallbackSrc={SITE_VISUAL}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 </div>

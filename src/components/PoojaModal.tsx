@@ -42,6 +42,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -72,6 +73,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
       setPaymentMode('Cash');
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [poojaToEdit, isOpen]);
 
@@ -87,6 +89,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     const finalName = poojaName === 'Other Ceremony' ? customPoojaName.trim() : poojaName;
 
@@ -120,6 +123,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.poojaExpenses.put(record);
 
@@ -142,6 +146,8 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save pooja expense: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -343,12 +349,12 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {poojaToEdit ? 'Save Changes' : 'Save Pooja Expense'}
+              <span>{isSubmitting ? 'Saving...' : (poojaToEdit ? 'Save Changes' : 'Save Pooja Expense')}</span>
             </button>
           </div>
         </form>

@@ -5,6 +5,7 @@ import type { ToolItem } from '../db/types';
 import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
 import { compressImageFile } from '../utils/constructionVisuals';
+import { SafeImage } from './ui/SafeImage';
 
 interface ToolModalProps {
   isOpen: boolean;
@@ -52,10 +53,12 @@ export const ToolModal: React.FC<ToolModalProps> = ({
   const [notes, setNotes] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
   useEffect(() => {
+    setIsSubmitting(false);
     if (toolToEdit) {
       const match = COMMON_TOOLS.find(
         t => t === toolToEdit.toolName || t.toLowerCase().startsWith(toolToEdit.toolName.toLowerCase().split(' ')[0])
@@ -114,6 +117,9 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       return;
     }
 
+    setIsSubmitting(true);
+    setError('');
+
     const now = new Date().toISOString();
     const id = toolToEdit ? toolToEdit.id : `tool-${Date.now()}`;
 
@@ -157,6 +163,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       onSuccess(toolToEdit ? `Tool "${finalName}" updated` : `Tool "${finalName}" added to site`);
       onClose();
     } catch (err: any) {
+      setIsSubmitting(false);
       setError('Failed to save tool: ' + err.message);
     }
   };
@@ -234,9 +241,10 @@ export const ToolModal: React.FC<ToolModalProps> = ({
                 />
                 {imageUrl && (
                   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                    <img
+                    <SafeImage
                       src={imageUrl}
                       alt="Tool preview"
+                      fallbackCategory="tool"
                       style={{
                         width: '44px',
                         height: '44px',
@@ -425,12 +433,21 @@ export const ToolModal: React.FC<ToolModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={isSubmitting}
+            >
               <Save size={18} />
-              {toolToEdit ? 'Save Changes' : 'Add Tool'}
+              <span>{isSubmitting ? 'Saving...' : toolToEdit ? 'Save Changes' : 'Add Tool'}</span>
             </button>
           </div>
         </form>

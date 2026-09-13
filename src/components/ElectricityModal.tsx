@@ -28,6 +28,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
   const [dueDate, setDueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -50,6 +51,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
       setDueDate('');
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [billToEdit, isOpen]);
 
@@ -61,6 +63,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!month.trim()) {
       setError('Please specify the billing month.');
@@ -90,6 +93,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.electricityBills.put(record);
 
@@ -112,6 +116,8 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save electricity bill: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -288,12 +294,12 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {billToEdit ? 'Save Changes' : 'Save Bill'}
+              <span>{isSubmitting ? 'Saving...' : (billToEdit ? 'Save Changes' : 'Save Bill')}</span>
             </button>
           </div>
         </form>

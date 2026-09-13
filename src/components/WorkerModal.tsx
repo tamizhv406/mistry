@@ -27,6 +27,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
   const [joiningDate, setJoiningDate] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (workerToEdit) {
@@ -51,6 +52,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
       setJoiningDate(new Date().toISOString().slice(0, 10));
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [workerToEdit, isOpen]);
 
@@ -70,6 +72,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!name.trim()) {
       setError('Please enter the worker name.');
@@ -98,12 +101,15 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.workers.put(record);
       onSuccess(workerToEdit ? `Worker "${record.name}" updated` : `Worker "${record.name}" added to roster`);
       onClose();
     } catch (err: any) {
       setError('Failed to save worker: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -212,12 +218,12 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {workerToEdit ? 'Save Changes' : 'Add Worker'}
+              <span>{isSubmitting ? 'Saving...' : (workerToEdit ? 'Save Changes' : 'Add Worker')}</span>
             </button>
           </div>
         </form>

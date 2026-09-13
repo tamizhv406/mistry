@@ -17,6 +17,7 @@ import { PaymentHistoryModal } from '../../components/PaymentHistoryModal';
 import { InteractiveHoverCard, type InteractiveHoverItem } from '../../components/ui/interactive-hover-links';
 import { ItemDetailsModal, type DetailField } from '../../components/ui/ItemDetailsModal';
 import { getToolVisual } from '../../utils/constructionVisuals';
+import { SafeImage } from '../../components/ui/SafeImage';
 
 interface ToolsTabProps {
   siteId: string;
@@ -25,7 +26,7 @@ interface ToolsTabProps {
   onDeleteTool: (tool: ToolItem) => void;
 }
 
-// 15 Standard Core Tools catalog
+// 15 Standard Core Tools + Custom Tool catalog
 const STANDARD_15_TOOLS = [
   { name: 'Hammer', tamil: 'சுத்தியல்', desc: 'Steel claw hammer for masonry and carpentry' },
   { name: 'Trowel', tamil: 'கரண்டி', desc: 'Masonry plastering and finishing trowel' },
@@ -42,6 +43,7 @@ const STANDARD_15_TOOLS = [
   { name: 'Concrete Mixer', tamil: 'கலவை இயந்திரம்', desc: '10/7 CFT rotating drum site concrete mixer' },
   { name: 'Tool Box', tamil: 'டூல் பாக்ஸ்', desc: 'Heavy duty steel cantilever site toolbox' },
   { name: 'Saw', tamil: 'மரம் அறுக்கும் வாள்', desc: 'Hand carpentry saw for centering and formwork' },
+  { name: 'Custom Tool', tamil: 'தனிப்பயன் உபகரணம்', desc: 'Custom construction machinery, vibrator & power tools' },
 ];
 
 export const ToolsTab: React.FC<ToolsTabProps> = ({
@@ -86,6 +88,7 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
       description: tool.notes || visual.description,
       imageUrl: tool.imageUrl || visual.imageUrl,
       imageAlt: visual.imageAlt,
+      fallbackCategory: 'tool',
       badge: `${tool.type} • ${tool.quantity} Nos`,
       badgeVariant:
         tool.type === 'Rental' ? 'warning' : tool.type === 'Repair' ? 'info' : 'primary',
@@ -286,9 +289,10 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
                 }}
                 className="group relative flex flex-col items-center justify-center p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/60 transition-all text-center"
               >
-                <img
+                <SafeImage
                   src={vis.imageUrl}
                   alt={st.name}
+                  fallbackCategory="tool"
                   className="w-10 h-10 object-contain drop-shadow-sm group-hover:scale-110 transition-transform"
                 />
                 <span className="text-[11px] font-bold text-slate-200 group-hover:text-amber-400 mt-1 line-clamp-1">
@@ -352,9 +356,10 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
                       className="cursor-pointer hover:bg-slate-800/40 transition-colors"
                     >
                       <td style={{ width: '50px' }}>
-                        <img
+                        <SafeImage
                           src={tool.imageUrl || vis.imageUrl}
                           alt={tool.toolName}
+                          fallbackCategory="tool"
                           style={{
                             width: '36px',
                             height: '36px',

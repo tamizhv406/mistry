@@ -32,6 +32,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({
   const [commentText, setCommentText] = useState('');
   const [dateTime, setDateTime] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (commentToEdit) {
@@ -43,6 +44,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({
       setCommentText('');
       setDateTime(new Date().toISOString());
       setError('');
+      setIsSubmitting(false);
     }
   }, [commentToEdit, isOpen]);
 
@@ -50,6 +52,7 @@ export const CommentModal: React.FC<CommentModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!commentText.trim()) {
       setError('Please write your note or observation.');
@@ -70,12 +73,15 @@ export const CommentModal: React.FC<CommentModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.siteComments.put(record);
       onSuccess(commentToEdit ? 'Note updated successfully' : 'Site note recorded');
       onClose();
     } catch (err: any) {
       setError('Failed to save note: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -129,12 +135,12 @@ export const CommentModal: React.FC<CommentModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {commentToEdit ? 'Save Changes' : 'Save Note'}
+              <span>{isSubmitting ? 'Saving...' : (commentToEdit ? 'Save Changes' : 'Save Note')}</span>
             </button>
           </div>
         </form>

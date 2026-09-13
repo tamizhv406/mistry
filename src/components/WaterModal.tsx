@@ -28,6 +28,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
   const [date, setDate] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -49,6 +50,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
       setDate(today);
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [billToEdit, isOpen]);
 
@@ -60,6 +62,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!supplier.trim()) {
       setError('Please specify the water supplier / source name.');
@@ -89,6 +92,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.waterBills.put(record);
 
@@ -111,6 +115,8 @@ export const WaterModal: React.FC<WaterModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save water expense: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -287,12 +293,12 @@ export const WaterModal: React.FC<WaterModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {billToEdit ? 'Save Changes' : 'Save Water Expense'}
+              <span>{isSubmitting ? 'Saving...' : (billToEdit ? 'Save Changes' : 'Save Water Expense')}</span>
             </button>
           </div>
         </form>

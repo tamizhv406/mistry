@@ -24,6 +24,7 @@ import {
   getMaterialVisual,
   getRodVisual,
 } from '../../utils/constructionVisuals';
+import { SafeImage } from '../../components/ui/SafeImage';
 
 interface MaterialsTabProps {
   siteId: string;
@@ -159,6 +160,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
       description: `${mat.quantity} ${mat.unit} • ${mat.supplier || 'Site Store'}`,
       imageUrl: mat.imageUrl || vis.imageUrl,
       imageAlt: mat.materialName,
+      fallbackCategory: (mat.category as any) || 'material',
       badge: `${mat.category.toUpperCase()} • ${mat.quantity} ${mat.unit}`,
       badgeVariant:
         mat.category === 'cement'
@@ -198,6 +200,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
       description: `${rod.brand || 'Fe550D TMT'} • ${rod.weightKg.toLocaleString('en-IN')} kg • ${rod.supplier}`,
       imageUrl: rod.imageUrl || vis.imageUrl,
       imageAlt: `TMT Rod ${rod.diameter}`,
+      fallbackCategory: 'rod',
       badge: `${rod.diameter} • ${rod.weightKg} kg`,
       badgeVariant: 'info',
       stats: [
@@ -447,9 +450,10 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                   }}
                   className="group relative flex flex-col items-center justify-center p-3 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/60 transition-all text-center"
                 >
-                  <img
+                  <SafeImage
                     src={vis.imageUrl}
                     alt={diam}
+                    fallbackCategory="rod"
                     className="w-12 h-10 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
                   />
                   <span className="text-xs font-black text-white mt-1.5 group-hover:text-blue-400">
@@ -624,9 +628,10 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                           className="cursor-pointer hover:bg-slate-800/40 transition-colors"
                         >
                           <td style={{ width: '45px' }}>
-                            <img
+                            <SafeImage
                               src={mat.imageUrl || vis.imageUrl}
                               alt={mat.materialName}
+                              fallbackCategory={(mat.category as any) || 'material'}
                               style={{
                                 width: '36px',
                                 height: '36px',
@@ -770,9 +775,10 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                           className="cursor-pointer hover:bg-slate-800/40 transition-colors"
                         >
                           <td style={{ width: '45px' }}>
-                            <img
+                            <SafeImage
                               src={rod.imageUrl || vis.imageUrl}
                               alt={rod.diameter}
+                              fallbackCategory="rod"
                               style={{
                                 width: '36px',
                                 height: '36px',

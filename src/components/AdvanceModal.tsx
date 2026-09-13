@@ -30,6 +30,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
   const [reason, setReason] = useState('Weekly advance');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -51,6 +52,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       setReason('Weekly advance');
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [advanceToEdit, isOpen, workers]);
 
@@ -60,6 +62,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!workerId) {
       setError('Please select a worker.');
@@ -92,6 +95,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.labourAdvances.put(record);
 
@@ -116,6 +120,8 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save advance: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -284,12 +290,12 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={16} />
-              <span>Save Advance</span>
+              <span>{isSubmitting ? 'Saving...' : 'Save Advance'}</span>
             </button>
           </div>
         </form>

@@ -34,6 +34,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [periodNotes, setPeriodNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -51,6 +52,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       setPaymentMode('Cash');
       setPeriodNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [paymentToEdit, isOpen, workers]);
 
@@ -85,6 +87,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!workerId) {
       setError('Please select a worker.');
@@ -116,6 +119,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.salaryPayments.put(paymentRecord);
 
@@ -142,6 +146,8 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to record salary payment: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -346,12 +352,12 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={16} />
-              <span>Record Salary Payment</span>
+              <span>{isSubmitting ? 'Saving...' : 'Record Salary Payment'}</span>
             </button>
           </div>
         </form>

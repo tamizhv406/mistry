@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Edit2, CheckCircle2, AlertCircle, TrendingUp } from 'lucide-react';
 import { calculateFinancialBalance } from '../../utils/financial';
+import { SafeImage, type FallbackCategory } from './SafeImage';
 
 export interface DetailField {
   label: string;
@@ -27,6 +28,8 @@ export interface ItemDetailsModalProps {
   badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
   imageUrl: string;
   imageAlt?: string;
+  fallbackCategory?: FallbackCategory;
+  fallbackSrc?: string;
   details: DetailField[];
   financials?: {
     totalAmount: number;
@@ -46,6 +49,8 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   badgeVariant = 'primary',
   imageUrl,
   imageAlt,
+  fallbackCategory = 'tool',
+  fallbackSrc,
   details,
   financials,
   onEdit,
@@ -119,9 +124,11 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
           {/* Left Column: Large Image Showcase (Desktop: min-w-[340px], Mobile: top banner) */}
           <div className="relative w-full md:w-5/12 bg-slate-950 flex flex-col items-center justify-center overflow-hidden border-b md:border-b-0 md:border-r border-slate-800">
             <div className="relative w-full h-56 sm:h-72 md:h-full min-h-[240px] md:min-h-[420px] overflow-hidden flex items-center justify-center">
-              <img
+              <SafeImage
                 src={imageUrl}
                 alt={imageAlt || title}
+                fallbackCategory={fallbackCategory || 'tool'}
+                fallbackSrc={fallbackSrc}
                 className="w-full h-full object-contain p-4 md:p-6 drop-shadow-2xl"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none md:hidden" />

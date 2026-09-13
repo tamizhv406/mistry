@@ -30,6 +30,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -53,6 +54,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
       setPaymentMode('Cash');
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [expenseToEdit, isOpen]);
 
@@ -69,6 +71,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (calculatedTotal <= 0) {
       setError('Please enter at least one expense amount.');
@@ -98,6 +101,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.teaSnacksExpenses.put(record);
 
@@ -124,6 +128,8 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save tea expense: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -332,12 +338,12 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" style={{ minWidth: '150px' }}>
+            <button type="submit" className="btn btn-primary" style={{ minWidth: '150px' }} disabled={isSubmitting}>
               <Save size={18} />
-              <span>{expenseToEdit ? 'Save Changes' : 'Save Refreshments'}</span>
+              <span>{isSubmitting ? 'Saving...' : (expenseToEdit ? 'Save Changes' : 'Save Refreshments')}</span>
             </button>
           </div>
         </form>

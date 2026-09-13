@@ -30,6 +30,7 @@ import type { Site, SiteStatus, User } from '../db/types';
 import { motion } from 'motion/react';
 import { SITE_VISUAL } from '../utils/constructionVisuals';
 import { calculateFinancialBalance } from '../utils/financial';
+import { SafeImage } from '../components/ui/SafeImage';
 
 interface DashboardViewProps {
   onOpenSite: (siteId: string) => void;
@@ -432,9 +433,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 {/* Visual Image Header */}
                 <div style={{ position: 'relative', width: '100%', height: '140px', overflow: 'hidden', backgroundColor: '#0f172a' }}>
-                  <img
+                  <SafeImage
                     src={site.imageUrl || SITE_VISUAL}
                     alt={site.name}
+                    fallbackCategory="site"
+                    fallbackSrc={SITE_VISUAL}
                     style={{
                       width: '100%',
                       height: '100%',

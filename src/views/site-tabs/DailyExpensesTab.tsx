@@ -13,6 +13,7 @@ import {
   Calendar as CalendarIcon,
   Building,
   Hash,
+  LayoutGrid,
 } from 'lucide-react';
 import type {
   TeaSnacksExpense,
@@ -28,6 +29,8 @@ import {
 } from '../../components/ui/interactive-hover-links';
 import { ItemDetailsModal, type DetailField } from '../../components/ui/ItemDetailsModal';
 import { getExpenseVisual } from '../../utils/constructionVisuals';
+import { calculateFinancialBalance } from '../../utils/financial';
+import type { FallbackCategory } from '../../components/ui/SafeImage';
 
 interface DailyExpensesTabProps {
   siteId: string;
@@ -36,7 +39,7 @@ interface DailyExpensesTabProps {
   electricity: ElectricityBill[];
   water: WaterBill[];
   otherExpenses: OtherExpense[];
-  initialSection?: 'tea' | 'pooja' | 'electricity' | 'water' | 'other';
+  initialSection?: 'all' | 'tea' | 'pooja' | 'electricity' | 'water' | 'other';
   onOpenTeaModal: (expense?: TeaSnacksExpense) => void;
   onOpenPoojaModal: (pooja?: PoojaExpense) => void;
   onOpenElectricityModal: (bill?: ElectricityBill) => void;
@@ -56,7 +59,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
   electricity,
   water,
   otherExpenses,
-  initialSection = 'tea',
+  initialSection = 'all',
   onOpenTeaModal,
   onOpenPoojaModal,
   onOpenElectricityModal,
@@ -68,7 +71,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
   onDeleteWater,
   onDeleteOther,
 }) => {
-  const [subSection, setSubSection] = useState<'tea' | 'pooja' | 'electricity' | 'water' | 'other'>(initialSection);
+  const [subSection, setSubSection] = useState<'all' | 'tea' | 'pooja' | 'electricity' | 'water' | 'other'>(initialSection);
   const [teaFilter, setTeaFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
 
   // Unified Item Details Modal state for expenses
@@ -79,6 +82,8 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     badgeVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
     imageUrl: string;
     imageAlt?: string;
+    fallbackCategory?: FallbackCategory;
+    fallbackSrc?: string;
     details: DetailField[];
     financials?: {
       totalAmount: number;
@@ -336,17 +341,384 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     });
   };
 
+  // Universal Financial Balances for each of the 8 expense categories
+  const teaPaidRatio = (totalFilteredTeaCost > 0) ? (totalFilteredTeaPaid / totalFilteredTeaCost) : 1;
+  const teaPaidEst = Math.round(totalFilteredTeaOnly * teaPaidRatio);
+  const teaFin = calculateFinancialBalance(totalFilteredTeaOnly, teaPaidEst);
+
+  const snacksPaidEst = Math.round(totalFilteredSnacksOnly * teaPaidRatio);
+  const snacksFin = calculateFinancialBalance(totalFilteredSnacksOnly, snacksPaidEst);
+
+  const juicePaidEst = Math.round(totalFilteredJuiceOnly * teaPaidRatio);
+  const juiceFin = calculateFinancialBalance(totalFilteredJuiceOnly, juicePaidEst);
+
+  const foodPaidEst = Math.round(totalFilteredOtherOnly * teaPaidRatio);
+  const foodFin = calculateFinancialBalance(totalFilteredOtherOnly, foodPaidEst);
+
+  const totalPoojaPaid = poojas.reduce((acc, p) => acc + p.paidAmount, 0);
+  const poojaFin = calculateFinancialBalance(totalPoojaCost, totalPoojaPaid);
+
+  const totalOtherPaid = otherExpenses.reduce((acc, o) => acc + o.paidAmount, 0);
+  const otherFin = calculateFinancialBalance(totalOtherCost, totalOtherPaid);
+
+  const totalElecPaid = electricity.reduce((acc, e) => acc + e.paidAmount, 0);
+  const elecFin = calculateFinancialBalance(totalElecCost, totalElecPaid);
+
+  const totalWaterPaid = water.reduce((acc, w) => acc + w.paidAmount, 0);
+  const waterFin = calculateFinancialBalance(totalWaterCost, totalWaterPaid);
+
+  const grandTotalExpenses = totalFilteredTeaCost + totalPoojaCost + totalOtherCost + totalElecCost + totalWaterCost;
+
+  // Master 8 Daily Expense Categories Cards with Tamil descriptions and 4 financial metrics
+  const expenseCategoryCards: InteractiveHoverItem[] = [
+    {
+      id: 'cat-tea',
+      title: 'Tea & Coffee',
+      tamilTitle: 'டீ & காபி',
+      description: 'Morning & evening hot tea, filter coffee & milk for site workers • தொழிலாளர் காலை & மாலை தேநீர்',
+      imageUrl: getExpenseVisual('tea').imageUrl,
+      imageAlt: 'Tea & Coffee',
+      fallbackCategory: 'tea',
+      icon: <Coffee size={18} />,
+      badge: 'Refreshment',
+      badgeVariant: 'warning',
+      stats: [
+        { label: 'Total Amount', value: `₹${teaFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${teaFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${teaFin.balanceDue.toLocaleString('en-IN')}`, color: teaFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${teaFin.extraPaid.toLocaleString('en-IN')}`, color: teaFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Tea & Coffee (தேநீர் & காபி)',
+          subtitle: 'Daily site hot tea, filter coffee & milk for workforce',
+          categoryBadge: 'Refreshments',
+          badgeVariant: 'warning',
+          imageUrl: getExpenseVisual('tea').imageUrl,
+          imageAlt: 'Tea & Coffee',
+          fallbackCategory: 'tea',
+          details: [
+            { label: 'Total Tea Spend', value: `₹${teaFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${teaFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${teaFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${teaFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Filtered Days Logged', value: `${filteredTea.length} days` },
+            { label: 'Tamil Translation', value: 'டீ மற்றும் காபி செலவுகள்' },
+          ],
+          financials: {
+            totalAmount: teaFin.totalAmount,
+            paidAmount: teaFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-snacks',
+      title: 'Snacks & Vada',
+      tamilTitle: 'ஸ்நாக்ஸ் & வடை',
+      description: 'Medu vada, bajji, samosa, bun butter & biscuits for labour crew • மாலை சிற்றுண்டி மற்றும் வடை வகைகள்',
+      imageUrl: getExpenseVisual('snacks').imageUrl,
+      imageAlt: 'Snacks & Vada',
+      fallbackCategory: 'snacks',
+      icon: <Tag size={18} />,
+      badge: 'Snacks',
+      badgeVariant: 'warning',
+      stats: [
+        { label: 'Total Amount', value: `₹${snacksFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${snacksFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${snacksFin.balanceDue.toLocaleString('en-IN')}`, color: snacksFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${snacksFin.extraPaid.toLocaleString('en-IN')}`, color: snacksFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Snacks & Vada (சிற்றுண்டி & வடை)',
+          subtitle: 'Morning & evening tea-break snacks for labour crew',
+          categoryBadge: 'Snacks',
+          badgeVariant: 'warning',
+          imageUrl: getExpenseVisual('snacks').imageUrl,
+          imageAlt: 'Snacks & Vada',
+          fallbackCategory: 'snacks',
+          details: [
+            { label: 'Total Snacks Spend', value: `₹${snacksFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${snacksFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${snacksFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${snacksFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Snack Items', value: 'Medu Vada, Masala Vada, Bajji, Samosa, Biscuits' },
+            { label: 'Tamil Translation', value: 'மாலை நேர சிற்றுண்டி' },
+          ],
+          financials: {
+            totalAmount: snacksFin.totalAmount,
+            paidAmount: snacksFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-juice',
+      title: 'Juice & Cooling',
+      tamilTitle: 'பழச்சாறு & குளிர்பானம்',
+      description: 'Fresh lemon juice, tender coconut, buttermilk & summer cooling • கோடை தாகம் தணிக்கும் பழச்சாறு',
+      imageUrl: getExpenseVisual('juice').imageUrl,
+      imageAlt: 'Juice & Cooling',
+      fallbackCategory: 'juice',
+      icon: <Sparkles size={18} />,
+      badge: 'Cool Drinks',
+      badgeVariant: 'success',
+      stats: [
+        { label: 'Total Amount', value: `₹${juiceFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${juiceFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${juiceFin.balanceDue.toLocaleString('en-IN')}`, color: juiceFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${juiceFin.extraPaid.toLocaleString('en-IN')}`, color: juiceFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Juice & Cooling (பழச்சாறு & குளிர்பானம்)',
+          subtitle: 'Summer cooling juices, lemon hydration, and tender coconut for workers',
+          categoryBadge: 'Beverages',
+          badgeVariant: 'success',
+          imageUrl: getExpenseVisual('juice').imageUrl,
+          imageAlt: 'Fresh Juice',
+          fallbackCategory: 'juice',
+          details: [
+            { label: 'Total Juice Spend', value: `₹${juiceFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${juiceFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${juiceFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${juiceFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Beverage Types', value: 'Lemon Juice, Sugarcane, Buttermilk, Tender Coconut' },
+            { label: 'Tamil Translation', value: 'கோடை குளிர்பானங்கள்' },
+          ],
+          financials: {
+            totalAmount: juiceFin.totalAmount,
+            paidAmount: juiceFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-food',
+      title: 'Meals & Food',
+      tamilTitle: 'உணவு & சாப்பாடு',
+      description: 'Worker lunch meals, overtime tiffin & night concrete parcels • மதிய உணவு & இரவு உணவு பொட்டலங்கள்',
+      imageUrl: getExpenseVisual('food').imageUrl,
+      imageAlt: 'Meals & Food',
+      fallbackCategory: 'food',
+      icon: <Building size={18} />,
+      badge: 'Meals / Tiffin',
+      badgeVariant: 'info',
+      stats: [
+        { label: 'Total Amount', value: `₹${foodFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${foodFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${foodFin.balanceDue.toLocaleString('en-IN')}`, color: foodFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${foodFin.extraPaid.toLocaleString('en-IN')}`, color: foodFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Meals & Food (உணவு & சாப்பாடு)',
+          subtitle: 'Overtime food parcels and noon meal expenses for concreting crew',
+          categoryBadge: 'Food',
+          badgeVariant: 'info',
+          imageUrl: getExpenseVisual('food').imageUrl,
+          imageAlt: 'Meals & Food',
+          fallbackCategory: 'food',
+          details: [
+            { label: 'Total Food Spend', value: `₹${foodFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${foodFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${foodFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${foodFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Meal Types', value: 'Full Meals, Biryani parcels, Night shift tiffin' },
+            { label: 'Tamil Translation', value: 'தொழிலாளர் சாப்பாடு மற்றும் சிற்றுண்டி' },
+          ],
+          financials: {
+            totalAmount: foodFin.totalAmount,
+            paidAmount: foodFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-pooja',
+      title: 'Pooja',
+      tamilTitle: 'பூஜை & சடங்கு',
+      description: 'Bhoomi Pooja, Pillar/Vasthu Pooja, and Roof Slab ceremonies • பூமி பூஜை, வாஸ்து மற்றும் கூரை மங்கல சடங்குகள்',
+      imageUrl: getExpenseVisual('pooja').imageUrl,
+      imageAlt: 'Pooja Ceremony',
+      fallbackCategory: 'pooja',
+      icon: <Sparkles size={18} />,
+      badge: `${poojas.length} Ceremonies`,
+      badgeVariant: 'warning',
+      stats: [
+        { label: 'Total Amount', value: `₹${poojaFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${poojaFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${poojaFin.balanceDue.toLocaleString('en-IN')}`, color: poojaFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${poojaFin.extraPaid.toLocaleString('en-IN')}`, color: poojaFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Site Pooja & Ceremonies (பூஜை செலவுகள்)',
+          subtitle: 'Auspicious site rituals, flowers, fruits & priest sambhavana',
+          categoryBadge: 'Pooja',
+          badgeVariant: 'warning',
+          imageUrl: getExpenseVisual('pooja').imageUrl,
+          imageAlt: 'Pooja Ceremony',
+          fallbackCategory: 'pooja',
+          details: [
+            { label: 'Total Ritual Spend', value: `₹${poojaFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${poojaFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${poojaFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${poojaFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Total Ceremonies', value: `${poojas.length} rituals recorded` },
+            { label: 'Tamil Translation', value: 'மங்களகரமான தள பூஜைகள்' },
+          ],
+          financials: {
+            totalAmount: poojaFin.totalAmount,
+            paidAmount: poojaFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-other',
+      title: 'Other Expenses',
+      tamilTitle: 'இதர தள செலவுகள்',
+      description: 'Vehicle transport, diesel fuel, machinery repairs, safety gear • வாகன போக்குவரத்து, டீசல் மற்றும் பழுது செலவு',
+      imageUrl: getExpenseVisual('other').imageUrl,
+      imageAlt: 'Other Expenses',
+      fallbackCategory: 'other',
+      icon: <Wallet size={18} />,
+      badge: `${otherExpenses.length} Entries`,
+      badgeVariant: 'primary',
+      stats: [
+        { label: 'Total Amount', value: `₹${otherFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${otherFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${otherFin.balanceDue.toLocaleString('en-IN')}`, color: otherFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${otherFin.extraPaid.toLocaleString('en-IN')}`, color: otherFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Other Expenses (இதர செலவுகள்)',
+          subtitle: 'Site transport, fuel, machine servicing, scaffolding and ad-hoc operations',
+          categoryBadge: 'Site Operations',
+          badgeVariant: 'primary',
+          imageUrl: getExpenseVisual('other').imageUrl,
+          imageAlt: 'Other Expenses',
+          fallbackCategory: 'other',
+          details: [
+            { label: 'Total Operations Spend', value: `₹${otherFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${otherFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${otherFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${otherFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Total Entries', value: `${otherExpenses.length} records logged` },
+            { label: 'Tamil Translation', value: 'இதர செயல்பாட்டு செலவுகள்' },
+          ],
+          financials: {
+            totalAmount: otherFin.totalAmount,
+            paidAmount: otherFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-electricity',
+      title: 'Electricity',
+      tamilTitle: 'மின்சாரம் (EB)',
+      description: 'TANGEDCO temporary power connection charges and EB utility bills • தற்காலிக மின்சார வாரிய கட்டணங்கள்',
+      imageUrl: getExpenseVisual('electricity').imageUrl,
+      imageAlt: 'Electricity',
+      fallbackCategory: 'electricity',
+      icon: <Zap size={18} />,
+      badge: `${electricity.length} EB Bills`,
+      badgeVariant: 'warning',
+      stats: [
+        { label: 'Total Amount', value: `₹${elecFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${elecFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${elecFin.balanceDue.toLocaleString('en-IN')}`, color: elecFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${elecFin.extraPaid.toLocaleString('en-IN')}`, color: elecFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Electricity Bills (மின்சார வாரிய கட்டணம்)',
+          subtitle: 'Temporary commercial / construction electrical supply and bills',
+          categoryBadge: 'EB Current',
+          badgeVariant: 'warning',
+          imageUrl: getExpenseVisual('electricity').imageUrl,
+          imageAlt: 'Electricity',
+          fallbackCategory: 'electricity',
+          details: [
+            { label: 'Total Power Spend', value: `₹${elecFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${elecFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${elecFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${elecFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Total EB Bills', value: `${electricity.length} bills` },
+            { label: 'Tamil Translation', value: 'மின்சார வாரிய (EB) பில்' },
+          ],
+          financials: {
+            totalAmount: elecFin.totalAmount,
+            paidAmount: elecFin.paidAmount,
+          },
+        });
+      },
+    },
+    {
+      id: 'cat-water',
+      title: 'Water',
+      tamilTitle: 'தண்ணீர் டேங்கர்',
+      description: 'Tanker water loads for brickwork, slab curing & concrete mixing • கட்டுமான கான்கிரீட் மற்றும் நனைத்தல் தண்ணீர்',
+      imageUrl: getExpenseVisual('water').imageUrl,
+      imageAlt: 'Water Supply',
+      fallbackCategory: 'water',
+      icon: <Droplets size={18} />,
+      badge: `${water.length} Water Loads`,
+      badgeVariant: 'info',
+      stats: [
+        { label: 'Total Amount', value: `₹${waterFin.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Paid Amount', value: `₹${waterFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
+        { label: 'Balance Due', value: `₹${waterFin.balanceDue.toLocaleString('en-IN')}`, color: waterFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
+        { label: 'Extra Paid', value: `₹${waterFin.extraPaid.toLocaleString('en-IN')}`, color: waterFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+      ],
+      onClick: () => {
+        setExpenseModalData({
+          title: 'Water Supply (தண்ணீர் விநியோகம்)',
+          subtitle: 'Water tanker loads for column curing, brickwork, and plastering',
+          categoryBadge: 'Water Supply',
+          badgeVariant: 'info',
+          imageUrl: getExpenseVisual('water').imageUrl,
+          imageAlt: 'Water Supply',
+          fallbackCategory: 'water',
+          details: [
+            { label: 'Total Water Spend', value: `₹${waterFin.totalAmount.toLocaleString('en-IN')}`, highlight: true },
+            { label: 'Paid Amount', value: `₹${waterFin.paidAmount.toLocaleString('en-IN')}` },
+            { label: 'Balance Due', value: `₹${waterFin.balanceDue.toLocaleString('en-IN')}` },
+            { label: 'Extra Paid', value: `₹${waterFin.extraPaid.toLocaleString('en-IN')}` },
+            { label: 'Total Deliveries', value: `${water.length} tanker loads` },
+            { label: 'Tamil Translation', value: 'கட்டுமான தண்ணீர் லோடு' },
+          ],
+          financials: {
+            totalAmount: waterFin.totalAmount,
+            paidAmount: waterFin.paidAmount,
+          },
+        });
+      },
+    },
+  ];
+
   return (
     <div>
       {/* Category Sub-Tabs */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
         <div className="sub-tabs" style={{ marginBottom: 0 }}>
           <button
+            className={`sub-tab-btn ${subSection === 'all' ? 'active' : ''}`}
+            onClick={() => setSubSection('all')}
+          >
+            <LayoutGrid size={16} />
+            <span>All 8 Categories (₹{grandTotalExpenses.toLocaleString('en-IN')})</span>
+          </button>
+          <button
             className={`sub-tab-btn ${subSection === 'tea' ? 'active' : ''}`}
             onClick={() => setSubSection('tea')}
           >
             <Coffee size={16} />
-            <span>Tea, Snacks & Juice (₹{teaSnacks.reduce((a, t) => a + t.totalAmount, 0).toLocaleString('en-IN')})</span>
+            <span>Tea & Snacks (₹{teaSnacks.reduce((a, t) => a + t.totalAmount, 0).toLocaleString('en-IN')})</span>
           </button>
           <button
             className={`sub-tab-btn ${subSection === 'pooja' ? 'active' : ''}`}
@@ -409,142 +781,73 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
               <span>Record Water Load</span>
             </button>
           )}
+          {subSection === 'all' && (
+            <button className="btn btn-primary btn-sm" onClick={() => onOpenTeaModal()}>
+              <PlusCircle size={16} />
+              <span>Record Site Expense</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* 0. ALL 8 CATEGORIES OVERVIEW */}
+      {subSection === 'all' && (
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '14px',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}>
+            <div>
+              <h4 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+                8 Daily Site Expense Categories
+              </h4>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                Tap or click any card to inspect full financial breakdown, balance due, and details
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button className="btn btn-sm btn-outline" onClick={() => onOpenTeaModal()}>
+                <Coffee size={14} /> <span>+ Tea / Refreshment</span>
+              </button>
+              <button className="btn btn-sm btn-outline" onClick={() => onOpenPoojaModal()}>
+                <Sparkles size={14} /> <span>+ Pooja</span>
+              </button>
+              <button className="btn btn-sm btn-outline" onClick={() => onOpenElectricityModal()}>
+                <Zap size={14} /> <span>+ EB Bill</span>
+              </button>
+              <button className="btn btn-sm btn-outline" onClick={() => onOpenWaterModal()}>
+                <Droplets size={14} /> <span>+ Water</span>
+              </button>
+              <button className="btn btn-sm btn-outline" onClick={() => onOpenOtherModal()}>
+                <Wallet size={14} /> <span>+ Other Expense</span>
+              </button>
+            </div>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '14px',
+          }}>
+            {expenseCategoryCards.map(item => (
+              <InteractiveHoverCard key={item.id} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 1. TEA & SNACKS SUBSECTION */}
       {subSection === 'tea' && (
         <div>
-          {/* Refreshment Visual Interactive Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '18px' }}>
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-tea',
-                title: 'Tea & Coffee',
-                description: `Daily hot tea, filter coffee & milk for site workers. Filtered spend: ₹${totalFilteredTeaOnly.toLocaleString('en-IN')}`,
-                imageUrl: getExpenseVisual('tea').imageUrl,
-                imageAlt: 'Tea & Coffee',
-                icon: <Coffee size={18} />,
-                badge: 'Hot Drink',
-                stats: [{ label: 'Filtered', value: `₹${totalFilteredTeaOnly.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Tea & Filter Coffee',
-                    subtitle: 'Daily site hot beverages supply for masons and helpers',
-                    categoryBadge: 'Refreshments',
-                    badgeVariant: 'warning',
-                    imageUrl: getExpenseVisual('tea').imageUrl,
-                    imageAlt: 'Tea & Coffee',
-                    details: [
-                      { label: 'Total Tea Spend', value: `₹${totalFilteredTeaOnly.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Timeframe', value: teaFilter === 'all' ? 'All Time' : teaFilter === 'today' ? 'Today' : teaFilter === 'week' ? 'Last 7 Days' : 'This Month' },
-                      { label: 'Filtered Records', value: `${filteredTea.length} days logged` },
-                      { label: 'Category', value: 'Hot Refreshments' },
-                    ],
-                    financials: {
-                      totalAmount: totalFilteredTeaCost,
-                      paidAmount: totalFilteredTeaPaid,
-                    },
-                  });
-                },
-              }}
-            />
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-snacks',
-                title: 'Snacks & Vada',
-                description: `Morning & evening snacks, medu vada, bajji, biscuits. Filtered spend: ₹${totalFilteredSnacksOnly.toLocaleString('en-IN')}`,
-                imageUrl: getExpenseVisual('snacks').imageUrl,
-                imageAlt: 'Snacks & Vada',
-                icon: <Tag size={18} />,
-                badge: 'Snacks',
-                stats: [{ label: 'Filtered', value: `₹${totalFilteredSnacksOnly.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Snacks, Vada & Biscuits',
-                    subtitle: 'Morning & evening tea time snacks for labour team',
-                    categoryBadge: 'Snacks',
-                    badgeVariant: 'warning',
-                    imageUrl: getExpenseVisual('snacks').imageUrl,
-                    imageAlt: 'Snacks & Vada',
-                    details: [
-                      { label: 'Total Snacks Spend', value: `₹${totalFilteredSnacksOnly.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Timeframe', value: teaFilter === 'all' ? 'All Time' : teaFilter === 'today' ? 'Today' : teaFilter === 'week' ? 'Last 7 Days' : 'This Month' },
-                      { label: 'Filtered Records', value: `${filteredTea.length} days logged` },
-                      { label: 'Items', value: 'Vada, Bajji, Samosa, Bun Butter, Biscuits' },
-                    ],
-                    financials: {
-                      totalAmount: totalFilteredTeaCost,
-                      paidAmount: totalFilteredTeaPaid,
-                    },
-                  });
-                },
-              }}
-            />
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-juice',
-                title: 'Fresh Juice & Cooling',
-                description: `Fresh fruit juices, lemon juice, tender coconut. Filtered spend: ₹${totalFilteredJuiceOnly.toLocaleString('en-IN')}`,
-                imageUrl: getExpenseVisual('juice').imageUrl,
-                imageAlt: 'Fresh Juice',
-                icon: <Sparkles size={18} />,
-                badge: 'Cold Drinks',
-                stats: [{ label: 'Filtered', value: `₹${totalFilteredJuiceOnly.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Fresh Juice & Cold Drinks',
-                    subtitle: 'Summer cooling juices, buttermilk & tender coconut for workers',
-                    categoryBadge: 'Beverages',
-                    badgeVariant: 'success',
-                    imageUrl: getExpenseVisual('juice').imageUrl,
-                    imageAlt: 'Fresh Juice',
-                    details: [
-                      { label: 'Total Juice Spend', value: `₹${totalFilteredJuiceOnly.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Timeframe', value: teaFilter === 'all' ? 'All Time' : teaFilter === 'today' ? 'Today' : teaFilter === 'week' ? 'Last 7 Days' : 'This Month' },
-                      { label: 'Filtered Records', value: `${filteredTea.length} days logged` },
-                      { label: 'Category', value: 'Hydration & Fruit Juices' },
-                    ],
-                    financials: {
-                      totalAmount: totalFilteredTeaCost,
-                      paidAmount: totalFilteredTeaPaid,
-                    },
-                  });
-                },
-              }}
-            />
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-food',
-                title: 'Meals & Food',
-                description: `Lunch meals, tiffin, special food for overtime work. Filtered spend: ₹${totalFilteredOtherOnly.toLocaleString('en-IN')}`,
-                imageUrl: getExpenseVisual('food').imageUrl,
-                imageAlt: 'Meals & Food',
-                icon: <Building size={18} />,
-                badge: 'Meals / Tiffin',
-                stats: [{ label: 'Filtered', value: `₹${totalFilteredOtherOnly.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Food, Lunch & Meals',
-                    subtitle: 'Overtime food parcel, tiffin, and noon meal expenses',
-                    categoryBadge: 'Food',
-                    badgeVariant: 'info',
-                    imageUrl: getExpenseVisual('food').imageUrl,
-                    imageAlt: 'Meals & Food',
-                    details: [
-                      { label: 'Total Food Spend', value: `₹${totalFilteredOtherOnly.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Timeframe', value: teaFilter === 'all' ? 'All Time' : teaFilter === 'today' ? 'Today' : teaFilter === 'week' ? 'Last 7 Days' : 'This Month' },
-                      { label: 'Filtered Records', value: `${filteredTea.length} days logged` },
-                      { label: 'Category', value: 'Meals & Heavy Tiffin' },
-                    ],
-                    financials: {
-                      totalAmount: totalFilteredTeaCost,
-                      paidAmount: totalFilteredTeaPaid,
-                    },
-                  });
-                },
-              }}
-            />
+          {/* Refreshment Visual Interactive Cards (4 Categories) */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+            {expenseCategoryCards.slice(0, 4).map(item => (
+              <InteractiveHoverCard key={item.id} item={item} />
+            ))}
           </div>
 
           {/* Timeframe Filter Buttons: Daily, Weekly, Monthly, All */}
@@ -717,38 +1020,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       {subSection === 'pooja' && (
         <div>
           <div style={{ marginBottom: '16px' }}>
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-pooja',
-                title: 'Site Pooja & Auspicious Ceremonies',
-                description: `Bhoomi Pooja, Pillar/Vasthu Pooja, Roof Concrete Pooja rituals. Total: ₹${totalPoojaCost.toLocaleString('en-IN')} across ${poojas.length} ceremonies.`,
-                imageUrl: getExpenseVisual('pooja').imageUrl,
-                imageAlt: 'Pooja Ceremony',
-                icon: <Sparkles size={18} />,
-                badge: `${poojas.length} Ceremonies`,
-                stats: [{ label: 'Total', value: `₹${totalPoojaCost.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Site Ceremonies & Poojas',
-                    subtitle: 'Bhoomi Pooja, Vasthu, and Roof Concreting auspicious rituals',
-                    categoryBadge: 'Pooja',
-                    badgeVariant: 'warning',
-                    imageUrl: getExpenseVisual('pooja').imageUrl,
-                    imageAlt: 'Pooja Ceremony',
-                    details: [
-                      { label: 'Total Ceremonies', value: `${poojas.length} recorded`, highlight: true },
-                      { label: 'Total Ritual Spend', value: `₹${totalPoojaCost.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Flowers & Items', value: `₹${poojas.reduce((a, p) => a + p.materialsExpense, 0).toLocaleString('en-IN')}` },
-                      { label: 'Priest Sambhavana', value: `₹${poojas.reduce((a, p) => a + p.priestExpense, 0).toLocaleString('en-IN')}` },
-                    ],
-                    financials: {
-                      totalAmount: totalPoojaCost,
-                      paidAmount: poojas.reduce((a, p) => a + p.paidAmount, 0),
-                    },
-                  });
-                },
-              }}
-            />
+            <InteractiveHoverCard item={expenseCategoryCards[4]} />
           </div>
 
           <div className="table-container">
@@ -882,37 +1154,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       {subSection === 'other' && (
         <div>
           <div style={{ marginBottom: '16px' }}>
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-other',
-                title: 'Transport, Fuel & Miscellaneous',
-                description: `Vehicle transport, machine fuel, scaffold rental, and ad-hoc operations. Total: ₹${totalOtherCost.toLocaleString('en-IN')} across ${otherExpenses.length} entries.`,
-                imageUrl: getExpenseVisual('other').imageUrl,
-                imageAlt: 'Site Operations',
-                icon: <Wallet size={18} />,
-                badge: `${otherExpenses.length} Entries`,
-                stats: [{ label: 'Total', value: `₹${totalOtherCost.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Miscellaneous Site Operations',
-                    subtitle: 'Transport, fuel, machinery maintenance, and site logistics',
-                    categoryBadge: 'Operations',
-                    badgeVariant: 'primary',
-                    imageUrl: getExpenseVisual('other').imageUrl,
-                    imageAlt: 'Site Operations',
-                    details: [
-                      { label: 'Total Recorded', value: `${otherExpenses.length} items`, highlight: true },
-                      { label: 'Total Amount', value: `₹${totalOtherCost.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Categories', value: 'Transport, Fuel, Repairs, Site Safety, Permit' },
-                    ],
-                    financials: {
-                      totalAmount: totalOtherCost,
-                      paidAmount: otherExpenses.reduce((a, o) => a + o.paidAmount, 0),
-                    },
-                  });
-                },
-              }}
-            />
+            <InteractiveHoverCard item={expenseCategoryCards[5]} />
           </div>
 
           <div className="table-container">
@@ -1047,37 +1289,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       {subSection === 'electricity' && (
         <div>
           <div style={{ marginBottom: '16px' }}>
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-electricity',
-                title: 'Site Electricity & EB Power',
-                description: `Site EB service bills, temporary connection charges, meter maintenance. Total: ₹${totalElecCost.toLocaleString('en-IN')} (${electricity.length} bills).`,
-                imageUrl: getExpenseVisual('electricity').imageUrl,
-                imageAlt: 'Electricity Bill',
-                icon: <Zap size={18} />,
-                badge: `${electricity.length} EB Bills`,
-                stats: [{ label: 'Total', value: `₹${totalElecCost.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Site Electricity (TNEB / EB)',
-                    subtitle: 'Temporary and permanent electrical utility bills',
-                    categoryBadge: 'EB Current',
-                    badgeVariant: 'warning',
-                    imageUrl: getExpenseVisual('electricity').imageUrl,
-                    imageAlt: 'Electricity Bill',
-                    details: [
-                      { label: 'Total EB Bills', value: `${electricity.length} logged`, highlight: true },
-                      { label: 'Total Power Spend', value: `₹${totalElecCost.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Service Type', value: 'Temporary Commercial / Domestic Construction Supply' },
-                    ],
-                    financials: {
-                      totalAmount: totalElecCost,
-                      paidAmount: electricity.reduce((a, e) => a + e.paidAmount, 0),
-                    },
-                  });
-                },
-              }}
-            />
+            <InteractiveHoverCard item={expenseCategoryCards[6]} />
           </div>
 
           <div className="table-container">
@@ -1205,37 +1417,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       {subSection === 'water' && (
         <div>
           <div style={{ marginBottom: '16px' }}>
-            <InteractiveHoverCard
-              item={{
-                id: 'exp-water',
-                title: 'Water Supply & Tankers',
-                description: `Curing water, concrete mixing water tankers, borewell supply. Total: ₹${totalWaterCost.toLocaleString('en-IN')} (${water.length} deliveries).`,
-                imageUrl: getExpenseVisual('water').imageUrl,
-                imageAlt: 'Water Tanker',
-                icon: <Droplets size={18} />,
-                badge: `${water.length} Loads`,
-                stats: [{ label: 'Total', value: `₹${totalWaterCost.toLocaleString('en-IN')}` }],
-                onClick: () => {
-                  setExpenseModalData({
-                    title: 'Construction Water Tankers',
-                    subtitle: 'Water supplies for brick curing, slab curing and plastering',
-                    categoryBadge: 'Water Supply',
-                    badgeVariant: 'info',
-                    imageUrl: getExpenseVisual('water').imageUrl,
-                    imageAlt: 'Water Tanker',
-                    details: [
-                      { label: 'Total Water Loads', value: `${water.length} records`, highlight: true },
-                      { label: 'Total Water Cost', value: `₹${totalWaterCost.toLocaleString('en-IN')}`, highlight: true },
-                      { label: 'Total Tanker Volume', value: `${water.reduce((a, w) => a + (Number(w.quantityLoads) || 1), 0)} tanker loads approx` },
-                    ],
-                    financials: {
-                      totalAmount: totalWaterCost,
-                      paidAmount: water.reduce((a, w) => a + w.paidAmount, 0),
-                    },
-                  });
-                },
-              }}
-            />
+            <InteractiveHoverCard item={expenseCategoryCards[7]} />
           </div>
 
           <div className="table-container">
@@ -1383,6 +1565,8 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
           badgeVariant={expenseModalData.badgeVariant}
           imageUrl={expenseModalData.imageUrl}
           imageAlt={expenseModalData.imageAlt}
+          fallbackCategory={expenseModalData.fallbackCategory}
+          fallbackSrc={expenseModalData.fallbackSrc}
           details={expenseModalData.details}
           financials={expenseModalData.financials}
           onEdit={expenseModalData.onEdit}

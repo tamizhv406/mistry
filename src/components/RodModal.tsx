@@ -46,6 +46,7 @@ export const RodModal: React.FC<RodModalProps> = ({
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -84,6 +85,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       setInvoiceNumber('');
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [rodToEdit, isOpen]);
 
@@ -97,6 +99,7 @@ export const RodModal: React.FC<RodModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     const selectedDiameter = diameter === 'Custom' ? customDiameter.trim() : diameter;
 
@@ -142,6 +145,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.rodEntries.put(rodData);
 
@@ -164,6 +168,8 @@ export const RodModal: React.FC<RodModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save steel entry: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -396,12 +402,12 @@ export const RodModal: React.FC<RodModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {rodToEdit ? 'Save Changes' : 'Save Rod Entry'}
+              <span>{isSubmitting ? 'Saving...' : (rodToEdit ? 'Save Changes' : 'Save Rod Entry')}</span>
             </button>
           </div>
         </form>

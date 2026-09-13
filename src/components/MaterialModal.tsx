@@ -48,6 +48,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -77,6 +78,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
       setNotes('');
       setSupplier('');
       setError('');
+      setIsSubmitting(false);
 
       if (category === 'sand') {
         setMaterialName('River Sand (Plastering)');
@@ -135,6 +137,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!supplier.trim()) {
       setError('Please enter the Supplier / Hardware shop name.');
@@ -182,6 +185,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.materials.put(record);
 
@@ -204,6 +208,8 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save material record: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -465,12 +471,12 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {materialToEdit ? 'Save Changes' : 'Save Purchase'}
+              <span>{isSubmitting ? 'Saving...' : (materialToEdit ? 'Save Changes' : 'Save Purchase')}</span>
             </button>
           </div>
         </form>

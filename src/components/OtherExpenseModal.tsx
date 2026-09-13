@@ -37,6 +37,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
 
@@ -58,6 +59,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
       setPaymentMode('Cash');
       setNotes('');
       setError('');
+      setIsSubmitting(false);
     }
   }, [expenseToEdit, isOpen]);
 
@@ -69,6 +71,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
 
     if (!description.trim()) {
       setError('Please describe this expense.');
@@ -98,6 +101,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
       updatedAt: now,
     };
 
+    setIsSubmitting(true);
     try {
       await db.otherExpenses.put(record);
 
@@ -121,6 +125,8 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
       onClose();
     } catch (err: any) {
       setError('Failed to save expense: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -297,12 +303,12 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
               <Save size={18} />
-              {expenseToEdit ? 'Save Changes' : 'Save Expense'}
+              <span>{isSubmitting ? 'Saving...' : (expenseToEdit ? 'Save Changes' : 'Save Expense')}</span>
             </button>
           </div>
         </form>
