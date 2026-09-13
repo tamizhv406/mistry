@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { HardHat, Eye, EyeOff, Lock, User, Phone, Mail, ArrowRight, ShieldCheck, Crown } from 'lucide-react';
+import { HardHat, Eye, EyeOff, Lock, User, Phone, Mail, ArrowRight, ShieldCheck, Crown, CheckCircle2 } from 'lucide-react';
 import { loginUser, registerUser } from '../services/auth';
 import type { User as UserType } from '../db/types';
+import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
+import { ChangeInitialPasswordModal } from '../components/ChangeInitialPasswordModal';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserType) => void;
@@ -13,6 +15,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
+
+  // Forgot Password & Initial Password Modals State
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
+  const [pendingInitialPasswordUser, setPendingInitialPasswordUser] = useState<UserType | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Registration fields
   const [username, setUsername] = useState('');
@@ -37,11 +44,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     setLoading(true);
     setError('');
+    setSuccessMessage('');
 
     try {
       const res = await loginUser(identifier, password, remember);
       if (res.success && res.user) {
-        onLoginSuccess(res.user);
+        if (res.user.mustChangePassword) {
+          setPendingInitialPasswordUser(res.user);
+        } else {
+          onLoginSuccess(res.user);
+        }
       } else {
         setError(res.error || 'Login failed. Please verify credentials.');
       }
@@ -58,12 +70,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setError('Username must be at least 3 characters.');
       return;
     }
-    if (!password || password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (!password || password.length < 8) {
+      setError('Password must be at least 8 characters with letters & numbers.');
       return;
     }
 
     setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
     try {
       const res = await registerUser(username, fullName, mobile, email, password, 'MISTRY');
       if (res.success && res.user) {
@@ -80,15 +95,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
   const handleMistryLogin = async () => {
     setIdentifier('mistry_velu');
-    setPassword('mistry123');
     setLoading(true);
     setError('');
     try {
       const res = await loginUser('mistry_velu', 'mistry123', true);
       if (res.success && res.user) {
-        onLoginSuccess(res.user);
+        if (res.user.mustChangePassword) {
+          setPendingInitialPasswordUser(res.user);
+        } else {
+          onLoginSuccess(res.user);
+        }
       } else {
-        setError(res.error || 'Mistry login failed.');
+        setError(res.error || 'Mistry demo login failed.');
       }
     } catch (err: any) {
       setError('Mistry login error: ' + err.message);
@@ -143,7 +161,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         zIndex: 10,
       }}>
         {/* Brand Header */}
-        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
           <div style={{
             width: '64px',
             height: '64px',
@@ -187,11 +205,29 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
+        {successMessage && (
+          <div style={{
+            backgroundColor: '#d1fae5',
+            color: '#065f46',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            fontSize: '0.88rem',
+            fontWeight: 600,
+            marginBottom: '18px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <CheckCircle2 size={18} />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
         {/* LOGIN FORM */}
         {!isRegister ? (
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="form-group">
-              <label>Username / Mobile Number</label>
+              <label>Username / Mobile Number / Email</label>
               <div style={{ position: 'relative' }}>
                 <User size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
@@ -227,12 +263,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     color: '#64748b',
                     padding: '4px',
                   }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
+            {/* Remember & Forgot Password Option */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#475569' }}>
                 <input
@@ -244,9 +282,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 <span>Keep me logged in</span>
               </label>
 
-              <span style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => setIsRegister(true)}>
-                New user? Register
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsForgotPasswordOpen(true)}
+                style={{
+                  color: '#d97706',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                  padding: '2px 0',
+                }}
+              >
+                Forgot Password?
+              </button>
             </div>
 
             <button
@@ -259,11 +309,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <ArrowRight size={18} />
             </button>
 
+            <div style={{ textAlign: 'center', marginTop: '6px' }}>
+              <span
+                style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.88rem' }}
+                onClick={() => setIsRegister(true)}
+              >
+                New contractor? Register Account
+              </span>
+            </div>
+
             {/* Quick Demo Login Option for Mistry testing */}
             <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748b' }}>
                 <ShieldCheck size={14} color="#6366f1" />
-                <span>Real Admin Portal: Sign in with master ID & password above</span>
+                <span>Super Admin Portal: Sign in with registered administrator credentials above</span>
               </div>
 
               {/* Demo Mistry Login Button */}
@@ -288,11 +347,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 }}
               >
                 <HardHat size={16} color="#d97706" />
-                <span>👷 Quick Demo Mistry Login (Sample Sites)</span>
+                <span>👷 One-Tap Demo Contractor Login (mistry_velu)</span>
               </button>
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center' }}>
-                Demo Contractor: <code>mistry_velu</code> / <code>mistry123</code>
-              </div>
             </div>
           </form>
         ) : (
@@ -341,7 +397,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             <div className="form-group">
-              <label>Password (Min 6 chars) <span className="required">*</span></label>
+              <label>Password (Min 8 chars, letters & numbers) <span className="required">*</span></label>
               <input
                 type="password"
                 placeholder="Choose a safe password"
@@ -370,6 +426,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </form>
         )}
       </div>
+
+      {/* Forgot Password OTP Modal */}
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        onSuccess={msg => {
+          setIsForgotPasswordOpen(false);
+          setError('');
+          setSuccessMessage(msg);
+        }}
+      />
+
+      {/* Mandatory Initial Password Setup Modal */}
+      {pendingInitialPasswordUser && (
+        <ChangeInitialPasswordModal
+          isOpen={Boolean(pendingInitialPasswordUser)}
+          user={pendingInitialPasswordUser}
+          onSuccess={() => {
+            const userToLogin = { ...pendingInitialPasswordUser, mustChangePassword: false };
+            setPendingInitialPasswordUser(null);
+            onLoginSuccess(userToLogin);
+          }}
+        />
+      )}
     </div>
   );
 };
+

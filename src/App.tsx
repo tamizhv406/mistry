@@ -14,6 +14,7 @@ import { TrashView } from './views/TrashView';
 import { BackupView } from './views/BackupView';
 import { EstimatorView } from './views/EstimatorView';
 import { AdminDashboardView } from './views/AdminDashboardView';
+import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
 
 import { SiteModal } from './components/SiteModal';
 import { MaterialModal } from './components/MaterialModal';
@@ -527,6 +528,7 @@ export function App() {
             onTrashRecord={(table, id, name) => handleSoftDelete(table, id, name)}
             onOpenEstimator={() => handleNavigate('estimator')}
             onNotify={addToast}
+            onReturnToAdmin={isAdmin(currentUser) ? () => handleNavigate('admin') : undefined}
           />
         )}
 
@@ -850,6 +852,19 @@ export function App() {
             setCommentToEdit(null);
           }}
           onSuccess={msg => addToast(msg, 'success')}
+        />
+      )}
+
+      {/* Mandatory Password Change Modal for Session Users */}
+      {currentUser && currentUser.mustChangePassword && (
+        <ChangeInitialPasswordModal
+          isOpen={true}
+          user={currentUser}
+          onSuccess={() => {
+            const updated = { ...currentUser, mustChangePassword: false };
+            setCurrentUser(updated);
+            addToast('Password successfully updated. Your account is secured.', 'success');
+          }}
         />
       )}
     </div>

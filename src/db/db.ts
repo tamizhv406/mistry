@@ -21,6 +21,9 @@ import type {
   EntityTable,
   TrashRecord,
   PaymentTransaction,
+  OtpSession,
+  AdminAuditLog,
+  UserRole,
 } from './types';
 
 export class BuildingMistryDB extends Dexie {
@@ -43,6 +46,8 @@ export class BuildingMistryDB extends Dexie {
   materialPrices!: Table<MaterialPriceQuote, string>;
   estimates!: Table<BuildingEstimate, string>;
   payments!: Table<PaymentTransaction, string>;
+  otpSessions!: Table<OtpSession, string>;
+  adminAuditLogs!: Table<AdminAuditLog, string>;
 
   constructor() {
     super('BuildingMistryDB');
@@ -145,6 +150,30 @@ export class BuildingMistryDB extends Dexie {
       estimates: 'id, userId, siteId, estimateName, isDeleted, createdAt',
       payments: 'id, userId, siteId, relatedRecordId, module, date, isDeleted, [siteId+date]',
     });
+
+    this.version(6).stores({
+      sites: 'id, userId, name, status, isDeleted, createdAt',
+      materials: 'id, userId, siteId, category, isDeleted, purchaseDate',
+      rodEntries: 'id, userId, siteId, diameter, isDeleted, purchaseDate',
+      workers: 'id, userId, siteId, category, isDeleted, name',
+      attendance: 'id, userId, siteId, workerId, date, isDeleted, [siteId+date]',
+      labourAdvances: 'id, userId, siteId, workerId, date, isDeleted',
+      salaryPayments: 'id, userId, siteId, workerId, date, isDeleted',
+      tools: 'id, userId, siteId, isDeleted',
+      teaSnacksExpenses: 'id, userId, siteId, date, isDeleted',
+      poojaExpenses: 'id, userId, siteId, date, isDeleted',
+      electricityBills: 'id, userId, siteId, month, isDeleted',
+      waterBills: 'id, userId, siteId, date, isDeleted',
+      siteComments: 'id, userId, siteId, dateTime, isDeleted',
+      otherExpenses: 'id, userId, siteId, category, isDeleted, date',
+      users: 'id, username, mobile, phoneNormalized, email, role, isActive',
+      activityLogs: 'id, userId, siteId, timestamp',
+      materialPrices: 'id, userId, material, supplier, district, effectiveDate, isDeleted',
+      estimates: 'id, userId, siteId, estimateName, isDeleted, createdAt',
+      payments: 'id, userId, siteId, relatedRecordId, module, date, isDeleted, [siteId+date]',
+      otpSessions: 'id, phoneNormalized, token, expiresAt',
+      adminAuditLogs: 'id, action, actorId, timestamp',
+    });
   }
 
   // Soft Delete
@@ -177,85 +206,126 @@ export class BuildingMistryDB extends Dexie {
 
   // Log Activity Helper with full backward compatibility and user audit logging
   async logActivity(
-    firstParam?: string,
-    secondParam?: string,
-    thirdParam?: string,
-    fourthParam?: string,
-    fifthParam?: string | number,
-    sixthParam?: string,
-    seventhParam?: string,
-    eighthParam?: number
+    firstParam?: any,
+    secondParam?: any,
+    thirdParam?: any,
+    fourthParam?: any,
+    fifthParam?: any,
+    sixthParam?: any,
+    seventhParam?: any
   ): Promise<void> {
     let userId: string | undefined;
     let userName: string | undefined;
-    let userRole: 'ADMIN' | 'MISTRY' | undefined;
+    let userRole: any | undefined;
     let siteId: string | undefined;
     let siteName: string | undefined;
-    let action: string = '';
+    let action: string = 'UPDATE';
     let description: string = '';
-    let amount: number | undefined;
 
-    if (sixthParam !== undefined) {
-      // Called with (userId, userName, userRole, siteId, siteName, action, description, amount)
+    if (seventhParam !== undefined) {
       userId = firstParam;
       userName = secondParam;
-      userRole = thirdParam as any;
+      userRole = thirdParam;
       siteId = fourthParam;
-      siteName = typeof fifthParam === 'string' ? fifthParam : undefined;
-      action = sixthParam;
+      siteName = fifthParam;
+      action = sixthParam || 'UPDATE';
       description = seventhParam || '';
-      amount = eighthParam;
-    } else {
-      // Backward compatible call: (siteId, siteName, action, description, amount)
+    } else if (thirdParam !== undefined) {
       siteId = firstParam;
-      siteName = secondParam;
-      action = thirdParam || '';
-      description = fourthParam || '';
-      amount = typeof fifthParam === 'number' ? fifthParam : undefined;
+      action = secondParam || 'UPDATE';
+      description = thirdParam || '';
+    } else if (secondParam !== undefined) {
+      action = firstParam || 'UPDATE';
+      description = secondParam || '';
+    } else if (firstParam !== undefined) {
+      description = firstParam;
     }
 
-    const id = `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    await this.activityLogs.put({
-      id,
-      userId,
-      userName,
-      userRole,
-      siteId,
-      siteName,
-      action,
-      description,
-      amount,
-      timestamp: new Date().toISOString(),
-    });
+    try {
+      const logEntry: ActivityLog = {
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        userId,
+        userName,
+        userRole,
+        siteId,
+        siteName,
+        action,
+        description,
+        timestamp: new Date().toISOString(),
+      };
+      await this.activityLogs.put(logEntry);
+    } catch {
+      // Non-blocking in case of storage issues
+    }
   }
 
-  // Admin Audit Log Helper
+  // Log Security & Admin Audit (Never stores passwords or OTPs)
+  async logSecurityAudit(
+    action: string,
+    actor: { id: string; fullName?: string; username?: string; role: UserRole },
+    affectedRecordId?: string,
+    affectedTable?: string,
+    result: 'SUCCESS' | 'FAILURE' | 'DENIED' = 'SUCCESS',
+    details?: string
+  ): Promise<void> {
+    try {
+      const auditEntry: AdminAuditLog = {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        action,
+        actorId: actor.id,
+        actorName: actor.fullName || actor.username || 'System',
+        actorRole: actor.role,
+        affectedRecordId,
+        affectedTable,
+        result,
+        details,
+        timestamp: new Date().toISOString(),
+      };
+      await this.adminAuditLogs.put(auditEntry);
+    } catch {
+      // Non-blocking
+    }
+  }
+
   async logAdminAudit(
     adminUser: User,
     action: string,
-    description: string,
+    details?: string,
     siteId?: string,
     siteName?: string
   ): Promise<void> {
     await this.logActivity(
       adminUser.id,
-      adminUser.fullName || adminUser.username,
-      'ADMIN',
+      adminUser.fullName,
+      adminUser.role,
       siteId,
       siteName,
       action,
-      description
+      details || `Admin action performed: ${action}`
     );
   }
 
-  // User Data Access & Authorization Helpers
+  async getAllAdminAuditLogs(user: User): Promise<AdminAuditLog[]> {
+    const isElevated =
+      user.role === 'SUPER_ADMIN' ||
+      user.role === 'SUB_ADMIN' ||
+      user.role === 'ADMIN';
+    if (!isElevated) {
+      throw new Error('Access Denied: Only administrators can view security audit logs.');
+    }
+    return this.adminAuditLogs.reverse().sortBy('timestamp');
+  }
+
+  // User Data Access & Authorization Helpers (Database Row Level Security)
   async getSitesForUser(user: User): Promise<Site[]> {
-    if (
+    const initialAdminEmail = ((typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) || 'tamilthilagan82@gmail.com').toLowerCase();
+    const isElevated =
       user.role === 'ADMIN' ||
       user.role === 'SUPER_ADMIN' ||
       user.role === 'SUB_ADMIN' ||
-      (user.email || '').toLowerCase() === 'tamilthilagan82@gmail.com'
-    ) {
+      (user.email || '').toLowerCase() === initialAdminEmail;
+
+    if (isElevated) {
       return this.sites.filter(s => !s.isDeleted).reverse().sortBy('createdAt');
     }
     return this.sites
@@ -267,11 +337,13 @@ export class BuildingMistryDB extends Dexie {
   async getSiteForUser(user: User, siteId: string): Promise<Site | null> {
     const site = await this.sites.get(siteId);
     if (!site || site.isDeleted) return null;
+    const initialAdminEmail = ((typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) || 'tamilthilagan82@gmail.com').toLowerCase();
     const isElevated =
       user.role === 'ADMIN' ||
       user.role === 'SUPER_ADMIN' ||
       user.role === 'SUB_ADMIN' ||
-      (user.email || '').toLowerCase() === 'tamilthilagan82@gmail.com';
+      (user.email || '').toLowerCase() === initialAdminEmail;
+
     if (!isElevated && site.userId && site.userId !== user.id) {
       throw new Error("Access Denied: You do not have permission to view another contractor's site.");
     }
@@ -282,7 +354,8 @@ export class BuildingMistryDB extends Dexie {
     const table = this.table(tableName);
     const record: any = await table.get(id);
     if (!record) return;
-    if (user.role === 'MISTRY' && record.userId && record.userId !== user.id) {
+    const isMistry = user.role === 'MISTRY' || user.role === 'MISTRY_USER';
+    if (isMistry && record.userId && record.userId !== user.id) {
       throw new Error("Access Denied: You cannot delete another contractor's record.");
     }
     const now = new Date().toISOString();
@@ -300,13 +373,22 @@ export class BuildingMistryDB extends Dexie {
       'SOFT_DELETE',
       `Moved ${tableName} record to Recycle Bin`
     );
+    await this.logSecurityAudit(
+      'RECORD_SOFT_DELETED',
+      user,
+      id,
+      tableName,
+      'SUCCESS',
+      `Moved ${tableName} record (${id}) to Trash`
+    );
   }
 
   async restoreRecordForUser(user: User, tableName: EntityTable, id: string): Promise<void> {
     const table = this.table(tableName);
     const record: any = await table.get(id);
     if (!record) return;
-    if (user.role === 'MISTRY' && record.userId && record.userId !== user.id) {
+    const isMistry = user.role === 'MISTRY' || user.role === 'MISTRY_USER';
+    if (isMistry && record.userId && record.userId !== user.id) {
       throw new Error("Access Denied: You cannot restore another contractor's record.");
     }
     const now = new Date().toISOString();
@@ -324,13 +406,22 @@ export class BuildingMistryDB extends Dexie {
       'RESTORE',
       `Restored ${tableName} record from Recycle Bin`
     );
+    await this.logSecurityAudit(
+      'RECORD_RESTORED',
+      user,
+      id,
+      tableName,
+      'SUCCESS',
+      `Restored ${tableName} record (${id}) from Trash`
+    );
   }
 
   async permanentDeleteForUser(user: User, tableName: EntityTable, id: string): Promise<void> {
     const table = this.table(tableName);
     const record: any = await table.get(id);
     if (!record) return;
-    if (user.role === 'MISTRY' && record.userId && record.userId !== user.id) {
+    const isMistry = user.role === 'MISTRY' || user.role === 'MISTRY_USER';
+    if (isMistry && record.userId && record.userId !== user.id) {
       throw new Error("Access Denied: You cannot permanently delete another contractor's record.");
     }
     await table.delete(id);
@@ -341,6 +432,14 @@ export class BuildingMistryDB extends Dexie {
       record.siteId,
       undefined,
       'PERMANENT_DELETE',
+      `Permanently deleted ${tableName} record (${id})`
+    );
+    await this.logSecurityAudit(
+      'RECORD_PERMANENTLY_DELETED',
+      user,
+      id,
+      tableName,
+      'SUCCESS',
       `Permanently deleted ${tableName} record (${id})`
     );
   }

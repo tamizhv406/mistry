@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Scale,
   Calculator,
+  ShieldCheck,
 } from 'lucide-react';
 import { useSiteData } from '../hooks/useSiteData';
 import { MaterialsTab } from './site-tabs/MaterialsTab';
@@ -81,6 +82,7 @@ interface SiteDetailViewProps {
   // Navigation
   onOpenEstimator?: () => void;
   onNotify?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onReturnToAdmin?: () => void;
   initialTab?: 'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance';
   initialExpenseSubSection?: 'tea' | 'pooja' | 'electricity' | 'water' | 'other';
   onTabChange?: (tab: string, sub?: string) => void;
@@ -107,6 +109,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
   onTrashRecord,
   onOpenEstimator,
   onNotify,
+  onReturnToAdmin,
   initialTab,
   initialExpenseSubSection,
   onTabChange,
@@ -188,10 +191,33 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
     <div className="main-wrapper">
       {/* Back Button and Quick Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-        <button className="btn btn-outline btn-sm" onClick={onBack}>
-          <ArrowLeft size={16} />
-          <span>All Sites Dashboard</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button className="btn btn-outline btn-sm" onClick={onBack}>
+            <ArrowLeft size={16} />
+            <span>All Sites Dashboard</span>
+          </button>
+          {onReturnToAdmin && (
+            <button
+              className="btn btn-sm"
+              style={{
+                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                color: '#fff',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+              }}
+              onClick={onReturnToAdmin}
+            >
+              <ShieldCheck size={16} />
+              <span>Return to Admin Dashboard (அட்மின் முகப்பு)</span>
+            </button>
+          )}
+        </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="btn btn-sm btn-outline" onClick={() => onEditSite(site)}>

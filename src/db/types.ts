@@ -384,14 +384,15 @@ export interface PaymentTransaction {
   updatedAt: string;
 }
 
-export type UserRole = 'SUPER_ADMIN' | 'SUB_ADMIN' | 'ADMIN' | 'MISTRY';
+export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN';
 
 export function isAdminRole(role?: string): boolean {
   return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN' || role === 'ADMIN';
 }
 
 export function isSuperAdminRole(role?: string, email?: string): boolean {
-  return role === 'SUPER_ADMIN' || (email || '').toLowerCase() === 'tamilthilagan82@gmail.com';
+  const initialAdminEmail = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) || 'tamilthilagan82@gmail.com';
+  return role === 'SUPER_ADMIN' || (email || '').toLowerCase() === initialAdminEmail.toLowerCase();
 }
 
 export interface User {
@@ -399,12 +400,40 @@ export interface User {
   username: string;
   fullName: string;
   mobile: string;
+  phoneNormalized?: string;
   email: string;
   passwordHash: string;
   role: UserRole;
   isActive: boolean;
+  mustChangePassword?: boolean;
+  lastLoginAt?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface OtpSession {
+  id: string;
+  phoneNormalized: string;
+  hashedOtp: string;
+  salt: string;
+  token?: string;
+  expiresAt: number; // Unix timestamp in ms
+  attempts: number;
+  verified: boolean;
+  createdAt: string;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  action: string;
+  actorId: string;
+  actorName: string;
+  actorRole: UserRole;
+  affectedRecordId?: string;
+  affectedTable?: string;
+  result: 'SUCCESS' | 'FAILURE' | 'DENIED';
+  details?: string;
+  timestamp: string;
 }
 
 export interface ActivityLog {
