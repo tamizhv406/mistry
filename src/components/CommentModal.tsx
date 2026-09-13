@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, MessageSquare } from 'lucide-react';
 import { db } from '../db/db';
 import type { SiteComment } from '../db/types';
+import { VoiceInputField } from './VoiceInputField';
 
 interface CommentModalProps {
   isOpen: boolean;
@@ -115,16 +116,16 @@ export const CommentModal: React.FC<CommentModalProps> = ({
               </select>
             </div>
 
-            <div className="form-group">
-              <label>Site Note / Observation <span className="required">*</span></label>
-              <textarea
-                rows={4}
-                placeholder="Describe site progress, client instructions, quality inspections, delays or safety checks..."
-                value={commentText}
-                onChange={e => setCommentText(e.target.value)}
-                autoFocus
-              />
-            </div>
+            <VoiceInputField
+              label="Site Note / Observation"
+              tamilLabel="தள குறிப்பு"
+              type="textarea"
+              rows={4}
+              placeholder="Describe site progress, client instructions, quality inspections, delays or safety checks..."
+              value={commentText}
+              onChange={setCommentText}
+              required
+            />
           </div>
 
           <div className="modal-footer">

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, UserCheck } from 'lucide-react';
 import { db } from '../db/db';
 import type { LabourWorker, LabourCategory } from '../db/types';
+import { VoiceInputField } from './VoiceInputField';
 
 interface WorkerModalProps {
   isOpen: boolean;
@@ -135,16 +136,14 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
             )}
 
             <div className="form-grid-2">
-              <div className="form-group">
-                <label>Worker Full Name <span className="required">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g. M. Senthil Kumar"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  autoFocus
-                />
-              </div>
+              <VoiceInputField
+                label="Worker Full Name"
+                tamilLabel="தொழிலாளி பெயர்"
+                placeholder="e.g. M. Senthil Kumar"
+                value={name}
+                onChange={setName}
+                required
+              />
 
               <div className="form-group">
                 <label>Phone Number</label>
@@ -202,15 +201,13 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
                 />
               </div>
 
-              <div className="form-group">
-                <label>Notes / Skills / Native Place</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Plastering expert, from Villupuram"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                />
-              </div>
+              <VoiceInputField
+                label="Notes / Skills / Native Place"
+                tamilLabel="குறிப்புகள்"
+                placeholder="e.g. Plastering expert, from Villupuram"
+                value={notes}
+                onChange={setNotes}
+              />
             </div>
           </div>
 

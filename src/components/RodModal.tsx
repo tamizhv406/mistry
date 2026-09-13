@@ -4,6 +4,7 @@ import { db } from '../db/db';
 import type { RodEntry } from '../db/types';
 import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
+import { VoiceInputField } from './VoiceInputField';
 
 interface RodModalProps {
   isOpen: boolean;
@@ -230,16 +231,14 @@ export const RodModal: React.FC<RodModalProps> = ({
             </div>
 
             <div className="form-grid-2">
-              <div className="form-group">
-                <label>Supplier / Steel Yard <span className="required">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g. Sri Ram Steel Traders, Annai Steels"
-                  value={supplier}
-                  onChange={e => setSupplier(e.target.value)}
-                  autoFocus
-                />
-              </div>
+              <VoiceInputField
+                label="Supplier / Steel Yard"
+                tamilLabel="கம்பி கடை"
+                placeholder="e.g. Sri Ram Steel Traders, Annai Steels"
+                value={supplier}
+                onChange={setSupplier}
+                required
+              />
 
               <div className="form-group">
                 <label>Number of Rod Pieces / Bundles (Optional)</label>
@@ -386,15 +385,13 @@ export const RodModal: React.FC<RodModalProps> = ({
                 />
               </div>
 
-              <div className="form-group">
-                <label>Notes / Structural Usage</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Stirrups for 1st floor beams"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                />
-              </div>
+              <VoiceInputField
+                label="Notes / Structural Usage"
+                tamilLabel="குறிப்புகள்"
+                placeholder="e.g. Stirrups for 1st floor beams"
+                value={notes}
+                onChange={setNotes}
+              />
             </div>
           </div>
 

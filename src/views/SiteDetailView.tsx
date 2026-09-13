@@ -81,6 +81,9 @@ interface SiteDetailViewProps {
   // Navigation
   onOpenEstimator?: () => void;
   onNotify?: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  initialTab?: 'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance';
+  initialExpenseSubSection?: 'tea' | 'pooja' | 'electricity' | 'water' | 'other';
+  onTabChange?: (tab: string, sub?: string) => void;
 }
 
 export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
@@ -104,13 +107,27 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
   onTrashRecord,
   onOpenEstimator,
   onNotify,
+  initialTab,
+  initialExpenseSubSection,
+  onTabChange,
 }) => {
   const data = useSiteData(siteId);
   const [activeTab, setActiveTab] = useState<
     'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance'
-  >('overview');
+  >(initialTab || 'overview');
   const [labourSubTab, setLabourSubTab] = useState<'salary' | 'roster' | 'attendance' | 'advances'>('salary');
-  const [expenseSubSection, setExpenseSubSection] = useState<'tea' | 'pooja' | 'electricity' | 'water' | 'other'>('tea');
+  const [expenseSubSection, setExpenseSubSection] = useState<'tea' | 'pooja' | 'electricity' | 'water' | 'other'>(
+    initialExpenseSubSection || 'tea'
+  );
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+    if (initialExpenseSubSection) {
+      setExpenseSubSection(initialExpenseSubSection);
+    }
+  }, [initialTab, initialExpenseSubSection]);
 
   if (!data || !data.site) {
     return (
@@ -163,6 +180,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
       setExpenseSubSection(sub as any);
     }
     setActiveTab(tab);
+    onTabChange?.(tab, sub);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { ChevronRight, X, Download } from 'lucide-react';
 import { db } from './db/db';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -55,9 +57,34 @@ export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
   const [currentView, setCurrentView] = useState<'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'estimator' | 'admin'>('dashboard');
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [currentSiteTab, setCurrentSiteTab] = useState<
+    'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance'
+  >('overview');
+  const [currentExpenseSubSection, setCurrentExpenseSubSection] = useState<'tea' | 'pooja' | 'electricity' | 'water' | 'other'>('tea');
+  const [isSitePickerOpen, setIsSitePickerOpen] = useState(false);
+  const [pendingSiteTab, setPendingSiteTab] = useState<{ tab: string; subTab?: string } | null>(null);
+
+  // Online / Offline Status
+  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [showOnlineRestored, setShowOnlineRestored] = useState(false);
+
+  // PWA Install Prompt Event
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const [isPwaInstalled, setIsPwaInstalled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+  });
+
+  // Query all active sites for the user (used by fast site switcher/picker)
+  const userSites =
+    useLiveQuery(async () => {
+      if (!currentUser) return [];
+      return await db.getSitesForUser(currentUser);
+    }, [currentUser]) || [];
+
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Initialize Auth table and check active session
+  // Initialize Auth, Network status & PWA install listeners
   useEffect(() => {
     initAuth().then(() => {
       const u = getCurrentUser();
@@ -65,7 +92,51 @@ export function App() {
         setCurrentUser(u);
       }
     });
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowOnlineRestored(true);
+      setTimeout(() => setShowOnlineRestored(false), 4000);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowOnlineRestored(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    const handleAppInstalled = () => {
+      setIsPwaInstalled(true);
+      setInstallPromptEvent(null);
+      addToast('Building Mistry installed successfully!', 'success');
+    };
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
   }, []);
+
+  const handleInstallPwa = async () => {
+    if (!installPromptEvent) return;
+    installPromptEvent.prompt();
+    const choice = await installPromptEvent.userChoice;
+    if (choice.outcome === 'accepted') {
+      setIsPwaInstalled(true);
+      addToast('Installing Building Mistry app...', 'info');
+    }
+    setInstallPromptEvent(null);
+  };
 
   // Site Modal State
   const [siteModalOpen, setSiteModalOpen] = useState(false);
@@ -158,10 +229,12 @@ export function App() {
     addToast('Signed out of Building Mistry', 'info');
   };
 
-  // Navigation Helper
-  const handleNavigate = (view: string, siteId?: string) => {
+  // Navigation Helper with deep tab and sub-tab support
+  const handleNavigate = (view: string, siteId?: string, tab?: string, subTab?: string) => {
     if (view === 'site-detail' && siteId) {
       setSelectedSiteId(siteId);
+      if (tab) setCurrentSiteTab(tab as any);
+      if (subTab) setCurrentExpenseSubSection(subTab as any);
       setCurrentView('site-detail');
     } else if (view === 'trash') {
       setCurrentView('trash');
@@ -180,6 +253,30 @@ export function App() {
     } else {
       setSelectedSiteId(null);
       setCurrentView('dashboard');
+    }
+  };
+
+  // Direct Site Section opener from mobile bottom navigation
+  const handleOpenSiteTab = (tab: string, subTab?: string) => {
+    if (selectedSiteId) {
+      setCurrentSiteTab(tab as any);
+      if (subTab) setCurrentExpenseSubSection(subTab as any);
+      setCurrentView('site-detail');
+    } else {
+      // If user has exactly 1 site, automatically pick that site
+      if (userSites.length === 1) {
+        setSelectedSiteId(userSites[0].id);
+        setCurrentSiteTab(tab as any);
+        if (subTab) setCurrentExpenseSubSection(subTab as any);
+        setCurrentView('site-detail');
+      } else if (userSites.length > 1) {
+        // Multiple sites: show fast mobile Site Picker sheet
+        setPendingSiteTab({ tab, subTab });
+        setIsSitePickerOpen(true);
+      } else {
+        addToast('Please create your first construction site', 'info');
+        setSiteModalOpen(true);
+      }
     }
   };
 
@@ -307,6 +404,24 @@ export function App() {
         onLogout={handleLogout}
       />
 
+      {/* Offline / Online Real-time Status Banners */}
+      {!isOnline && (
+        <div className="offline-status-banner no-print" role="status">
+          <span className="offline-dot">⚡</span>
+          <span>
+            <strong>Offline Mode:</strong> Database working locally on device. All changes are completely safe and persistent.
+          </span>
+        </div>
+      )}
+      {showOnlineRestored && (
+        <div className="online-status-banner no-print" role="status">
+          <span>🟢</span>
+          <span>
+            <strong>Back Online:</strong> Internet connection restored. Local records active.
+          </span>
+        </div>
+      )}
+
       {/* Main View Router */}
       <main>
         {currentView === 'dashboard' && (
@@ -347,6 +462,12 @@ export function App() {
         {currentView === 'site-detail' && selectedSiteId && (
           <SiteDetailView
             siteId={selectedSiteId}
+            initialTab={currentSiteTab}
+            initialExpenseSubSection={currentExpenseSubSection}
+            onTabChange={(tab, sub) => {
+              setCurrentSiteTab(tab as any);
+              if (sub) setCurrentExpenseSubSection(sub as any);
+            }}
             onBack={() => handleNavigate('dashboard')}
             onEditSite={site => {
               setSiteToEdit(site);
@@ -445,10 +566,73 @@ export function App() {
       {/* Mobile Bottom Navigation Bar */}
       <MobileBottomNav
         currentView={currentView}
+        selectedSiteId={selectedSiteId}
+        activeSiteTab={currentSiteTab}
+        activeExpenseSubSection={currentExpenseSubSection}
         onNavigate={handleNavigate}
+        onOpenSiteTab={handleOpenSiteTab}
         onLogout={handleLogout}
         user={currentUser}
+        installPromptEvent={installPromptEvent}
+        onInstallPwa={handleInstallPwa}
+        isPwaInstalled={isPwaInstalled}
       />
+
+      {/* Fast Mobile Site Selector Sheet */}
+      {isSitePickerOpen && (
+        <div className="mobile-drawer-overlay" onClick={() => setIsSitePickerOpen(false)}>
+          <div
+            className="mobile-drawer-content"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Select Project Site"
+          >
+            <div className="mobile-drawer-handle-bar">
+              <div className="mobile-drawer-drag-pill" />
+            </div>
+            <div className="mobile-drawer-header">
+              <div>
+                <h3 className="mobile-drawer-title">Choose Project Site (தளத்தைத் தேர்வு செய்க)</h3>
+                <p className="mobile-drawer-sub">Select a site to view {pendingSiteTab?.tab || 'ledger'}</p>
+              </div>
+              <button
+                type="button"
+                className="mobile-drawer-close"
+                onClick={() => setIsSitePickerOpen(false)}
+                aria-label="Close site picker"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-3 space-y-2 max-h-[60vh] overflow-y-auto">
+              {userSites.map(site => (
+                <button
+                  key={site.id}
+                  type="button"
+                  className="w-full flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-100 text-left transition-all active:scale-98"
+                  onClick={() => {
+                    setSelectedSiteId(site.id);
+                    if (pendingSiteTab?.tab) setCurrentSiteTab(pendingSiteTab.tab as any);
+                    if (pendingSiteTab?.subTab) setCurrentExpenseSubSection(pendingSiteTab.subTab as any);
+                    setIsSitePickerOpen(false);
+                    setPendingSiteTab(null);
+                    setCurrentView('site-detail');
+                  }}
+                >
+                  <div>
+                    <div className="font-bold text-sm text-slate-100">{site.name}</div>
+                    <div className="text-xs text-slate-400">
+                      {site.ownerName} • {site.area || site.buildingType}
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className="text-amber-400" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmModal

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx tests/test_mistry_core.ts",
+    "test": "tsx tests/test_mistry_core.ts && tsx tests/test_pwa_mobile.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --dotfiles"

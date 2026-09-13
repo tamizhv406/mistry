@@ -4,6 +4,7 @@ import { db } from '../db/db';
 import type { Material, MaterialCategory } from '../db/types';
 import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
+import { VoiceInputField } from './VoiceInputField';
 
 interface MaterialModalProps {
   isOpen: boolean;
@@ -263,26 +264,22 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
             )}
 
             <div className="form-grid-2">
-              <div className="form-group">
-                <label>Material Description / Type</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Plastering Sand / Wirecut Bricks"
-                  value={materialName}
-                  onChange={e => setMaterialName(e.target.value)}
-                />
-              </div>
+              <VoiceInputField
+                label="Material Description / Type"
+                tamilLabel="பொருள் விவரம்"
+                placeholder="e.g. Plastering Sand / Wirecut Bricks"
+                value={materialName}
+                onChange={setMaterialName}
+              />
 
-              <div className="form-group">
-                <label>Supplier / Hardware Shop <span className="required">*</span></label>
-                <input
-                  type="text"
-                  placeholder="e.g. Cauvery Traders / Sri Ram Hardware"
-                  value={supplier}
-                  onChange={e => setSupplier(e.target.value)}
-                  autoFocus
-                />
-              </div>
+              <VoiceInputField
+                label="Supplier / Hardware Shop"
+                tamilLabel="விற்பனையாளர்"
+                placeholder="e.g. Cauvery Traders / Sri Ram Hardware"
+                value={supplier}
+                onChange={setSupplier}
+                required
+              />
             </div>
 
             <div className="form-grid-3">
@@ -457,15 +454,13 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                 />
               </div>
 
-              <div className="form-group">
-                <label>Notes / Vehicle No</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Lorry TN-22-AX-4433, unloaded at backyard"
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                />
-              </div>
+              <VoiceInputField
+                label="Material Notes / Vehicle No"
+                tamilLabel="குறிப்புகள்"
+                placeholder="e.g. Lorry TN-22-AX-4433, unloaded at backyard"
+                value={notes}
+                onChange={setNotes}
+              />
             </div>
           </div>
 
