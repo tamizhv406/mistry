@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx tests/test_mistry_core.ts && tsx tests/test_pwa_mobile.ts && tsx tests/test_admin_recovery.ts && tsx tests/test_audit_fixes.ts",
+    "test": "tsx tests/test_mistry_core.ts && tsx tests/test_pwa_mobile.ts && tsx tests/test_admin_recovery.ts && tsx tests/test_audit_fixes.ts && tsx tests/test_floor_plan_modal.ts && tsx tests/test_floor_plan_cad_suite.ts && node tests/test_planner5d_room_dimensions.js && tsx tests/test_ai_copilot_geometry.ts && tsx tests/test_ai_sketch_understanding.ts && tsx tests/test_ai_assistant_suite.ts && tsx tests/test_cad_wall_openings_and_canvas.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --dotfiles"
@@ -18,12 +18,14 @@
     "lucide-react": "^1.45.0",
     "motion": "^13.2.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "three": "^0.177.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.177.0",
     "@vitejs/plugin-react": "^6.1.1",
     "fake-indexeddb": "^6.2.5",
     "gh-pages": "^6.3.0",

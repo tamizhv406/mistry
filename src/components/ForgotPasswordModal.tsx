@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Phone,
+  Mail,
   KeyRound,
   Lock,
   ArrowRight,
@@ -19,6 +20,7 @@ import {
   resetPasswordWithToken,
   validatePasswordStrength,
 } from '../services/otpService';
+import { requestEmailPasswordReset } from '../services/emailRecoveryService';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -32,6 +34,9 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   onSuccess,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [recoveryMethod, setRecoveryMethod] = useState<'email' | 'phone'>('email');
+  const [email, setEmail] = useState('');
+  const [emailSubmitted, setEmailSubmitted] = useState(false);
   const [mobile, setMobile] = useState('');
   const [otp, setOtp] = useState('');
   const [recoveryToken, setRecoveryToken] = useState('');
@@ -59,6 +64,9 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
   const handleResetState = () => {
     setStep(1);
+    setRecoveryMethod('email');
+    setEmail('');
+    setEmailSubmitted(false);
     setMobile('');
     setOtp('');
     setRecoveryToken('');
@@ -69,6 +77,32 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setCooldown(0);
     onClose();
   };
+
+  // Email recovery handler
+  const handleEmailRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !email.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setInfoMessage('');
+    try {
+      const res = await requestEmailPasswordReset(email.trim());
+      if (res.success) {
+        setInfoMessage(res.message);
+        setEmailSubmitted(true);
+      } else {
+        setError(res.error || 'Request failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Unexpected error.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // Step 1: Request OTP
   const handleRequestOtp = async (e: React.FormEvent) => {
@@ -214,8 +248,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 {step === 4 ? 'Password Reset Complete' : 'Forgot Password?'}
               </h3>
               <p style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                {step === 1 && 'Step 1: Enter your registered mobile number'}
-                {step === 2 && 'Step 2: Enter 6-digit OTP verification code'}
+                {step === 1 && 'Choose your account recovery method below'}
+                {step === 2 && 'Step 2: Enter the 6-digit OTP verification code'}
                 {step === 3 && 'Step 3: Create your new strong password'}
                 {step === 4 && 'Step 4: Account security updated'}
               </p>
@@ -271,66 +305,129 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
             </div>
           )}
 
-          {/* STEP 1: MOBILE NUMBER ENTRY */}
+          {/* STEP 1: RECOVERY METHOD SELECTION */}
           {step === 1 && (
-            <form onSubmit={handleRequestOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <p style={{ fontSize: '0.88rem', color: '#475569' }}>
-                Enter the mobile phone number associated with your Building Mistry account. A 6-digit OTP will be dispatched for verification.
-              </p>
-
-              <div className="form-group">
-                <label htmlFor="fp-mobile" style={{ fontWeight: 600 }}>Mobile Number (கைபேசி எண்)</label>
-                <div style={{ position: 'relative' }}>
-                  <span
-                    style={{
-                      position: 'absolute',
-                      left: '14px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: '#64748b',
-                      fontSize: '0.9rem',
-                      fontWeight: 700,
-                    }}
-                  >
-                    +91
-                  </span>
-                  <input
-                    id="fp-mobile"
-                    name="tel"
-                    type="tel"
-                    placeholder="98401 23456"
-                    value={mobile}
-                    onChange={e => setMobile(e.target.value)}
-                    autoComplete="tel"
-                    style={{ paddingLeft: '48px', fontSize: '1rem', letterSpacing: '0.5px' }}
-                    autoFocus
-                  />
-                </div>
-                <span style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
-                  10-digit Indian phone number starting with 6, 7, 8, or 9
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+            <>
+              {/* Recovery Method Toggle */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 18, background: '#f1f5f9', borderRadius: 12, padding: 4 }}>
                 <button
                   type="button"
-                  className="btn btn-outline"
-                  onClick={handleResetState}
-                  style={{ flex: 1 }}
+                  id="fp-method-email"
+                  onClick={() => { setRecoveryMethod('email'); setError(''); setInfoMessage(''); setEmailSubmitted(false); }}
+                  style={{
+                    flex: 1, padding: '10px 12px', borderRadius: 10, fontWeight: 600, fontSize: '0.88rem',
+                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    background: recoveryMethod === 'email' ? '#ffffff' : 'transparent',
+                    color: recoveryMethod === 'email' ? '#d97706' : '#64748b',
+                    boxShadow: recoveryMethod === 'email' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                    transition: 'all 0.2s',
+                  }}
                 >
-                  Cancel (ரத்து)
+                  <Mail size={16} /> Email Recovery
                 </button>
                 <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loading}
-                  style={{ flex: 1 }}
+                  type="button"
+                  id="fp-method-phone"
+                  onClick={() => { setRecoveryMethod('phone'); setError(''); setInfoMessage(''); setEmailSubmitted(false); }}
+                  style={{
+                    flex: 1, padding: '10px 12px', borderRadius: 10, fontWeight: 600, fontSize: '0.88rem',
+                    border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    background: recoveryMethod === 'phone' ? '#ffffff' : 'transparent',
+                    color: recoveryMethod === 'phone' ? '#d97706' : '#64748b',
+                    boxShadow: recoveryMethod === 'phone' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
+                    transition: 'all 0.2s',
+                  }}
                 >
-                  {loading ? 'Sending Code...' : 'Request OTP / OTP பெறுக'}
-                  <ArrowRight size={16} />
+                  <Phone size={16} /> Mobile OTP
                 </button>
               </div>
-            </form>
+
+              {/* Email Recovery Form */}
+              {recoveryMethod === 'email' && !emailSubmitted && (
+                <form onSubmit={handleEmailRecovery} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <p style={{ fontSize: '0.88rem', color: '#475569' }}>
+                    Enter the email address associated with your account. A password reset link will be sent if the email is registered.
+                  </p>
+                  <div className="form-group">
+                    <label htmlFor="fp-email" style={{ fontWeight: 600 }}>Email Address</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }}>
+                        <Mail size={17} />
+                      </span>
+                      <input
+                        id="fp-email"
+                        type="email"
+                        placeholder="yourname@example.com"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
+                        autoComplete="email"
+                        style={{ paddingLeft: 46, fontSize: '1rem' }}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="btn btn-primary" disabled={loading} id="fp-email-submit-btn">
+                    {loading ? 'Sending...' : <><Mail size={17} /> Send Recovery Email</>}
+                  </button>
+                  <button type="button" className="btn btn-outline" onClick={handleResetState}>
+                    Cancel
+                  </button>
+                </form>
+              )}
+
+              {/* Email Submitted Confirmation */}
+              {recoveryMethod === 'email' && emailSubmitted && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ background: '#dbeafe', color: '#1e40af', padding: '16px', borderRadius: 12, fontSize: '0.88rem', display: 'flex', gap: 10 }}>
+                    <ShieldCheck size={20} style={{ flexShrink: 0, marginTop: 2 }} />
+                    <span>{infoMessage}</span>
+                  </div>
+                  <p style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                    If you don't see an email, check your spam folder. You can also use <strong>Mobile OTP</strong> recovery instead.
+                  </p>
+                  <button type="button" className="btn btn-outline" onClick={() => { setRecoveryMethod('phone'); setEmailSubmitted(false); setError(''); setInfoMessage(''); }}
+                    id="fp-switch-to-phone-btn">
+                    <Phone size={16} /> Switch to Mobile OTP
+                  </button>
+                  <button type="button" className="btn btn-outline" onClick={handleResetState}>Close</button>
+                </div>
+              )}
+
+              {/* Phone OTP Form (existing flow) */}
+              {recoveryMethod === 'phone' && (
+                <form onSubmit={handleRequestOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <p style={{ fontSize: '0.88rem', color: '#475569' }}>
+                    Enter the mobile phone number associated with your Building Mistry account. A 6-digit OTP will be sent for verification.
+                  </p>
+                  <div className="form-group">
+                    <label htmlFor="fp-mobile" style={{ fontWeight: 600 }}>Mobile Number</label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: '0.9rem', fontWeight: 700 }}>+91</span>
+                      <input
+                        id="fp-mobile"
+                        name="tel"
+                        type="tel"
+                        placeholder="98401 23456"
+                        value={mobile}
+                        onChange={e => setMobile(e.target.value)}
+                        autoComplete="tel"
+                        style={{ paddingLeft: '48px', fontSize: '1rem', letterSpacing: '0.5px' }}
+                        autoFocus
+                      />
+                    </div>
+                    <span style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                      10-digit Indian phone number starting with 6, 7, 8, or 9
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                    <button type="button" className="btn btn-outline" onClick={handleResetState} style={{ flex: 1 }}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={loading} style={{ flex: 1 }}>
+                      {loading ? 'Sending Code...' : 'Send OTP'} <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
           )}
 
           {/* STEP 2: OTP VERIFICATION */}
@@ -341,7 +438,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </p>
 
               <div className="form-group">
-                <label htmlFor="fp-otp" style={{ fontWeight: 600 }}>6-Digit OTP Code (சரிபார்ப்பு குறியீடு)</label>
+                <label htmlFor="fp-otp" style={{ fontWeight: 600 }}>6-Digit OTP Code</label>
                 <input
                   id="fp-otp"
                   name="one-time-code"
@@ -385,7 +482,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   }}
                 >
                   <RefreshCw size={14} className={loading ? 'spin' : ''} />
-                  <span>{cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend Code / மறுஅனுப்பு'}</span>
+                  <span>{cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend Code'}</span>
                 </button>
               </div>
 
@@ -396,7 +493,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   onClick={() => setStep(1)}
                   style={{ flex: 1 }}
                 >
-                  Back (பின்செல்க)
+                  Back
                 </button>
                 <button
                   type="submit"
@@ -404,7 +501,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   disabled={loading || otp.length !== 6}
                   style={{ flex: 1 }}
                 >
-                  {loading ? 'Verifying...' : 'Verify OTP / OTP சரிபார்க்க'}
+                  {loading ? 'Verifying...' : 'Verify OTP'}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -419,7 +516,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </p>
 
               <div className="form-group">
-                <label htmlFor="fp-new-password" style={{ fontWeight: 600 }}>New Password (புதிய கடவுச்சொல்)</label>
+                <label htmlFor="fp-new-password" style={{ fontWeight: 600 }}>New Password</label>
                 <div style={{ position: 'relative' }}>
                   <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                   <input
@@ -463,7 +560,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
               </div>
 
               <div className="form-group">
-                <label htmlFor="fp-confirm-password" style={{ fontWeight: 600 }}>Confirm New Password (மீண்டும் உறுதி செய்க)</label>
+                <label htmlFor="fp-confirm-password" style={{ fontWeight: 600 }}>Confirm New Password</label>
                 <div style={{ position: 'relative' }}>
                   <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                   <input
@@ -490,7 +587,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 disabled={loading || !newPassword || !confirmPassword || newPassword !== confirmPassword || !pwdStrength.valid}
                 style={{ width: '100%', marginTop: '6px' }}
               >
-                {loading ? 'Updating Password...' : 'Save New Password & Continue / புதிய கடவுச்சொல் சேமிக்க'}
+                {loading ? 'Updating Password...' : 'Save New Password & Continue'}
               </button>
             </form>
           )}
@@ -525,7 +622,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 onClick={handleResetState}
                 style={{ width: '100%' }}
               >
-                Return to Sign In / உள்நுழைவுக்குத் திரும்பு
+                Return to Sign In
               </button>
             </div>
           )}

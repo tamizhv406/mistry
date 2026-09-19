@@ -526,6 +526,276 @@ export interface BuildingEstimate {
   deletedAt?: string;
 }
 
+// ============================================================
+// Floor Plan Creator — Geometry Types
+// ============================================================
+
+export type FloorPlanUnit = 'feet' | 'meters' | 'inches' | 'centimeters';
+
+export type WallType = 'exterior' | 'interior' | 'partition' | 'structural';
+
+export interface FloorPlanWall {
+  id: string;
+  x1: number;         // Start X in plan units
+  y1: number;         // Start Y in plan units
+  x2: number;         // End X in plan units
+  y2: number;         // End Y in plan units
+  thickness: number;  // Wall thickness in plan units
+  thicknessMm?: number; // Wall thickness in mm (e.g. 100, 115, 150, 200, 230)
+  height?: number;    // Height in plan units
+  wallType: WallType;
+  startNodeId?: string; // Connected vertex node ID
+  endNodeId?: string;   // Connected vertex node ID
+  color?: string;     // Optional override
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export type RoomType =
+  | 'Living Room' | 'Master Bedroom' | 'Bedroom' | 'Guest Room' | 'Kids Room'
+  | 'Kitchen' | 'Dining' | 'Bathroom' | 'Toilet' | 'Utility' | 'Store' | 'Store Room'
+  | 'Study' | 'Pooja' | 'Prayer Room' | 'Balcony' | 'Corridor' | 'Staircase'
+  | 'Parking' | 'Garage' | 'Office' | 'Terrace' | 'Custom';
+
+export interface FloorPlanRoom {
+  id: string;
+  roomType: RoomType;
+  label: string;       // Display name (user editable)
+  x: number;           // Top-left X
+  y: number;           // Top-left Y
+  width: number;       // Width in plan units
+  height: number;      // Height in plan units
+  area?: number;       // Computed area
+  perimeter?: number;  // Computed perimeter
+  polygonPoints?: { x: number; y: number }[]; // Enclosed wall boundary vertices
+  rotation: number;    // Degrees (0, 90, 180, 270)
+  color?: string;
+  floorFinish?: string;// e.g. 'Vitrified Tiles', 'Granite', 'Marble', 'Hardwood'
+  wallThickness?: number; // Wall thickness in plan units
+  ceilingHeight?: number;
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export type DoorType =
+  | 'Single' | 'Double' | 'Main Entrance' | 'Sliding'
+  | 'Pocket' | 'Bathroom' | 'Balcony' | 'French' | 'Opening' | 'Custom';
+
+export interface FloorPlanDoor {
+  id: string;
+  doorType: DoorType;
+  x: number;
+  y: number;
+  width: number;       // Door opening width in plan units
+  height?: number;     // Standard 7 ft / 2.1 m
+  rotation: number;    // 0 | 90 | 180 | 270
+  wallId?: string;     // Which wall it belongs to / hosted on
+  wallOffset?: number; // Offset along host wall from start node
+  swingAngle?: number; // 0-90 for arc display
+  frameThickness?: number; // Door frame jamb thickness
+  hostWallThickness?: number; // Single source of truth host wall thickness
+  flipHorizontal?: boolean;
+  flipVertical?: boolean;
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export type WindowType =
+  | 'Single Window' | 'Double Window' | 'Sliding Window' | 'Large Window'
+  | 'Bay Window' | 'Corner Window' | 'Fixed Window' | 'Ventilator'
+  | 'Standard' | 'Large' | 'Sliding' | 'Bay' | 'Corner' | 'Custom';
+
+export interface FloorPlanWindow {
+  id: string;
+  windowType: WindowType;
+  x: number;
+  y: number;
+  width: number;       // Window width in plan units
+  height?: number;     // e.g. 4 ft
+  sillHeight?: number; // e.g. 3 ft
+  sillHeightMm?: number;
+  frameThickness?: number; // Outer frame thickness
+  hostWallThickness?: number; // Single source of truth host wall thickness
+  rotation: number;
+  wallId?: string;     // Which wall it belongs to / hosted on
+  wallOffset?: number; // Offset along host wall
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export type FurnitureCategory =
+  | 'Bedroom' | 'Living' | 'Dining & Study' | 'Kitchen' | 'Bathroom' | 'Utility' | 'Outdoor'
+  | 'bedroom' | 'living' | 'dining' | 'kitchen' | 'bathroom' | 'utility' | 'outdoor'
+  | 'furniture' | 'electrical' | 'plumbing' | 'structural' | 'custom';
+
+export interface FloorPlanFurniture {
+  id: string;
+  category: FurnitureCategory;
+  itemType: string;    // e.g. 'King Bed', '3-Seater Sofa', 'Dining Table 6', 'Toilet Commode'
+  label: string;
+  x: number;           // Position X in plan units
+  y: number;           // Position Y in plan units
+  width: number;       // Width in plan units
+  height: number;      // Depth/Length in plan units
+  depth?: number;      // Specific depth in plan units
+  elevation?: number;  // Height above floor
+  wallMounted?: boolean; // True for wall-mounted TV, Split AC, mirrors
+  wallId?: string;     // Wall it snaps against
+  rotation: number;    // 0, 45, 90, 135, 180, 225, 270, 315
+  color?: string;
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export type StaircaseType = 'Straight' | 'L' | 'U' | 'Spiral';
+
+export interface FloorPlanStaircase {
+  id: string;
+  stairType?: StaircaseType;
+  type?: 'straight' | 'l-shape' | 'u-shape' | 'spiral';
+  x: number;
+  y: number;
+  width: number;       // Staircase width (e.g. 3.25 ft / 1 m)
+  length: number;      // Total run length (e.g. 10 ft / 3 m)
+  rotation: number;    // 0, 90, 180, 270
+  numSteps?: number;   // e.g. 16
+  steps?: number;
+  riserHeight?: number;// e.g. 7 inches
+  treadWidth?: number; // e.g. 10 inches
+  direction?: 'UP' | 'DOWN' | 'up' | 'down';
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export type StructuralType = 'Column' | 'Pillar' | 'Beam';
+export type ColumnShape = 'square' | 'rectangular' | 'round';
+
+export interface FloorPlanColumn {
+  id: string;
+  structType?: StructuralType;
+  shape?: ColumnShape;
+  x: number;
+  y: number;
+  width: number;       // e.g. 0.75 ft (9 inches)
+  depth: number;       // e.g. 1.25 ft (15 inches)
+  height?: number;     // e.g. 10 ft
+  rotation?: number;
+  material?: string;   // 'RCC M20', 'Steel', 'Brick'
+  layerId?: string;
+  layer?: string;
+  label?: string;
+  locked?: boolean;
+}
+
+export type AnnotationType = 'text' | 'dimension' | 'area' | 'north' | 'note' | 'scale' | 'room-label';
+
+export interface FloorPlanAnnotation {
+  id: string;
+  annotType?: AnnotationType;
+  x: number;
+  y: number;
+  x2?: number;
+  y2?: number;
+  text: string;
+  fontSize?: number;
+  rotation?: number;
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export interface FloorPlanDimension {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  distance: number;
+  text?: string;
+  unit?: FloorPlanUnit;
+  orientation?: 'horizontal' | 'vertical' | 'aligned';
+  targetType?: 'wall' | 'room' | 'custom';
+  targetId?: string;
+  layerId?: string;
+  layer?: string;
+  locked?: boolean;
+}
+
+export interface FloorPlanLayerConfig {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  opacity?: number;
+  color?: string;
+}
+
+export interface FloorPlanVersion {
+  id?: string;
+  versionId: string;
+  versionNumber: number;
+  timestamp: string;
+  note: string;
+  snapshot: string;    // JSON serialization of the plan geometry
+}
+
+export interface FloorPlanLevel {
+  id: string;
+  name: string;        // e.g. "Ground Floor", "First Floor", "Terrace"
+  elevation?: number;  // in feet / meters
+  walls: FloorPlanWall[];
+  rooms: FloorPlanRoom[];
+  doors: FloorPlanDoor[];
+  windows: FloorPlanWindow[];
+  furniture?: FloorPlanFurniture[];
+  stairs?: FloorPlanStaircase[];
+  columns?: FloorPlanColumn[];
+  annotations?: FloorPlanAnnotation[];
+  dimensions?: FloorPlanDimension[];
+}
+
+export interface FloorPlan {
+  id: string;
+  userId: string;
+  siteId?: string;       // Optional site association
+  siteName?: string;     // Denormalized for display
+  buildingName: string;
+  floorName: string;     // e.g. "Ground Floor", "First Floor"
+  plotLength: number;    // Plot boundary length
+  plotWidth: number;     // Plot boundary width
+  unit: FloorPlanUnit;   // 'feet' | 'meters' | 'inches' | 'centimeters'
+  walls: FloorPlanWall[];
+  rooms: FloorPlanRoom[];
+  doors: FloorPlanDoor[];
+  windows: FloorPlanWindow[];
+  furniture?: FloorPlanFurniture[];
+  stairs?: FloorPlanStaircase[];
+  columns?: FloorPlanColumn[];
+  annotations?: FloorPlanAnnotation[];
+  dimensions?: FloorPlanDimension[];
+  floors?: FloorPlanLevel[];
+  layers?: FloorPlanLayerConfig[];
+  versionHistory?: FloorPlanVersion[];
+  northRotation?: number; // 0, 45, 90, 180, 270
+  scale?: string;         // '1:50', '1:100', '1:200', 'custom'
+  ceilingHeight?: number; // e.g. 10 ft
+  status?: 'draft' | 'completed';
+  notes?: string;
+  thumbnailDataUrl?: string;  // PNG thumbnail (not the full geometry)
+  isDeleted: boolean;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
+
 export type EntityTable =
   | 'sites'
   | 'materials'
@@ -543,7 +813,8 @@ export type EntityTable =
   | 'otherExpenses'
   | 'materialPrices'
   | 'estimates'
-  | 'payments';
+  | 'payments'
+  | 'floorPlans';
 
 export interface TrashRecord {
   id: string;

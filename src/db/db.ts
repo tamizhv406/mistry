@@ -24,6 +24,7 @@ import type {
   OtpSession,
   AdminAuditLog,
   UserRole,
+  FloorPlan,
 } from './types';
 
 export class BuildingMistryDB extends Dexie {
@@ -48,6 +49,7 @@ export class BuildingMistryDB extends Dexie {
   payments!: Table<PaymentTransaction, string>;
   otpSessions!: Table<OtpSession, string>;
   adminAuditLogs!: Table<AdminAuditLog, string>;
+  floorPlans!: Table<FloorPlan, string>;
 
   constructor() {
     super('BuildingMistryDB');
@@ -173,6 +175,32 @@ export class BuildingMistryDB extends Dexie {
       payments: 'id, userId, siteId, relatedRecordId, module, date, isDeleted, [siteId+date]',
       otpSessions: 'id, phoneNormalized, token, expiresAt',
       adminAuditLogs: 'id, action, actorId, timestamp',
+    });
+
+    // Version 7: Add Floor Plan Creator table (additive — no existing data affected)
+    this.version(7).stores({
+      sites: 'id, userId, name, status, isDeleted, createdAt',
+      materials: 'id, userId, siteId, category, isDeleted, purchaseDate',
+      rodEntries: 'id, userId, siteId, diameter, isDeleted, purchaseDate',
+      workers: 'id, userId, siteId, category, isDeleted, name',
+      attendance: 'id, userId, siteId, workerId, date, isDeleted, [siteId+date]',
+      labourAdvances: 'id, userId, siteId, workerId, date, isDeleted',
+      salaryPayments: 'id, userId, siteId, workerId, date, isDeleted',
+      tools: 'id, userId, siteId, isDeleted',
+      teaSnacksExpenses: 'id, userId, siteId, date, isDeleted',
+      poojaExpenses: 'id, userId, siteId, date, isDeleted',
+      electricityBills: 'id, userId, siteId, month, isDeleted',
+      waterBills: 'id, userId, siteId, date, isDeleted',
+      siteComments: 'id, userId, siteId, dateTime, isDeleted',
+      otherExpenses: 'id, userId, siteId, category, isDeleted, date',
+      users: 'id, username, mobile, phoneNormalized, email, role, isActive',
+      activityLogs: 'id, userId, siteId, timestamp',
+      materialPrices: 'id, userId, material, supplier, district, effectiveDate, isDeleted',
+      estimates: 'id, userId, siteId, estimateName, isDeleted, createdAt',
+      payments: 'id, userId, siteId, relatedRecordId, module, date, isDeleted, [siteId+date]',
+      otpSessions: 'id, phoneNormalized, token, expiresAt',
+      adminAuditLogs: 'id, action, actorId, timestamp',
+      floorPlans: 'id, userId, siteId, isDeleted, createdAt',
     });
   }
 

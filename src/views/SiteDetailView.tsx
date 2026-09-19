@@ -26,6 +26,7 @@ import {
   Scale,
   Calculator,
   ShieldCheck,
+  PenTool,
 } from 'lucide-react';
 import { useSiteData } from '../hooks/useSiteData';
 import { MaterialsTab } from './site-tabs/MaterialsTab';
@@ -81,6 +82,7 @@ interface SiteDetailViewProps {
 
   // Navigation
   onOpenEstimator?: () => void;
+  onOpenFloorPlans?: (siteId: string) => void;
   onNotify?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onReturnToAdmin?: () => void;
   initialTab?: 'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance';
@@ -108,6 +110,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
   onOpenCommentModal,
   onTrashRecord,
   onOpenEstimator,
+  onOpenFloorPlans,
   onNotify,
   onReturnToAdmin,
   initialTab,
@@ -471,6 +474,19 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           <Scale size={17} />
           <span>Estimator & Variance</span>
         </button>
+
+        {onOpenFloorPlans && (
+          <button
+            type="button"
+            className="tab-btn"
+            onClick={() => onOpenFloorPlans(site.id)}
+            id="site-tab-floor-plans"
+            title="Create & manage floor plans for this site"
+          >
+            <PenTool size={17} />
+            <span>Floor Plans</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: OVERVIEW */}
@@ -807,6 +823,28 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 </div>
                 <ChevronRight size={18} className="site-grid-card-arrow" />
               </div>
+
+              {/* 16. Floor Plan Creator */}
+              {onOpenFloorPlans && (
+                <div
+                  className="site-grid-card site-grid-card-featured"
+                  onClick={() => onOpenFloorPlans(site.id)}
+                  role="button"
+                  tabIndex={0}
+                  id="site-card-floor-plans"
+                  style={{ border: '1.5px solid rgba(217, 119, 6, 0.35)' }}
+                >
+                  <div className="site-grid-card-icon" style={{ background: 'rgba(217, 119, 6, 0.15)', color: '#d97706' }}>
+                    <PenTool size={24} />
+                  </div>
+                  <div className="site-grid-card-content">
+                    <div className="site-grid-card-title">Floor Plan Creator</div>
+                    <div className="site-grid-card-badge" style={{ background: '#fffbeb', color: '#b45309' }}>2D / 3D Layouts</div>
+                    <div className="site-grid-card-sub">Design & Edit Floor Plans</div>
+                  </div>
+                  <ChevronRight size={18} className="site-grid-card-arrow" />
+                </div>
+              )}
             </div>
           </div>
 

@@ -6,6 +6,7 @@ import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Toast, type ToastMessage } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
+import { AppShell } from './components/AppShell';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
@@ -14,6 +15,8 @@ import { TrashView } from './views/TrashView';
 import { BackupView } from './views/BackupView';
 import { EstimatorView } from './views/EstimatorView';
 import { AdminDashboardView } from './views/AdminDashboardView';
+import { FloorPlanListView } from './views/FloorPlanListView';
+import { FloorPlanEditorView } from './views/FloorPlanEditorView';
 import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
 
 import { SiteModal } from './components/SiteModal';
@@ -56,8 +59,9 @@ import type {
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
-  const [currentView, setCurrentView] = useState<'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'estimator' | 'admin'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'estimator' | 'admin' | 'floor-plans' | 'floor-plan-editor' | 'notifications'>('dashboard');
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [selectedFloorPlanId, setSelectedFloorPlanId] = useState<string | null>(null);
   const [currentSiteTab, setCurrentSiteTab] = useState<
     'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance'
   >('overview');
@@ -251,6 +255,12 @@ export function App() {
       } else {
         addToast('Access denied: Admin Portal is restricted to administrators', 'error');
       }
+    } else if (view === 'floor-plans') {
+      setCurrentView('floor-plans');
+    } else if (view === 'floor-plan-editor') {
+      setCurrentView('floor-plan-editor');
+    } else if (view === 'notifications') {
+      setCurrentView('notifications');
     } else {
       setSelectedSiteId(null);
       setCurrentView('dashboard');
@@ -392,39 +402,36 @@ export function App() {
 
   return (
     <div className="app-container">
-      {/* Top Navbar */}
-      <Navbar
-        currentView={currentView}
-        selectedSiteId={selectedSiteId}
-        onNavigate={handleNavigate}
-        onOpenNewSiteModal={() => {
-          setSiteToEdit(null);
-          setSiteModalOpen(true);
-        }}
+      {/* Top Navbar — visible on mobile only (AppShell handles desktop sidebar) */}
+      <div className="desktop-navbar-hidden">
+        <Navbar
+          currentView={currentView}
+          selectedSiteId={selectedSiteId}
+          onNavigate={handleNavigate}
+          onOpenNewSiteModal={() => {
+            setSiteToEdit(null);
+            setSiteModalOpen(true);
+          }}
+          user={currentUser}
+          onLogout={handleLogout}
+        />
+      </div>
+
+      <AppShell
         user={currentUser}
+        currentView={currentView}
+        onNavigate={handleNavigate}
         onLogout={handleLogout}
-      />
-
-      {/* Offline / Online Real-time Status Banners */}
-      {!isOnline && (
-        <div className="offline-status-banner no-print" role="status">
-          <span className="offline-dot">⚡</span>
-          <span>
-            <strong>Offline Mode:</strong> Database working locally on device. All changes are completely safe and persistent.
-          </span>
-        </div>
-      )}
-      {showOnlineRestored && (
-        <div className="online-status-banner no-print" role="status">
-          <span>🟢</span>
-          <span>
-            <strong>Back Online:</strong> Internet connection restored. Local records active.
-          </span>
-        </div>
-      )}
-
-      {/* Main View Router */}
-      <main>
+        onOpenNewSiteModal={() => { setSiteToEdit(null); setSiteModalOpen(true); }}
+        onOpenSiteTab={handleOpenSiteTab}
+        isOnline={isOnline}
+        showOnlineRestored={showOnlineRestored}
+        installPromptEvent={installPromptEvent}
+        onInstallPwa={handleInstallPwa}
+        isPwaInstalled={isPwaInstalled}
+      >
+        {/* Main View Router */}
+        <main>
         {currentView === 'dashboard' && (
           <DashboardView
             onOpenSite={id => handleNavigate('site-detail', id)}
@@ -527,9 +534,68 @@ export function App() {
             }}
             onTrashRecord={(table, id, name) => handleSoftDelete(table, id, name)}
             onOpenEstimator={() => handleNavigate('estimator')}
+            onOpenFloorPlans={siteId => {
+              setSelectedSiteId(siteId);
+              setCurrentView('floor-plans');
+            }}
             onNotify={addToast}
             onReturnToAdmin={isAdmin(currentUser) ? () => handleNavigate('admin') : undefined}
           />
+        )}
+
+        {currentView === 'floor-plans' && currentUser && (
+          <FloorPlanListView
+            user={currentUser}
+            onOpenEditor={(planId, siteId) => {
+              setSelectedFloorPlanId(planId);
+              setCurrentView('floor-plan-editor');
+            }}
+            onNotify={addToast}
+            initialSiteId={selectedSiteId}
+            onOpenNewSiteModal={() => {
+              setSiteToEdit(null);
+              setSiteModalOpen(true);
+            }}
+          />
+        )}
+
+        {currentView === 'floor-plan-editor' && currentUser && (
+          selectedFloorPlanId ? (
+            <FloorPlanEditorView
+              planId={selectedFloorPlanId}
+              user={currentUser}
+              onBack={() => setCurrentView('floor-plans')}
+              onBackToSite={(siteId) => {
+                setSelectedSiteId(siteId);
+                setCurrentView('site-detail');
+              }}
+              onNotify={addToast}
+              onOpenEstimator={(areaSqFt) => {
+                handleNavigate('estimator');
+                addToast(`Floor plan area: ${areaSqFt.toFixed(0)} sq.ft passed to estimator`, 'info');
+              }}
+            />
+          ) : (
+            <FloorPlanListView
+              user={currentUser}
+              onOpenEditor={(planId) => {
+                setSelectedFloorPlanId(planId);
+                setCurrentView('floor-plan-editor');
+              }}
+              onNotify={addToast}
+              onOpenNewSiteModal={() => {
+                setSiteToEdit(null);
+                setSiteModalOpen(true);
+              }}
+            />
+          )
+        )}
+
+        {currentView === 'notifications' && (
+          <div style={{ padding: '40px 24px', textAlign: 'center', color: '#64748b' }}>
+            <h2 style={{ color: '#1e293b', marginBottom: 12 }}>Notifications</h2>
+            <p>No new notifications at this time.</p>
+          </div>
         )}
 
         {currentView === 'estimator' && (
@@ -564,6 +630,7 @@ export function App() {
           />
         )}
       </main>
+      </AppShell>
 
       {/* Mobile Bottom Navigation Bar */}
       <MobileBottomNav
@@ -595,7 +662,7 @@ export function App() {
             </div>
             <div className="mobile-drawer-header">
               <div>
-                <h3 className="mobile-drawer-title">Choose Project Site (தளத்தைத் தேர்வு செய்க)</h3>
+                <h3 className="mobile-drawer-title">Choose Project Site</h3>
                 <p className="mobile-drawer-sub">Select a site to view {pendingSiteTab?.tab || 'ledger'}</p>
               </div>
               <button
