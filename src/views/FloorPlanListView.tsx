@@ -1,3 +1,4 @@
+import { parsePlanFile } from '../domain/planDocument';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   PenTool,
@@ -165,38 +166,41 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
+      if (file.size > 20 * 1024 * 1024) throw new Error('This file is too large to be a floor plan.');
       const text = await file.text();
-      const data = JSON.parse(text);
-      if (!data.floorName || !data.plotLength || !data.plotWidth) {
-        throw new Error('Invalid floor plan file format: missing floorName, plotLength, or plotWidth.');
-      }
+      // Reads this app's own export (all floors) as well as the older single-floor format.
+      const imported = parsePlanFile(text);
       if (userSites.length === 0) {
-        onNotify('Create a construction site first to import plans.', 'error');
+        onNotify('Create a project first, then import the plan into it.', 'error');
         return;
       }
-      const targetSite = userSites.find(s => s.id === data.siteId) || userSites[0];
+      const targetSite = userSites.find(s => s.id === initialSiteId) || userSites[0];
+      const ground = imported.floors[0];
       const res = await createFloorPlan(user, {
-        buildingName: data.buildingName || targetSite.name,
-        floorName: `${data.floorName} (Imported)`,
+        buildingName: `${imported.buildingName} (imported)`,
+        floorName: ground.name,
         siteId: targetSite.id,
         siteName: targetSite.name,
-        plotLength: parseFloat(data.plotLength) || 40,
-        plotWidth: parseFloat(data.plotWidth) || 30,
-        unit: data.unit || 'feet',
-        walls: data.walls || [],
-        rooms: data.rooms || [],
-        doors: data.doors || [],
-        windows: data.windows || [],
-        furniture: data.furniture || [],
-        stairs: data.stairs || [],
-        columns: data.columns || [],
-        annotations: data.annotations || [],
-        notes: data.notes,
+        plotLength: imported.plotLength,
+        plotWidth: imported.plotWidth,
+        unit: imported.unit,
+        ceilingHeight: imported.ceilingHeight,
+        walls: ground.walls,
+        rooms: ground.rooms,
+        doors: ground.doors,
+        windows: ground.windows,
+        furniture: ground.furniture || [],
+        stairs: ground.stairs || [],
+        columns: ground.columns || [],
+        annotations: ground.annotations || [],
+        floors: imported.floors,
         status: 'draft',
       });
       if (res.success && res.plan) {
-        onNotify(`Floor plan "${res.plan.floorName}" imported successfully!`, 'success');
+        onNotify(`Plan imported into ${targetSite.name} with ${imported.floors.length} floor${imported.floors.length === 1 ? '' : 's'}`, 'success');
         onOpenEditor(res.plan.id);
+      } else {
+        onNotify(res.error || 'The plan could not be imported.', 'error');
       }
     } catch (err: any) {
       onNotify('Import failed: ' + err.message, 'error');
@@ -528,7 +532,7 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
                           className="fp-card-thumbnail"
                           onClick={() => onOpenEditor(fp.id)}
                         >
-                          {fp.thumbnailDataUrl ? (
+                          {fp.thumbnailDataUrl && fp.thumbnailDataUrl.startsWith('data:') ? (
                             <img
                               src={fp.thumbnailDataUrl}
                               alt={`${fp.floorName} thumbnail`}
@@ -1305,10 +1309,8 @@ const NewFloorPlanModal: React.FC<NewFloorPlanModalProps> = ({
                 onChange={e => setUnit(e.target.value as FloorPlanUnit)}
                 required
               >
-                <option value="feet">Feet (ft)</option>
-                <option value="inches">Inches (in)</option>
-                <option value="meters">Meters (m)</option>
-                <option value="centimeters">Centimeters (cm)</option>
+                <option value="feet">Feet and inches</option>
+                <option value="meters">Metres</option>
               </select>
             </div>
 

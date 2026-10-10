@@ -872,3 +872,28 @@ button.m-stat:active { background: var(--m-surface-2); }
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ------------------------------------------------------------------ Floor planner (phone) */
+
+.fp-canvas-svg { touch-action: none; -webkit-user-select: none; user-select: none; }
+
+.fp-mobile-mode-bar .fp-mobile-history-btn {
+  flex: 0 0 46px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e2e8f0;
+}
+.fp-mobile-mode-bar .fp-mobile-history-btn:disabled { opacity: 0.3; }
+
+@media (max-width: 768px) {
+  /* Comfortable touch targets in the editor chrome. */
+  .fp-mobile-back-btn, .fp-mobile-menu-btn { min-width: 44px; min-height: 44px; }
+  .fp-mobile-save-btn { min-height: 40px; }
+  .fp-mobile-mode-btn { min-height: 40px; }
+  .fp-mobile-zoom-btn { min-width: 40px; min-height: 40px; }
+  .fp-mobile-tool-btn { min-height: 52px; }
+  .fp-mobile-tool-label { font-size: 0.68rem; }
+  .fp-mobile-sub-btn { min-height: 38px; }
+}

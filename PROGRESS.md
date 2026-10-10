@@ -54,13 +54,38 @@ Bugs found in the existing code and fixed along the way:
 - Tools: `available = total − issued − lost`. See `src/domain/toolTracking.ts`.
 - Reports: "recorded expenditure" (by event date) and "paid out" (payments ledger) are separate. See `src/domain/reports.ts`.
 
-## Not done yet
+## Floor Planner (done and verified on a phone viewport)
 
-See the "Next steps" section at the end of this file. It is rewritten at the end of every work session.
+- Full-screen editor on phones; create dialog button no longer hidden behind the navigation.
+- One pointer-based input path: two fingers pinch-zoom (anchored between the fingers) and never draw;
+  placing tools act on a tap; walls can be drawn by dragging or by tapping both ends; elements and wall
+  corners can be dragged with a finger; follow-up "ghost clicks" after a tap are ignored.
+- Rooms are derived from connected walls of any shape (shared and T-junction walls included), with exact
+  area; they follow wall edits and keep their names. No guessed room types.
+- Joined walls stay joined when a wall or corner is moved; doors/windows follow or go with their wall.
+- Doors and windows must be on a wall, fit it, and not overlap; refusals are explained in plain words.
+- Floors: add, rename, duplicate, delete through tested functions; per-floor undo history.
+- Saving: all floors together, autosave after 1.5 s, save on Back / background / close, real thumbnail.
+- Export: picture (whole plan, with units and disclaimer), print/PDF, plan file that Import reads back.
+- Units: feet or metres only for new plans; fixed wrong areas for legacy inches/centimetre plans.
+
+Bugs fixed here: deleting a floor could overwrite another floor's walls; undo after switching floors loaded
+the other floor; edits made within 3.5 s of leaving were lost; the saved thumbnail was a dead `blob:` link;
+autosave showed a toast every time; pinch zoom ran away; importing the app's own export failed.
+
+## Not verified / known limits
+
+- The 3D preview opens from the editor and reads the same floor data, but it was not re-tested in this pass.
+- DXF export is unchanged (wall centre-lines only) and was not re-tested.
+- The classic "All ledgers" screens still work and now use the shared salary ledger, but keep their older look.
+- Not tested on a physical phone; testing used Edge with touch emulation at 390 x 844.
+- Supabase: nothing is synced. See README "Data and privacy".
 
 ## Next steps
 
-1. Floor Planner (flagship): make the existing editor fully usable on a phone, verify drawing, snapping, rooms,
-   doors/windows, floors, undo/redo, autosave and reload, 3D preview and export; add tests for anything not covered.
-2. Supabase: decide whether cloud sync is wanted (see README "Data and Supabase"). Nothing is synced today.
-3. README rewrite for the new structure.
+1. Try the app on a real Android phone (install from the browser menu) and note anything awkward.
+2. Decide whether cloud backup/sync is wanted. If yes: design tables to match `src/db/types.ts`, add RLS
+   per project owner, and sync from IndexedDB. Do not put a service-role key in the frontend.
+3. Re-test 3D preview and DXF export against multi-floor plans.
+4. Restyle the classic ledger screens with `src/styles/mobile.css`, or retire the ones the new screens replace.
+5. Merge: review the branch, then `git checkout main && git merge feature/mobile-first-overhaul`.

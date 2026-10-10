@@ -76,6 +76,16 @@ import type {
 import type { PlanContext } from '../services/aiProvider';
 
 
+import {
+  PlanHistory, PLAN_DISCLAIMER, addFloor, buildSavePayload, deleteFloor, duplicateFloor, exportPlan, levelToState, loadFloors,
+  normaliseFloor, renameFloor, suggestFloorName, switchFloor, validateFloorName, type FloorsView,
+} from '../domain/planDocument';
+import {
+  areaToSqFt, baseUnitOf, fitOpeningOnWall, formatPlanArea, joinTolerance, moveJoint, openingOverlaps, roomArea, roomPerimeter,
+  translateWall,
+} from '../domain/planGeometry';
+import { ConfirmSheet, Field, Note, Sheet } from '../components/mobile/kit';
+
 // ─────────────────────────────────────────────────────────
 // Constants & Catalogs
 // ─────────────────────────────────────────────────────────
@@ -216,6 +226,7 @@ interface EditorState {
 
 type EditorAction =
   | { type: 'SET_STATE'; payload: EditorState }
+  | { type: 'SET_WALLS'; walls: FloorPlanWall[] }
   | { type: 'ADD_WALL'; payload: FloorPlanWall }
   | { type: 'UPDATE_WALL'; id: string; changes: Partial<FloorPlanWall> }
   | { type: 'DELETE_WALL'; id: string }
@@ -245,6 +256,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'SET_STATE':
       return action.payload;
+    case 'SET_WALLS':
+      return { ...state, walls: action.walls };
     case 'ADD_WALL':
       return { ...state, walls: [...state.walls, action.payload] };
     case 'UPDATE_WALL':
@@ -302,6 +315,18 @@ function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+const WALL_ACTIONS = new Set<EditorAction['type']>(['ADD_WALL', 'UPDATE_WALL', 'DELETE_WALL', 'SET_WALLS']);
+
+/**
+ * Applies an edit and, when walls changed, brings the floor back to a consistent state:
+ * rooms enclosed by walls are recalculated and doors/windows stay on (or go with) their wall.
+ */
+function reducePlan(state: EditorState, action: EditorAction, unit: FloorPlanUnit): EditorState {
+  const next = editorReducer(state, action);
+  if (!WALL_ACTIONS.has(action.type)) return next;
+  return normaliseFloor(next, unit, () => uid('room')).state;
+}
+
 function snapToGrid(val: number, gridSize: number = SNAP_THRESHOLD): number {
   return Math.round(val / gridSize) * gridSize;
 }
@@ -325,20 +350,15 @@ function wallLength(w: FloorPlanWall): number {
   return Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2);
 }
 
+// Coordinates are in feet (feet/inches plans) or metres (metre/centimetre plans), so the
+// outline area is already in sq.ft or sq.m. It is the area of the outline as drawn.
 function computeRoomArea(r: FloorPlanRoom, unit: FloorPlanUnit): string {
-  const area = (r.polygonPoints && r.polygonPoints.length >= 3)
-    ? computePolygonArea(r.polygonPoints)
-    : (r.width * r.height);
-  if (unit === 'feet') return `${area.toFixed(1)} sq.ft`;
-  if (unit === 'inches') return `${(area / 144).toFixed(1)} sq.ft`;
-  if (unit === 'centimeters') return `${(area / 10000).toFixed(2)} sq.m`;
-  return `${area.toFixed(2)} sq.m`;
+  const area = roomArea(r);
+  return baseUnitOf(unit) === 'feet' ? `${area.toFixed(1)} sq.ft` : `${area.toFixed(2)} sq.m`;
 }
 
 function computeRoomPerimeter(r: FloorPlanRoom, unit: FloorPlanUnit): string {
-  const perimeter = (r.polygonPoints && r.polygonPoints.length >= 3)
-    ? computePolygonPerimeter(r.polygonPoints)
-    : 2 * (r.width + r.height);
+  const perimeter = roomPerimeter(r);
   if (unit === 'feet') return `${perimeter.toFixed(1)} ft`;
   if (unit === 'inches') return `${(perimeter * 12).toFixed(1)} in`;
   if (unit === 'centimeters') return `${(perimeter * 100).toFixed(0)} cm`;
@@ -380,12 +400,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [activeFloorIndex, setActiveFloorIndex] = useState(0);
 
   // Editor state with undo/redo
-  const [editorState, dispatch] = useReducer(editorReducer, {
+  const planReducer = useCallback((s: EditorState, a: EditorAction) => reducePlan(s, a, unit), [unit]);
+  const [editorState, dispatch] = useReducer(planReducer, {
     walls: [], rooms: [], doors: [], windows: [],
     furniture: [], stairs: [], columns: [], annotations: [],
   });
-  const historyRef = useRef<EditorState[]>([]);
-  const historyIndexRef = useRef(-1);
+  // Undo history is kept per floor, so undo can never bring one floor's drawing into another.
+  const historyRef = useRef(new PlanHistory(UNDO_HISTORY_LIMIT));
+  const activeFloorIdRef = useRef('level-ground');
+  const [, setHistoryTick] = useState(0);
+  const canUndo = historyRef.current.canUndo(activeFloorIdRef.current);
+  const canRedo = historyRef.current.canRedo(activeFloorIdRef.current);
+  // Latest values for code that runs outside the render that created it (autosave, unload).
+  const latestRef = useRef<{ plan: FloorPlan | null; floors: FloorPlanLevel[]; activeIndex: number; state: EditorState; dirty: boolean }>({
+    plan: null, floors: [], activeIndex: 0, state: editorState, dirty: false,
+  });
+  const [floorDialog, setFloorDialog] = useState<{ mode: 'add' | 'duplicate' | 'rename'; value: string; error: string } | null>(null);
+  const [confirmDeleteFloor, setConfirmDeleteFloor] = useState(false);
 
   // Tools & View Modes
   const [activeTool, setActiveTool] = useState<Tool>('select');
@@ -671,6 +702,40 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const panMovedRef = useRef(false);
   const touchStartRef = useRef<{ x: number; y: number; panX: number; panY: number; dist?: number } | null>(null);
 
+  // Pointer input (mouse, touch and pen through one path).
+  const supportsPointer = typeof window !== 'undefined' && 'PointerEvent' in window;
+  const elementHitRef = useRef(false);
+  // Where and when the last canvas tap ended. The browser sends a follow-up "click" for every
+  // tap; if a button has appeared under the finger by then (for example Delete on the item
+  // that was just placed) that click must not press it.
+  const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
+  useEffect(() => {
+    const swallowGhostClick = (ev: MouseEvent) => {
+      const tap = lastTapRef.current;
+      if (Date.now() - tap.time < 500 && Math.hypot(ev.clientX - tap.x, ev.clientY - tap.y) < 30) {
+        ev.stopPropagation();
+        ev.preventDefault();
+      }
+    };
+    window.addEventListener('click', swallowGhostClick, true);
+    return () => window.removeEventListener('click', swallowGhostClick, true);
+  }, []);
+  const dragStartStateRef = useRef<EditorState | null>(null);
+  const jointDragRef = useRef<{ walls: FloorPlanWall[]; origin: { x: number; y: number } } | null>(null);
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const gestureRef = useRef<{
+    kind: 'none' | 'single' | 'pinch';
+    onElement: boolean;
+    downAt: { x: number; y: number };
+    moved: boolean;
+    dragDrawing: boolean;
+    panning: boolean;
+    waitForAllUp: boolean;
+    startDist: number;
+    startZoom: number;
+    anchor: { x: number; y: number };
+  }>({ kind: 'none', onElement: false, downAt: { x: 0, y: 0 }, moved: false, dragDrawing: false, panning: false, waitForAllUp: false, startDist: 1, startZoom: 1, anchor: { x: 0, y: 0 } });
+
   // Layer Helpers
   const isLayerVisible = useCallback((layerId?: string) => {
     if (!layerId) return true;
@@ -701,37 +766,20 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (cancelled) return;
       if (loaded) {
         setPlan(loaded);
-        const initialFloors: FloorPlanLevel[] = loaded.floors && loaded.floors.length > 0
-          ? loaded.floors
-          : [{
-              id: 'level-ground',
-              name: loaded.floorName || 'Ground Floor',
-              walls: loaded.walls || [],
-              rooms: loaded.rooms || [],
-              doors: loaded.doors || [],
-              windows: loaded.windows || [],
-              furniture: loaded.furniture || [],
-              stairs: loaded.stairs || [],
-              columns: loaded.columns || [],
-              annotations: loaded.annotations || [],
-            }];
+        // loadFloors also adopts drawings saved in the plan's top-level fields (older plans
+        // and starter templates), so nothing that was saved is left behind.
+        const initialFloors: FloorPlanLevel[] = loadFloors(loaded);
 
         setFloorLevels(initialFloors);
         setActiveFloorIndex(0);
 
-        const currentLvl = initialFloors[0];
-        const state: EditorState = {
-          walls: currentLvl.walls || [],
-          rooms: currentLvl.rooms || [],
-          doors: currentLvl.doors || [],
-          windows: currentLvl.windows || [],
-          furniture: currentLvl.furniture || [],
-          stairs: currentLvl.stairs || [],
-          columns: currentLvl.columns || [],
-          annotations: currentLvl.annotations || [],
-        };
+        const state: EditorState = levelToState(initialFloors[0]);
         dispatch({ type: 'SET_STATE', payload: state });
-        pushHistory(state);
+        historyRef.current = new PlanHistory(UNDO_HISTORY_LIMIT);
+        activeFloorIdRef.current = initialFloors[0].id;
+        historyRef.current.reset(initialFloors[0].id, state);
+        setHistoryTick(t => t + 1);
+        setSaveStatus('saved');
 
         // Automatic Fit-To-Screen on load: calculates actual geometry bounding box
         const bbox = calculatePlanBoundingBox(
@@ -764,14 +812,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   // ── History ───────────────────────────────────────────
 
   const pushHistory = useCallback((state: EditorState) => {
-    const idx = historyIndexRef.current + 1;
-    historyRef.current = historyRef.current.slice(0, idx);
-    historyRef.current.push(JSON.parse(JSON.stringify(state)));
-    if (historyRef.current.length > UNDO_HISTORY_LIMIT) {
-      historyRef.current.shift();
-    } else {
-      historyIndexRef.current = idx;
-    }
+    historyRef.current.push(activeFloorIdRef.current, state);
+    setHistoryTick(t => t + 1);
   }, []);
 
   const markUnsaved = useCallback(() => setSaveStatus('unsaved'), []);
@@ -815,27 +857,36 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const dispatchWithHistory = useCallback((action: EditorAction) => {
     dispatch(action);
-    const next = editorReducer(editorState, action);
+    // Same reducer as the live state, so the history holds exactly what is on screen.
+    const next = reducePlan(editorState, action, unit);
     pushHistory(next);
     markUnsaved();
-  }, [editorState, pushHistory, markUnsaved]);
+    if (WALL_ACTIONS.has(action.type)) {
+      const before = new Set(editorState.rooms.map(r => r.id));
+      const created = next.rooms.filter(r => r.fromWalls && !before.has(r.id));
+      if (created.length === 1) onNotify(`Room created from walls: ${formatPlanArea(roomArea(created[0]), unit)}. Tap it to name it.`, 'success');
+      else if (created.length > 1) onNotify(`${created.length} rooms created from walls. Tap a room to name it.`, 'success');
+      const lostOpenings = editorState.doors.length + editorState.windows.length - next.doors.length - next.windows.length;
+      if (lostOpenings > 0) onNotify(`${lostOpenings} door/window removed with its wall.`, 'info');
+    }
+  }, [editorState, pushHistory, markUnsaved, unit, onNotify]);
 
   const handleUndo = useCallback(() => {
-    if (historyIndexRef.current > 0) {
-      historyIndexRef.current -= 1;
-      const prev = historyRef.current[historyIndexRef.current];
-      dispatch({ type: 'SET_STATE', payload: JSON.parse(JSON.stringify(prev)) });
-      markUnsaved();
-    }
+    const prev = historyRef.current.undo(activeFloorIdRef.current);
+    if (!prev) return;
+    dispatch({ type: 'SET_STATE', payload: prev });
+    setSelectedElement(null);
+    setHistoryTick(t => t + 1);
+    markUnsaved();
   }, [markUnsaved]);
 
   const handleRedo = useCallback(() => {
-    if (historyIndexRef.current < historyRef.current.length - 1) {
-      historyIndexRef.current += 1;
-      const next = historyRef.current[historyIndexRef.current];
-      dispatch({ type: 'SET_STATE', payload: JSON.parse(JSON.stringify(next)) });
-      markUnsaved();
-    }
+    const next = historyRef.current.redo(activeFloorIdRef.current);
+    if (!next) return;
+    dispatch({ type: 'SET_STATE', payload: next });
+    setSelectedElement(null);
+    setHistoryTick(t => t + 1);
+    markUnsaved();
   }, [markUnsaved]);
 
   // ── Coordinate Conversion ────────────────────────────
@@ -855,193 +906,158 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   // ── Save ──────────────────────────────────────────────
 
-  const handleSave = useCallback(async () => {
-    if (!plan) return;
+  latestRef.current = { plan, floors: floorLevels, activeIndex: activeFloorIndex, state: editorState, dirty: saveStatus !== 'saved' };
+  const saveSeqRef = useRef(0);
+
+  /**
+   * Writes every floor to the database. Always reads the latest drawing, so it is safe to call
+   * from a timer, from the Back button or while the page is being closed.
+   * `announce` is true only when the user pressed Save; autosave reports through the status chip.
+   */
+  const saveNow = useCallback(async (announce = false): Promise<boolean> => {
+    const { plan: p, floors, activeIndex, state } = latestRef.current;
+    if (!p) return false;
+    const seq = ++saveSeqRef.current;
     setSaving(true);
     setSaveStatus('saving');
     try {
-      // Sync active level into floorLevels array
-      const updatedFloors = floorLevels.map((lvl, idx) => {
-        if (idx === activeFloorIndex) {
-          return {
-            ...lvl,
-            walls: editorState.walls,
-            rooms: editorState.rooms,
-            doors: editorState.doors,
-            windows: editorState.windows,
-            furniture: editorState.furniture,
-            stairs: editorState.stairs,
-            columns: editorState.columns,
-            annotations: editorState.annotations,
-          };
-        }
-        return lvl;
-      });
-
-      let thumbnailDataUrl: string | undefined;
-      if (svgRef.current) {
-        try {
-          const svgData = new XMLSerializer().serializeToString(svgRef.current);
-          const blob = new Blob([svgData], { type: 'image/svg+xml' });
-          thumbnailDataUrl = URL.createObjectURL(blob);
-        } catch { /* non-critical */ }
-      }
-
-      const res = await updateFloorPlan(user, plan.id, {
-        walls: editorState.walls,
-        rooms: editorState.rooms,
-        doors: editorState.doors,
-        windows: editorState.windows,
-        furniture: editorState.furniture,
-        stairs: editorState.stairs,
-        columns: editorState.columns,
-        annotations: editorState.annotations,
-        floors: updatedFloors,
-        thumbnailDataUrl,
-      });
-
+      const payload = buildSavePayload(p, floors, activeIndex, state);
+      const res = await updateFloorPlan(user, p.id, payload);
+      if (seq !== saveSeqRef.current) return res.success; // a newer save has started
       if (res.success) {
-        setSaveStatus('saved');
-        setFloorLevels(updatedFloors);
-        onNotify('Floor plan saved successfully!', 'success');
+        // If the drawing changed while this save was in flight, it is still unsaved.
+        const stillSame = latestRef.current.state === state && latestRef.current.floors === floors;
+        setSaveStatus(stillSame ? 'saved' : 'unsaved');
+        if (announce) onNotify('Floor plan saved', 'success');
       } else {
         setSaveStatus('unsaved');
-        onNotify(res.error || 'Save failed', 'error');
+        onNotify(res.error || 'The plan could not be saved. Your drawing is still open; try Save again.', 'error');
       }
+      return res.success;
+    } catch (err) {
+      if (seq === saveSeqRef.current) {
+        setSaveStatus('unsaved');
+        onNotify('The plan could not be saved: ' + (err as Error).message, 'error');
+      }
+      return false;
     } finally {
-      setSaving(false);
+      if (seq === saveSeqRef.current) setSaving(false);
     }
-  }, [plan, editorState, floorLevels, activeFloorIndex, user, onNotify]);
+  }, [user, onNotify]);
 
-  // Debounced auto-save
+  const handleSave = useCallback(() => { void saveNow(true); }, [saveNow]);
+
+  // Autosave shortly after the last change.
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (saveStatus === 'unsaved' && plan) {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = setTimeout(() => { handleSave(); }, 3500);
+      autoSaveTimer.current = setTimeout(() => { void saveNow(false); }, 1500);
     }
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [editorState, saveStatus, handleSave, plan]);
+  }, [editorState, floorLevels, saveStatus, saveNow, plan]);
+
+  // Never lose the last few seconds of work: save when the app goes to the background, when
+  // the page is closed or refreshed, and when the editor itself is left.
+  useEffect(() => {
+    const flush = () => { if (latestRef.current.dirty) void saveNow(false); };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!latestRef.current.dirty) return;
+      flush();
+      e.preventDefault();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      flush();
+    };
+  }, [saveNow]);
+
+  /** Leaves the editor only after pending changes are written. */
+  const leaveEditor = useCallback(async (go: () => void) => {
+    if (latestRef.current.dirty) await saveNow(false);
+    go();
+  }, [saveNow]);
 
   // ── Multi-Floor Level Handlers ─────────────────────────
 
+  // All floor changes go through src/domain/planDocument.ts. Each one first writes what is on
+  // screen back into its floor, then returns the complete next view, so there is no moment
+  // where the screen and the stored floors disagree.
+  const applyFloorsView = (view: FloorsView, changed: boolean) => {
+    setFloorLevels(view.floors);
+    setActiveFloorIndex(view.activeIndex);
+    const floorId = view.floors[view.activeIndex].id;
+    activeFloorIdRef.current = floorId;
+    dispatch({ type: 'SET_STATE', payload: view.state });
+    if (!historyRef.current.has(floorId)) historyRef.current.reset(floorId, view.state);
+    setHistoryTick(t => t + 1);
+    setSelectedElement(null);
+    setIsDrawingWall(false);
+    setWallStart(null);
+    if (changed) markUnsaved();
+  };
+
   const handleSwitchFloor = (newIndex: number) => {
     if (newIndex === activeFloorIndex || newIndex < 0 || newIndex >= floorLevels.length) return;
-    // Save current level state into array
-    const updatedFloors = floorLevels.map((lvl, idx) => {
-      if (idx === activeFloorIndex) {
-        return {
-          ...lvl,
-          walls: editorState.walls,
-          rooms: editorState.rooms,
-          doors: editorState.doors,
-          windows: editorState.windows,
-          furniture: editorState.furniture,
-          stairs: editorState.stairs,
-          columns: editorState.columns,
-          annotations: editorState.annotations,
-        };
-      }
-      return lvl;
-    });
-
-    setFloorLevels(updatedFloors);
-    setActiveFloorIndex(newIndex);
-
-    const target = updatedFloors[newIndex];
-    const nextState: EditorState = {
-      walls: target.walls || [],
-      rooms: target.rooms || [],
-      doors: target.doors || [],
-      windows: target.windows || [],
-      furniture: target.furniture || [],
-      stairs: target.stairs || [],
-      columns: target.columns || [],
-      annotations: target.annotations || [],
-    };
-    dispatch({ type: 'SET_STATE', payload: nextState });
-    pushHistory(nextState);
-    setSelectedElement(null);
-    onNotify(`Switched to ${target.name}`, 'info');
+    applyFloorsView(switchFloor(floorLevels, activeFloorIndex, editorState, newIndex), false);
   };
 
-  const handleAddFloor = () => {
-    const floorNumber = floorLevels.length + 1;
-    const name = window.prompt('Enter Floor / Level Name:', `${floorNumber === 2 ? 'First' : floorNumber === 3 ? 'Second' : `${floorNumber}th`} Floor`);
-    if (!name || !name.trim()) return;
-
-    const newLevel: FloorPlanLevel = {
-      id: uid('level'),
-      name: name.trim(),
-      elevation: (floorLevels.length) * (plan?.ceilingHeight || 10),
-      walls: [],
-      rooms: [],
-      doors: [],
-      windows: [],
-      furniture: [],
-      stairs: [],
-      columns: [],
-      annotations: [],
-    };
-
-    const updated = [...floorLevels, newLevel];
-    setFloorLevels(updated);
-    handleSwitchFloor(updated.length - 1);
-    markUnsaved();
-    onNotify(`Created new level "${name}"`, 'success');
-  };
+  const handleAddFloor = () => setFloorDialog({ mode: 'add', value: suggestFloorName(floorLevels), error: '' });
 
   const handleDuplicateFloor = () => {
-    const current = floorLevels[activeFloorIndex];
-    const defaultName = `${current?.name || 'Floor'} (Duplicate)`;
-    const name = window.prompt('Enter name for cloned floor level:', defaultName);
-    if (!name || !name.trim()) return;
-
-    const newLevel: FloorPlanLevel = {
-      id: uid('level'),
-      name: name.trim(),
-      elevation: (floorLevels.length) * (plan?.ceilingHeight || 10),
-      walls: editorState.walls.map(w => ({ ...w, id: uid('wall') })),
-      rooms: editorState.rooms.map(r => ({ ...r, id: uid('room') })),
-      doors: editorState.doors.map(d => ({ ...d, id: uid('door') })),
-      windows: editorState.windows.map(w => ({ ...w, id: uid('win') })),
-      columns: editorState.columns.map(c => ({ ...c, id: uid('col') })),
-      stairs: editorState.stairs.map(s => ({ ...s, id: uid('stair') })),
-      furniture: editorState.furniture.map(f => ({ ...f, id: uid('furn') })),
-      annotations: editorState.annotations.map(a => ({ ...a, id: uid('annot') })),
-    };
-
-    const updated = [...floorLevels, newLevel];
-    setFloorLevels(updated);
-    handleSwitchFloor(updated.length - 1);
-    markUnsaved();
-    onNotify(`Duplicated floor layout to "${name}"`, 'success');
+    const base = `${floorLevels[activeFloorIndex]?.name || 'Floor'} copy`;
+    let name = base;
+    for (let i = 2; validateFloorName(floorLevels, name) && i < 50; i++) name = `${base} ${i}`;
+    setFloorDialog({ mode: 'duplicate', value: name, error: '' });
   };
 
-  const handleRenameFloor = useCallback(() => {
+  const handleRenameFloor = () => {
     const current = floorLevels[activeFloorIndex];
-    if (!current) return;
-    const name = window.prompt('Rename Floor / Level:', current.name);
-    if (!name || !name.trim() || name.trim() === current.name) return;
-    setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, name: name.trim() } : lvl));
-    markUnsaved();
-    onNotify(`Renamed floor to "${name.trim()}"`, 'success');
-  }, [floorLevels, activeFloorIndex, onNotify]);
+    if (current) setFloorDialog({ mode: 'rename', value: current.name, error: '' });
+  };
 
-  const handleDeleteFloor = useCallback(() => {
+  const submitFloorDialog = () => {
+    if (!floorDialog) return;
+    const error = validateFloorName(floorLevels, floorDialog.value, floorDialog.mode === 'rename' ? activeFloorIndex : undefined);
+    if (error) return setFloorDialog({ ...floorDialog, error });
+    const name = floorDialog.value.trim();
+    const storey = plan?.ceilingHeight || WALL_HEIGHT_DEFAULT;
+    if (floorDialog.mode === 'add') {
+      applyFloorsView(addFloor(floorLevels, activeFloorIndex, editorState, name, storey, () => uid('level')), true);
+      onNotify(`${name} added`, 'success');
+    } else if (floorDialog.mode === 'duplicate') {
+      applyFloorsView(duplicateFloor(floorLevels, activeFloorIndex, editorState, name, storey, uid), true);
+      onNotify(`Copied to ${name}`, 'success');
+    } else {
+      setFloorLevels(renameFloor(floorLevels, activeFloorIndex, name));
+      markUnsaved();
+    }
+    setFloorDialog(null);
+  };
+
+  const handleDeleteFloor = () => {
     if (floorLevels.length <= 1) {
-      onNotify('Cannot delete the only floor in the project.', 'error');
+      onNotify('A plan needs at least one floor, so this one can not be deleted.', 'info');
       return;
     }
-    const current = floorLevels[activeFloorIndex];
-    if (!window.confirm(`Are you sure you want to delete "${current?.name}"? All walls, rooms, and symbols on this level will be removed.`)) return;
-    const updated = floorLevels.filter((_, idx) => idx !== activeFloorIndex);
-    setFloorLevels(updated);
-    const nextIdx = Math.max(0, activeFloorIndex - 1);
-    handleSwitchFloor(nextIdx);
-    markUnsaved();
-    onNotify(`Deleted floor "${current?.name}"`, 'info');
-  }, [floorLevels, activeFloorIndex, onNotify]);
+    setConfirmDeleteFloor(true);
+  };
+
+  const confirmDeleteCurrentFloor = () => {
+    const removed = floorLevels[activeFloorIndex];
+    const view = deleteFloor(floorLevels, activeFloorIndex, editorState, activeFloorIndex);
+    setConfirmDeleteFloor(false);
+    if (!view) return;
+    historyRef.current.forget(removed.id);
+    applyFloorsView(view, true);
+    onNotify(`${removed.name} deleted`, 'info');
+  };
 
   const handleNewProject = useCallback(() => {
     if (window.confirm('Start a new floor plan project? Any unsaved changes will be lost.')) {
@@ -1993,49 +2009,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               wallType: 'exterior',
               layer: 'walls',
             };
-            const nextWalls = [...editorState.walls, newWall];
+            // Adding the wall also recalculates the rooms it encloses (see reducePlan), for
+            // rooms of any shape. The room is named "Room N"; its use is never guessed.
             dispatchWithHistory({
               type: 'ADD_WALL',
               payload: newWall,
             });
-
-            // Real-Time Room Loop Recognition ("3-4 walls sernthu room anaa AI purinjikanum")
-            if (isAiLiveAssistActive) {
-              const rec = recognizeRoomPerimeter(nextWalls, editorState.rooms, unit);
-              if (rec.detected && rec.room) {
-                dispatchWithHistory({
-                  type: 'ADD_ROOM',
-                  payload: rec.room,
-                });
-                triggerAiFeedback(rec.message || `✨ AI detected Room! Created ${rec.room.label}`);
-                onNotify(rec.message || `✨ AI detected Room! Created ${rec.room.label}`, 'success');
-              }
-            } else {
-              try {
-                const detectedRooms = detectEnclosedRooms(nextWalls, unit);
-                if (detectedRooms.length > 0 && editorState.rooms.length === 0) {
-                  const best = detectedRooms[0];
-                  dispatchWithHistory({
-                    type: 'ADD_ROOM',
-                    payload: {
-                      id: uid('room'),
-                      roomType: 'Living Room',
-                      label: 'Room 1',
-                      x: best.x,
-                      y: best.y,
-                      width: best.width,
-                      height: best.height,
-                      rotation: 0,
-                      color: ROOM_COLORS['Living Room'],
-                      floorFinish: 'Wood Parquet',
-                      wallThickness: wallThickness,
-                      layer: 'rooms',
-                    },
-                  });
-                  onNotify(`Enclosed room perimeter detected! Area: ${formatArea(best.area || 0, unit)}`, 'success');
-                }
-              } catch { /* ignore */ }
-            }
           }
           setWallStart({ x: targetX2, y: targetY2 });
           setLiveLengthBadge(null);
@@ -2072,53 +2051,88 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setActiveTool('select');
         onNotify(`Placed ${newRoom.label} (${w}×${h} ${unit === 'feet' ? 'ft' : 'm'})`, 'success');
       } else if (activeTool === 'door') {
-        const host = findHostWallForOpening(world.x, world.y, editorState.walls, 2.5);
+        const feetBased = baseUnitOf(unit) === 'feet';
+        const host = findHostWallForOpening(world.x, world.y, editorState.walls, feetBased ? 2.5 : 0.8);
+        const defaultWidth = feetBased
+          ? (selectedDoorType === 'Double' ? 5.0 : selectedDoorType === 'Main Entrance' ? 3.5 : 3.0)
+          : (selectedDoorType === 'Double' ? 1.5 : selectedDoorType === 'Main Entrance' ? 1.05 : 0.9);
+        // A door must sit on a wall, fit within it and not overlap another opening.
+        if (!host) {
+          onNotify(editorState.walls.length ? 'Tap on a wall to place the door.' : 'Draw a wall first. A door is placed on a wall.', 'info');
+          return;
+        }
+        const fit = fitOpeningOnWall(host.wall, defaultWidth, world.x, world.y);
+        if (!fit) {
+          onNotify(`This wall is too short for a ${formatDim(defaultWidth, unit)} door.`, 'info');
+          return;
+        }
+        if (openingOverlaps(host.wall.id, fit.wallOffset, defaultWidth, [...editorState.doors, ...editorState.windows])) {
+          onNotify('There is already a door or window at this spot. Tap a clear part of the wall.', 'info');
+          return;
+        }
         const newDoorId = uid('door');
-        const defaultWidth = unit === 'feet' ? (selectedDoorType === 'Double' ? 5.0 : selectedDoorType === 'Main Entrance' ? 3.5 : 3.0) : 0.9;
         dispatchWithHistory({
           type: 'ADD_DOOR',
           payload: {
             id: newDoorId,
             doorType: selectedDoorType,
-            x: host ? host.projectedX : snapped.x,
-            y: host ? host.projectedY : snapped.y,
+            x: fit.x,
+            y: fit.y,
             width: defaultWidth,
-            rotation: host ? host.angleDeg : 0,
+            rotation: fit.rotation,
             swingAngle: 90,
-            wallId: host ? host.wall.id : undefined,
-            wallOffset: host ? host.offset : undefined,
-            hostWallThickness: host ? host.wallThickness : wallThickness,
+            wallId: host.wall.id,
+            wallOffset: fit.wallOffset,
+            hostWallThickness: host.wallThickness,
             layer: 'doors',
           },
         });
         setSelectedElement({ type: 'door', id: newDoorId });
         setActiveTool('select');
-        onNotify(host ? `Placed ${selectedDoorType} Door embedded on ${host.wall.wallType} wall` : `Placed ${selectedDoorType} Door`, 'success');
+        onNotify(`${selectedDoorType} door placed (${formatDim(defaultWidth, unit)} wide)`, 'success');
       } else if (activeTool === 'window') {
-        const host = findHostWallForOpening(world.x, world.y, editorState.walls, 2.5);
+        const feetBased = baseUnitOf(unit) === 'feet';
+        const host = findHostWallForOpening(world.x, world.y, editorState.walls, feetBased ? 2.5 : 0.8);
         const winSpec = ARCHITECTURAL_WINDOW_TYPES.find(w => w.type === selectedWindowType);
+        // Window presets are defined in feet; convert them for metre plans.
+        const toPlan = (feet: number) => (feetBased ? feet : Math.round(feet * 0.3048 * 100) / 100);
+        const winWidth = toPlan(winSpec ? winSpec.defaultWidth : 4.0);
+        // A window must sit on a wall, fit within it and not overlap another opening.
+        if (!host) {
+          onNotify(editorState.walls.length ? 'Tap on a wall to place the window.' : 'Draw a wall first. A window is placed on a wall.', 'info');
+          return;
+        }
+        const fit = fitOpeningOnWall(host.wall, winWidth, world.x, world.y);
+        if (!fit) {
+          onNotify(`This wall is too short for a ${formatDim(winWidth, unit)} window.`, 'info');
+          return;
+        }
+        if (openingOverlaps(host.wall.id, fit.wallOffset, winWidth, [...editorState.doors, ...editorState.windows])) {
+          onNotify('There is already a door or window at this spot. Tap a clear part of the wall.', 'info');
+          return;
+        }
         const newWinId = uid('win');
         dispatchWithHistory({
           type: 'ADD_WINDOW',
           payload: {
             id: newWinId,
             windowType: selectedWindowType,
-            x: host ? host.projectedX : snapped.x,
-            y: host ? host.projectedY : snapped.y,
-            width: winSpec ? winSpec.defaultWidth : (unit === 'feet' ? 4.0 : 1.2),
-            height: winSpec ? winSpec.defaultHeight : (unit === 'feet' ? 4.0 : 1.2),
-            sillHeight: winSpec ? winSpec.defaultSillHeight : (unit === 'feet' ? 3.0 : 0.9),
-            frameThickness: winSpec ? winSpec.frameThickness : 0.18,
-            rotation: host ? host.angleDeg : 0,
-            wallId: host ? host.wall.id : undefined,
-            wallOffset: host ? host.offset : undefined,
-            hostWallThickness: host ? host.wallThickness : wallThickness,
+            x: fit.x,
+            y: fit.y,
+            width: winWidth,
+            height: toPlan(winSpec ? winSpec.defaultHeight : 4.0),
+            sillHeight: toPlan(winSpec ? winSpec.defaultSillHeight : 3.0),
+            frameThickness: toPlan(winSpec ? winSpec.frameThickness : 0.18),
+            rotation: fit.rotation,
+            wallId: host.wall.id,
+            wallOffset: fit.wallOffset,
+            hostWallThickness: host.wallThickness,
             layer: 'windows',
           },
         });
         setSelectedElement({ type: 'window', id: newWinId });
         setActiveTool('select');
-        onNotify(host ? `Placed ${selectedWindowType} embedded on ${host.wall.wallType} wall` : `Placed ${selectedWindowType}`, 'success');
+        onNotify(`${selectedWindowType} window placed (${formatDim(winWidth, unit)} wide)`, 'success');
       } else if (activeTool === 'column') {
         dispatchWithHistory({
           type: 'ADD_COLUMN',
@@ -2238,6 +2252,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (resizingWall) {
         const sx = snapToGrid(world.x);
         const sy = snapToGrid(world.y);
+        if (jointDragRef.current) {
+          // Move the corner: every wall end that met here moves together, so joined walls
+          // stay joined. Rooms and hosted doors/windows follow through the reducer.
+          dispatch({ type: 'SET_WALLS', walls: moveJoint(jointDragRef.current.walls, jointDragRef.current.origin, { x: sx, y: sy }, joinTolerance(unit)) });
+          return;
+        }
         if (resizingWall.endpoint === 1) {
           dispatch({ type: 'UPDATE_WALL', id: resizingWall.id, changes: { x1: sx, y1: sy } });
         } else {
@@ -2305,7 +2325,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         const snappedDy = snapToGrid(dy);
 
         const { type, id } = selectedElement;
-        if (type === 'wall') {
+        if (type === 'wall' && dragStartStateRef.current) {
+          // Slide the wall; walls joined to its ends stretch with it. Doors, windows and
+          // rooms follow through the reducer, so the plan stays connected.
+          dispatch({ type: 'SET_WALLS', walls: translateWall(dragStartStateRef.current.walls, id, snappedDx, snappedDy, joinTolerance(unit)) });
+        } else if (type === 'wall') {
           const snap = dragElementSnapshot as FloorPlanWall;
           dispatch({
             type: 'UPDATE_WALL', id,
@@ -2347,26 +2371,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           });
         } else if (type === 'door' || type === 'window') {
           // Snap hosted door/window along nearest wall
-          const hostProj = projectPointOntoWall(world.x, world.y, editorState.walls, 1.2);
-          if (hostProj) {
-            if (type === 'door') {
-              dispatch({
-                type: 'UPDATE_DOOR', id,
-                changes: { x: hostProj.projectedX, y: hostProj.projectedY, rotation: Math.round(hostProj.angleDeg), wallId: hostProj.wall.id }
-              });
-            } else {
-              dispatch({
-                type: 'UPDATE_WINDOW', id,
-                changes: { x: hostProj.projectedX, y: hostProj.projectedY, rotation: Math.round(hostProj.angleDeg), wallId: hostProj.wall.id }
-              });
-            }
-          } else {
-            const snap = dragElementSnapshot;
-            if (type === 'door') {
-              dispatch({ type: 'UPDATE_DOOR', id, changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) } });
-            } else {
-              dispatch({ type: 'UPDATE_WINDOW', id, changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) } });
-            }
+          // A door or window lives on a wall. It slides along the nearest wall, is kept clear
+          // of the wall ends, and can not be dropped on top of another opening or off a wall.
+          const hostProj = projectPointOntoWall(world.x, world.y, editorState.walls, baseUnitOf(unit) === 'feet' ? 3 : 0.9);
+          const width = Number((dragElementSnapshot as { width?: number }).width) || 0;
+          const fit = hostProj ? fitOpeningOnWall(hostProj.wall, width, world.x, world.y) : null;
+          const taken = fit && hostProj
+            ? openingOverlaps(hostProj.wall.id, fit.wallOffset, width, [...editorState.doors, ...editorState.windows], id)
+            : false;
+          if (fit && hostProj && !taken) {
+            const changes = { x: fit.x, y: fit.y, rotation: fit.rotation, wallId: hostProj.wall.id, wallOffset: fit.wallOffset, hostWallThickness: hostProj.wall.thickness };
+            if (type === 'door') dispatch({ type: 'UPDATE_DOOR', id, changes });
+            else dispatch({ type: 'UPDATE_WINDOW', id, changes });
           }
         } else if (type === 'column') {
           const snap = dragElementSnapshot as FloorPlanColumn;
@@ -2447,19 +2463,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           triggerAiFeedback(`${strokeResult.label} detected — converted`);
           onNotify(`${strokeResult.label} detected — converted`, 'success');
 
-          // Check if this action closed a room loop
-          if (strokeResult.classification === 'wall') {
-            const nextWalls = [...editorState.walls, strokeResult.suggestedAction.payload];
-            const rec = recognizeRoomPerimeter(nextWalls, editorState.rooms, unit);
-            if (rec.detected && rec.room) {
-              dispatchWithHistory({
-                type: 'ADD_ROOM',
-                payload: rec.room,
-              });
-              triggerAiFeedback(rec.message || `✨ AI detected and created ${rec.room.label}!`);
-              onNotify(rec.message || `✨ AI detected and created ${rec.room.label}!`, 'success');
-            }
-          }
+          // A wall that closes a loop creates its room through the shared reducer.
         } else if (strokeResult.confidence >= 0.70) {
           // 70–89%: Ask user for confirmation via on-canvas card without covering canvas
           setPendingClassification(strokeResult);
@@ -2483,8 +2487,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
 
     if (resizingWall) {
-      pushHistory(editorState);
-      markUnsaved();
+      if (dragStartStateRef.current !== editorState) {
+        pushHistory(editorState);
+        markUnsaved();
+      }
+      dragStartStateRef.current = null;
+      jointDragRef.current = null;
       setResizingWall(null);
       return;
     }
@@ -2497,8 +2505,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       return;
     }
     if (isDragging && selectedElement) {
-      pushHistory(editorState);
-      markUnsaved();
+      if (dragStartStateRef.current !== editorState) {
+        pushHistory(editorState);
+        markUnsaved();
+      }
+      dragStartStateRef.current = null;
       setIsDragging(false);
       setDragStartPos(null);
       setDragElementSnapshot(null);
@@ -2657,11 +2668,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       id: string
     ) => {
       if (activeTool !== 'select') return;
-      e.stopPropagation();
+      // Tell the canvas handler that this press landed on an element (so it does not start
+      // panning), while still letting it track the pointer for pinch detection.
+      elementHitRef.current = true;
+      if (!supportsPointer) e.stopPropagation();
       setSelectedElement({ type, id });
       const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
       setDragStartPos(svgPos);
       setIsDragging(true);
+      // Whole-floor snapshot: lets a drag be cancelled cleanly and joined walls follow.
+      dragStartStateRef.current = editorState;
 
       let snapshot: any = null;
       if (type === 'wall') snapshot = editorState.walls.find(w => w.id === id);
@@ -2696,9 +2712,233 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     [activeTool, getSvgPos, editorState]
   );
 
+  // ── Pointer input: mouse, touch and pen through one path ──────────────
+  //
+  // Touch rules (they exist to prevent accidental drawing on a phone):
+  //   • Two fingers always pinch-zoom and pan. Whatever the first finger had started is undone.
+  //   • Select tool: drag empty space to move the view, drag an element to move it.
+  //   • Wall tool: drag to draw a wall, or tap its two ends one after the other.
+  //   • Door / Window / Room and other placing tools: a tap places, a drag only moves the view.
+
+  const elementDownProps = (
+    type: 'wall' | 'room' | 'door' | 'window' | 'column' | 'stairs' | 'furniture' | 'annotation',
+    id: string
+  ) => (supportsPointer
+    ? { onPointerDown: (e: React.PointerEvent) => handleElementMouseDown(e, type, id) }
+    : { onMouseDown: (e: React.MouseEvent) => handleElementMouseDown(e, type, id) });
+
+  const beginJointDrag = (e: React.SyntheticEvent, wall: FloorPlanWall, endpoint: 1 | 2) => {
+    elementHitRef.current = true;
+    if (!supportsPointer) e.stopPropagation();
+    dragStartStateRef.current = editorState;
+    jointDragRef.current = {
+      walls: editorState.walls,
+      origin: endpoint === 1 ? { x: wall.x1, y: wall.y1 } : { x: wall.x2, y: wall.y2 },
+    };
+    setResizingWall({ id: wall.id, endpoint });
+  };
+
+  const jointDownProps = (wall: FloorPlanWall, endpoint: 1 | 2) => (supportsPointer
+    ? { onPointerDown: (e: React.PointerEvent) => beginJointDrag(e, wall, endpoint) }
+    : { onMouseDown: (e: React.MouseEvent) => beginJointDrag(e, wall, endpoint) });
+
+  const fakeMouse = (x: number, y: number) => ({
+    clientX: x, clientY: y, button: 0, buttons: 1, shiftKey: false, altKey: false,
+    preventDefault: () => {}, stopPropagation: () => {},
+  }) as unknown as React.MouseEvent<SVGSVGElement>;
+
+  /** Undoes whatever a single finger had started, so a pinch never leaves a mark on the plan. */
+  const cancelSingleGesture = () => {
+    const g = gestureRef.current;
+    if ((isDragging || resizingWall) && dragStartStateRef.current) {
+      dispatch({ type: 'SET_STATE', payload: dragStartStateRef.current });
+    }
+    dragStartStateRef.current = null;
+    jointDragRef.current = null;
+    setIsDragging(false);
+    setDragStartPos(null);
+    setDragElementSnapshot(null);
+    setDragHostedOpeningsSnapshot(null);
+    setResizingWall(null);
+    setIsPanning(false);
+    setPanStart(null);
+    if (g.dragDrawing) {
+      setIsDrawingWall(false);
+      setWallStart(null);
+    }
+    setIsFreehandDrawing(false);
+    setFreehandPoints([]);
+    setLiveLengthBadge(null);
+    setSnapIndicator(null);
+    g.dragDrawing = false;
+    g.panning = false;
+  };
+
+  const pinchPoints = () => {
+    const [a, b] = Array.from(pointersRef.current.values());
+    const rect = svgRef.current!.getBoundingClientRect();
+    return {
+      dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+      midX: (a.x + b.x) / 2 - rect.left,
+      midY: (a.y + b.y) / 2 - rect.top,
+    };
+  };
+
+  const onCanvasPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    const onElement = elementHitRef.current;
+    elementHitRef.current = false;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture is a nicety */ }
+
+    if (e.pointerType === 'mouse') {
+      if (!onElement) handleMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
+      return;
+    }
+
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gestureRef.current;
+    if (pointersRef.current.size === 1) {
+      Object.assign(g, {
+        kind: 'single', onElement, downAt: { x: e.clientX, y: e.clientY },
+        moved: false, dragDrawing: false, panning: false, waitForAllUp: false,
+      });
+      const immediate = activeTool === 'select' || activeTool === 'pan' || activeTool === 'ai_draw';
+      if (immediate && !onElement) handleMouseDown(fakeMouse(e.clientX, e.clientY));
+    } else if (pointersRef.current.size === 2) {
+      cancelSingleGesture();
+      const p = pinchPoints();
+      Object.assign(g, {
+        kind: 'pinch', startDist: p.dist, startZoom: zoom,
+        // The plan point between the fingers; it stays between them while pinching.
+        anchor: { x: (p.midX - panX) / (GRID_SIZE_PX * zoom), y: (p.midY - panY) / (GRID_SIZE_PX * zoom) },
+      });
+    }
+  };
+
+  const onCanvasPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType === 'mouse') {
+      handleMouseMove(e as unknown as React.MouseEvent<SVGSVGElement>);
+      return;
+    }
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gestureRef.current;
+
+    if (g.kind === 'pinch') {
+      if (pointersRef.current.size < 2) return;
+      const p = pinchPoints();
+      // Zoom is always worked out from where the pinch started, so it can not run away.
+      const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +((g.startZoom * p.dist) / g.startDist).toFixed(3)));
+      setZoom(nextZoom);
+      setPanX(Math.round(p.midX - g.anchor.x * GRID_SIZE_PX * nextZoom));
+      setPanY(Math.round(p.midY - g.anchor.y * GRID_SIZE_PX * nextZoom));
+      return;
+    }
+    if (g.kind !== 'single') return;
+
+    if (!g.moved && Math.hypot(e.clientX - g.downAt.x, e.clientY - g.downAt.y) > 8) g.moved = true;
+    if (!g.moved) return;
+
+    const immediate = activeTool === 'select' || activeTool === 'pan' || activeTool === 'ai_draw';
+    if (!immediate && !g.onElement) {
+      if (activeTool === 'wall') {
+        if (!isDrawingWall && !g.dragDrawing) {
+          // Drag to draw: the wall starts where the finger first touched.
+          g.dragDrawing = true;
+          handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
+          return;
+        }
+      } else if (!g.panning) {
+        g.panning = true;
+        const rect = svgRef.current!.getBoundingClientRect();
+        panMovedRef.current = true;
+        setIsPanning(true);
+        setPanStart({ x: g.downAt.x - rect.left, y: g.downAt.y - rect.top, panX, panY });
+        return;
+      }
+    }
+    handleMouseMove(fakeMouse(e.clientX, e.clientY));
+  };
+
+  const onCanvasPointerUp = (e: React.PointerEvent<SVGSVGElement>, cancelled = false) => {
+    if (e.pointerType === 'mouse') {
+      handleMouseUp();
+      return;
+    }
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.delete(e.pointerId);
+    lastTapRef.current = { time: Date.now(), x: e.clientX, y: e.clientY };
+    const g = gestureRef.current;
+
+    if (g.kind === 'pinch') {
+      // The finger left on the screen after a pinch does nothing until the screen is clear.
+      if (pointersRef.current.size === 0) g.kind = 'none';
+      return;
+    }
+    if (g.kind !== 'single') return;
+    g.kind = 'none';
+
+    if (cancelled) {
+      cancelSingleGesture();
+      return;
+    }
+    const immediate = activeTool === 'select' || activeTool === 'pan' || activeTool === 'ai_draw';
+    if (immediate || g.onElement) {
+      handleMouseUp();
+      return;
+    }
+    if (g.panning) {
+      g.panning = false;
+      setIsPanning(false);
+      setPanStart(null);
+      return;
+    }
+    if (activeTool === 'wall') {
+      if (g.moved && isDrawingWall) {
+        handleMouseDown(fakeMouse(e.clientX, e.clientY)); // the wall ends where the finger lifts
+        if (g.dragDrawing) {
+          setIsDrawingWall(false);
+          setWallStart(null);
+        }
+      } else if (!g.moved) {
+        handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
+      } else if (g.dragDrawing) {
+        setIsDrawingWall(false);
+        setWallStart(null);
+      }
+      g.dragDrawing = false;
+      setLiveLengthBadge(null);
+      setSnapIndicator(null);
+      return;
+    }
+    if (!g.moved) {
+      // A tap with a placing tool places the item at the tapped point.
+      handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
+      handleMouseUp();
+    }
+  };
+
+  const canvasInputProps = supportsPointer
+    ? {
+        onPointerDown: onCanvasPointerDown,
+        onPointerMove: onCanvasPointerMove,
+        onPointerUp: (e: React.PointerEvent<SVGSVGElement>) => onCanvasPointerUp(e),
+        onPointerCancel: (e: React.PointerEvent<SVGSVGElement>) => onCanvasPointerUp(e, true),
+      }
+    : {
+        // Browsers without Pointer Events: the earlier mouse + touch handlers.
+        onMouseDown: handleMouseDown,
+        onMouseMove: handleMouseMove,
+        onMouseUp: handleMouseUp,
+        onMouseLeave: handleMouseUp,
+        onTouchStart: handleTouchStart,
+        onTouchMove: handleTouchMove,
+        onTouchEnd: handleTouchEnd,
+      };
+
   // ── Metric Computations ───────────────────────────────
 
-  const totalFloorArea = editorState.rooms.reduce((s, r) => s + r.width * r.height, 0);
+  // Sum of room outline areas (an L-shaped room counts its real outline, not its bounding box).
+  const totalFloorArea = editorState.rooms.reduce((s, r) => s + roomArea(r), 0);
   const totalWallLength = editorState.walls.reduce((s, w) => s + wallLength(w), 0);
   const ceilingHeight = plan?.ceilingHeight || WALL_HEIGHT_DEFAULT;
 
@@ -2714,38 +2954,91 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   // ── Export Handlers ───────────────────────────────────
 
+  /**
+   * A stand-alone copy of the drawing that frames the whole plan, whatever part of it is on
+   * screen right now. Used for PNG and print/PDF so an export is never a cropped viewport.
+   */
+  const buildExportSvg = useCallback((): { text: string; width: number; height: number } | null => {
+    if (!svgRef.current || !plan) return null;
+    const bbox = calculatePlanBoundingBox(
+      editorState.walls, editorState.rooms, editorState.doors, editorState.windows,
+      editorState.furniture, editorState.columns, editorState.stairs, plan.plotLength, plan.plotWidth
+    );
+    const k = GRID_SIZE_PX * zoom;
+    const margin = 60;
+    const w = bbox.width * k + margin * 2;
+    const h = bbox.height * k + margin * 2;
+    const x = (bbox.centerX - bbox.width / 2) * k + panX - margin;
+    const y = (bbox.centerY - bbox.height / 2) * k + panY - margin;
+    const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+    // Export at a fixed, generous resolution regardless of the current zoom.
+    const scale = Math.min(4, 2000 / Math.max(w, h));
+    const width = Math.round(w * scale);
+    const height = Math.round(h * scale);
+    clone.setAttribute('width', String(width));
+    clone.setAttribute('height', String(height));
+    clone.removeAttribute('style');
+    return { text: new XMLSerializer().serializeToString(clone), width, height };
+  }, [plan, editorState, zoom, panX, panY]);
+
   const handleExportPNG = useCallback(() => {
-    if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
-    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(svgBlob);
-    const canvas = document.createElement('canvas');
+    const svg = buildExportSvg();
+    if (!svg || !plan) return;
+    const floorName = floorLevels[activeFloorIndex]?.name || 'Floor';
+    const footer = 64;
+    const url = URL.createObjectURL(new Blob([svg.text], { type: 'image/svg+xml;charset=utf-8' }));
     const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = viewMode === 'blueprint' ? '#0f172a' : '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
+    const fail = () => {
       URL.revokeObjectURL(url);
-      const link = document.createElement('a');
-      link.download = `${plan?.buildingName || 'floor-plan'}-${floorLevels[activeFloorIndex]?.name || 'level'}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      onNotify('The picture could not be created on this device. Try Print / PDF instead.', 'error');
+    };
+    img.onerror = fail;
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = svg.width;
+        canvas.height = svg.height + footer;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return fail();
+        ctx.fillStyle = viewMode === 'blueprint' ? '#0f172a' : '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, svg.width, svg.height);
+        // Caption: what this is, its units, and what it is not.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, svg.height, canvas.width, footer);
+        ctx.fillStyle = '#0f172a';
+        ctx.font = '600 20px sans-serif';
+        ctx.fillText(`${plan.buildingName} · ${floorName} · dimensions in ${baseUnitOf(unit) === 'feet' ? 'feet and inches' : 'metres'} · not to scale`, 16, svg.height + 26);
+        ctx.fillStyle = '#475569';
+        ctx.font = '15px sans-serif';
+        ctx.fillText(PLAN_DISCLAIMER, 16, svg.height + 50);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(blob => {
+          if (!blob || blob.size === 0) return onNotify('The picture could not be created on this device.', 'error');
+          const fileName = `${plan.buildingName || 'floor-plan'}-${floorName}.png`.replace(/[\\/:*?"<>|]+/g, '-');
+          const link = document.createElement('a');
+          const blobUrl = URL.createObjectURL(blob);
+          link.download = fileName;
+          link.href = blobUrl;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          onNotify(`Picture created: ${fileName}`, 'success');
+        }, 'image/png');
+      } catch {
+        fail();
+      }
     };
     img.src = url;
-  }, [plan, viewMode, floorLevels, activeFloorIndex]);
+  }, [buildExportSvg, plan, viewMode, floorLevels, activeFloorIndex, unit, onNotify]);
 
   const handleExportPDF = useCallback(() => {
-    if (!svgRef.current || !plan) return;
-    const svgClone = svgRef.current.cloneNode(true) as SVGSVGElement;
-    const svgWidth = Math.max(850, plan.plotLength * GRID_SIZE_PX * zoom + 140);
-    const svgHeight = Math.max(650, plan.plotWidth * GRID_SIZE_PX * zoom + 140);
-    svgClone.setAttribute('width', `${svgWidth}`);
-    svgClone.setAttribute('height', `${svgHeight}`);
-
-    const svgData = new XMLSerializer().serializeToString(svgClone);
+    const exportSvg = buildExportSvg();
+    if (!exportSvg || !plan) return;
+    const svgData = exportSvg.text;
 
     const roomRows = editorState.rooms.map(r => `
       <tr>
@@ -2795,17 +3088,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       <body>
         <div class="title-block">
           <div>
-            <h1>BUILDING MISTRY CAD</h1>
-            <p>Architectural Floor Plan & Engineering Drawing</p>
+            <h1>MISTRY FLOOR PLAN</h1>
+            <p>Conceptual layout for planning and discussion</p>
             <p><strong>Project:</strong> ${plan.buildingName} ${plan.siteName ? `| <strong>Site:</strong> ${plan.siteName}` : ''}</p>
           </div>
           <div class="meta-grid">
             <div><strong>Drawing Level:</strong> ${floorLevels[activeFloorIndex]?.name || plan.floorName}</div>
-            <div><strong>Scale:</strong> 1:${Math.round(1 / zoom * 20)}</div>
-            <div><strong>Plot Size:</strong> ${plan.plotLength} × ${plan.plotWidth} ${unit}</div>
-            <div><strong>Date:</strong> ${new Date().toLocaleDateString('en-IN')}</div>
-            <div><strong>Total Carpet Area:</strong> ${totalFloorArea.toFixed(1)} ${unit === 'feet' ? 'sq.ft' : 'sq.m'}</div>
-            <div><strong>Status:</strong> ${plan.status || 'Active CAD Drawing'}</div>
+            <div><strong>Scale:</strong> Not to scale. Use the written dimensions.</div>
+            <div><strong>Plot Size:</strong> ${formatDim(plan.plotLength, unit)} × ${formatDim(plan.plotWidth, unit)}</div>
+            <div><strong>Date:</strong> ${new Date().toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })}</div>
+            <div><strong>Total room area:</strong> ${formatPlanArea(totalFloorArea, unit)}</div>
+            <div><strong>Units:</strong> ${baseUnitOf(unit) === 'feet' ? 'Feet and inches' : 'Metres'}</div>
           </div>
         </div>
 
@@ -2820,15 +3113,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <th>Room Name</th>
                 <th>Type</th>
                 <th>Dimensions</th>
-                <th>Carpet Area</th>
+                <th>Area (room outline)</th>
               </tr>
             </thead>
             <tbody>
               ${roomRows}
               <tr style="background: #f1f5f9; font-weight: 700;">
-                <td colspan="3" style="padding: 6px 12px; border: 1px solid #cbd5e1; text-align: right;">Total Floor Area:</td>
+                <td colspan="3" style="padding: 6px 12px; border: 1px solid #cbd5e1; text-align: right;">Total room area:</td>
                 <td style="padding: 6px 12px; border: 1px solid #cbd5e1; color: #0284c7;">
-                  ${totalFloorArea.toFixed(1)} ${unit === 'feet' ? 'sq.ft' : 'sq.m'}
+                  ${formatPlanArea(totalFloorArea, unit)}
                 </td>
               </tr>
             </tbody>
@@ -2836,7 +3129,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         ` : ''}
 
         <div class="footer-note">
-          <span>* Generated by Building Mistry CAD Suite. Verify all dimensions on site prior to construction.</span>
+          <span>${PLAN_DISCLAIMER}</span>
           <span>Drawing Ref: ${plan.id.slice(0, 8)} | Page 1 of 1</span>
         </div>
 
@@ -2855,7 +3148,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     } else {
       window.print();
     }
-  }, [plan, zoom, editorState.rooms, floorLevels, activeFloorIndex, totalFloorArea, unit]);
+  }, [buildExportSvg, plan, editorState.rooms, floorLevels, activeFloorIndex, totalFloorArea, unit]);
 
   const handleExportDXF = useCallback(() => {
     if (!plan) return;
@@ -2886,7 +3179,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const handleExportProjectJSON = useCallback(() => {
     if (!plan) return;
     try {
-      const jsonContent = exportFloorPlanAsProjectJson(plan, floorLevels, activeFloorIndex);
+      // Every floor, with the floor on screen written back first so the file is up to date.
+      const floors = switchFloor(floorLevels, activeFloorIndex, editorState, activeFloorIndex).floors;
+      const jsonContent = JSON.stringify(exportPlan(plan, floors, new Date().toISOString()), null, 2);
       const blob = new Blob([jsonContent], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -2894,11 +3189,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       link.href = url;
       link.click();
       URL.revokeObjectURL(url);
-      onNotify('Project JSON backup exported successfully!', 'success');
+      onNotify('Plan file created. It can be opened again with Import Plan.', 'success');
     } catch (err: any) {
       onNotify(`Failed to export Project JSON: ${err.message}`, 'error');
     }
-  }, [plan, floorLevels, activeFloorIndex, onNotify]);
+  }, [plan, floorLevels, activeFloorIndex, editorState, onNotify]);
 
   const handleLoadStarterPlan = useCallback(() => {
     if (!window.confirm('Load 30x40 2BHK Starter Plan? Current unsaved elements on this level will be replaced.')) return;
@@ -3332,7 +3627,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <button
               type="button"
               className="fp-mobile-back-btn"
-              onClick={() => onBackToSite(plan.siteId!)}
+              onClick={() => leaveEditor(() => onBackToSite(plan.siteId!))}
               title="Back to Construction Site"
               aria-label="Back to Site"
             >
@@ -3342,7 +3637,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <button
               type="button"
               className="fp-mobile-back-btn"
-              onClick={onBack}
+              onClick={() => leaveEditor(onBack)}
               title="Back to Floor Plans"
               aria-label="Back to Plans"
             >
@@ -3417,6 +3712,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <Box size={14} />
           3D
         </button>
+        <button type="button" className="fp-mobile-mode-btn fp-mobile-history-btn" onClick={handleUndo} disabled={!canUndo} aria-label="Undo" title="Undo" id="fp-mobile-undo">
+          <Undo2 size={18} />
+        </button>
+        <button type="button" className="fp-mobile-mode-btn fp-mobile-history-btn" onClick={handleRedo} disabled={!canRedo} aria-label="Redo" title="Redo" id="fp-mobile-redo">
+          <Redo2 size={18} />
+        </button>
       </div>
 
       {/* ── Editor Header ─────────────────────────────── */}
@@ -3427,7 +3728,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <button
               type="button"
               className="fp-editor-back-btn"
-              onClick={() => onBackToSite(plan.siteId!)}
+              onClick={() => leaveEditor(() => onBackToSite(plan.siteId!))}
               title="Back to Construction Site"
               style={{ width: 'auto', padding: '0 12px', gap: 6 }}
             >
@@ -3438,7 +3739,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <button
               type="button"
               className="fp-editor-back-btn"
-              onClick={onBack}
+              onClick={() => leaveEditor(onBack)}
               title="Back to Floor Plans"
               style={{ width: 'auto', padding: '0 12px', gap: 6 }}
             >
@@ -4449,13 +4750,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             className="fp-canvas-svg"
             width="100%"
             height="100%"
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            {...canvasInputProps}
             onContextMenu={e => e.preventDefault()}
             onDragOver={e => {
               e.preventDefault();
@@ -4631,7 +4926,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={room.id}
-                onMouseDown={e => handleElementMouseDown(e, 'room', room.id)}
+                {...elementDownProps('room', room.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
               >
                 {hasPoly ? (
@@ -4889,7 +5184,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={stair.id}
                 transform={`rotate(${stair.rotation || 0}, ${sx + sw / 2}, ${sy + sl / 2})`}
-                onMouseDown={e => handleElementMouseDown(e, 'stairs', stair.id)}
+                {...elementDownProps('stairs', stair.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
               >
                 <rect
@@ -4942,7 +5237,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={furn.id}
                 transform={`rotate(${furn.rotation || 0}, ${fx + fw / 2}, ${fy + fh / 2})`}
-                onMouseDown={e => handleElementMouseDown(e, 'furniture', furn.id)}
+                {...elementDownProps('furniture', furn.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
               >
                 {isSelected && (
@@ -4984,7 +5279,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={col.id}
-                onMouseDown={e => handleElementMouseDown(e, 'column', col.id)}
+                {...elementDownProps('column', col.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
               >
                 {col.shape === 'round' ? (
@@ -5047,7 +5342,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={wall.id}
-                onMouseDown={e => handleElementMouseDown(e, 'wall', wall.id)}
+                {...elementDownProps('wall', wall.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
                 className="fp-wall-group"
               >
@@ -5156,22 +5451,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <circle
                       cx={wall.x1 * GRID_SIZE_PX * zoom + panX}
                       cy={wall.y1 * GRID_SIZE_PX * zoom + panY}
-                      r={7 * zoom}
+                      r={Math.max(isMobile ? 13 : 7, 7 * zoom)}
                       fill="#f59e0b"
                       stroke="#ffffff"
-                      strokeWidth={2 * zoom}
+                      strokeWidth={2}
                       style={{ cursor: 'crosshair' }}
-                      onMouseDown={e => { e.stopPropagation(); setResizingWall({ id: wall.id, endpoint: 1 }); }}
+                      {...jointDownProps(wall, 1)}
                     />
                     <circle
                       cx={wall.x2 * GRID_SIZE_PX * zoom + panX}
                       cy={wall.y2 * GRID_SIZE_PX * zoom + panY}
-                      r={7 * zoom}
+                      r={Math.max(isMobile ? 13 : 7, 7 * zoom)}
                       fill="#f59e0b"
                       stroke="#ffffff"
-                      strokeWidth={2 * zoom}
+                      strokeWidth={2}
                       style={{ cursor: 'crosshair' }}
-                      onMouseDown={e => { e.stopPropagation(); setResizingWall({ id: wall.id, endpoint: 2 }); }}
+                      {...jointDownProps(wall, 2)}
                     />
                   </>
                 ) : (
@@ -5217,7 +5512,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={door.id}
                 transform={`rotate(${door.rotation}, ${dx}, ${dy})`}
-                onMouseDown={e => handleElementMouseDown(e, 'door', door.id)}
+                {...elementDownProps('door', door.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
                 className="fp-door-group"
               >
@@ -5343,7 +5638,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={win.id}
                 transform={`rotate(${win.rotation}, ${wx}, ${wy})`}
-                onMouseDown={e => handleElementMouseDown(e, 'window', win.id)}
+                {...elementDownProps('window', win.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
                 className="fp-window-group"
               >
@@ -5462,7 +5757,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={annot.id}
-                onMouseDown={e => handleElementMouseDown(e, 'annotation', annot.id)}
+                {...elementDownProps('annotation', annot.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
               >
                 <text
@@ -7587,6 +7882,21 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               Cancel Wall
             </button>
           )}
+          {isDrawingWall && (
+            <button
+              type="button"
+              className="fp-mobile-sub-btn active"
+              onClick={() => {
+                setIsDrawingWall(false);
+                setWallStart(null);
+                setLiveLengthBadge(null);
+                setSnapIndicator(null);
+                setActiveTool('select');
+              }}
+            >
+              Done
+            </button>
+          )}
         </div>
       )}
 
@@ -7759,6 +8069,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         >
           <Square size={20} />
           <span className="fp-mobile-tool-label">Room</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('measure'); setSelectedElement(null); setIsMeasuring(false); setMeasureStart(null); setMeasureCurrent(null); }}
+          title="Measure a distance"
+          id="fp-mobile-tool-measure"
+        >
+          <Ruler size={20} />
+          <span className="fp-mobile-tool-label">Tape</span>
         </button>
 
         <button
@@ -8817,6 +9138,43 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       )}
 
       {/* ── 3D Preview Modal ─────────────────────────── */}
+      <Sheet
+        open={!!floorDialog}
+        title={floorDialog?.mode === 'add' ? 'Add floor' : floorDialog?.mode === 'duplicate' ? 'Duplicate this floor' : 'Rename floor'}
+        subtitle={floorDialog?.mode === 'duplicate' ? `Copies everything on ${currentFloor.name}` : undefined}
+        onClose={() => setFloorDialog(null)}
+        footer={
+          <>
+            <button type="button" className="m-btn" onClick={() => setFloorDialog(null)}>Cancel</button>
+            <button type="button" className="m-btn is-primary" onClick={submitFloorDialog}>
+              {floorDialog?.mode === 'add' ? 'Add floor' : floorDialog?.mode === 'duplicate' ? 'Duplicate' : 'Save name'}
+            </button>
+          </>
+        }
+      >
+        {floorDialog?.error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{floorDialog.error}</Note></div>}
+        <Field label="Floor name">
+          <input
+            type="text"
+            value={floorDialog?.value || ''}
+            maxLength={40}
+            onChange={e => floorDialog && setFloorDialog({ ...floorDialog, value: e.target.value, error: '' })}
+            onKeyDown={e => { if (e.key === 'Enter') submitFloorDialog(); }}
+            placeholder="e.g. First Floor"
+          />
+        </Field>
+      </Sheet>
+
+      <ConfirmSheet
+        open={confirmDeleteFloor}
+        title={`Delete ${currentFloor.name}?`}
+        message={<>Everything drawn on this floor will be removed: {editorState.walls.length} walls, {editorState.rooms.length} rooms, {editorState.doors.length + editorState.windows.length} doors and windows. The other floors are not affected. This can not be undone.</>}
+        confirmLabel="Delete floor"
+        danger
+        onConfirm={confirmDeleteCurrentFloor}
+        onCancel={() => setConfirmDeleteFloor(false)}
+      />
+
       {show3D && plan && (
         <FloorPlan3DPreview
           plan={plan}
