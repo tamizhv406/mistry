@@ -15,37 +15,26 @@ import type {
 export const WALL_THICKNESS_PRESETS_MM = [100, 115, 150, 200, 230] as const;
 
 /**
+ * Plan coordinates are stored in the plan's base unit: feet for 'feet' and 'inches' plans,
+ * metres for 'meters' and 'centimeters' plans ('inches' / 'centimeters' only change how a
+ * length is displayed). See src/domain/planGeometry.ts.
+ */
+function isFeetBased(unit: FloorPlanUnit): boolean {
+  return unit === 'feet' || unit === 'inches';
+}
+
+/**
  * Converts millimeters to plan units
  */
 export function mmToPlanUnits(mm: number, unit: FloorPlanUnit): number {
-  switch (unit) {
-    case 'meters':
-      return mm / 1000;
-    case 'centimeters':
-      return mm / 10;
-    case 'inches':
-      return mm / 25.4;
-    case 'feet':
-    default:
-      return mm / 304.8;
-  }
+  return isFeetBased(unit) ? mm / 304.8 : mm / 1000;
 }
 
 /**
  * Converts plan units to millimeters
  */
 export function planUnitsToMm(val: number, unit: FloorPlanUnit): number {
-  switch (unit) {
-    case 'meters':
-      return val * 1000;
-    case 'centimeters':
-      return val * 10;
-    case 'inches':
-      return val * 25.4;
-    case 'feet':
-    default:
-      return val * 304.8;
-  }
+  return isFeetBased(unit) ? val * 304.8 : val * 1000;
 }
 
 /**
@@ -59,9 +48,9 @@ export function formatLength(val: number, unit: FloorPlanUnit): string {
     if (inches === 0) return `${feet}'-0" [${(val * 0.3048).toFixed(2)}m]`;
     return `${feet}'-${inches}" [${(val * 0.3048).toFixed(2)}m]`;
   } else if (unit === 'inches') {
-    return `${val.toFixed(1)}" [${(val * 25.4).toFixed(0)}mm]`;
+    return `${Math.round(val * 12)}" [${(val * 304.8).toFixed(0)}mm]`;
   } else if (unit === 'centimeters') {
-    return `${val.toFixed(0)} cm [${(val / 100).toFixed(2)}m]`;
+    return `${Math.round(val * 100)} cm [${val.toFixed(2)}m]`;
   }
   return `${val.toFixed(2)} m`;
 }
@@ -73,11 +62,11 @@ export function formatArea(areaSqUnits: number, unit: FloorPlanUnit): string {
   if (unit === 'feet') {
     return `${areaSqUnits.toFixed(1)} sq.ft (${(areaSqUnits * 0.092903).toFixed(1)} m²)`;
   } else if (unit === 'inches') {
-    const sqFt = areaSqUnits / 144;
-    return `${sqFt.toFixed(1)} sq.ft (${(sqFt * 0.092903).toFixed(1)} m²)`;
+    // Coordinates of an inches plan are in feet, so the area is already in sq.ft.
+    return `${areaSqUnits.toFixed(1)} sq.ft (${(areaSqUnits * 0.092903).toFixed(1)} m²)`;
   } else if (unit === 'centimeters') {
-    const sqM = areaSqUnits / 10000;
-    return `${sqM.toFixed(2)} m² (${(sqM * 10.7639).toFixed(1)} sq.ft)`;
+    // Coordinates of a centimetre plan are in metres, so the area is already in sq.m.
+    return `${areaSqUnits.toFixed(2)} m² (${(areaSqUnits * 10.7639).toFixed(1)} sq.ft)`;
   }
   return `${areaSqUnits.toFixed(2)} m² (${(areaSqUnits * 10.7639).toFixed(1)} sq.ft)`;
 }

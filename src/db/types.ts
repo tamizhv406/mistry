@@ -613,6 +613,9 @@ export interface FloorPlanRoom {
   perimeter?: number;  // Computed perimeter
   shapeType?: RoomShapeType; // Room polygon shape archetype
   polygonPoints?: { x: number; y: number }[]; // Enclosed wall boundary vertices
+  // True when the room is the space enclosed by walls. Its outline and area then follow
+  // the walls automatically; a room placed by hand keeps the size it was given.
+  fromWalls?: boolean;
   rotation: number;    // Degrees (0, 90, 180, 270)
   color?: string;
   floorFinish?: string;// e.g. 'Vitrified Tiles', 'Granite', 'Marble', 'Hardwood'
