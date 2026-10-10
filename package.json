@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsx tests/test_mistry_core.ts && tsx tests/test_pwa_mobile.ts && tsx tests/test_admin_recovery.ts && tsx tests/test_audit_fixes.ts && tsx tests/test_floor_plan_modal.ts && tsx tests/test_floor_plan_cad_suite.ts && node tests/test_planner5d_room_dimensions.js && tsx tests/test_ai_copilot_geometry.ts && tsx tests/test_ai_sketch_understanding.ts && tsx tests/test_ai_assistant_suite.ts && tsx tests/test_cad_wall_openings_and_canvas.ts",
+    "test": "tsx tests/test_mistry_core.ts && tsx tests/test_pwa_mobile.ts && tsx tests/test_admin_recovery.ts && tsx tests/test_audit_fixes.ts && tsx tests/test_floor_plan_modal.ts && tsx tests/test_floor_plan_cad_suite.ts && node tests/test_planner5d_room_dimensions.js && tsx tests/test_ai_copilot_geometry.ts && tsx tests/test_ai_sketch_understanding.ts && tsx tests/test_ai_assistant_suite.ts && tsx tests/test_cad_wall_openings_and_canvas.ts && tsx tests/test_auth_recovery_and_ai_cad.ts && tsx tests/test_mobile_cad_redesign.ts && tsx tests/test_professional_cad_suite.ts",
     "lint": "oxlint",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist --dotfiles"

@@ -386,17 +386,17 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         <div className="section-breadcrumb-bar">
           <button className="btn btn-outline btn-sm" onClick={() => setActiveTab('overview')}>
             <ArrowLeft size={16} />
-            <span>← Back to Site Dashboard</span>
+            <span>Back to Site Dashboard</span>
           </button>
           <div className="section-breadcrumb-title">
-            {activeTab === 'materials' && '🧱 Materials & Steel Rods'}
-            {activeTab === 'labour' && `👷 Labour & Wages (${labourSubTab.toUpperCase()})`}
-            {activeTab === 'tools' && '🔨 Tools, Machinery & Rentals'}
-            {activeTab === 'expenses' && `☕ Daily Expenses & Bills (${expenseSubSection.toUpperCase()})`}
-            {activeTab === 'payments' && '💳 Universal Payment Ledger & Audit Trail'}
-            {activeTab === 'comments' && '📝 Site Notes & Supervisor Diary'}
-            {activeTab === 'reports' && '📊 Cost Reports & PDF Statements'}
-            {activeTab === 'variance' && '📐 Estimate vs Actual Variance Analysis'}
+            {activeTab === 'materials' && 'Materials & Steel Rods'}
+            {activeTab === 'labour' && `Labour & Wages (${labourSubTab.toUpperCase()})`}
+            {activeTab === 'tools' && 'Tools, Machinery & Rentals'}
+            {activeTab === 'expenses' && `Daily Expenses & Bills (${expenseSubSection.toUpperCase()})`}
+            {activeTab === 'payments' && 'Universal Payment Ledger & Audit Trail'}
+            {activeTab === 'comments' && 'Site Notes & Supervisor Diary'}
+            {activeTab === 'reports' && 'Cost Reports & Financial Statements'}
+            {activeTab === 'variance' && 'Estimate vs Actual Variance Analysis'}
           </div>
         </div>
       )}
@@ -507,7 +507,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             boxShadow: 'var(--shadow-sm)',
           }}>
             <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              ⚡ Quick Entry Shortcuts for Mistry:
+              Quick Entry Shortcuts:
             </span>
 
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -544,7 +544,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               marginBottom: '14px',
             }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>📋</span> Site Modules & Records
+                Site Modules & Records
               </h3>
               <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                 Tap any module to view details or add entries

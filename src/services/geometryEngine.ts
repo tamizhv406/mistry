@@ -943,3 +943,251 @@ export const ARCHITECTURAL_WINDOW_TYPES: {
     description: 'High-level frosted glass louver ventilator for bathrooms & kitchens',
   },
 ];
+
+// ============================================================
+// Polygon Room Generators & Precision Geometry
+// ============================================================
+
+/**
+ * Generates 6-vertex polygon coordinates for an L-shaped room
+ * @param x Top-left X
+ * @param y Top-left Y
+ * @param width Total bounding width
+ * @param height Total bounding height
+ * @param cutoutW Cutout width from right side (default 40% of width)
+ * @param cutoutH Cutout height from bottom side (default 50% of height)
+ */
+export function generateLShapedRoom(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  cutoutW?: number,
+  cutoutH?: number
+): Array<{ x: number; y: number }> {
+  const cW = cutoutW ?? width * 0.45;
+  const cH = cutoutH ?? height * 0.5;
+
+  return [
+    { x, y },                               // 1: Top-Left
+    { x: x + width, y },                    // 2: Top-Right
+    { x: x + width, y: y + height - cH },   // 3: Cutout right top
+    { x: x + width - cW, y: y + height - cH }, // 4: Cutout inner corner
+    { x: x + width - cW, y: y + height },   // 5: Cutout bottom
+    { x, y: y + height },                   // 6: Bottom-Left
+  ];
+}
+
+/**
+ * Generates 8-vertex polygon coordinates for a U-shaped room
+ * @param x Top-left X
+ * @param y Top-left Y
+ * @param width Total bounding width
+ * @param height Total bounding height
+ * @param innerW Width of the central indentation
+ * @param innerH Depth of the central indentation
+ */
+export function generateUShapedRoom(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  innerW?: number,
+  innerH?: number
+): Array<{ x: number; y: number }> {
+  const iW = innerW ?? width * 0.4;
+  const iH = innerH ?? height * 0.5;
+  const wingW = (width - iW) / 2;
+
+  return [
+    { x, y },                                 // 1: Top-Left of Left Wing
+    { x: x + wingW, y },                      // 2: Inner-Top of Left Wing
+    { x: x + wingW, y: y + iH },              // 3: Inner-Bottom of Left Wing
+    { x: x + width - wingW, y: y + iH },      // 4: Inner-Bottom of Right Wing
+    { x: x + width - wingW, y },              // 5: Inner-Top of Right Wing
+    { x: x + width, y },                      // 6: Top-Right of Right Wing
+    { x: x + width, y: y + height },          // 7: Bottom-Right
+    { x, y: y + height },                     // 8: Bottom-Left
+  ];
+}
+
+/**
+ * Generates 8-vertex polygon coordinates for a T-shaped room
+ * @param x Top-left X
+ * @param y Top-left Y
+ * @param width Total bounding width
+ * @param height Total bounding height
+ * @param stemW Width of the stem extending down
+ * @param stemH Height of the stem extending down
+ */
+export function generateTShapedRoom(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  stemW?: number,
+  stemH?: number
+): Array<{ x: number; y: number }> {
+  const sW = stemW ?? width * 0.4;
+  const sH = stemH ?? height * 0.6;
+  const barH = height - sH;
+  const stemX = x + (width - sW) / 2;
+
+  return [
+    { x, y },                               // 1: Top-Left
+    { x: x + width, y },                    // 2: Top-Right
+    { x: x + width, y: y + barH },          // 3: Right Bar Bottom
+    { x: stemX + sW, y: y + barH },         // 4: Right Stem Top
+    { x: stemX + sW, y: y + height },       // 5: Right Stem Bottom
+    { x: stemX, y: y + height },            // 6: Left Stem Bottom
+    { x: stemX, y: y + barH },              // 7: Left Stem Top
+    { x, y: y + barH },                     // 8: Left Bar Bottom
+  ];
+}
+
+/**
+ * Computes exact mathematical polygon area using the Shoelace formula (Gauss's area formula).
+ * Guaranteed non-negative area regardless of vertex winding order.
+ */
+export function computePolygonArea(points?: Array<{ x: number; y: number }>): number {
+  if (!points || points.length < 3) return 0;
+  let sum = 0;
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const curr = points[i];
+    const next = points[(i + 1) % n];
+    sum += curr.x * next.y - next.x * curr.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+/**
+ * Computes exact mathematical polygon perimeter by summing Euclidean edge lengths
+ */
+export function computePolygonPerimeter(points?: Array<{ x: number; y: number }>): number {
+  if (!points || points.length < 2) return 0;
+  let perimeter = 0;
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
+    const curr = points[i];
+    const next = points[(i + 1) % n];
+    perimeter += Math.hypot(next.x - curr.x, next.y - curr.y);
+  }
+  return perimeter;
+}
+
+// ============================================================
+// Mirroring Utilities for Professional CAD
+// ============================================================
+
+/**
+ * Mirrors a wall horizontally or vertically across a reference center coordinate
+ */
+export function mirrorWall(
+  wall: FloorPlanWall,
+  axis: 'horizontal' | 'vertical',
+  center: number
+): FloorPlanWall {
+  if (axis === 'horizontal') {
+    // Flip across vertical line x = center
+    return {
+      ...wall,
+      x1: 2 * center - wall.x1,
+      x2: 2 * center - wall.x2,
+    };
+  } else {
+    // Flip across horizontal line y = center
+    return {
+      ...wall,
+      y1: 2 * center - wall.y1,
+      y2: 2 * center - wall.y2,
+    };
+  }
+}
+
+/**
+ * Mirrors a door or window along an axis
+ */
+export function mirrorOpening<T extends FloorPlanDoor | FloorPlanWindow>(
+  item: T,
+  axis: 'horizontal' | 'vertical',
+  center: number
+): T {
+  if (axis === 'horizontal') {
+    return {
+      ...item,
+      x: 2 * center - item.x,
+      rotation: (360 - item.rotation) % 360,
+    };
+  } else {
+    return {
+      ...item,
+      y: 2 * center - item.y,
+      rotation: (180 - item.rotation + 360) % 360,
+    };
+  }
+}
+
+/**
+ * Mirrors a room along an axis, flipping bounding box and polygon vertices if present
+ */
+export function mirrorRoom(
+  room: FloorPlanRoom,
+  axis: 'horizontal' | 'vertical',
+  center: number
+): FloorPlanRoom {
+  let newX = room.x;
+  let newY = room.y;
+  let newPoly = room.polygonPoints;
+
+  if (axis === 'horizontal') {
+    // New X is reflection of right edge: center - ((room.x + room.width) - center)
+    newX = 2 * center - (room.x + room.width);
+    if (newPoly) {
+      newPoly = newPoly.map(pt => ({
+        x: 2 * center - pt.x,
+        y: pt.y,
+      }));
+    }
+  } else {
+    // New Y is reflection of bottom edge
+    newY = 2 * center - (room.y + room.height);
+    if (newPoly) {
+      newPoly = newPoly.map(pt => ({
+        x: pt.x,
+        y: 2 * center - pt.y,
+      }));
+    }
+  }
+
+  return {
+    ...room,
+    x: newX,
+    y: newY,
+    polygonPoints: newPoly,
+  };
+}
+
+/**
+ * Mirrors a furniture or electrical symbol
+ */
+export function mirrorFurniture(
+  item: FloorPlanFurniture,
+  axis: 'horizontal' | 'vertical',
+  center: number
+): FloorPlanFurniture {
+  if (axis === 'horizontal') {
+    return {
+      ...item,
+      x: 2 * center - (item.x + item.width),
+      rotation: (360 - item.rotation) % 360,
+    };
+  } else {
+    return {
+      ...item,
+      y: 2 * center - (item.y + item.height),
+      rotation: (180 - item.rotation + 360) % 360,
+    };
+  }
+}
+

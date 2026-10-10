@@ -14,6 +14,8 @@ import {
   formatLength,
   formatArea,
   getWallLength,
+  projectPointOntoWall,
+  getWallAngleDeg,
 } from './geometryEngine';
 import {
   classifyDrawingStroke,
@@ -142,6 +144,8 @@ export class LocalFloorPlanAIProvider implements FloorPlanAIProvider {
     // ─────────────────────────────────────────────────────────
     if (
       text.includes('analyze plan') ||
+      text.includes('analyze my plan') ||
+      (text.includes('analyze') && text.includes('plan')) ||
       text.includes('understand plan') ||
       text.includes('floor area') ||
       text.includes('total area') ||
@@ -283,7 +287,12 @@ export class LocalFloorPlanAIProvider implements FloorPlanAIProvider {
     // ─────────────────────────────────────────────────────────
     // 7. "Show dimensions" / "Hide dimensions"
     // ─────────────────────────────────────────────────────────
-    if (text.includes('show dimension') || text.includes('display dimension') || text.includes('show measurements')) {
+    if (
+      text.includes('show dimension') ||
+      text.includes('display dimension') ||
+      text.includes('show measurements') ||
+      (text.includes('dimension') && (text.includes('show') || text.includes('display') || text.includes('view')))
+    ) {
       return {
         success: true,
         understood: true,
@@ -381,7 +390,114 @@ export class LocalFloorPlanAIProvider implements FloorPlanAIProvider {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 9. "Make this wall 10 feet" / "Make this wall 12 feet"
+    // 9a. "Make this wall 6 inches thick" / "Set wall thickness to 9 inches"
+    // ─────────────────────────────────────────────────────────
+    const wallThickMatch = text.match(/(?:make|set|change)\s+(?:this\s+)?wall\s+(?:thickness\s+to\s+|to\s+)?(\d+(?:\.\d+)?)\s*(inches|inch|in|"|mm|cm|ft|feet)?\s*(?:thick(?:ness)?)?/);
+    if (wallThickMatch && (text.includes('thick') || text.includes('inch') || text.includes('mm') || text.includes('cm') || text.includes('thickness'))) {
+      const rawVal = parseFloat(wallThickMatch[1]);
+      const rawUnit = (wallThickMatch[2] || 'inch').toLowerCase();
+      let targetThicknessInUnits = rawVal;
+      let targetThicknessMm = rawVal;
+
+      if (rawUnit.startsWith('in') || rawUnit === '"') {
+        targetThicknessInUnits = unit === 'feet' ? rawVal / 12 : (rawVal * 25.4) / 1000;
+        targetThicknessMm = rawVal * 25.4;
+      } else if (rawUnit === 'mm') {
+        targetThicknessInUnits = unit === 'feet' ? rawVal / 304.8 : rawVal / 1000;
+        targetThicknessMm = rawVal;
+      } else if (rawUnit === 'cm') {
+        targetThicknessInUnits = unit === 'feet' ? (rawVal * 10) / 304.8 : rawVal / 100;
+        targetThicknessMm = rawVal * 10;
+      } else if (rawUnit.startsWith('f') || rawUnit === 'ft') {
+        targetThicknessInUnits = unit === 'feet' ? rawVal : rawVal * 0.3048;
+        targetThicknessMm = rawVal * 304.8;
+      }
+
+      let targetWall: FloorPlanWall | null = null;
+      if (selectedElement && selectedElement.type === 'wall') {
+        targetWall = walls.find(w => w.id === selectedElement.id) || null;
+      }
+      if (!targetWall && walls.length === 1) {
+        targetWall = walls[0];
+      }
+
+      if (!targetWall) {
+        return {
+          success: false,
+          understood: true,
+          message: 'Please select a wall to adjust its thickness.',
+        };
+      }
+
+      return {
+        success: true,
+        understood: true,
+        message: `Wall thickness set to ${rawVal} ${rawUnit || 'inches'}.`,
+        action: {
+          action: 'UPDATE_WALL',
+          objectId: targetWall.id,
+          payload: {
+            ...targetWall,
+            thickness: +targetThicknessInUnits.toFixed(3),
+            thicknessMm: Math.round(targetThicknessMm),
+          },
+          description: `Update wall thickness to ${rawVal} ${rawUnit || 'inches'}`,
+        },
+      };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 9b. "Move this wall 2 feet" / "Move this wall 3 feet"
+    // ─────────────────────────────────────────────────────────
+    const moveWallMatch = text.match(/move\s+(?:this\s+)?wall\s+(?:by\s+)?(\d+(?:\.\d+)?)\s*(feet|ft|m|meters|meter)?/);
+    if (moveWallMatch) {
+      const dist = parseFloat(moveWallMatch[1]);
+      let targetWall: FloorPlanWall | null = null;
+      if (selectedElement && selectedElement.type === 'wall') {
+        targetWall = walls.find(w => w.id === selectedElement.id) || null;
+      }
+      if (!targetWall && walls.length === 1) {
+        targetWall = walls[0];
+      }
+
+      if (!targetWall) {
+        return {
+          success: false,
+          understood: true,
+          message: 'Please select a wall to move it.',
+        };
+      }
+
+      const dx = targetWall.x2 - targetWall.x1;
+      const dy = targetWall.y2 - targetWall.y1;
+      const len = Math.hypot(dx, dy) || 1;
+      // Perpendicular normal displacement
+      const nx = -dy / len;
+      const ny = dx / len;
+      const offsetX = +(nx * dist).toFixed(2);
+      const offsetY = +(ny * dist).toFixed(2);
+
+      return {
+        success: true,
+        understood: true,
+        message: `Moved wall by ${dist} ${unit === 'feet' ? 'ft' : 'm'}.`,
+        action: {
+          action: 'UPDATE_WALL',
+          objectId: targetWall.id,
+          payload: {
+            ...targetWall,
+            x1: targetWall.x1 + offsetX,
+            y1: targetWall.y1 + offsetY,
+            x2: targetWall.x2 + offsetX,
+            y2: targetWall.y2 + offsetY,
+          },
+          description: `Move wall by ${dist} ${unit === 'feet' ? 'ft' : 'm'}`,
+        },
+      };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 9c. "Make this wall 10 feet" / "Make this wall 12 feet"
     // ─────────────────────────────────────────────────────────
     const wallLenMatch = text.match(/(?:make|set|change)\s+(?:this\s+)?wall\s+(?:to\s+)?(\d+(?:\.\d+)?)\s*(feet|ft|m|meters|meter)?/);
     if (wallLenMatch) {
@@ -491,7 +607,131 @@ export class LocalFloorPlanAIProvider implements FloorPlanAIProvider {
     }
 
     // ─────────────────────────────────────────────────────────
-    // 11. "Add door" / "Add window"
+    // 10b. "Add a bedroom here" / "Create a kitchen here"
+    // ─────────────────────────────────────────────────────────
+    const createRoomMatch = text.match(/(?:add|create|insert|put)\s+(?:a\s+)?(bedroom|master bedroom|kitchen|living room|bathroom|toilet|pooja|dining|store)\s*(?:here|at cursor)?/);
+    if (createRoomMatch && (text.includes('here') || text.includes('create') || text.includes('add'))) {
+      const parsedType = createRoomMatch[1];
+      const rType: RoomType = parsedType === 'kitchen' ? 'Kitchen'
+        : parsedType === 'bedroom' ? 'Bedroom'
+        : parsedType === 'master bedroom' ? 'Master Bedroom'
+        : parsedType === 'bathroom' ? 'Bathroom'
+        : parsedType === 'living room' ? 'Living Room'
+        : parsedType === 'pooja' ? 'Pooja'
+        : parsedType === 'dining' ? 'Dining'
+        : 'Bedroom';
+      const defaultW = unit === 'feet' ? (rType === 'Bathroom' ? 6 : rType === 'Kitchen' ? 10 : 12) : (rType === 'Bathroom' ? 1.8 : 3.6);
+      const defaultH = unit === 'feet' ? (rType === 'Bathroom' ? 8 : rType === 'Kitchen' ? 10 : 14) : (rType === 'Bathroom' ? 2.4 : 4.2);
+      const posX = context.cursorPos?.x || 10;
+      const posY = context.cursorPos?.y || 10;
+
+      return {
+        success: true,
+        understood: true,
+        message: `Created ${rType} (${defaultW}×${defaultH} ${unit === 'feet' ? 'ft' : 'm'}).`,
+        action: {
+          action: 'ADD_ROOM',
+          payload: {
+            id: `room-${Date.now()}`,
+            roomType: rType,
+            label: rType,
+            x: posX,
+            y: posY,
+            width: defaultW,
+            height: defaultH,
+            area: defaultW * defaultH,
+            perimeter: 2 * (defaultW + defaultH),
+            layer: 'rooms',
+          },
+          description: `Add ${rType} here`,
+        },
+      };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 11a. "Add a 4 feet door here" / "Add a 3 feet door here"
+    // ─────────────────────────────────────────────────────────
+    const explicitDoorMatch = text.match(/(?:add|insert|put)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*(?:feet|ft|m|meter)?\s*door\s*(?:here)?/);
+    if (explicitDoorMatch) {
+      const doorW = parseFloat(explicitDoorMatch[1]);
+      const posX = context.cursorPos?.x || 10;
+      const posY = context.cursorPos?.y || 0;
+      let hostWallId: string | undefined;
+      let rotation = 0;
+
+      const hostProj = projectPointOntoWall(posX, posY, walls, 1.5);
+      if (hostProj) {
+        hostWallId = hostProj.wall.id;
+        rotation = Math.round(hostProj.angleDeg);
+      }
+
+      return {
+        success: true,
+        understood: true,
+        message: `Added ${doorW} ${unit === 'feet' ? 'ft' : 'm'} door${hostWallId ? ' attached to wall' : ''}.`,
+        action: {
+          action: 'ADD_DOOR',
+          payload: {
+            id: `door-${Date.now()}`,
+            type: 'Single',
+            x: hostProj ? hostProj.projectedX : posX,
+            y: hostProj ? hostProj.projectedY : posY,
+            width: doorW,
+            wallId: hostWallId,
+            rotation,
+          },
+          description: `Add ${doorW} ${unit === 'feet' ? 'ft' : 'm'} door`,
+        },
+      };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 11b. "Add two windows to this wall" / "Add 2 windows to this wall"
+    // ─────────────────────────────────────────────────────────
+    const twoWindowsMatch = text.match(/(?:add|insert)\s+(?:two|2)\s+windows?\s*(?:to\s+(?:this\s+)?wall)?/);
+    if (twoWindowsMatch) {
+      let targetWall: FloorPlanWall | null = null;
+      if (selectedElement && selectedElement.type === 'wall') {
+        targetWall = walls.find(w => w.id === selectedElement.id) || null;
+      }
+      if (!targetWall && walls.length === 1) {
+        targetWall = walls[0];
+      }
+
+      if (!targetWall) {
+        return {
+          success: false,
+          understood: true,
+          message: 'Please select a wall to add windows to.',
+        };
+      }
+
+      const rot = Math.round(getWallAngleDeg(targetWall));
+      const win1X = +(targetWall.x1 + (targetWall.x2 - targetWall.x1) * 0.33).toFixed(2);
+      const win1Y = +(targetWall.y1 + (targetWall.y2 - targetWall.y1) * 0.33).toFixed(2);
+
+      return {
+        success: true,
+        understood: true,
+        message: `Adding two windows along wall (${formatLength(getWallLength(targetWall), unit)}).`,
+        action: {
+          action: 'ADD_WINDOW',
+          payload: {
+            id: `win-${Date.now()}`,
+            type: 'Standard',
+            x: win1X,
+            y: win1Y,
+            width: unit === 'feet' ? 4 : 1.2,
+            wallId: targetWall.id,
+            rotation: rot,
+          },
+          description: 'Add window to wall',
+        },
+      };
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // 11c. Generic "Add door" / "Add window"
     // ─────────────────────────────────────────────────────────
     if (text.includes('add door') || text.includes('insert door') || text.includes('door podu')) {
       return {

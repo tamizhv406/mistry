@@ -18,6 +18,8 @@ import { AdminDashboardView } from './views/AdminDashboardView';
 import { FloorPlanListView } from './views/FloorPlanListView';
 import { FloorPlanEditorView } from './views/FloorPlanEditorView';
 import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
+import { ResetPasswordModal } from './components/ResetPasswordModal';
+import { checkPasswordRecoveryUrl, isSupabaseConfigured, supabase } from './services/supabase';
 
 import { SiteModal } from './components/SiteModal';
 import { MaterialModal } from './components/MaterialModal';
@@ -89,6 +91,8 @@ export function App() {
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(() => checkPasswordRecoveryUrl());
+
   // Initialize Auth, Network status & PWA install listeners
   useEffect(() => {
     initAuth().then(() => {
@@ -97,6 +101,20 @@ export function App() {
         setCurrentUser(u);
       }
     });
+
+    if (checkPasswordRecoveryUrl()) {
+      setIsRecoveryModalOpen(true);
+    }
+
+    let authSub: { unsubscribe: () => void } | null = null;
+    if (isSupabaseConfigured() && supabase) {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecoveryModalOpen(true);
+        }
+      });
+      authSub = data?.subscription || null;
+    }
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -125,6 +143,7 @@ export function App() {
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
+      if (authSub) authSub.unsubscribe();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -934,6 +953,13 @@ export function App() {
           }}
         />
       )}
+
+      {/* Supabase Password Recovery Flow Modal */}
+      <ResetPasswordModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onSuccess={msg => addToast(msg, 'success')}
+      />
     </div>
   );
 }

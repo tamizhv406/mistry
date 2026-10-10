@@ -9,12 +9,14 @@ import {
   Compass, Lock, Unlock, RotateCw, ClipboardCopy, ClipboardPaste,
   Settings, FlipHorizontal, FlipVertical, FileCode, Check, Magnet, Hand,
   ChevronUp, GripHorizontal, SlidersHorizontal, Grid as GridIcon,
+  MoreVertical, MoreHorizontal, Shapes, Minus, Type, Image as ImageIcon,
+  Maximize, Minimize, FilePlus, Edit, Bed, Sofa, Utensils, Bath, Zap,
 } from 'lucide-react';
 import type {
   FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanDoor, FloorPlanWindow,
   FloorPlanFurniture, FloorPlanStaircase, FloorPlanColumn, FloorPlanAnnotation,
   FloorPlanLevel, RoomType, DoorType, WindowType, FloorPlanUnit, User,
-  FloorPlanLayerConfig,
+  FloorPlanLayerConfig, BackgroundPlanImage, RoomShapeType, StaircaseType,
 } from '../db/types';
 import {
   getFloorPlanById, updateFloorPlan, saveFloorPlanVersion, restoreFloorPlanVersion,
@@ -26,6 +28,9 @@ import {
   detectEnclosedRooms, WALL_THICKNESS_PRESETS_MM, mmToPlanUnits, planUnitsToMm,
   computeWallSegmentsWithOpenings, calculatePlanBoundingBox, findHostWallForOpening,
   ARCHITECTURAL_WINDOW_TYPES,
+  generateLShapedRoom, generateUShapedRoom, generateTShapedRoom,
+  computePolygonArea, computePolygonPerimeter,
+  mirrorWall, mirrorOpening, mirrorRoom, mirrorFurniture,
 } from '../services/geometryEngine';
 import type { SnapPoint } from '../services/geometryEngine';
 import { FloorPlan3DPreview } from '../components/FloorPlan3DPreview';
@@ -117,7 +122,7 @@ const ROOM_TYPES: RoomType[] = [
 ];
 
 const DOOR_TYPES: DoorType[] = [
-  'Single', 'Double', 'Main Entrance', 'Sliding', 'Pocket', 'Bathroom', 'Balcony', 'French',
+  'Single', 'Double', 'Main Entrance', 'Sliding', 'Pocket', 'Bathroom', 'Balcony', 'French', 'Opening',
 ];
 
 const WINDOW_TYPES: WindowType[] = [
@@ -182,6 +187,7 @@ type Tool =
   | 'dimension'
   | 'annotation'
   | 'pan'
+  | 'measure'
   | 'ai_draw';
 
 type ViewMode = 'design' | 'blueprint' | 'presentation';
@@ -320,11 +326,23 @@ function wallLength(w: FloorPlanWall): number {
 }
 
 function computeRoomArea(r: FloorPlanRoom, unit: FloorPlanUnit): string {
-  const area = r.width * r.height;
+  const area = (r.polygonPoints && r.polygonPoints.length >= 3)
+    ? computePolygonArea(r.polygonPoints)
+    : (r.width * r.height);
   if (unit === 'feet') return `${area.toFixed(1)} sq.ft`;
   if (unit === 'inches') return `${(area / 144).toFixed(1)} sq.ft`;
   if (unit === 'centimeters') return `${(area / 10000).toFixed(2)} sq.m`;
   return `${area.toFixed(2)} sq.m`;
+}
+
+function computeRoomPerimeter(r: FloorPlanRoom, unit: FloorPlanUnit): string {
+  const perimeter = (r.polygonPoints && r.polygonPoints.length >= 3)
+    ? computePolygonPerimeter(r.polygonPoints)
+    : 2 * (r.width + r.height);
+  if (unit === 'feet') return `${perimeter.toFixed(1)} ft`;
+  if (unit === 'inches') return `${(perimeter * 12).toFixed(1)} in`;
+  if (unit === 'centimeters') return `${(perimeter * 100).toFixed(0)} cm`;
+  return `${perimeter.toFixed(2)} m`;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -441,6 +459,52 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [draftRoomType, setDraftRoomType] = useState<RoomType>('Living Room');
   const [draftRoomThickness, setDraftRoomThickness] = useState<number>(() => unit === 'feet' ? 0.75 : 0.23);
   const [draftRoomFloorFinish, setDraftRoomFloorFinish] = useState<string>('Wood Parquet');
+
+  // Mobile-First CAD Workspace State (< 768px)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showMobileShapes, setShowMobileShapes] = useState(false);
+  const [showMobileMoreTools, setShowMobileMoreTools] = useState(false);
+  const [showMobileDetails, setShowMobileDetails] = useState(false);
+  const [showMobileProperties, setShowMobileProperties] = useState(false);
+  const [aiStrokeSuggestion, setAiStrokeSuggestion] = useState<{ message: string; action: ValidatedPlanAction } | null>(null);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // ── Desktop Professional CAD Engine & States ──────
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFloorMenu, setShowFloorMenu] = useState(false);
+  type DesktopCategory = 'STRUCTURE' | 'OPENINGS' | 'FURNITURE' | 'ELECTRICAL' | 'ANNOTATION' | 'TOOLS';
+  const [activeDesktopCategory, setActiveDesktopCategory] = useState<DesktopCategory | null>('STRUCTURE');
+
+  // Interactive Measurement Tape Tool
+  const [measureStart, setMeasureStart] = useState<{ x: number; y: number } | null>(null);
+  const [measureCurrent, setMeasureCurrent] = useState<{ x: number; y: number } | null>(null);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+
+  // Background Reference Image State
+  const [showBgImageModal, setShowBgImageModal] = useState(false);
+  const [bgImageScaleW, setBgImageScaleW] = useState<number>(30);
+  const [bgImageScaleH, setBgImageScaleH] = useState<number>(40);
+  const [bgImageOpacity, setBgImageOpacity] = useState<number>(0.5);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
 
   // Floating Bottom Property Dock Controls ("work pannu mothu disturb pannuthu itha yethna pannu")
   const [isBottomDockMinimized, setIsBottomDockMinimized] = useState<boolean>(() => {
@@ -595,6 +659,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [dragElementSnapshot, setDragElementSnapshot] = useState<any>(null);
+  const [dragHostedOpeningsSnapshot, setDragHostedOpeningsSnapshot] = useState<{
+    doors: FloorPlanDoor[];
+    windows: FloorPlanWindow[];
+  } | null>(null);
 
   // Pan state
   const [isPanning, setIsPanning] = useState(false);
@@ -721,15 +789,29 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       plan?.plotLength || 40,
       plan?.plotWidth || 30
     );
-    const vw = containerRef.current?.clientWidth || (window.innerWidth - 80);
-    const vh = containerRef.current?.clientHeight || (window.innerHeight - 140);
+    const vw = containerRef.current?.clientWidth || (window.innerWidth - (window.innerWidth < 768 ? 16 : 80));
+    const vh = containerRef.current?.clientHeight || (window.innerHeight - (window.innerWidth < 768 ? 120 : 140));
     const geomW = bbox.width * GRID_SIZE_PX;
     const geomH = bbox.height * GRID_SIZE_PX;
-    const fitZoom = Math.min(4.0, Math.max(MIN_ZOOM, Math.min((vw * 0.78) / geomW, (vh * 0.78) / geomH)));
+    const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
+    const paddingFactor = isMobileView ? 0.94 : 0.84;
+    const fitZoom = Math.min(4.0, Math.max(MIN_ZOOM, Math.min((vw * paddingFactor) / geomW, (vh * paddingFactor) / geomH)));
     setZoom(+fitZoom.toFixed(2));
     setPanX(Math.round(vw / 2 - bbox.centerX * GRID_SIZE_PX * fitZoom));
     setPanY(Math.round(vh / 2 - bbox.centerY * GRID_SIZE_PX * fitZoom));
   }, [editorState, plan]);
+
+  // Auto-fit plot to available viewport on initial load
+  const didInitialFitRef = useRef(false);
+  useEffect(() => {
+    if (!loading && plan && containerRef.current && !didInitialFitRef.current) {
+      didInitialFitRef.current = true;
+      const t = setTimeout(() => {
+        handleFitToScreen();
+      }, 150);
+      return () => clearTimeout(t);
+    }
+  }, [loading, plan, handleFitToScreen]);
 
   const dispatchWithHistory = useCallback((action: EditorAction) => {
     dispatch(action);
@@ -936,6 +1018,37 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     onNotify(`Duplicated floor layout to "${name}"`, 'success');
   };
 
+  const handleRenameFloor = useCallback(() => {
+    const current = floorLevels[activeFloorIndex];
+    if (!current) return;
+    const name = window.prompt('Rename Floor / Level:', current.name);
+    if (!name || !name.trim() || name.trim() === current.name) return;
+    setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, name: name.trim() } : lvl));
+    markUnsaved();
+    onNotify(`Renamed floor to "${name.trim()}"`, 'success');
+  }, [floorLevels, activeFloorIndex, onNotify]);
+
+  const handleDeleteFloor = useCallback(() => {
+    if (floorLevels.length <= 1) {
+      onNotify('Cannot delete the only floor in the project.', 'error');
+      return;
+    }
+    const current = floorLevels[activeFloorIndex];
+    if (!window.confirm(`Are you sure you want to delete "${current?.name}"? All walls, rooms, and symbols on this level will be removed.`)) return;
+    const updated = floorLevels.filter((_, idx) => idx !== activeFloorIndex);
+    setFloorLevels(updated);
+    const nextIdx = Math.max(0, activeFloorIndex - 1);
+    handleSwitchFloor(nextIdx);
+    markUnsaved();
+    onNotify(`Deleted floor "${current?.name}"`, 'info');
+  }, [floorLevels, activeFloorIndex, onNotify]);
+
+  const handleNewProject = useCallback(() => {
+    if (window.confirm('Start a new floor plan project? Any unsaved changes will be lost.')) {
+      handleLoadStarterPlan();
+    }
+  }, []);
+
   // ── Selected Entity Helpers ─────────────────────────
 
   const getSelectedEntity = useCallback(() => {
@@ -1137,6 +1250,47 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       });
     }
   }, [selectedElement, editorState, dispatchWithHistory]);
+
+  const handleMirrorSelected = useCallback((axis: 'horizontal' | 'vertical' = 'horizontal') => {
+    if (!selectedElement) {
+      onNotify('Select an element first to mirror it.', 'info');
+      return;
+    }
+    const { type, id } = selectedElement;
+    if (type === 'wall') {
+      const w = editorState.walls.find(x => x.id === id);
+      if (!w || w.locked) return;
+      const center = axis === 'horizontal' ? (w.x1 + w.x2) / 2 : (w.y1 + w.y2) / 2;
+      const mirrored = mirrorWall(w, axis, center);
+      dispatchWithHistory({ type: 'UPDATE_WALL', id, changes: mirrored });
+      onNotify('Wall mirrored', 'success');
+    } else if (type === 'room') {
+      const r = editorState.rooms.find(x => x.id === id);
+      if (!r || r.locked) return;
+      const center = axis === 'horizontal' ? r.x + r.width / 2 : r.y + r.height / 2;
+      const mirrored = mirrorRoom(r, axis, center);
+      dispatchWithHistory({ type: 'UPDATE_ROOM', id, changes: mirrored });
+      onNotify('Room mirrored', 'success');
+    } else if (type === 'door') {
+      const d = editorState.doors.find(x => x.id === id);
+      if (!d || d.locked) return;
+      dispatchWithHistory({ type: 'UPDATE_DOOR', id, changes: { flipHorizontal: !d.flipHorizontal } });
+      onNotify('Door mirrored', 'success');
+    } else if (type === 'window') {
+      const win = editorState.windows.find(x => x.id === id);
+      if (!win || win.locked) return;
+      const mirrored = mirrorOpening(win, axis, win.x);
+      dispatchWithHistory({ type: 'UPDATE_WINDOW', id, changes: mirrored });
+      onNotify('Window mirrored', 'success');
+    } else if (type === 'furniture') {
+      const f = editorState.furniture.find(x => x.id === id);
+      if (!f || f.locked) return;
+      const center = axis === 'horizontal' ? f.x + f.width / 2 : f.y + f.height / 2;
+      const mirrored = mirrorFurniture(f, axis, center);
+      dispatchWithHistory({ type: 'UPDATE_FURNITURE', id, changes: mirrored });
+      onNotify('Item mirrored', 'success');
+    }
+  }, [selectedElement, editorState, dispatchWithHistory, onNotify]);
 
   // ── Save Selection As Custom Shape ────────────────────
 
@@ -2043,6 +2197,25 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           });
         }
         setActiveTool('select');
+      } else if (activeTool === 'measure') {
+        const snapPt = findSnapPoint(
+          world.x, world.y, editorState.walls,
+          snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
+          snapToEndpointsEnabled, snapToWallEnabled
+        );
+        const pt = { x: snapPt.x, y: snapPt.y };
+        if (!isMeasuring || !measureStart) {
+          setMeasureStart(pt);
+          setMeasureCurrent(pt);
+          setIsMeasuring(true);
+        } else {
+          setMeasureCurrent(pt);
+          setIsMeasuring(false);
+          const dist = Math.hypot(pt.x - measureStart.x, pt.y - measureStart.y);
+          const angle = (Math.atan2(pt.y - measureStart.y, pt.x - measureStart.x) * 180 / Math.PI + 360) % 360;
+          onNotify(`Tape Measurement: ${formatLength(dist, unit)} at ${Math.round(angle)}°`, 'info');
+        }
+        return;
       } else if (activeTool === 'select') {
         setSelectedElement(null);
       }
@@ -2053,7 +2226,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       stairType, selectedFurnitureToPlace, svgToWorld, getSvgPos, panX, panY,
       snapToGridEnabled, snapToEndpointsEnabled, snapToWallEnabled, isOrthoActive,
       editorState.walls, editorState.rooms.length, unit, dispatchWithHistory, onNotify,
-      isSpacePressed
+      isSpacePressed, isMeasuring, measureStart
     ]
   );
 
@@ -2143,6 +2316,29 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               y2: snapToGrid(snap.y2 + snappedDy),
             },
           });
+          // Synchronize hosted doors & windows so they stay attached to the moving wall
+          if (dragHostedOpeningsSnapshot) {
+            dragHostedOpeningsSnapshot.doors.forEach(d => {
+              dispatch({
+                type: 'UPDATE_DOOR',
+                id: d.id,
+                changes: {
+                  x: snapToGrid(d.x + snappedDx),
+                  y: snapToGrid(d.y + snappedDy),
+                },
+              });
+            });
+            dragHostedOpeningsSnapshot.windows.forEach(w => {
+              dispatch({
+                type: 'UPDATE_WINDOW',
+                id: w.id,
+                changes: {
+                  x: snapToGrid(w.x + snappedDx),
+                  y: snapToGrid(w.y + snappedDy),
+                },
+              });
+            });
+          }
         } else if (type === 'room') {
           const snap = dragElementSnapshot as FloorPlanRoom;
           dispatch({
@@ -2211,12 +2407,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         return;
       }
 
+      if (activeTool === 'measure' && isMeasuring && measureStart) {
+        const snapPt = findSnapPoint(
+          world.x, world.y, editorState.walls,
+          snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
+          snapToEndpointsEnabled, snapToWallEnabled
+        );
+        setMeasureCurrent({ x: snapPt.x, y: snapPt.y });
+        return;
+      }
+
       setCurrentMousePos({ x: snapToGrid(world.x), y: snapToGrid(world.y) });
     },
     [
       resizingWall, isPanning, panStart, isDrawingWall, wallStart, isDragging, dragStartPos,
       dragElementSnapshot, selectedElement, svgToWorld, getSvgPos, snapToGridEnabled,
-      snapToEndpointsEnabled, snapToWallEnabled, isOrthoActive, editorState.walls, unit, zoom, panX, panY
+      snapToEndpointsEnabled, snapToWallEnabled, isOrthoActive, editorState.walls, unit, zoom, panX, panY,
+      activeTool, isMeasuring, measureStart
     ]
   );
 
@@ -2254,15 +2461,21 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             }
           }
         } else if (strokeResult.confidence >= 0.70) {
-          // 70–89%: Ask user for confirmation without breaking canvas
+          // 70–89%: Ask user for confirmation via on-canvas card without covering canvas
           setPendingClassification(strokeResult);
-          setIsAiAssistantOpen(true);
-          triggerAiFeedback(`Looks like a ${strokeResult.label}. Confirm in Assistant.`);
+          setAiStrokeSuggestion({
+            message: `I detected a possible ${strokeResult.label}. Convert it to a verified ${strokeResult.label}?`,
+            action: strokeResult.suggestedAction,
+          });
+          triggerAiFeedback(`Looks like a ${strokeResult.label}. Confirm on canvas.`);
         } else {
           // Below 70%: Do NOT guess blindly. Ask user!
           setPendingClassification(strokeResult);
-          setIsAiAssistantOpen(true);
-          triggerAiFeedback("I found a possible shape, but I'm not completely sure. What should this be?");
+          setAiStrokeSuggestion({
+            message: `I detected an ambiguous drawing. Convert it to ${strokeResult.label || 'wall'}?`,
+            action: strokeResult.suggestedAction,
+          });
+          triggerAiFeedback("Shape detected. Confirm conversion or keep drawing.");
         }
       }
       setFreehandPoints([]);
@@ -2289,6 +2502,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setIsDragging(false);
       setDragStartPos(null);
       setDragElementSnapshot(null);
+      setDragHostedOpeningsSnapshot(null);
     }
   }, [
     resizingWall, isPanning, isDragging, selectedElement, editorState, pushHistory, markUnsaved,
@@ -2337,20 +2551,24 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   // ── Touch Pan & Pinch Zoom Handlers ───────────────────
 
+  // ── Touch Pan & Pinch Zoom Handlers ───────────────────
+
+  const touchToMouseEvent = (t: React.Touch) => {
+    return {
+      clientX: t.clientX,
+      clientY: t.clientY,
+      button: 0,
+      buttons: 1,
+      preventDefault: () => {},
+      stopPropagation: () => {},
+      shiftKey: false,
+      altKey: false,
+    } as unknown as React.MouseEvent<SVGSVGElement>;
+  };
+
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
-      if (e.touches.length === 1) {
-        const t = e.touches[0];
-        const svgRect = svgRef.current?.getBoundingClientRect();
-        if (!svgRect) return;
-        touchStartRef.current = {
-          x: t.clientX - svgRect.left,
-          y: t.clientY - svgRect.top,
-          panX,
-          panY,
-        };
-        setIsPanning(true);
-      } else if (e.touches.length === 2) {
+      if (e.touches.length === 2) {
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -2364,40 +2582,71 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           dist,
         };
         setIsPanning(true);
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (activeTool === 'pan') {
+          const svgRect = svgRef.current?.getBoundingClientRect();
+          if (!svgRect) return;
+          touchStartRef.current = {
+            x: t.clientX - svgRect.left,
+            y: t.clientY - svgRect.top,
+            panX,
+            panY,
+          };
+          setIsPanning(true);
+        } else {
+          handleMouseDown(touchToMouseEvent(t));
+        }
       }
     },
-    [panX, panY]
+    [panX, panY, activeTool, handleMouseDown]
   );
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
-      if (!touchStartRef.current) return;
-      if (e.touches.length === 1) {
-        const t = e.touches[0];
-        const svgRect = svgRef.current?.getBoundingClientRect();
-        if (!svgRect) return;
-        const curX = t.clientX - svgRect.left;
-        const curY = t.clientY - svgRect.top;
-        const dx = curX - touchStartRef.current.x;
-        const dy = curY - touchStartRef.current.y;
-        setPanX(touchStartRef.current.panX + dx);
-        setPanY(touchStartRef.current.panY + dy);
-      } else if (e.touches.length === 2 && touchStartRef.current.dist) {
+      if (e.touches.length === 2 && touchStartRef.current?.dist) {
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         const factor = dist / touchStartRef.current.dist;
-        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(zoom * factor).toFixed(3)));
         setZoom(newZoom);
+        const svgRect = svgRef.current?.getBoundingClientRect();
+        if (svgRect) {
+          const midX = (t1.clientX + t2.clientX) / 2 - svgRect.left;
+          const midY = (t1.clientY + t2.clientY) / 2 - svgRect.top;
+          const dx = midX - touchStartRef.current.x;
+          const dy = midY - touchStartRef.current.y;
+          setPanX(touchStartRef.current.panX + dx);
+          setPanY(touchStartRef.current.panY + dy);
+        }
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        if (isPanning && touchStartRef.current) {
+          const svgRect = svgRef.current?.getBoundingClientRect();
+          if (!svgRect) return;
+          const curX = t.clientX - svgRect.left;
+          const curY = t.clientY - svgRect.top;
+          const dx = curX - touchStartRef.current.x;
+          const dy = curY - touchStartRef.current.y;
+          setPanX(touchStartRef.current.panX + dx);
+          setPanY(touchStartRef.current.panY + dy);
+        } else if (!isPanning) {
+          handleMouseMove(touchToMouseEvent(t));
+        }
       }
     },
-    [zoom]
+    [zoom, isPanning, handleMouseMove]
   );
 
   const handleTouchEnd = useCallback(() => {
-    touchStartRef.current = null;
-    setIsPanning(false);
-  }, []);
+    if (isPanning) {
+      touchStartRef.current = null;
+      setIsPanning(false);
+    } else {
+      handleMouseUp();
+    }
+  }, [isPanning, handleMouseUp]);
 
   // ── Element Selection MouseDown ───────────────────────
 
@@ -2428,10 +2677,21 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setIsDragging(false);
         setDragStartPos(null);
         setDragElementSnapshot(null);
+        setDragHostedOpeningsSnapshot(null);
         return;
       }
 
       setDragElementSnapshot(snapshot ? JSON.parse(JSON.stringify(snapshot)) : null);
+      if (type === 'wall') {
+        const hostedDoors = editorState.doors.filter(d => d.wallId === id);
+        const hostedWindows = editorState.windows.filter(w => w.wallId === id);
+        setDragHostedOpeningsSnapshot({
+          doors: JSON.parse(JSON.stringify(hostedDoors)),
+          windows: JSON.parse(JSON.stringify(hostedWindows)),
+        });
+      } else {
+        setDragHostedOpeningsSnapshot(null);
+      }
     },
     [activeTool, getSvgPos, editorState]
   );
@@ -2757,6 +3017,288 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     onNotify(`Selected ${room.label}`, 'info');
   };
 
+  // ── Additional Professional Exports: SVG & JPEG ───────
+
+  const handleExportSVG = useCallback(() => {
+    if (!svgRef.current || !plan) return;
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = `${plan.buildingName || 'floor-plan'}-${floorLevels[activeFloorIndex]?.name || 'level'}.svg`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    onNotify('Exported SVG vector drawing!', 'success');
+  }, [plan, floorLevels, activeFloorIndex, onNotify]);
+
+  const handleExportJPEG = useCallback(() => {
+    if (!svgRef.current || !plan) return;
+    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const canvas = document.createElement('canvas');
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width || 1200;
+      canvas.height = img.height || 800;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = viewMode === 'blueprint' ? '#0f172a' : '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      const link = document.createElement('a');
+      link.download = `${plan.buildingName || 'floor-plan'}-${floorLevels[activeFloorIndex]?.name || 'level'}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.click();
+      onNotify('Exported high-res JPEG image!', 'success');
+    };
+    img.src = url;
+  }, [plan, viewMode, floorLevels, activeFloorIndex, onNotify]);
+
+  // ── Structure & Symbol Quick-Add Functions ───────────
+
+  const handleAddSquareRoom = useCallback(() => {
+    handleAddRoomByDimensions(12, 12, 'Living Room', 'Wood Parquet');
+  }, [handleAddRoomByDimensions]);
+
+  const handleAddLShapedRoom = useCallback(() => {
+    const roomCount = editorState.rooms.length;
+    const posX = snapToGrid(4 + (roomCount % 3) * 6);
+    const posY = snapToGrid(4 + Math.floor(roomCount / 3) * 6);
+    const w = 14;
+    const h = 14;
+    const pts = generateLShapedRoom(posX, posY, w, h, 6, 7);
+    const area = computePolygonArea(pts);
+    const perimeter = computePolygonPerimeter(pts);
+    const newId = uid('room');
+    const newRoom: FloorPlanRoom = {
+      id: newId,
+      roomType: 'Living Room',
+      label: `L-Shape Room ${roomCount + 1}`,
+      x: posX,
+      y: posY,
+      width: w,
+      height: h,
+      shapeType: 'l-shape',
+      polygonPoints: pts,
+      area,
+      perimeter,
+      rotation: 0,
+      color: ROOM_COLORS['Living Room'],
+      floorFinish: 'Wood Parquet',
+      wallThickness: unit === 'feet' ? 0.75 : 0.23,
+      layer: 'rooms',
+    };
+    dispatchWithHistory({ type: 'ADD_ROOM', payload: newRoom });
+    setSelectedElement({ type: 'room', id: newId });
+    onNotify('Added L-shaped room (exact Shoelace area)', 'success');
+  }, [editorState.rooms, unit, dispatchWithHistory, onNotify]);
+
+  const handleAddUShapedRoom = useCallback(() => {
+    const roomCount = editorState.rooms.length;
+    const posX = snapToGrid(4 + (roomCount % 3) * 6);
+    const posY = snapToGrid(4 + Math.floor(roomCount / 3) * 6);
+    const w = 16;
+    const h = 14;
+    const pts = generateUShapedRoom(posX, posY, w, h, 6, 7);
+    const area = computePolygonArea(pts);
+    const perimeter = computePolygonPerimeter(pts);
+    const newId = uid('room');
+    const newRoom: FloorPlanRoom = {
+      id: newId,
+      roomType: 'Living Room',
+      label: `U-Shape Room ${roomCount + 1}`,
+      x: posX,
+      y: posY,
+      width: w,
+      height: h,
+      shapeType: 'u-shape',
+      polygonPoints: pts,
+      area,
+      perimeter,
+      rotation: 0,
+      color: ROOM_COLORS['Living Room'],
+      floorFinish: 'Wood Parquet',
+      wallThickness: unit === 'feet' ? 0.75 : 0.23,
+      layer: 'rooms',
+    };
+    dispatchWithHistory({ type: 'ADD_ROOM', payload: newRoom });
+    setSelectedElement({ type: 'room', id: newId });
+    onNotify('Added U-shaped room (exact Shoelace area)', 'success');
+  }, [editorState.rooms, unit, dispatchWithHistory, onNotify]);
+
+  const handleAddTShapedRoom = useCallback(() => {
+    const roomCount = editorState.rooms.length;
+    const posX = snapToGrid(4 + (roomCount % 3) * 6);
+    const posY = snapToGrid(4 + Math.floor(roomCount / 3) * 6);
+    const w = 14;
+    const h = 16;
+    const pts = generateTShapedRoom(posX, posY, w, h, 6, 9);
+    const area = computePolygonArea(pts);
+    const perimeter = computePolygonPerimeter(pts);
+    const newId = uid('room');
+    const newRoom: FloorPlanRoom = {
+      id: newId,
+      roomType: 'Living Room',
+      label: `T-Shape Room ${roomCount + 1}`,
+      x: posX,
+      y: posY,
+      width: w,
+      height: h,
+      shapeType: 't-shape',
+      polygonPoints: pts,
+      area,
+      perimeter,
+      rotation: 0,
+      color: ROOM_COLORS['Living Room'],
+      floorFinish: 'Wood Parquet',
+      wallThickness: unit === 'feet' ? 0.75 : 0.23,
+      layer: 'rooms',
+    };
+    dispatchWithHistory({ type: 'ADD_ROOM', payload: newRoom });
+    setSelectedElement({ type: 'room', id: newId });
+    onNotify('Added T-shaped room (exact Shoelace area)', 'success');
+  }, [editorState.rooms, unit, dispatchWithHistory, onNotify]);
+
+  const handleAddWallPreset = useCallback((preset: 'exterior' | 'interior' | 'partition') => {
+    const thick = preset === 'exterior' ? (unit === 'feet' ? 0.75 : 0.23) : preset === 'interior' ? (unit === 'feet' ? 0.375 : 0.115) : (unit === 'feet' ? 0.25 : 0.075);
+    setWallThickness(thick);
+    setActiveTool('wall');
+    setSelectedElement(null);
+    onNotify(`Activated ${preset} wall tool (${formatLength(thick, unit)})`, 'info');
+  }, [unit, onNotify]);
+
+  const handleAddDoorPreset = useCallback((dType: DoorType) => {
+    setSelectedDoorType(dType);
+    setActiveTool('door');
+    setSelectedElement(null);
+    onNotify(`Activated ${dType} placement tool`, 'info');
+  }, [onNotify]);
+
+  const handleAddWindowPreset = useCallback((wType: WindowType) => {
+    setSelectedWindowType(wType);
+    setActiveTool('window');
+    setSelectedElement(null);
+    onNotify(`Activated ${wType} placement tool`, 'info');
+  }, [onNotify]);
+
+  const handleAddStairPreset = useCallback((type: StaircaseType) => {
+    const newStair: FloorPlanStaircase = {
+      id: uid('stair'),
+      stairType: type,
+      x: snapToGrid(10),
+      y: snapToGrid(10),
+      width: unit === 'feet' ? 3.5 : 1.0,
+      length: unit === 'feet' ? 10 : 3.0,
+      rotation: 0,
+      numSteps: 16,
+      direction: 'UP',
+      layer: 'stairs',
+    };
+    dispatchWithHistory({ type: 'ADD_STAIRS', payload: newStair });
+    setSelectedElement({ type: 'stairs', id: newStair.id });
+    onNotify(`Added ${type} Staircase`, 'success');
+  }, [unit, dispatchWithHistory, onNotify]);
+
+  const handleAddLanding = useCallback(() => {
+    const newLanding: FloorPlanRoom = {
+      id: uid('room'),
+      roomType: 'Corridor',
+      label: 'Stair Landing',
+      x: snapToGrid(12),
+      y: snapToGrid(12),
+      width: unit === 'feet' ? 6 : 1.8,
+      height: unit === 'feet' ? 4 : 1.2,
+      rotation: 0,
+      color: 'rgba(234,179,8,0.2)',
+      floorFinish: 'Vitrified Tiles',
+      layer: 'rooms',
+    };
+    dispatchWithHistory({ type: 'ADD_ROOM', payload: newLanding });
+    setSelectedElement({ type: 'room', id: newLanding.id });
+    onNotify('Added Landing Platform', 'success');
+  }, [unit, dispatchWithHistory, onNotify]);
+
+  const handleAddVoid = useCallback(() => {
+    const newVoid: FloorPlanRoom = {
+      id: uid('room'),
+      roomType: 'Custom',
+      label: 'Void / Cutout',
+      x: snapToGrid(14),
+      y: snapToGrid(14),
+      width: unit === 'feet' ? 8 : 2.4,
+      height: unit === 'feet' ? 8 : 2.4,
+      rotation: 0,
+      color: 'rgba(239, 68, 68, 0.08)',
+      floorFinish: 'Color Tint',
+      layer: 'rooms',
+    };
+    dispatchWithHistory({ type: 'ADD_ROOM', payload: newVoid });
+    setSelectedElement({ type: 'room', id: newVoid.id });
+    onNotify('Added Void Cutout Area', 'success');
+  }, [unit, dispatchWithHistory, onNotify]);
+
+  const handleAddFurnitureItem = useCallback((item: FurnitureCatalogItem) => {
+    const newId = uid('furn');
+    const newFurn: FloorPlanFurniture = {
+      id: newId,
+      category: item.category,
+      itemType: item.itemType,
+      label: item.label,
+      x: snapToGrid(10),
+      y: snapToGrid(10),
+      width: item.width,
+      height: item.height,
+      rotation: 0,
+      layer: 'furniture',
+    };
+    dispatchWithHistory({ type: 'ADD_FURNITURE', payload: newFurn });
+    setSelectedElement({ type: 'furniture', id: newId });
+    onNotify(`Added ${item.itemType} to plan`, 'success');
+  }, [dispatchWithHistory, onNotify]);
+
+  const handleAddElectricalItem = useCallback((name: string) => {
+    const newId = uid('furn');
+    const newElec: FloorPlanFurniture = {
+      id: newId,
+      category: 'electrical',
+      itemType: name,
+      label: name,
+      x: snapToGrid(10),
+      y: snapToGrid(10),
+      width: 1.5,
+      height: 1.5,
+      rotation: 0,
+      layer: 'furniture',
+    };
+    dispatchWithHistory({ type: 'ADD_FURNITURE', payload: newElec });
+    setSelectedElement({ type: 'furniture', id: newId });
+    onNotify(`Added ${name} to plan`, 'success');
+  }, [dispatchWithHistory, onNotify]);
+
+  const handleAddAnnotationPreset = useCallback((type: 'dimension' | 'note' | 'label') => {
+    if (type === 'dimension') {
+      setActiveTool('dimension');
+      setSelectedElement(null);
+      onNotify('Click wall or drag on canvas to place Dimension Line', 'info');
+    } else {
+      const newId = uid('annot');
+      const newAnnot: FloorPlanAnnotation = {
+        id: newId,
+        x: snapToGrid(10),
+        y: snapToGrid(10),
+        text: type === 'note' ? 'Architectural Note' : 'General Label',
+        fontSize: 12,
+        rotation: 0,
+        layer: 'annotations',
+      };
+      dispatchWithHistory({ type: 'ADD_ANNOTATION', payload: newAnnot });
+      setSelectedElement({ type: 'annotation', id: newId });
+      onNotify('Added Text Annotation', 'success');
+    }
+  }, [dispatchWithHistory, onNotify]);
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b' }}>
@@ -2783,7 +3325,102 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   return (
     <div className={`fp-editor-root ${viewMode === 'blueprint' ? 'fp-blueprint-mode' : viewMode === 'presentation' ? 'fp-presentation-mode' : ''}`}>
+      {/* ── Mobile Top Header (< 768px) ────────────────── */}
+      <header className="fp-mobile-header no-print" aria-label="Mobile CAD Navigation">
+        <div className="fp-mobile-header-left">
+          {plan.siteId && onBackToSite ? (
+            <button
+              type="button"
+              className="fp-mobile-back-btn"
+              onClick={() => onBackToSite(plan.siteId!)}
+              title="Back to Construction Site"
+              aria-label="Back to Site"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="fp-mobile-back-btn"
+              onClick={onBack}
+              title="Back to Floor Plans"
+              aria-label="Back to Plans"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
+
+          <div className="fp-mobile-title-group">
+            <h2 className="fp-mobile-title">{currentFloor.name || 'Floor Plan'}</h2>
+            <span className="fp-mobile-subtitle">{plan.buildingName || plan.siteName || 'CAD Model'}</span>
+          </div>
+        </div>
+
+        <div className="fp-mobile-header-right">
+          <button
+            type="button"
+            className={`fp-mobile-save-btn ${saving ? 'unsaved' : saveStatus === 'saved' ? 'saved' : 'unsaved'}`}
+            onClick={handleSave}
+            disabled={saving}
+            title="Save Floor Plan"
+            id="fp-mobile-save-btn"
+          >
+            {saving ? (
+              <RotateCcw size={14} className="spin" />
+            ) : saveStatus === 'saved' ? (
+              <CheckCircle2 size={14} />
+            ) : (
+              <Save size={14} />
+            )}
+            <span>{saving ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Save'}</span>
+          </button>
+
+          <button
+            type="button"
+            className="fp-mobile-menu-btn"
+            onClick={() => setShowMobileMenu(true)}
+            title="CAD Options & Levels"
+            aria-label="More Options"
+            id="fp-mobile-menu-btn"
+          >
+            <MoreVertical size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* ── Mobile Secondary Mode Bar (< 768px) ────────── */}
+      <div className="fp-mobile-mode-bar no-print" role="tablist" aria-label="View Modes">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewMode === 'design'}
+          className={`fp-mobile-mode-btn ${viewMode === 'design' ? 'active' : ''}`}
+          onClick={() => setViewMode('design')}
+        >
+          Design
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={viewMode === 'blueprint'}
+          className={`fp-mobile-mode-btn ${viewMode === 'blueprint' ? 'active' : ''}`}
+          onClick={() => setViewMode('blueprint')}
+        >
+          Blueprint
+        </button>
+        <button
+          type="button"
+          className="fp-mobile-mode-btn btn-3d"
+          onClick={() => setShow3D(true)}
+          title="Open 3D Architectural Preview"
+        >
+          <Box size={14} />
+          3D
+        </button>
+      </div>
+
       {/* ── Editor Header ─────────────────────────────── */}
+
       <div className="fp-editor-header no-print">
         <div className="fp-editor-header-left">
           {plan.siteId && onBackToSite ? (
@@ -2820,7 +3457,89 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             )}
           </div>
 
-          {/* Floor Level Switcher */}
+          {/* New Project Button */}
+          <button
+            type="button"
+            className="fp-tool-btn"
+            onClick={handleNewProject}
+            title="Start New Floor Plan Project"
+            id="fp-header-new-project-btn"
+            style={{ width: 'auto', padding: '0 10px', gap: 6 }}
+          >
+            <FilePlus size={15} color="#38bdf8" />
+            <span className="fp-tool-btn-label" style={{ display: 'inline', fontWeight: 600 }}>New Project</span>
+          </button>
+
+          {/* Professional Floor Selector & Menu */}
+          <div className="fp-floor-selector-group" style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(15, 23, 42, 0.6)', padding: '2px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)' }}>
+            <Layers size={14} color="#38bdf8" />
+            <select
+              value={activeFloorIndex}
+              onChange={e => handleSwitchFloor(Number(e.target.value))}
+              className="fp-floor-dropdown"
+              style={{ background: 'transparent', color: '#f8fafc', border: 'none', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+              title="Select Active Floor Level"
+            >
+              {floorLevels.map((lvl, idx) => (
+                <option key={lvl.id || idx} value={idx} style={{ background: '#0f172a', color: '#f8fafc' }}>
+                  {lvl.name}
+                </option>
+              ))}
+            </select>
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className="fp-floor-menu-btn"
+                onClick={() => setShowFloorMenu(m => !m)}
+                title="Floor Operations (Add, Rename, Duplicate, Delete)"
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px' }}
+              >
+                <MoreVertical size={14} />
+              </button>
+              {showFloorMenu && (
+                <div
+                  className="fp-more-dropdown"
+                  style={{ left: 0, top: '100%', minWidth: 160, zIndex: 1000 }}
+                  onMouseLeave={() => setShowFloorMenu(false)}
+                >
+                  <button
+                    type="button"
+                    className="fp-more-item"
+                    onClick={() => { setShowFloorMenu(false); handleAddFloor(); }}
+                  >
+                    <Plus size={14} color="#38bdf8" />
+                    <span>Add Floor</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-more-item"
+                    onClick={() => { setShowFloorMenu(false); handleRenameFloor(); }}
+                  >
+                    <Edit size={14} color="#f59e0b" />
+                    <span>Rename Floor</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-more-item"
+                    onClick={() => { setShowFloorMenu(false); handleDuplicateFloor(); }}
+                  >
+                    <Copy size={14} color="#34d399" />
+                    <span>Duplicate Floor</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-more-item danger"
+                    onClick={() => { setShowFloorMenu(false); handleDeleteFloor(); }}
+                  >
+                    <Trash2 size={14} color="#f87171" />
+                    <span>Delete Floor</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Floor Level Quick Switcher */}
           <div className="fp-level-switcher">
             {floorLevels.map((lvl, idx) => (
               <button
@@ -3029,6 +3748,24 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <button
                   type="button"
                   className="fp-more-item"
+                  onClick={() => { setShowExportMenu(false); handleExportSVG(); }}
+                  id="fp-export-svg-btn"
+                >
+                  <Download size={16} color="#06b6d4" />
+                  <span>SVG Vector Drawing (.svg)</span>
+                </button>
+                <button
+                  type="button"
+                  className="fp-more-item"
+                  onClick={() => { setShowExportMenu(false); handleExportJPEG(); }}
+                  id="fp-export-jpeg-btn"
+                >
+                  <Download size={16} color="#f97316" />
+                  <span>JPEG High-Res Image (.jpg)</span>
+                </button>
+                <button
+                  type="button"
+                  className="fp-more-item"
                   onClick={() => { setShowExportMenu(false); handleExportPNG(); }}
                   id="fp-export-png-btn"
                 >
@@ -3049,6 +3786,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           >
             <Layers size={18} />
             <span className="fp-tool-btn-label">Layers</span>
+          </button>
+
+          {/* Fullscreen Toggle */}
+          <button
+            type="button"
+            className="fp-tool-btn"
+            onClick={handleToggleFullscreen}
+            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Canvas'}
+            id="fp-fullscreen-btn"
+          >
+            {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+            <span className="fp-tool-btn-label">Full</span>
           </button>
 
           {/* CAD Settings */}
@@ -3438,8 +4187,124 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         </button>
       </div>
 
-      {/* ── Main Workspace: Shape Library + Canvas ────── */}
-      <div className="fp-canvas-workspace">
+      {/* ── Desktop Professional CAD Workspace ────────── */}
+      <div className="fp-desktop-workspace">
+        {/* ── Left Toolbar (Compact Vertical Professional Toolbar) ── */}
+        <aside className="fp-desktop-left-toolbar no-print" aria-label="Professional Left CAD Toolbar">
+          <button
+            type="button"
+            className={`fp-vert-tool-btn ${activeTool === 'select' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('select'); setIsDrawingWall(false); setWallStart(null); }}
+            title="Select / Move (V)"
+            id="fp-vert-select-btn"
+          >
+            <MousePointer2 size={18} />
+            <span className="fp-vert-tool-label">Select</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-vert-tool-btn ${activeTool === 'pan' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTool(t => t === 'pan' ? 'select' : 'pan');
+              setIsDrawingWall(false);
+              setWallStart(null);
+            }}
+            title="Pan Blueprint Canvas (H / Space+Drag)"
+            id="fp-vert-pan-btn"
+          >
+            <Hand size={18} />
+            <span className="fp-vert-tool-label">Pan</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-vert-tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTool(t => t === 'measure' ? 'select' : 'measure');
+              setMeasureStart(null);
+              setMeasureCurrent(null);
+              setIsMeasuring(false);
+            }}
+            title="Measure Distance & Angle (M)"
+            id="fp-vert-measure-btn"
+          >
+            <Ruler size={18} />
+            <span className="fp-vert-tool-label">Measure</span>
+          </button>
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0', width: '80%' }} />
+
+          <button
+            type="button"
+            className="fp-vert-tool-btn"
+            onClick={handleRotateSelected}
+            disabled={!selectedElement || isSelectedLocked}
+            title="Rotate Selected 90° (R)"
+            id="fp-vert-rotate-btn"
+          >
+            <RotateCw size={18} />
+            <span className="fp-vert-tool-label">Rotate</span>
+          </button>
+          <button
+            type="button"
+            className="fp-vert-tool-btn"
+            onClick={() => handleMirrorSelected('horizontal')}
+            disabled={!selectedElement || isSelectedLocked}
+            title="Mirror Selected (Flip)"
+            id="fp-vert-mirror-btn"
+          >
+            <FlipHorizontal size={18} />
+            <span className="fp-vert-tool-label">Mirror</span>
+          </button>
+          <button
+            type="button"
+            className="fp-vert-tool-btn"
+            onClick={handleDuplicateSelected}
+            disabled={!selectedElement}
+            title="Clone Selected Element"
+            id="fp-vert-clone-btn"
+          >
+            <Copy size={18} />
+            <span className="fp-vert-tool-label">Clone</span>
+          </button>
+          <button
+            type="button"
+            className="fp-vert-tool-btn"
+            style={{ color: selectedElement ? '#f87171' : undefined }}
+            onClick={handleDeleteSelected}
+            disabled={!selectedElement || isSelectedLocked}
+            title="Delete Selected (Del)"
+            id="fp-vert-delete-btn"
+          >
+            <Trash2 size={18} />
+            <span className="fp-vert-tool-label">Delete</span>
+          </button>
+
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '4px 0', width: '80%' }} />
+
+          <button
+            type="button"
+            className="fp-vert-tool-btn"
+            onClick={handleUndo}
+            title="Undo (Ctrl+Z)"
+            id="fp-vert-undo-btn"
+          >
+            <Undo2 size={18} />
+            <span className="fp-vert-tool-label">Undo</span>
+          </button>
+          <button
+            type="button"
+            className="fp-vert-tool-btn"
+            onClick={handleRedo}
+            title="Redo (Ctrl+Y)"
+            id="fp-vert-redo-btn"
+          >
+            <Redo2 size={18} />
+            <span className="fp-vert-tool-label">Redo</span>
+          </button>
+        </aside>
+
+        {/* ── Center Workspace: Shape Library + Canvas ────── */}
+        <div className="fp-canvas-workspace">
         <FloorPlanShapeLibrary
           user={user}
           unit={unit}
@@ -3465,7 +4330,82 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             touchAction: 'none',
           }}
         >
+          {/* Mobile Floating Zoom Pill (< 768px) */}
+          <div className="fp-mobile-zoom-pill no-print" aria-label="Canvas Zoom Controls">
+            <button
+              type="button"
+              className="fp-mobile-zoom-btn"
+              onClick={() => setZoom(z => Math.max(MIN_ZOOM, +(z * 0.8).toFixed(2)))}
+              title="Zoom Out"
+              aria-label="Zoom Out"
+            >
+              <Minus size={14} />
+            </button>
+            <span className="fp-mobile-zoom-text">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              className="fp-mobile-zoom-btn"
+              onClick={() => setZoom(z => Math.min(MAX_ZOOM, +(z * 1.25).toFixed(2)))}
+              title="Zoom In"
+              aria-label="Zoom In"
+            >
+              <Plus size={14} />
+            </button>
+            <button
+              type="button"
+              className="fp-mobile-zoom-fit"
+              onClick={handleFitToScreen}
+              title="Fit entire floor plan to screen"
+            >
+              <Maximize2 size={11} />
+              FIT
+            </button>
+          </div>
+
+          {/* Mobile Floating AI Assistant Button (< 768px) */}
+          <button
+            type="button"
+            className="fp-fab-ai no-print"
+            onClick={() => setIsAiAssistantOpen(true)}
+            title="✦ AI Floor Plan Assistant (Ctrl + K)"
+            id="fp-mobile-fab-ai"
+          >
+            <Sparkles size={16} className="animate-pulse" />
+            <span>✦ AI</span>
+          </button>
+
+          {/* On-Canvas AI Drawing Recognition Confirmation Card */}
+          {aiStrokeSuggestion && (
+            <div className="fp-ai-stroke-card no-print" role="dialog" aria-label="AI Drawing Recognition">
+              <div className="fp-ai-stroke-content">
+                <Sparkles size={16} color="#fbbf24" style={{ flexShrink: 0 }} />
+                <span className="fp-ai-stroke-text">{aiStrokeSuggestion.message}</span>
+              </div>
+              <div className="fp-ai-stroke-actions">
+                <button
+                  type="button"
+                  className="fp-ai-btn-convert"
+                  onClick={() => {
+                    executeValidatedAction(aiStrokeSuggestion.action);
+                    setAiStrokeSuggestion(null);
+                    onNotify(`${aiStrokeSuggestion.action.description} applied`, 'success');
+                  }}
+                >
+                  Convert
+                </button>
+                <button
+                  type="button"
+                  className="fp-ai-btn-dismiss"
+                  onClick={() => setAiStrokeSuggestion(null)}
+                >
+                  Keep Drawing
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Floating Canvas AI Copilot Pill */}
+
           <button
             type="button"
             className="fp-canvas-floating-copilot"
@@ -3619,6 +4559,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </>
           )}
 
+          {/* ── Background Reference Plan Image (FloorPlanCreator standard) ── */}
+          {currentFloor.backgroundImage && currentFloor.backgroundImage.visible !== false && currentFloor.backgroundImage.url && (
+            <image
+              href={currentFloor.backgroundImage.url}
+              x={panX + currentFloor.backgroundImage.x * GRID_SIZE_PX * zoom}
+              y={panY + currentFloor.backgroundImage.y * GRID_SIZE_PX * zoom}
+              width={currentFloor.backgroundImage.width * GRID_SIZE_PX * zoom}
+              height={currentFloor.backgroundImage.height * GRID_SIZE_PX * zoom}
+              opacity={currentFloor.backgroundImage.opacity ?? 0.5}
+              style={{ pointerEvents: currentFloor.backgroundImage.locked ? 'none' : 'auto' }}
+            />
+          )}
+
           {/* ── Plot Boundary ────────────────────────── */}
           <rect
             x={panX}
@@ -3670,6 +4623,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             const isSelected = selectedElement?.id === room.id;
             const isWoodFloor = room.floorFinish !== 'Color Tint';
             const wallThickPx = Math.max(7, Math.min(14, (room.wallThickness || 0.75) * 8 * zoom));
+            const hasPoly = !!(room.polygonPoints && room.polygonPoints.length >= 3);
+            const polyPointsStr = hasPoly
+              ? room.polygonPoints!.map(p => `${p.x * GRID_SIZE_PX * zoom + panX},${p.y * GRID_SIZE_PX * zoom + panY}`).join(' ')
+              : '';
 
             return (
               <g
@@ -3677,55 +4634,93 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 onMouseDown={e => handleElementMouseDown(e, 'room', room.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
               >
-                {/* 1. Floor Finish (Wood Parquet or Plain Color Tint) */}
-                <rect
-                  x={rx}
-                  y={ry}
-                  width={rw}
-                  height={rh}
-                  fill={isWoodFloor ? 'url(#fp-wood-parquet)' : (room.color || ROOM_COLORS[room.roomType] || 'rgba(251,191,36,0.18)')}
-                  rx={2 * zoom}
-                />
-                {/* Subtle room tint overlay on top of wood floor */}
-                {isWoodFloor && (
-                  <rect
-                    x={rx}
-                    y={ry}
-                    width={rw}
-                    height={rh}
-                    fill={room.color || 'rgba(217, 119, 6, 0.08)'}
-                    rx={2 * zoom}
-                    style={{ pointerEvents: 'none' }}
-                  />
-                )}
+                {hasPoly ? (
+                  <>
+                    {/* 1. Polygon Floor Finish */}
+                    <polygon
+                      points={polyPointsStr}
+                      fill={isWoodFloor ? 'url(#fp-wood-parquet)' : (room.color || ROOM_COLORS[room.roomType] || 'rgba(251,191,36,0.18)')}
+                    />
+                    {isWoodFloor && (
+                      <polygon
+                        points={polyPointsStr}
+                        fill={room.color || 'rgba(217, 119, 6, 0.08)'}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    )}
+                    {/* 2. Polygon Perimeter Wall Border */}
+                    <polygon
+                      points={polyPointsStr}
+                      fill="none"
+                      stroke={isSelected ? '#059669' : (viewMode === 'blueprint' ? '#93c5fd' : '#10b981')}
+                      strokeWidth={wallThickPx}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                    {/* Active Selection Glow for Polygon */}
+                    {isSelected && (
+                      <polygon
+                        points={polyPointsStr}
+                        fill="none"
+                        stroke="#38bdf8"
+                        strokeWidth={2.5 * zoom}
+                        strokeDasharray={`${6 * zoom},${4 * zoom}`}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* 1. Floor Finish (Wood Parquet or Plain Color Tint) */}
+                    <rect
+                      x={rx}
+                      y={ry}
+                      width={rw}
+                      height={rh}
+                      fill={isWoodFloor ? 'url(#fp-wood-parquet)' : (room.color || ROOM_COLORS[room.roomType] || 'rgba(251,191,36,0.18)')}
+                      rx={2 * zoom}
+                    />
+                    {/* Subtle room tint overlay on top of wood floor */}
+                    {isWoodFloor && (
+                      <rect
+                        x={rx}
+                        y={ry}
+                        width={rw}
+                        height={rh}
+                        fill={room.color || 'rgba(217, 119, 6, 0.08)'}
+                        rx={2 * zoom}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    )}
 
-                {/* 2. Planner 5D Perimeter Wall Border */}
-                <rect
-                  x={rx}
-                  y={ry}
-                  width={rw}
-                  height={rh}
-                  fill="none"
-                  stroke={isSelected ? '#059669' : (viewMode === 'blueprint' ? '#93c5fd' : '#10b981')}
-                  strokeWidth={wallThickPx}
-                  rx={2 * zoom}
-                  style={{ pointerEvents: 'none' }}
-                />
+                    {/* 2. Planner 5D Perimeter Wall Border */}
+                    <rect
+                      x={rx}
+                      y={ry}
+                      width={rw}
+                      height={rh}
+                      fill="none"
+                      stroke={isSelected ? '#059669' : (viewMode === 'blueprint' ? '#93c5fd' : '#10b981')}
+                      strokeWidth={wallThickPx}
+                      rx={2 * zoom}
+                      style={{ pointerEvents: 'none' }}
+                    />
 
-                {/* Active Selection Glow Box */}
-                {isSelected && (
-                  <rect
-                    x={rx - 4 * zoom}
-                    y={ry - 4 * zoom}
-                    width={rw + 8 * zoom}
-                    height={rh + 8 * zoom}
-                    fill="none"
-                    stroke="#38bdf8"
-                    strokeWidth={2 * zoom}
-                    strokeDasharray={`${6 * zoom},${4 * zoom}`}
-                    rx={4 * zoom}
-                    style={{ pointerEvents: 'none' }}
-                  />
+                    {/* Active Selection Glow Box */}
+                    {isSelected && (
+                      <rect
+                        x={rx - 4 * zoom}
+                        y={ry - 4 * zoom}
+                        width={rw + 8 * zoom}
+                        height={rh + 8 * zoom}
+                        fill="none"
+                        stroke="#38bdf8"
+                        strokeWidth={2 * zoom}
+                        strokeDasharray={`${6 * zoom},${4 * zoom}`}
+                        rx={4 * zoom}
+                        style={{ pointerEvents: 'none' }}
+                      />
+                    )}
+                  </>
                 )}
 
                 {/* On-Canvas Rotation Knob & Stalk */}
@@ -4255,28 +5250,60 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   strokeWidth={1}
                 />
 
-                {/* Door Leaf (Solid wood panel pivoted at opening) */}
-                <g transform={`scale(${flipH}, ${flipV})`}>
-                  <rect
-                    x={dx - dw / 2}
-                    y={dy - dw}
-                    width={3.5 * zoom}
-                    height={dw}
-                    fill={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#93c5fd' : '#f8fafc'}
-                    stroke={isSelected ? '#fbbf24' : viewMode === 'blueprint' ? '#60a5fa' : '#334155'}
-                    strokeWidth={1.5 * zoom}
-                    rx={1}
-                  />
+                {/* Door Leaf or Pass-Through Opening */}
+                {door.doorType === 'Opening' ? (
+                  /* Pass-through opening / archway: clean opening casing, no door leaf or swing arc */
+                  <g>
+                    <line
+                      x1={dx - dw / 2}
+                      y1={dy - wallThickPx / 2}
+                      x2={dx - dw / 2}
+                      y2={dy + wallThickPx / 2}
+                      stroke={isSelected ? '#f59e0b' : '#94a3b8'}
+                      strokeWidth={2 * zoom}
+                    />
+                    <line
+                      x1={dx + dw / 2}
+                      y1={dy - wallThickPx / 2}
+                      x2={dx + dw / 2}
+                      y2={dy + wallThickPx / 2}
+                      stroke={isSelected ? '#f59e0b' : '#94a3b8'}
+                      strokeWidth={2 * zoom}
+                    />
+                    <line
+                      x1={dx - dw / 2}
+                      y1={dy}
+                      x2={dx + dw / 2}
+                      y2={dy}
+                      stroke={isSelected ? '#f59e0b' : '#64748b'}
+                      strokeWidth={1.5 * zoom}
+                      strokeDasharray={`${4 * zoom},${3 * zoom}`}
+                    />
+                  </g>
+                ) : (
+                  /* Standard Door Leaf and Swing Arc */
+                  <g transform={`scale(${flipH}, ${flipV})`}>
+                    <rect
+                      x={dx - dw / 2}
+                      y={dy - dw}
+                      width={3.5 * zoom}
+                      height={dw}
+                      fill={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#93c5fd' : '#f8fafc'}
+                      stroke={isSelected ? '#fbbf24' : viewMode === 'blueprint' ? '#60a5fa' : '#334155'}
+                      strokeWidth={1.5 * zoom}
+                      rx={1}
+                    />
 
-                  {/* 90° Swing Arc */}
-                  <path
-                    d={`M ${dx - dw / 2} ${dy - dw} A ${dw} ${dw} 0 0 1 ${dx + dw / 2} ${dy}`}
-                    fill="none"
-                    stroke={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#60a5fa' : '#64748b'}
-                    strokeWidth={1.2 * zoom}
-                    strokeDasharray={`${4 * zoom},${3 * zoom}`}
-                  />
-                </g>
+                    {/* 90° Swing Arc */}
+                    <path
+                      d={`M ${dx - dw / 2} ${dy - dw} A ${dw} ${dw} 0 0 1 ${dx + dw / 2} ${dy}`}
+                      fill="none"
+                      stroke={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#60a5fa' : '#64748b'}
+                      strokeWidth={1.2 * zoom}
+                      strokeDasharray={`${4 * zoom},${3 * zoom}`}
+                    />
+                  </g>
+                )}
 
                 {/* Door label */}
                 {zoom > 0.6 && (
@@ -4510,6 +5537,70 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 filter: 'drop-shadow(0 0 8px rgba(192, 132, 252, 0.85))',
               }}
             />
+          )}
+
+          {/* ── Interactive 2-Point Measure Tape (FloorPlanCreator standard) ── */}
+          {measureStart && measureCurrent && (
+            <g className="fp-measure-tape-overlay" style={{ pointerEvents: 'none' }}>
+              <line
+                x1={measureStart.x * GRID_SIZE_PX * zoom + panX}
+                y1={measureStart.y * GRID_SIZE_PX * zoom + panY}
+                x2={measureCurrent.x * GRID_SIZE_PX * zoom + panX}
+                y2={measureCurrent.y * GRID_SIZE_PX * zoom + panY}
+                stroke="#10b981"
+                strokeWidth={2.5 * zoom}
+                strokeDasharray={`${6 * zoom},${4 * zoom}`}
+              />
+              <circle
+                cx={measureStart.x * GRID_SIZE_PX * zoom + panX}
+                cy={measureStart.y * GRID_SIZE_PX * zoom + panY}
+                r={5 * zoom}
+                fill="#10b981"
+                stroke="#ffffff"
+                strokeWidth={1.5 * zoom}
+              />
+              <circle
+                cx={measureCurrent.x * GRID_SIZE_PX * zoom + panX}
+                cy={measureCurrent.y * GRID_SIZE_PX * zoom + panY}
+                r={5 * zoom}
+                fill="#10b981"
+                stroke="#ffffff"
+                strokeWidth={1.5 * zoom}
+              />
+              {(() => {
+                const dx = measureCurrent.x - measureStart.x;
+                const dy = measureCurrent.y - measureStart.y;
+                const dist = Math.hypot(dx, dy);
+                const deg = Math.round((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360);
+                const midX = ((measureStart.x + measureCurrent.x) / 2) * GRID_SIZE_PX * zoom + panX;
+                const midY = ((measureStart.y + measureCurrent.y) / 2) * GRID_SIZE_PX * zoom + panY;
+                return (
+                  <g transform={`translate(${midX}, ${midY - 12 * zoom})`}>
+                    <rect
+                      x={-60 * zoom}
+                      y={-14 * zoom}
+                      width={120 * zoom}
+                      height={22 * zoom}
+                      rx={4 * zoom}
+                      fill="rgba(15, 23, 42, 0.9)"
+                      stroke="#10b981"
+                      strokeWidth={1.2 * zoom}
+                    />
+                    <text
+                      x={0}
+                      y={2 * zoom}
+                      textAnchor="middle"
+                      fill="#ffffff"
+                      fontSize={11 * zoom}
+                      fontWeight="bold"
+                      fontFamily="'Outfit', sans-serif"
+                    >
+                      {formatDim(dist, unit)} ({deg}°)
+                    </text>
+                  </g>
+                );
+              })()}
+            </g>
           )}
         </svg>
 
@@ -5567,6 +6658,582 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       )}
     </div>
 
+        {/* ── Right Symbol / Structure Panel (FloorPlanCreator standard) ── */}
+        <aside className="fp-desktop-right-panel no-print" aria-label="Symbol & Structure Library">
+          {/* Numerical Precision Inspector */}
+          <div className="fp-numerical-inspector">
+            <h4>Numerical Precision Inspector</h4>
+            {selectedElement ? (
+              <div>
+                {selectedElement.type === 'wall' && (() => {
+                  const w = editorState.walls.find(x => x.id === selectedElement.id);
+                  if (!w) return null;
+                  const len = getWallLength(w);
+                  const ang = getWallAngleDeg(w);
+                  return (
+                    <div className="fp-inspector-content">
+                      <div className="fp-inspector-row">
+                        <label>Wall Type</label>
+                        <span style={{ fontWeight: 600, color: '#38bdf8' }}>{w.wallType}</span>
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Length ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          className="fp-inspector-input"
+                          value={+len.toFixed(2)}
+                          onChange={e => {
+                            const newLen = parseFloat(e.target.value);
+                            if (!newLen || newLen <= 0.1) return;
+                            const rad = (ang * Math.PI) / 180;
+                            const newX2 = w.x1 + newLen * Math.cos(rad);
+                            const newY2 = w.y1 + newLen * Math.sin(rad);
+                            dispatchWithHistory({ type: 'UPDATE_WALL', id: w.id, changes: { x2: newX2, y2: newY2 } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Thickness</label>
+                        <select
+                          className="fp-inspector-input"
+                          value={w.thickness}
+                          onChange={e => {
+                            const th = parseFloat(e.target.value);
+                            dispatchWithHistory({ type: 'UPDATE_WALL', id: w.id, changes: { thickness: th } });
+                            markUnsaved();
+                          }}
+                        >
+                          <option value={unit === 'feet' ? 0.75 : 0.23}>9" Ext ({formatLength(unit === 'feet' ? 0.75 : 0.23, unit)})</option>
+                          <option value={unit === 'feet' ? 0.375 : 0.115}>4.5" Int ({formatLength(unit === 'feet' ? 0.375 : 0.115, unit)})</option>
+                          <option value={unit === 'feet' ? 0.25 : 0.075}>3" Part ({formatLength(unit === 'feet' ? 0.25 : 0.075, unit)})</option>
+                        </select>
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Angle</label>
+                        <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{Math.round(ang)}°</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {selectedElement.type === 'room' && (() => {
+                  const r = editorState.rooms.find(x => x.id === selectedElement.id);
+                  if (!r) return null;
+                  const area = computeRoomArea(r, unit);
+                  const perim = computeRoomPerimeter(r, unit);
+                  return (
+                    <div className="fp-inspector-content">
+                      <div className="fp-inspector-row">
+                        <label>Room Name</label>
+                        <input
+                          type="text"
+                          className="fp-inspector-input"
+                          value={r.label}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_ROOM', id: r.id, changes: { label: e.target.value } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          className="fp-inspector-input"
+                          value={r.width}
+                          onChange={e => {
+                            const nw = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_ROOM', id: r.id, changes: { width: nw } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Length/Height ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.5"
+                          className="fp-inspector-input"
+                          value={r.height}
+                          onChange={e => {
+                            const nh = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_ROOM', id: r.id, changes: { height: nh } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Area (Shoelace)</label>
+                        <span style={{ color: '#10b981', fontWeight: 700, fontSize: '0.85rem' }}>
+                          {area} {unit === 'feet' ? 'sq.ft' : 'sq.m'}
+                        </span>
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Perimeter</label>
+                        <span style={{ color: '#38bdf8', fontWeight: 600, fontSize: '0.8rem' }}>
+                          {perim} {unit}
+                        </span>
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Floor Finish</label>
+                        <select
+                          className="fp-inspector-input"
+                          value={r.floorFinish || 'Vitrified Tiles'}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_ROOM', id: r.id, changes: { floorFinish: e.target.value } });
+                            markUnsaved();
+                          }}
+                        >
+                          {['Vitrified Tiles', 'Marble', 'Granite', 'Wood Parquet', 'Ceramic Tiles', 'Concrete', 'Color Tint'].map(f => (
+                            <option key={f} value={f}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {selectedElement.type === 'door' && (() => {
+                  const d = editorState.doors.find(x => x.id === selectedElement.id);
+                  if (!d) return null;
+                  return (
+                    <div className="fp-inspector-content">
+                      <div className="fp-inspector-row">
+                        <label>Door Type</label>
+                        <select
+                          className="fp-inspector-input"
+                          value={d.doorType}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { doorType: e.target.value as DoorType } });
+                            markUnsaved();
+                          }}
+                        >
+                          {DOOR_TYPES.map(dt => (<option key={dt} value={dt}>{dt}</option>))}
+                        </select>
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          className="fp-inspector-input"
+                          value={d.width}
+                          onChange={e => {
+                            const nw = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: nw } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Swing Angle</label>
+                        <select
+                          className="fp-inspector-input"
+                          value={d.swingAngle || 90}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { swingAngle: parseInt(e.target.value) } });
+                            markUnsaved();
+                          }}
+                        >
+                          <option value={90}>90°</option>
+                          <option value={45}>45°</option>
+                          <option value={180}>180°</option>
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {selectedElement.type === 'window' && (() => {
+                  const w = editorState.windows.find(x => x.id === selectedElement.id);
+                  if (!w) return null;
+                  return (
+                    <div className="fp-inspector-content">
+                      <div className="fp-inspector-row">
+                        <label>Window Type</label>
+                        <select
+                          className="fp-inspector-input"
+                          value={w.windowType}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { windowType: e.target.value as WindowType } });
+                            markUnsaved();
+                          }}
+                        >
+                          {WINDOW_TYPES.map(wt => (<option key={wt} value={wt}>{wt}</option>))}
+                        </select>
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          className="fp-inspector-input"
+                          value={w.width}
+                          onChange={e => {
+                            const nw = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: nw } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          className="fp-inspector-input"
+                          value={w.height || (unit === 'feet' ? 4 : 1.2)}
+                          onChange={e => {
+                            const nh = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { height: nh } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {selectedElement.type === 'furniture' && (() => {
+                  const f = editorState.furniture.find(x => x.id === selectedElement.id);
+                  if (!f) return null;
+                  return (
+                    <div className="fp-inspector-content">
+                      <div className="fp-inspector-row">
+                        <label>Item Name</label>
+                        <input
+                          type="text"
+                          className="fp-inspector-input"
+                          value={f.label || f.itemType}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { label: e.target.value } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          className="fp-inspector-input"
+                          value={f.width}
+                          onChange={e => {
+                            const nw = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { width: nw } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Length/Depth</label>
+                        <input
+                          type="number"
+                          step="0.25"
+                          className="fp-inspector-input"
+                          value={f.height}
+                          onChange={e => {
+                            const nh = parseFloat(e.target.value) || 1;
+                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { height: nh } });
+                            markUnsaved();
+                          }}
+                        />
+                      </div>
+                      <div className="fp-inspector-row">
+                        <label>Rotation</label>
+                        <select
+                          className="fp-inspector-input"
+                          value={f.rotation || 0}
+                          onChange={e => {
+                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: parseInt(e.target.value) } });
+                            markUnsaved();
+                          }}
+                        >
+                          <option value={0}>0°</option>
+                          <option value={45}>45°</option>
+                          <option value={90}>90°</option>
+                          <option value={135}>135°</option>
+                          <option value={180}>180°</option>
+                          <option value={270}>270°</option>
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <p style={{ fontSize: '0.75rem', color: '#94a3b8', margin: 0 }}>
+                Select any wall, room, door, window, or symbol to view and edit its exact real-world dimensions.
+              </p>
+            )}
+          </div>
+
+          {/* Categorized Library Accordion */}
+          <div className="fp-category-accordion">
+            {/* STRUCTURE */}
+            <div className="fp-accordion-section">
+              <button
+                type="button"
+                className={`fp-accordion-header ${activeDesktopCategory === 'STRUCTURE' ? 'active' : ''}`}
+                onClick={() => setActiveDesktopCategory(c => c === 'STRUCTURE' ? null : 'STRUCTURE')}
+              >
+                <span>STRUCTURE</span>
+                {activeDesktopCategory === 'STRUCTURE' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {activeDesktopCategory === 'STRUCTURE' && (
+                <div className="fp-accordion-body">
+                  <button type="button" className="fp-symbol-item-btn" onClick={handleAddSquareRoom}>
+                    <Square size={16} color="#38bdf8" />
+                    <span>Square Room</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={handleAddLShapedRoom}>
+                    <Shapes size={16} color="#38bdf8" />
+                    <span>L-Shaped Room</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={handleAddUShapedRoom}>
+                    <Shapes size={16} color="#38bdf8" />
+                    <span>U-Shaped Room</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={handleAddTShapedRoom}>
+                    <Shapes size={16} color="#38bdf8" />
+                    <span>T-Shaped Room</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => { setActiveTool('room'); onNotify('Click canvas to place custom room', 'info'); }}>
+                    <Shapes size={16} color="#38bdf8" />
+                    <span>Custom Room</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWallPreset('exterior')}>
+                    <Pencil size={16} color="#f59e0b" />
+                    <span>9" Exterior Wall</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWallPreset('interior')}>
+                    <Pencil size={16} color="#fbbf24" />
+                    <span>4.5" Interior Wall</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWallPreset('partition')}>
+                    <Pencil size={16} color="#fcd34d" />
+                    <span>3" Partition Wall</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddStairPreset('Straight')}>
+                    <Columns size={16} color="#a78bfa" />
+                    <span>Staircase Flight</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={handleAddLanding}>
+                    <Square size={16} color="#eab308" />
+                    <span>Landing Platform</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={handleAddVoid}>
+                    <X size={16} color="#f87171" />
+                    <span>Void / Cutout</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => setShowBgImageModal(true)}>
+                    <ImageIcon size={16} color="#34d399" />
+                    <span>Image Background</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* OPENINGS */}
+            <div className="fp-accordion-section">
+              <button
+                type="button"
+                className={`fp-accordion-header ${activeDesktopCategory === 'OPENINGS' ? 'active' : ''}`}
+                onClick={() => setActiveDesktopCategory(c => c === 'OPENINGS' ? null : 'OPENINGS')}
+              >
+                <span>OPENINGS</span>
+                {activeDesktopCategory === 'OPENINGS' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {activeDesktopCategory === 'OPENINGS' && (
+                <div className="fp-accordion-body">
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Single')}>
+                    <DoorOpen size={16} color="#38bdf8" />
+                    <span>Single Door</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Double')}>
+                    <DoorOpen size={16} color="#38bdf8" />
+                    <span>Double Door</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Sliding')}>
+                    <DoorOpen size={16} color="#38bdf8" />
+                    <span>Sliding Door</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWindowPreset('Single Window')}>
+                    <AppWindow size={16} color="#38bdf8" />
+                    <span>Single Window</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Opening')}>
+                    <Split size={16} color="#f59e0b" />
+                    <span>Wall Opening</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* FURNITURE */}
+            <div className="fp-accordion-section">
+              <button
+                type="button"
+                className={`fp-accordion-header ${activeDesktopCategory === 'FURNITURE' ? 'active' : ''}`}
+                onClick={() => setActiveDesktopCategory(c => c === 'FURNITURE' ? null : 'FURNITURE')}
+              >
+                <span>FURNITURE</span>
+                {activeDesktopCategory === 'FURNITURE' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {activeDesktopCategory === 'FURNITURE' && (
+                <div className="fp-accordion-body">
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'bedroom', itemType: 'Bed (Queen)', label: 'Bed', width: 5.5, height: 6.5 })}>
+                    <Bed size={16} color="#818cf8" />
+                    <span>Queen Bed</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'living', itemType: 'Sofa 3-Seater', label: 'Sofa', width: 7.0, height: 3.0 })}>
+                    <Sofa size={16} color="#818cf8" />
+                    <span>3-Seater Sofa</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'dining', itemType: 'Dining Table 6-Seater', label: 'Dining Table', width: 5.0, height: 3.5 })}>
+                    <Square size={16} color="#818cf8" />
+                    <span>Dining Table</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'living', itemType: 'Armchair', label: 'Chair', width: 2.8, height: 2.8 })}>
+                    <Armchair size={16} color="#818cf8" />
+                    <span>Lounge Chair</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'bedroom', itemType: 'Wardrobe 3-Door', label: 'Wardrobe', width: 6.0, height: 2.0 })}>
+                    <Square size={16} color="#818cf8" />
+                    <span>Wardrobe</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'kitchen', itemType: 'Kitchen Counter Sink', label: 'Kitchen Sink', width: 4.0, height: 2.0 })}>
+                    <Utensils size={16} color="#34d399" />
+                    <span>Kitchen Counter Sink</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'bathroom', itemType: 'Bathroom Commode', label: 'Commode', width: 2.2, height: 2.5 })}>
+                    <Bath size={16} color="#38bdf8" />
+                    <span>Bathroom Commode</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'kitchen', itemType: 'Refrigerator', label: 'Fridge', width: 2.8, height: 2.8 })}>
+                    <Box size={16} color="#f59e0b" />
+                    <span>Refrigerator</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ELECTRICAL */}
+            <div className="fp-accordion-section">
+              <button
+                type="button"
+                className={`fp-accordion-header ${activeDesktopCategory === 'ELECTRICAL' ? 'active' : ''}`}
+                onClick={() => setActiveDesktopCategory(c => c === 'ELECTRICAL' ? null : 'ELECTRICAL')}
+              >
+                <span>ELECTRICAL</span>
+                {activeDesktopCategory === 'ELECTRICAL' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {activeDesktopCategory === 'ELECTRICAL' && (
+                <div className="fp-accordion-body">
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Ceiling Light')}>
+                    <Zap size={16} color="#fbbf24" />
+                    <span>Ceiling Light</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Wall Switch')}>
+                    <Zap size={16} color="#fbbf24" />
+                    <span>Wall Switch</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Power Socket')}>
+                    <Zap size={16} color="#fbbf24" />
+                    <span>Power Socket</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Ceiling Fan')}>
+                    <RotateCw size={16} color="#fbbf24" />
+                    <span>Ceiling Fan</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ANNOTATION */}
+            <div className="fp-accordion-section">
+              <button
+                type="button"
+                className={`fp-accordion-header ${activeDesktopCategory === 'ANNOTATION' ? 'active' : ''}`}
+                onClick={() => setActiveDesktopCategory(c => c === 'ANNOTATION' ? null : 'ANNOTATION')}
+              >
+                <span>ANNOTATION</span>
+                {activeDesktopCategory === 'ANNOTATION' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {activeDesktopCategory === 'ANNOTATION' && (
+                <div className="fp-accordion-body">
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => setShowDimensions(d => !d)}>
+                    <Ruler size={16} color="#38bdf8" />
+                    <span>Dimension Lines ({showDimensions ? 'ON' : 'OFF'})</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddAnnotationPreset('note')}>
+                    <Type size={16} color="#38bdf8" />
+                    <span>Architectural Note</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddAnnotationPreset('label')}>
+                    <ChevronRight size={16} color="#38bdf8" />
+                    <span>Direction Arrow</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddAnnotationPreset('label')}>
+                    <Type size={16} color="#38bdf8" />
+                    <span>Room Label Tag</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* TOOLS */}
+            <div className="fp-accordion-section">
+              <button
+                type="button"
+                className={`fp-accordion-header ${activeDesktopCategory === 'TOOLS' ? 'active' : ''}`}
+                onClick={() => setActiveDesktopCategory(c => c === 'TOOLS' ? null : 'TOOLS')}
+              >
+                <span>TOOLS</span>
+                {activeDesktopCategory === 'TOOLS' ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+              {activeDesktopCategory === 'TOOLS' && (
+                <div className="fp-accordion-body">
+                  <button
+                    type="button"
+                    className="fp-symbol-item-btn"
+                    onClick={() => {
+                      setActiveTool('measure');
+                      setMeasureStart(null);
+                      setMeasureCurrent(null);
+                      setIsMeasuring(false);
+                      onNotify('Click 2 points on canvas to measure distance & angle', 'info');
+                    }}
+                  >
+                    <Ruler size={16} color="#10b981" />
+                    <span>Tape Measure</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => setShowRoomScheduleModal(true)}>
+                    <Calculator size={16} color="#38bdf8" />
+                    <span>Area Schedule</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => setShowRoomScheduleModal(true)}>
+                    <ScanLine size={16} color="#38bdf8" />
+                    <span>Perimeter Breakdown</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => setShowBgImageModal(true)}>
+                    <ImageIcon size={16} color="#f59e0b" />
+                    <span>Background Image</span>
+                  </button>
+                  <button type="button" className="fp-symbol-item-btn" onClick={() => setShowSettingsModal(true)}>
+                    <Settings size={16} color="#94a3b8" />
+                    <span>Scale & Snapping</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
+
       {/* ── Properties Panel ──────────────────────────── */}
       {selectedElement && (
         <div className="fp-properties-panel no-print">
@@ -5887,7 +7554,238 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         </div>
       )}
 
+      {/* ── Mobile Contextual Subtoolbar (< 768px) ────── */}
+      {activeTool === 'wall' && (
+        <div className="fp-mobile-subtoolbar no-print">
+          <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '0 4px', fontWeight: 600 }}>Wall:</span>
+          {[
+            { label: '9" Ext', val: 0.75 },
+            { label: '4.5" Int', val: 0.375 },
+            { label: '3" Part', val: 0.25 },
+          ].map(p => (
+            <button
+              key={p.label}
+              type="button"
+              className={`fp-mobile-sub-btn ${wallThickness === p.val ? 'active' : ''}`}
+              onClick={() => setWallThickness(p.val)}
+            >
+              {p.label}
+            </button>
+          ))}
+          {isDrawingWall && (
+            <button
+              type="button"
+              className="fp-mobile-sub-btn"
+              style={{ background: 'rgba(239,68,68,0.2)', color: '#f87171', borderColor: 'rgba(239,68,68,0.4)' }}
+              onClick={() => {
+                setIsDrawingWall(false);
+                setWallStart(null);
+                setLiveLengthBadge(null);
+                setSnapIndicator(null);
+              }}
+            >
+              Cancel Wall
+            </button>
+          )}
+        </div>
+      )}
+
+      {activeTool === 'door' && (
+        <div className="fp-mobile-subtoolbar no-print">
+          <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '0 4px', fontWeight: 600 }}>Door:</span>
+          {DOOR_TYPES.map(dt => (
+            <button
+              key={dt}
+              type="button"
+              className={`fp-mobile-sub-btn ${selectedDoorType === dt ? 'active' : ''}`}
+              onClick={() => setSelectedDoorType(dt)}
+            >
+              {dt}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTool === 'window' && (
+        <div className="fp-mobile-subtoolbar no-print">
+          <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '0 4px', fontWeight: 600 }}>Window:</span>
+          {WINDOW_TYPES.map(wt => (
+            <button
+              key={wt}
+              type="button"
+              className={`fp-mobile-sub-btn ${selectedWindowType === wt ? 'active' : ''}`}
+              onClick={() => setSelectedWindowType(wt)}
+            >
+              {wt}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTool === 'room' && (
+        <div className="fp-mobile-subtoolbar no-print">
+          <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '0 4px', fontWeight: 600 }}>Room:</span>
+          {ROOM_TYPES.slice(0, 5).map(rt => (
+            <button
+              key={rt}
+              type="button"
+              className={`fp-mobile-sub-btn ${selectedRoomType === rt ? 'active' : ''}`}
+              onClick={() => setSelectedRoomType(rt)}
+            >
+              {rt}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="fp-mobile-sub-btn"
+            style={{ background: 'rgba(56,189,248,0.2)', color: '#38bdf8' }}
+            onClick={() => setShowAddRoomModal(true)}
+          >
+            + Custom Size
+          </button>
+        </div>
+      )}
+
+      {activeTool === 'column' && (
+        <div className="fp-mobile-subtoolbar no-print">
+          <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '0 4px', fontWeight: 600 }}>Column:</span>
+          {[
+            { id: 'square', label: '9"×9" Square' },
+            { id: 'rectangular', label: '9"×15" Rect' },
+            { id: 'round', label: 'Round Pillar' },
+          ].map(c => (
+            <button
+              key={c.id}
+              type="button"
+              className={`fp-mobile-sub-btn ${columnShape === c.id ? 'active' : ''}`}
+              onClick={() => setColumnShape(c.id as any)}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTool === 'stairs' && (
+        <div className="fp-mobile-subtoolbar no-print">
+          <span style={{ fontSize: '0.68rem', color: '#94a3b8', padding: '0 4px', fontWeight: 600 }}>Stair:</span>
+          {[
+            { id: 'straight', label: 'Straight' },
+            { id: 'l-shape', label: 'L-Shape' },
+            { id: 'u-shape', label: 'Dog-Leg' },
+            { id: 'spiral', label: 'Spiral' },
+          ].map(st => (
+            <button
+              key={st.id}
+              type="button"
+              className={`fp-mobile-sub-btn ${stairType === st.id ? 'active' : ''}`}
+              onClick={() => setStairType(st.id as any)}
+            >
+              {st.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Mobile Compact Status Strip (< 768px) ───────── */}
+      <div
+        className="fp-mobile-status-strip no-print"
+        onClick={() => setShowMobileDetails(true)}
+        title="Tap to view project statistics & details"
+        role="button"
+        tabIndex={0}
+      >
+        <span>Rooms {editorState.rooms.length}</span>
+        <span className="fp-status-dot">•</span>
+        <span>Area {totalFloorArea.toFixed(0)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}</span>
+        <span className="fp-status-dot">•</span>
+        <span className={`fp-status-save-text ${saveStatus === 'saved' ? 'saved' : 'unsaved'}`}>
+          {saving ? 'Saving...' : saveStatus === 'saved' ? 'Saved' : 'Unsaved'}
+        </span>
+      </div>
+
+      {/* ── Mobile Bottom Toolbar (< 768px) ──────────────── */}
+      <nav className="fp-mobile-toolbar no-print" aria-label="Mobile Floor Plan Drawing Toolbar">
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'select' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('select'); setIsDrawingWall(false); setWallStart(null); }}
+          title="Select / Move"
+          id="fp-mobile-tool-select"
+        >
+          <MousePointer2 size={20} />
+          <span className="fp-mobile-tool-label">Select</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'wall' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('wall'); setSelectedElement(null); }}
+          title="Draw Wall"
+          id="fp-mobile-tool-wall"
+        >
+          <Pencil size={20} />
+          <span className="fp-mobile-tool-label">Wall</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'door' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('door'); setSelectedElement(null); }}
+          title="Place Door"
+          id="fp-mobile-tool-door"
+        >
+          <DoorOpen size={20} />
+          <span className="fp-mobile-tool-label">Door</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'window' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('window'); setSelectedElement(null); }}
+          title="Place Window"
+          id="fp-mobile-tool-window"
+        >
+          <AppWindow size={20} />
+          <span className="fp-mobile-tool-label">Window</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'room' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('room'); setSelectedElement(null); }}
+          title="Place Room"
+          id="fp-mobile-tool-room"
+        >
+          <Square size={20} />
+          <span className="fp-mobile-tool-label">Room</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${showMobileShapes ? 'active' : ''}`}
+          onClick={() => setShowMobileShapes(true)}
+          title="Shapes & Geometry"
+          id="fp-mobile-tool-shapes"
+        >
+          <Shapes size={20} />
+          <span className="fp-mobile-tool-label">Shapes</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${showMobileMoreTools ? 'active' : ''}`}
+          onClick={() => setShowMobileMoreTools(true)}
+          title="More CAD Tools"
+          id="fp-mobile-tool-more"
+        >
+          <MoreHorizontal size={20} />
+          <span className="fp-mobile-tool-label">More</span>
+        </button>
+      </nav>
+
       {/* ── Bottom Status Bar ─────────────────────────── */}
+
       <div className="fp-bottom-bar no-print">
         <div className="fp-bottom-left">
           <span><strong>Unit:</strong> {unit === 'feet' ? 'Feet (ft / in)' : unit}</span>
@@ -6619,6 +8517,174 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         </div>
       )}
 
+      {/* ── Background Image Calibration Modal (FloorPlanCreator standard) ── */}
+      {showBgImageModal && (
+        <div className="fp-calc-modal no-print" role="dialog" aria-modal="true">
+          <div className="fp-calc-dialog" style={{ maxWidth: 480 }}>
+            <div className="fp-calc-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ImageIcon size={20} color="#38bdf8" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#f8fafc' }}>
+                  Background Reference Plan Image
+                </h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => setShowBgImageModal(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="fp-calc-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0 }}>
+                Import an existing blueprint, surveyor drawing, or sketch (PNG/JPG) to trace over in Building Mistry CAD.
+              </p>
+
+              <div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8', display: 'block', marginBottom: 6 }}>
+                  Upload Image File
+                </label>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  style={{ fontSize: '0.8rem', color: '#f8fafc' }}
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const dataUrl = reader.result as string;
+                      const bg: BackgroundPlanImage = {
+                        id: uid('bg'),
+                        url: dataUrl,
+                        x: 0,
+                        y: 0,
+                        width: bgImageScaleW,
+                        height: bgImageScaleH,
+                        opacity: bgImageOpacity,
+                        locked: true,
+                        visible: true,
+                      };
+                      setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, backgroundImage: bg } : lvl));
+                      markUnsaved();
+                      onNotify('Background reference image imported successfully', 'success');
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </div>
+
+              {currentFloor.backgroundImage && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                      <input
+                        type="number"
+                        className="fp-inspector-input"
+                        value={currentFloor.backgroundImage.width}
+                        onChange={e => {
+                          const w = parseFloat(e.target.value) || 10;
+                          setBgImageScaleW(w);
+                          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, width: w } } : lvl));
+                          markUnsaved();
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
+                      <input
+                        type="number"
+                        className="fp-inspector-input"
+                        value={currentFloor.backgroundImage.height}
+                        onChange={e => {
+                          const h = parseFloat(e.target.value) || 10;
+                          setBgImageScaleH(h);
+                          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, height: h } } : lvl));
+                          markUnsaved();
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span>Opacity</span>
+                      <span>{Math.round((currentFloor.backgroundImage.opacity ?? 0.5) * 100)}%</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="1.0"
+                      step="0.05"
+                      value={currentFloor.backgroundImage.opacity ?? 0.5}
+                      style={{ width: '100%' }}
+                      onChange={e => {
+                        const op = parseFloat(e.target.value);
+                        setBgImageOpacity(op);
+                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, opacity: op } } : lvl));
+                        markUnsaved();
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        const isLocked = !currentFloor.backgroundImage?.locked;
+                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, locked: isLocked } } : lvl));
+                        markUnsaved();
+                      }}
+                    >
+                      {currentFloor.backgroundImage.locked ? <Lock size={14} /> : <Unlock size={14} />}
+                      <span>{currentFloor.backgroundImage.locked ? 'Locked' : 'Unlocked'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        const isVis = currentFloor.backgroundImage?.visible === false;
+                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, visible: isVis } } : lvl));
+                        markUnsaved();
+                      }}
+                    >
+                      <Eye size={14} />
+                      <span>{currentFloor.backgroundImage.visible !== false ? 'Visible' : 'Hidden'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => {
+                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, backgroundImage: undefined } : lvl));
+                        markUnsaved();
+                        onNotify('Background reference image removed', 'info');
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="fp-calc-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setShowBgImageModal(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── CAD Drawing & Snapping Settings Modal ────── */}
       {showSettingsModal && (
         <div className="fp-calc-modal" role="dialog" aria-modal="true">
@@ -7014,6 +9080,507 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         report={analysisReport}
         unit={unit}
       />
+
+      {/* ── Mobile More Menu Bottom Sheet (< 768px) ────── */}
+      {showMobileMenu && (
+        <div className="fp-mobile-sheet-backdrop" onClick={() => setShowMobileMenu(false)}>
+          <div className="fp-mobile-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="Floor Plan Menu">
+            <div className="fp-mobile-sheet-handle" />
+            <div className="fp-mobile-sheet-header">
+              <span className="fp-mobile-sheet-title">Floor Plan Menu</span>
+              <button
+                type="button"
+                className="fp-mobile-sheet-close"
+                onClick={() => setShowMobileMenu(false)}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Floor Levels Switcher */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Floor Levels
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {floorLevels.map((lvl, idx) => (
+                  <button
+                    key={lvl.id || idx}
+                    type="button"
+                    className={`fp-mobile-sub-btn ${idx === activeFloorIndex ? 'active' : ''}`}
+                    onClick={() => {
+                      handleSwitchFloor(idx);
+                      setShowMobileMenu(false);
+                    }}
+                  >
+                    {idx === activeFloorIndex && <Check size={12} />}
+                    {lvl.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="fp-mobile-sub-btn"
+                  onClick={() => {
+                    handleAddFloor();
+                    setShowMobileMenu(false);
+                  }}
+                  title="Add Level"
+                >
+                  <Plus size={12} /> Add Level
+                </button>
+                <button
+                  type="button"
+                  className="fp-mobile-sub-btn"
+                  onClick={() => {
+                    handleDuplicateFloor();
+                    setShowMobileMenu(false);
+                  }}
+                  title="Duplicate Level"
+                >
+                  <Copy size={12} /> Duplicate
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="fp-mobile-sheet-grid">
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  handleExportDXF();
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><FileCode size={18} /></div>
+                <span>Export DXF</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  handleExportPDF();
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><FileDown size={18} /></div>
+                <span>Export PDF Sheet</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  handleExportPNG();
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Download size={18} /></div>
+                <span>Export PNG</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowEstimationModal(true);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Calculator size={18} /></div>
+                <span>Material Estimator</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setIsLayersOpen(true);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Layers size={18} /></div>
+                <span>CAD Layers</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowSettingsModal(true);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Settings size={18} /></div>
+                <span>CAD Settings</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowVersionModal(true);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><History size={18} /></div>
+                <span>Version History</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn danger"
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  if (window.confirm('Clear all elements from current floor level?')) {
+                    dispatchWithHistory({
+                      type: 'SET_STATE',
+                      payload: {
+                        walls: [], rooms: [], doors: [], windows: [],
+                        furniture: [], stairs: [], columns: [], annotations: [],
+                      },
+                    });
+                  }
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Trash2 size={18} /></div>
+                <span>Clear Floor Level</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Shapes Bottom Sheet (< 768px) ────────── */}
+      {showMobileShapes && (
+        <div className="fp-mobile-sheet-backdrop" onClick={() => setShowMobileShapes(false)}>
+          <div className="fp-mobile-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="CAD Shapes">
+            <div className="fp-mobile-sheet-handle" />
+            <div className="fp-mobile-sheet-header">
+              <span className="fp-mobile-sheet-title">CAD Shapes & Geometry</span>
+              <button
+                type="button"
+                className="fp-mobile-sheet-close"
+                onClick={() => setShowMobileShapes(false)}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="fp-mobile-sheet-grid">
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  handleAddRoomByDimensions(14, 12, 'Living Room');
+                  setShowMobileShapes(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Square size={18} /></div>
+                <div>
+                  <div>Rectangle Room</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>14 × 12 {unit === 'feet' ? 'ft' : 'm'} standard</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  handleAddRoomByDimensions(10, 10, 'Bedroom');
+                  setShowMobileShapes(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Square size={18} /></div>
+                <div>
+                  <div>Square Room</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>10 × 10 {unit === 'feet' ? 'ft' : 'm'} room</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('column');
+                  setColumnShape('round');
+                  setShowMobileShapes(false);
+                  onNotify('Round pillar/column active: tap canvas to place', 'info');
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Shapes size={18} /></div>
+                <div>
+                  <div>Circle / Round</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Circular pillar or round space</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('wall');
+                  setIsDrawingWall(false);
+                  setWallStart(null);
+                  setShowMobileShapes(false);
+                  onNotify('Polygon mode: tap consecutive points to enclose polygon', 'info');
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Pencil size={18} /></div>
+                <div>
+                  <div>Polygon / L-Shape</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Multi-corner room geometry</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                style={{ gridColumn: 'span 2' }}
+                onClick={() => {
+                  setIsShapeLibraryOpen(true);
+                  setShowMobileShapes(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Layers size={18} /></div>
+                <div>
+                  <div>Browse Full Shape Library</div>
+                  <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Access 50+ architectural symbols & room presets</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile More Tools Bottom Sheet (< 768px) ─────── */}
+      {showMobileMoreTools && (
+        <div className="fp-mobile-sheet-backdrop" onClick={() => setShowMobileMoreTools(false)}>
+          <div className="fp-mobile-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="More CAD Tools">
+            <div className="fp-mobile-sheet-handle" />
+            <div className="fp-mobile-sheet-header">
+              <span className="fp-mobile-sheet-title">More CAD Tools</span>
+              <button
+                type="button"
+                className="fp-mobile-sheet-close"
+                onClick={() => setShowMobileMoreTools(false)}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="fp-mobile-sheet-grid">
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('column');
+                  setSelectedElement(null);
+                  setShowMobileMoreTools(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Columns size={18} /></div>
+                <span>Structural Column</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('stairs');
+                  setSelectedElement(null);
+                  setShowMobileMoreTools(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Split size={18} /></div>
+                <span>Staircase</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowFurnitureModal(true);
+                  setShowMobileMoreTools(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Armchair size={18} /></div>
+                <span>Furniture & Symbols</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowDimensions(d => !d);
+                  setShowMobileMoreTools(false);
+                  onNotify(`Dimensions ${!showDimensions ? 'Shown' : 'Hidden'}`, 'info');
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Ruler size={18} /></div>
+                <span>{showDimensions ? 'Hide Dimensions' : 'Show Dimensions'}</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('annotation');
+                  setSelectedElement(null);
+                  setShowMobileMoreTools(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Type size={18} /></div>
+                <span>Text Note</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('ai_draw');
+                  setSelectedElement(null);
+                  setShowMobileMoreTools(false);
+                  triggerAiFeedback('✨ AI Draw Mode Active: Draw roughly — AI detects walls, rooms & doors!');
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon" style={{ color: '#fbbf24' }}><Sparkles size={18} /></div>
+                <span>AI Freehand Draw</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setActiveTool('pan');
+                  setIsDrawingWall(false);
+                  setWallStart(null);
+                  setSelectedElement(null);
+                  setShowMobileMoreTools(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Hand size={18} /></div>
+                <span>Pan Canvas</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  setShowGrid(g => !g);
+                  setShowMobileMoreTools(false);
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><GridIcon size={18} /></div>
+                <span>{showGrid ? 'Hide Grid' : 'Show Grid'}</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                onClick={() => {
+                  const next = !(snapToGridEnabled && snapToEndpointsEnabled);
+                  setSnapToGridEnabled(next);
+                  setSnapToEndpointsEnabled(next);
+                  setSnapToWallEnabled(next);
+                  setShowMobileMoreTools(false);
+                  onNotify(`Snapping ${next ? 'Enabled' : 'Disabled'}`, 'info');
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Magnet size={18} /></div>
+                <span>{snapToGridEnabled ? 'Disable Snap' : 'Enable Snap'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mobile Details Bottom Sheet (< 768px) ───────── */}
+      {showMobileDetails && (
+        <div className="fp-mobile-sheet-backdrop" onClick={() => setShowMobileDetails(false)}>
+          <div className="fp-mobile-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="Plan Overview">
+            <div className="fp-mobile-sheet-handle" />
+            <div className="fp-mobile-sheet-header">
+              <span className="fp-mobile-sheet-title">Plan Overview & Statistics</span>
+              <button
+                type="button"
+                className="fp-mobile-sheet-close"
+                onClick={() => setShowMobileDetails(false)}
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="fp-mobile-sheet-grid">
+              <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>TOTAL FLOOR AREA</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>
+                  {totalFloorArea.toFixed(1)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}
+                </span>
+              </div>
+
+              <div
+                className="fp-mobile-grid-btn"
+                style={{ flexDirection: 'column', alignItems: 'flex-start', cursor: 'pointer' }}
+                onClick={() => {
+                  setShowMobileDetails(false);
+                  setShowRoomScheduleModal(true);
+                }}
+              >
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>ROOMS SCHEDULE</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#4ade80' }}>
+                  {editorState.rooms.length} Rooms (View)
+                </span>
+              </div>
+
+              <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>WALLS COUNT</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc' }}>
+                  {editorState.walls.length} Walls
+                </span>
+              </div>
+
+              <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>COLUMNS COUNT</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#f8fafc' }}>
+                  {editorState.columns.length} Columns
+                </span>
+              </div>
+
+              <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>OPENINGS</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#f8fafc' }}>
+                  {editorState.doors.length} Doors • {editorState.windows.length} Windows
+                </span>
+              </div>
+
+              <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>SAVE STATUS</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: saveStatus === 'saved' ? '#4ade80' : '#fbbf24' }}>
+                  {saveStatus === 'saved' ? 'Saved to local database' : 'Unsaved changes pending'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: 8, width: '100%' }}
+              onClick={() => {
+                setShowMobileDetails(false);
+                setShowRoomScheduleModal(true);
+              }}
+            >
+              View Full Room Schedule Table
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── "Help Me Design" Proposed Layout Modal ── */}
       <HelpMeDesignModal

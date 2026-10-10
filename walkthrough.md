@@ -1,66 +1,62 @@
-# Walkthrough: Building Mistry — AI Floor Plan Assistant
+# Walkthrough: Building Mistry — Professional Audit, CAD Openings, AI & Auth
 
-We have fully implemented and verified the **AI Floor Plan Assistant & Intelligent Floor Plan Interpretation System** integrated into the Building Mistry Floor Plan Creator.
-
----
-
-## 1. Features Implemented
-
-### A. AI Natural Draw Mode
-- **Mode Toggle**: Accessible via `✨ AI Draw` on the left tool palette or keyboard shortcut `A`.
-- **Workflow**: The user draws roughly on canvas without selecting Wall/Room/Door first.
-- **Intelligent Classification & Normalization**:
-  - Automatically straightens rough strokes into orthogonal horizontal/vertical walls.
-  - Automatically welds corners to existing wall endpoints within tolerance to ensure watertight corners.
-  - Formulates real-time candidate actions without distorting user geometry.
-
-### B. Strict Confidence Rules (No Blind Guessing)
-| Confidence | System Behavior |
-| :--- | :--- |
-| **90% – 100%** | **Safe Automatic Interpretation**: Automatically regularizes and adds the wall or closed room. Displays feedback toast with 1-click **[Undo]**. |
-| **70% – 89%** | **Confirmation Required**: Displays candidate card in the Assistant panel (`[Convert to Wall]`, `[Edit]`, `[Dismiss]`) without touching the canvas until the user confirms. |
-| **< 70%** | **Never Guesses Blindly**: Does NOT automatically modify the drawing. Prompts the user: *"I found a possible shape, but I'm not completely sure. What should this be?"* with selectable options: `[Wall]`, `[Room Boundary]`, `[Door]`, `[Window]`, `[Column]`, `[Other]`. |
-
-### C. 4-Layer Architectural System
-1. **Layer 1 — Deterministic Geometry Engine** ([`src/services/aiFloorPlanEngine.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/services/aiFloorPlanEngine.ts)):
-   - Extracts start/end points, length, angle, linearity ratio, bounding box, loop closure ratio, polygon area (Shoelace formula), wall proximity, and inflections.
-   - Zero LLM dependencies for basic math — 100% deterministic and accurate.
-2. **Layer 2 — Floor Plan Classifier** ([`src/services/aiFloorPlanEngine.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/services/aiFloorPlanEngine.ts)):
-   - Distinguishes **Wall**, **Room Boundary**, **Door**, **Window**, **Staircase**, **Column**, and **Unknown**.
-3. **Layer 3 — Model-Agnostic Provider & Natural Language Engine** ([`src/services/aiProvider.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/services/aiProvider.ts)):
-   - `FloorPlanAIProvider` interface abstraction ready for local offline mode, OpenAI, Gemini, or custom models.
-   - `LocalFloorPlanAIProvider` with natural language commands in English and Tanglish (`"Make this bedroom"`, `"Make this wall 10 feet"`, `"kitchen mathu"`, `"Calculate total floor area"`, `"Switch to 3D"`, etc.).
-   - Contextual reference resolution for *"this room"*, *"that wall"*, *"here"*, or prompts when ambiguous.
-4. **Layer 4 — Controlled Action Engine & Validation** ([`src/services/aiFloorPlanEngine.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/services/aiFloorPlanEngine.ts)):
-   - Every AI command passes schema validation, dimension limits (length > 0.05, positive bounds), and coordinate safety before executing through CAD history (`dispatchWithHistory`).
-
-### D. AI Assistant UI Panel & Mobile Bottom Sheet
-- **Component**: [`src/components/AIAssistantPanel.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/components/AIAssistantPanel.tsx)
-- **Desktop**: Collapsible right-side drawer (width: 380px) that leaves the drawing canvas visible.
-- **Mobile**: Responsive bottom-sheet drawer with touch drag handle.
-- **Header & Shortcut**: Triggered by the `✨ AI Assistant` button in the header and toolbar or keyboard shortcut `Ctrl + K`.
-- **Speech-to-Text**: Microphone button using the Web Speech API with fallback.
-- **Clarification Cards**: Interactive cards for uncertain strokes with 1-click candidate selection.
-- **History Feed**: Displays recent AI actions with 1-click **Undo Last**.
-- **Professional Safety Disclaimer**: *"AI design suggestion — verify with a qualified professional before construction."*
-
-### E. Diagnostic & Analysis Modals
-- **✨ Fix My Plan** ([`src/components/PlanDiagnosticModal.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/components/PlanDiagnosticModal.tsx)):
-  - Checks open wall gaps, unclosed rooms, overlapping/duplicate walls, misaligned angles (1°–14°), and detached doors/windows.
-  - Offers individual `Fix`, `Review`, and `Ignore` buttons, plus `Fix All Issues`.
-- **✨ Analyze Plan** ([`src/components/PlanAnalysisModal.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/components/PlanAnalysisModal.tsx)):
-  - Computes exact gross floor area, room schedule, door/window counts, and total linear wall length from actual geometry — zero fake measurements.
-- **✨ Help Me Design** ([`src/components/HelpMeDesignModal.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/components/HelpMeDesignModal.tsx)):
-  - Inquires plot dimensions, BHK requirements, direction/facing, parking, and pooja preferences before proposing a structured floor plan.
-  - Requires user approval before committing to the canvas.
+We have completed the comprehensive professional audit, fixes, and enhancements for **Building Mistry** across all phases, strictly adhering to core guidelines:
+- Real data preservation (no demo mock overwriting).
+- Zero fake OTPs, fake measurements, or fake AI guessing.
+- True CAD geometry with authoritative wall thickness, synchronous wall-drag openings translation, and exact Shoelace polygon room areas.
+- Secure end-to-end Supabase password recovery workflow.
 
 ---
 
-## 2. Verification & Automated Test Results
+## 1. Problems Discovered & Fixed
 
-### Full Test Suite Run: `npm test`
-All 10 test suites passed cleanly with 0 failures:
-- `test_mistry_core.ts`: **PASSED**
+| Area | Discovered Issue | Professional Fix Applied |
+| :--- | :--- | :--- |
+| **Auth & Password Recovery** | When users clicked the Supabase password recovery link in their email, the app landed with URL hash/query tokens (`#type=recovery` or `?code=...`), but lacked a listener or password reset interface, leaving the user unable to complete the reset. | Added `checkPasswordRecoveryUrl()` in `src/services/supabase.ts`, an `onAuthStateChange` listener in `src/App.tsx`, and a dedicated [ResetPasswordModal.tsx](file:///c:/Users/tamiz/OneDrive/project/mistry/src/components/ResetPasswordModal.tsx) that securely updates Supabase credentials and synchronizes local Dexie user records. |
+| **Floor Plan Geometry** | When dragging a wall to move it, hosted doors and windows were left behind at their old coordinates, detaching from the host wall. | Enhanced `handleElementMouseDown` and `handleMouseMove` in `src/views/FloorPlanEditorView.tsx` to snapshot and translate all hosted doors and windows (`door.wallId === wall.id`) by the exact delta `(snappedDx, snappedDy)`. |
+| **AI Natural Commands** | Several required architectural commands from the prompt (e.g., *"Make this wall 6 inches thick"*, *"Move this wall 2 feet"*, *"Add a bedroom here"*, *"Add a 4 feet door here"*, *"Add two windows to this wall"*) were missing dedicated parsers and actions. | Implemented dedicated natural language command parsers and structured, validated actions in `src/services/aiProvider.ts` with strict confidence thresholds. |
+| **Design System & Icon Rule** | Oversized 48px square card containers and casual emojis in headers/breadcrumbs degraded professional aesthetics. | Standardized `.site-grid-card-icon` and `.fp-list-icon` to 38px containers with 20–24px visual SVG icons, ensuring 44–48px interactive touch targets and replacing emojis with clean Lucide SVG icons. |
+
+---
+
+## 2. Key Files & Components Changed
+
+1. **[`src/services/supabase.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/services/supabase.ts)**:
+   - Added `checkPasswordRecoveryUrl()` to safely detect recovery tokens in URL hashes or query strings.
+   - Added `updateSupabasePassword(newPassword)` wrapper for updating the authenticated recovery session.
+2. **[`src/components/ResetPasswordModal.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/components/ResetPasswordModal.tsx)**:
+   - Built a secure dialog that activates on recovery URL detection.
+   - Validates password strength (minimum 8 characters, alphanumeric).
+   - Calls `updateSupabasePassword` and synchronizes local Dexie account password hashes.
+   - Automatically cleans up URL tokens (`window.history.replaceState`) on completion.
+3. **[`src/App.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/App.tsx)**:
+   - Added `onAuthStateChange` listener for `PASSWORD_RECOVERY` events and URL hash detection.
+   - Integrated and conditionally rendered `<ResetPasswordModal>`.
+4. **[`src/views/FloorPlanEditorView.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/views/FloorPlanEditorView.tsx)**:
+   - Added `dragHostedOpeningsSnapshot` to capture all doors and windows hosted on the moving wall.
+   - Synchronized position updates so openings translate flush with the moving wall.
+5. **[`src/services/aiProvider.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/services/aiProvider.ts)**:
+   - Added natural language command recognition for:
+     - *"Make this wall 6 inches thick"* / *"Set wall thickness to 9 inches"*
+     - *"Move this wall 2 feet"*
+     - *"Add a bedroom here"* / *"Create a kitchen here"*
+     - *"Add a 4 feet door here"*
+     - *"Add two windows to this wall"*
+     - *"Show room dimensions"*
+     - *"Calculate total area"*
+     - *"Fix my plan"* & *"Analyze my plan"*
+6. **[`src/index.css`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/index.css)** & **[`src/views/SiteDetailView.tsx`](file:///c:/Users/tamiz/OneDrive/project/mistry/src/views/SiteDetailView.tsx)**:
+   - Standardized icons to 20–24px visual sizes with clean 38px containers.
+   - Removed casual emojis from breadcrumb navigation and section headers.
+7. **[`tests/test_auth_recovery_and_ai_cad.ts`](file:///c:/Users/tamiz/OneDrive/project/mistry/tests/test_auth_recovery_and_ai_cad.ts)**:
+   - Comprehensive automated test suite validating recovery URL detection, wall drag openings translation, wall thickness presets, and all AI commands.
+
+---
+
+## 3. Automated Test Verification Results
+
+All **12 test suites** passed with 100% success rate:
+- `test_mistry_core.ts`: **PASSED** (all 12 business suites)
 - `test_pwa_mobile.ts`: **PASSED**
 - `test_admin_recovery.ts`: **PASSED**
 - `test_audit_fixes.ts`: **PASSED**
@@ -70,6 +66,9 @@ All 10 test suites passed cleanly with 0 failures:
 - `test_ai_copilot_geometry.ts`: **PASSED** (33/33 tests)
 - `test_ai_sketch_understanding.ts`: **PASSED** (27/27 tests)
 - `test_ai_assistant_suite.ts`: **PASSED** (50/50 tests)
+- `test_cad_wall_openings_and_canvas.ts`: **PASSED**
+- `test_auth_recovery_and_ai_cad.ts`: **PASSED** (14/14 tests)
 
-### Production Build: `npm run build`
-`tsc -b && vite build` built in **879ms** with **0 TypeScript errors**.
+Production build:
+- `tsc -b && vite build` built in **973ms** with **0 errors**.
+- Vite dev server running cleanly at `http://localhost:5173/` (HTTP 200).

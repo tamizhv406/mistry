@@ -558,6 +558,8 @@ export type RoomType =
   | 'Study' | 'Pooja' | 'Prayer Room' | 'Balcony' | 'Corridor' | 'Staircase'
   | 'Parking' | 'Garage' | 'Office' | 'Terrace' | 'Custom';
 
+export type RoomShapeType = 'rectangle' | 'l-shape' | 'u-shape' | 't-shape' | 'polygon';
+
 export interface FloorPlanRoom {
   id: string;
   roomType: RoomType;
@@ -568,6 +570,7 @@ export interface FloorPlanRoom {
   height: number;      // Height in plan units
   area?: number;       // Computed area
   perimeter?: number;  // Computed perimeter
+  shapeType?: RoomShapeType; // Room polygon shape archetype
   polygonPoints?: { x: number; y: number }[]; // Enclosed wall boundary vertices
   rotation: number;    // Degrees (0, 90, 180, 270)
   color?: string;
@@ -745,6 +748,20 @@ export interface FloorPlanVersion {
   snapshot: string;    // JSON serialization of the plan geometry
 }
 
+export interface BackgroundPlanImage {
+  id: string;
+  url: string;        // data URL / blob URL
+  x: number;          // plan coordinates
+  y: number;
+  width: number;      // calibrated plan width
+  height: number;     // calibrated plan height
+  opacity: number;    // 0.1 to 1.0 (default 0.5)
+  visible: boolean;   // show/hide toggle
+  locked: boolean;    // lock from accidental drag
+  rotation?: number;
+  fileName?: string;
+}
+
 export interface FloorPlanLevel {
   id: string;
   name: string;        // e.g. "Ground Floor", "First Floor", "Terrace"
@@ -758,6 +775,7 @@ export interface FloorPlanLevel {
   columns?: FloorPlanColumn[];
   annotations?: FloorPlanAnnotation[];
   dimensions?: FloorPlanDimension[];
+  backgroundImage?: BackgroundPlanImage;
 }
 
 export interface FloorPlan {
@@ -780,6 +798,7 @@ export interface FloorPlan {
   annotations?: FloorPlanAnnotation[];
   dimensions?: FloorPlanDimension[];
   floors?: FloorPlanLevel[];
+  backgroundImage?: BackgroundPlanImage;
   layers?: FloorPlanLayerConfig[];
   versionHistory?: FloorPlanVersion[];
   northRotation?: number; // 0, 45, 90, 180, 270
