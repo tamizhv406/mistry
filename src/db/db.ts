@@ -25,6 +25,10 @@ import type {
   AdminAuditLog,
   UserRole,
   FloorPlan,
+  StockMovement,
+  CatalogItem,
+  ToolAsset,
+  ToolIssue,
 } from './types';
 
 export class BuildingMistryDB extends Dexie {
@@ -50,6 +54,10 @@ export class BuildingMistryDB extends Dexie {
   otpSessions!: Table<OtpSession, string>;
   adminAuditLogs!: Table<AdminAuditLog, string>;
   floorPlans!: Table<FloorPlan, string>;
+  stockMovements!: Table<StockMovement, string>;
+  catalogItems!: Table<CatalogItem, string>;
+  toolAssets!: Table<ToolAsset, string>;
+  toolIssues!: Table<ToolIssue, string>;
 
   constructor() {
     super('BuildingMistryDB');
@@ -201,6 +209,15 @@ export class BuildingMistryDB extends Dexie {
       otpSessions: 'id, phoneNormalized, token, expiresAt',
       adminAuditLogs: 'id, action, actorId, timestamp',
       floorPlans: 'id, userId, siteId, isDeleted, createdAt',
+    });
+
+    // Version 8: stock movements, editable catalog and tool issue/return tracking.
+    // Additive only: Dexie carries every existing table and record forward untouched.
+    this.version(8).stores({
+      stockMovements: 'id, userId, siteId, itemKey, eventDate, isDeleted',
+      catalogItems: 'id, kind, category, isDeleted',
+      toolAssets: 'id, userId, siteId, isDeleted',
+      toolIssues: 'id, userId, siteId, toolAssetId, isDeleted',
     });
   }
 

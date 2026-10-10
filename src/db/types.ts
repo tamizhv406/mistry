@@ -62,6 +62,9 @@ export interface Site {
   expectedCompletionDate: string;
   status: SiteStatus;
   notes?: string;
+  // Pay policy for approved Leave days. Unset means the owner has not decided yet:
+  // leave is then counted as unpaid and the app says so instead of guessing.
+  leavePaid?: boolean;
   imageUrl?: string;
   imageType?: string;
   imageAlt?: string;
@@ -91,6 +94,11 @@ export interface Material {
   purchaseDate: string;
   invoiceNumber?: string;
   brand?: string;
+  materialType?: string;   // e.g. cement type 'OPC' | 'PPC' | 'PSC'
+  grade?: string;          // e.g. '43' | '53' (OPC only)
+  catalogItemId?: string;
+  createdBy?: string;
+  updatedBy?: string;
   notes?: string;
   imageUrl?: string;
   imageType?: string;
@@ -152,17 +160,31 @@ export interface LabourWorker {
   updatedAt: string;
 }
 
-export type AttendanceStatus = 'present' | 'half_day' | 'absent' | 'overtime';
+// 'leave' is an approved day off; whether it is paid comes from the site's pay policy.
+// 'absent' is an unapproved no-show and is never paid.
+export type AttendanceStatus = 'present' | 'half_day' | 'absent' | 'overtime' | 'leave';
+
+export interface AttendanceEdit {
+  at: string;          // ISO timestamp of the correction
+  by?: string;         // user id
+  byName?: string;
+  from: AttendanceStatus;
+  to: AttendanceStatus;
+}
 
 export interface AttendanceRecord {
   id: string;
   userId?: string;
   siteId: string;
   workerId: string;
-  date: string; // YYYY-MM-DD
+  date: string; // Event date, YYYY-MM-DD in the site's timezone (Asia/Kolkata)
   status: AttendanceStatus;
   overtimeHours?: number;
-  dayMultiplier: number; // 1 for present, 0.5 for half day, 0 for absent, 1.5 for overtime
+  dayMultiplier: number; // 1 for present, 0.5 for half day, 0 for absent/leave, 1.5 for overtime
+  dailyWageSnapshot?: number; // Wage on the day it was marked, so later wage changes don't rewrite history
+  createdBy?: string;
+  updatedBy?: string;
+  editHistory?: AttendanceEdit[];
   notes?: string;
   isDeleted: boolean;
   deletedAt?: string;
@@ -174,6 +196,8 @@ export interface AttendanceRecord {
 export interface LabourAdvance {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
   siteId: string;
   workerId: string;
   date: string;
@@ -191,6 +215,8 @@ export interface LabourAdvance {
 export interface SalaryPayment {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
   siteId: string;
   workerId: string;
   date: string;
@@ -238,6 +264,9 @@ export interface ToolItem {
 export interface TeaSnacksExpense {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  payee?: string;
   siteId: string;
   date: string;
   teaExpense: number;
@@ -262,6 +291,9 @@ export interface TeaSnacksExpense {
 export interface PoojaExpense {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  payee?: string;
   siteId: string;
   date: string;
   poojaName: string;
@@ -286,6 +318,9 @@ export interface PoojaExpense {
 export interface ElectricityBill {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  payee?: string;
   siteId: string;
   month: string;
   meterNumber?: string;
@@ -308,6 +343,9 @@ export interface ElectricityBill {
 export interface WaterBill {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  payee?: string;
   siteId: string;
   date: string;
   supplier: string;
@@ -346,6 +384,9 @@ export type OtherExpenseCategory = 'Transport' | 'Repair' | 'Equipment' | 'Fuel'
 export interface OtherExpense {
   id: string;
   userId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  payee?: string;
   siteId: string;
   date: string;
   category: OtherExpenseCategory;
@@ -814,6 +855,104 @@ export interface FloorPlan {
 }
 
 // ============================================================
+// Stock, catalog and tool tracking (schema v8, additive)
+// ============================================================
+
+export type CatalogKind = 'material' | 'brand' | 'tool';
+
+export interface CatalogItem {
+  id: string;
+  kind: CatalogKind;
+  name: string;
+  category: string;        // material category, or tool category
+  unit?: string;           // default unit for materials
+  description?: string;
+  imageUrl?: string;       // bundled path or user-supplied data URL
+  imageCredit?: string;    // author + license for bundled photos
+  isBuiltIn?: boolean;
+  userId?: string;         // who added a custom entry
+  isDeleted: boolean;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Purchases stay in `materials` / `rodEntries` (they carry cost and payments).
+// Everything else that changes stock is a StockMovement.
+export type StockMovementType = 'opening' | 'usage' | 'return' | 'adjust_in' | 'adjust_out';
+
+export interface StockMovement {
+  id: string;
+  userId?: string;
+  siteId: string;
+  itemKey: string;         // see domain/stock.ts stockItemKey()
+  itemName: string;
+  category: string;
+  unit: string;
+  movementType: StockMovementType;
+  quantity: number;        // always positive; direction comes from movementType
+  eventDate: string;       // YYYY-MM-DD
+  reason?: string;
+  notes?: string;
+  createdBy?: string;
+  createdByName?: string;
+  isDeleted: boolean;      // "voided": kept in history, excluded from the balance
+  deletedAt?: string;
+  voidReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ToolCondition = 'Good' | 'Needs Repair' | 'Damaged' | 'Lost';
+
+export interface ToolAsset {
+  id: string;
+  userId?: string;
+  siteId: string;
+  catalogItemId?: string;
+  name: string;
+  category: string;
+  imageUrl?: string;
+  imageCredit?: string;
+  totalQuantity: number;
+  condition: ToolCondition;
+  notes?: string;
+  createdBy?: string;
+  isDeleted: boolean;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ToolReturn {
+  id: string;
+  quantity: number;
+  returnedAt: string;      // ISO timestamp
+  condition: ToolCondition;
+  notes?: string;
+  recordedBy?: string;
+}
+
+export interface ToolIssue {
+  id: string;
+  userId?: string;
+  siteId: string;
+  toolAssetId: string;
+  quantity: number;
+  issuedTo: string;        // person receiving the tool
+  workerId?: string;
+  issuedAt: string;        // ISO timestamp
+  expectedReturnDate?: string; // YYYY-MM-DD
+  returns: ToolReturn[];
+  notes?: string;
+  createdBy?: string;
+  isDeleted: boolean;
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
 
 export type EntityTable =
   | 'sites'
@@ -833,7 +972,11 @@ export type EntityTable =
   | 'materialPrices'
   | 'estimates'
   | 'payments'
-  | 'floorPlans';
+  | 'floorPlans'
+  | 'stockMovements'
+  | 'catalogItems'
+  | 'toolAssets'
+  | 'toolIssues';
 
 export interface TrashRecord {
   id: string;

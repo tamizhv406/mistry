@@ -1,4 +1,5 @@
 import { db } from './db';
+import { todayKey } from '../utils/datetime';
 
 export interface BackupData {
   version: number;
@@ -23,6 +24,11 @@ export interface BackupData {
     materialPrices?: any[];
     estimates?: any[];
     payments?: any[];
+    floorPlans?: any[];
+    stockMovements?: any[];
+    catalogItems?: any[];
+    toolAssets?: any[];
+    toolIssues?: any[];
   };
 }
 
@@ -46,6 +52,11 @@ export async function exportDatabaseBackup(): Promise<void> {
     materialPrices,
     estimates,
     payments,
+    floorPlans,
+    stockMovements,
+    catalogItems,
+    toolAssets,
+    toolIssues,
   ] = await Promise.all([
     db.sites.toArray(),
     db.materials.toArray(),
@@ -65,10 +76,15 @@ export async function exportDatabaseBackup(): Promise<void> {
     db.materialPrices.toArray(),
     db.estimates.toArray(),
     db.payments.toArray(),
+    db.floorPlans.toArray(),
+    db.stockMovements.toArray(),
+    db.catalogItems.toArray(),
+    db.toolAssets.toArray(),
+    db.toolIssues.toArray(),
   ]);
 
   const backup: BackupData = {
-    version: 4,
+    version: 5,
     appName: 'Building Mistry',
     exportedAt: new Date().toISOString(),
     data: {
@@ -90,6 +106,11 @@ export async function exportDatabaseBackup(): Promise<void> {
       materialPrices,
       estimates,
       payments,
+      floorPlans,
+      stockMovements,
+      catalogItems,
+      toolAssets,
+      toolIssues,
     },
   };
 
@@ -97,7 +118,7 @@ export async function exportDatabaseBackup(): Promise<void> {
   const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const dateStr = new Date().toISOString().slice(0, 10);
+  const dateStr = todayKey();
   a.href = url;
   a.download = `building_mistry_backup_${dateStr}.json`;
   document.body.appendChild(a);
@@ -138,6 +159,11 @@ export async function importDatabaseBackup(file: File): Promise<{ success: boole
       db.materialPrices,
       db.estimates,
       db.payments,
+      db.floorPlans,
+      db.stockMovements,
+      db.catalogItems,
+      db.toolAssets,
+      db.toolIssues,
     ], async () => {
       // Clear existing records
       await Promise.all([
@@ -180,7 +206,22 @@ export async function importDatabaseBackup(file: File): Promise<{ success: boole
       if (data.materialPrices?.length) { await db.materialPrices.bulkAdd(data.materialPrices); totalRestored += data.materialPrices.length; }
       if (data.estimates?.length) { await db.estimates.bulkAdd(data.estimates); totalRestored += data.estimates.length; }
       if (data.payments?.length) { await db.payments.bulkAdd(data.payments); totalRestored += data.payments.length; }
-    });
+
+      // Tables added in later backup versions. An older backup file has no entry for them,
+      // so the records already on this device are left alone instead of being wiped.
+      const optional: [keyof BackupData['data'], { clear(): Promise<void>; bulkAdd(rows: any[]): Promise<unknown> }][] = [
+        ['floorPlans', db.floorPlans],
+        ['stockMovements', db.stockMovements],
+        ['catalogItems', db.catalogItems],
+        ['toolAssets', db.toolAssets],
+        ['toolIssues', db.toolIssues],
+      ];
+      for (const [key, table] of optional) {
+        const rows = data[key];
+        if (!Array.isArray(rows)) continue;
+        await table.clear();
+        if (rows.length) { await table.bulkAdd(rows); totalRestored += rows.length; }
+      }    });
 
     return {
       success: true,
