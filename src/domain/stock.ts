@@ -9,6 +9,10 @@
  * a wrong movement is voided (kept, struck through, excluded from the balance), never edited.
  */
 import type { Material, RodEntry, StockMovement, StockMovementType } from '../db/types';
+import { dayKeyOf } from '../utils/datetime';
+
+/** Purchase date, or for old rows without one, the Indian calendar day the row was entered. */
+const purchaseDay = (date: string | undefined, createdAt: string | undefined) => date || (createdAt ? dayKeyOf(createdAt) : '');
 
 export const STOCK_MOVEMENT_LABEL: Record<StockMovementType | 'purchase', string> = {
   purchase: 'Purchase',
@@ -107,7 +111,7 @@ export function buildStock(
     const unit = (m.unit || 'Unit').trim();
     const it = ensure(stockItemKey({ category: m.category, name, unit }), name, m.category, unit);
     it.lines.push({
-      id: m.id, type: 'purchase', source: 'purchase', date: m.purchaseDate || (m.createdAt || '').slice(0, 10),
+      id: m.id, type: 'purchase', source: 'purchase', date: purchaseDay(m.purchaseDate, m.createdAt),
       createdAt: m.createdAt || '', quantity: Number(m.quantity) || 0, signed: Number(m.quantity) || 0,
       voided: false, balanceAfter: 0, supplier: m.supplier, cost: Number(m.totalAmount) || 0,
       reference: m.invoiceNumber, notes: m.notes,
@@ -119,7 +123,7 @@ export function buildStock(
     const name = rodItemName(r);
     const it = ensure(stockItemKey({ category: 'rod', name, unit: 'kg' }), name, 'rod', 'kg');
     it.lines.push({
-      id: r.id, type: 'purchase', source: 'purchase', date: r.purchaseDate || (r.createdAt || '').slice(0, 10),
+      id: r.id, type: 'purchase', source: 'purchase', date: purchaseDay(r.purchaseDate, r.createdAt),
       createdAt: r.createdAt || '', quantity: Number(r.weightKg) || 0, signed: Number(r.weightKg) || 0,
       voided: false, balanceAfter: 0, supplier: r.supplier, cost: Number(r.totalAmount) || 0,
       reference: r.invoiceNumber, notes: r.notes,

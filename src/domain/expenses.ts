@@ -3,6 +3,7 @@
  * Material purchases, tool costs and labour are separate cost heads and are not included here.
  */
 import type { ElectricityBill, OtherExpense, PoojaExpense, TeaSnacksExpense, WaterBill, EntityTable } from '../db/types';
+import { dayKeyOf, isDayKey } from '../utils/datetime';
 
 export interface ExpenseRow {
   id: string;
@@ -41,7 +42,7 @@ export function flattenExpenses(src: {
   for (const e of src.electricity) {
     if (e.isDeleted) continue;
     // Older bills only have a billing month; they are dated to the day they were entered.
-    const date = e.date || (e.createdAt || '').slice(0, 10) || `${e.month}-01`;
+    const date = e.date || (e.createdAt ? dayKeyOf(e.createdAt) : isDayKey(`${e.month}-01`) ? `${e.month}-01` : '');
     rows.push({ id: e.id, table: 'electricityBills', category: 'Electricity', date, title: `Electricity bill${e.month ? ' · ' + e.month : ''}`, payee: e.payee || '', amount: num(e.billAmount), paid: num(e.paidAmount), due: due(num(e.billAmount), num(e.paidAmount)), notes: e.notes || '', createdAt: e.createdAt, updatedAt: e.updatedAt });
   }
   for (const w of src.water) {

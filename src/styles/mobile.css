@@ -39,7 +39,23 @@
 /* ------------------------------------------------------------------ Shell */
 
 .m-topbar {
-  display: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--m-top-h);
+  padding: 0 12px 0 14px;
+  background: var(--m-surface);
+  border-bottom: 1px solid var(--m-line);
+  position: sticky;
+  top: 0;
+  z-index: 90;
+}
+
+@media (min-width: 769px) {
+  .m-topbar .m-brand { display: none; }
+  .m-topbar .m-project-switch { flex: 0 1 420px; }
+  .m-topbar .m-avatar { margin-left: auto; }
+  .app-shell-sidebar { top: var(--m-top-h); height: calc(100vh - var(--m-top-h)); }
 }
 
 @media (max-width: 768px) {
@@ -49,19 +65,6 @@
   .app-shell-mobile-drawer,
   .mobile-bottom-bar {
     display: none !important;
-  }
-
-  .m-topbar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: var(--m-top-h);
-    padding: 0 12px 0 14px;
-    background: var(--m-surface);
-    border-bottom: 1px solid var(--m-line);
-    position: sticky;
-    top: 0;
-    z-index: 90;
   }
 
   .app-shell-content {
@@ -297,7 +300,17 @@
 button.m-row:active { background: var(--m-surface-2); }
 
 .m-row-main { flex: 1; min-width: 0; }
-.m-row-title { font-weight: 700; font-size: 0.98rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-row-title {
+  font-weight: 700;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  overflow: hidden;
+  display: -webkit-box !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
 .m-row-sub { font-size: 0.82rem; color: var(--m-ink-3); margin-top: 1px; }
 .m-row-end { text-align: right; flex-shrink: 0; }
 .m-row-amount { font-family: var(--font-heading); font-weight: 700; font-size: 1rem; }
@@ -495,6 +508,8 @@ button.m-stat:active { background: var(--m-surface-2); }
   scrollbar-width: none;
 }
 .m-chips::-webkit-scrollbar { display: none; }
+/* Inside a form every choice must be visible without sideways scrolling. */
+.m-sheet .m-chips { flex-wrap: wrap; overflow: visible; }
 
 .m-chip {
   min-height: 40px;

@@ -211,3 +211,68 @@ check('Cannot return more than is out', !validateReturn(i1, 3).ok && validateRet
 eq('Total cannot drop below issued + lost', minimumTotal(st), 3);
 
 console.log(`\n✅ Domain logic: all ${passed} checks passed.`);
+
+// ---------------------------------------------------------------------------
+// 7. Reports and CSV
+// ---------------------------------------------------------------------------
+import { buildProjectReport, toCsv } from '../src/domain/reports';
+import { flattenExpenses } from '../src/domain/expenses';
+import type { OtherExpense, PaymentTransaction, ElectricityBill } from '../src/db/types';
+
+{
+  console.log('\n--- 7. Reports and CSV ---');
+  const other = (id: string, date: string, amount: number, paid: number, category: OtherExpense['category'] = 'Fuel'): OtherExpense => ({
+    id, siteId: 's1', date, category, description: 'x', amount, paidAmount: paid, balance: amount - paid, extraPaid: 0, isDeleted: false, createdAt: `${date}T05:00:00.000Z`, updatedAt: stamp,
+  });
+  const paymentRow = (id: string, date: string, amount: number, module: string): PaymentTransaction => ({
+    id, siteId: 's1', relatedRecordId: id, module, date, amount, paymentType: 'Cash', isDeleted: false, createdAt: stamp, updatedAt: stamp,
+  });
+  const src = {
+    workers: [{ id: 'w1', siteId: 's1', name: 'Senthil', phone: '', category: 'PERIYAAL', dailyWage: 800, joiningDate: '2026-09-01', isDeleted: false, createdAt: stamp, updatedAt: stamp }],
+    attendance: [att('w1', '2026-09-30', 'present'), att('w1', '2026-10-01', 'present'), att('w1', '2026-10-02', 'half_day')],
+    advances: [adv('a1', 'w1', '2026-10-02', 300, 'Recoverable')],
+    salaryPayments: [pay('p1', 'w1', '2026-10-03', 500)],
+    materials: [mat('m1', 'Ramco PPC Cement', 100, '2026-10-01', { paidAmount: 10000, balance: 30000 }), mat('m0', 'Ramco PPC Cement', 10, '2026-09-15')],
+    rodEntries: [],
+    stockMovements: [mv('v1', 'usage', 30, '2026-10-02'), mv('v0', 'usage', 5, '2026-09-20')],
+    toolAssets: [tool],
+    toolIssues: [issue('i1', 2, 'Senthil', [], { expectedReturnDate: '2026-10-02' })],
+    toolCosts: [],
+    teaSnacks: [], poojas: [], water: [],
+    electricity: [{ id: 'e1', siteId: 's1', month: 'January 2026', billAmount: 900, paidAmount: 0, balance: 900, extraPaid: 0, isDeleted: false, createdAt: '2026-10-04T20:00:00.000Z', updatedAt: stamp } as ElectricityBill],
+    otherExpenses: [other('o1', '2026-10-05', 1200, 1200), other('o2', '2026-09-10', 700, 0), { ...other('o3', '2026-10-06', 9999, 0), isDeleted: true }],
+    payments: [paymentRow('x1', '2026-10-01', 10000, 'Material'), paymentRow('x2', '2026-10-03', 500, 'Salary'), paymentRow('x3', '2026-10-02', 300, 'Advance'), paymentRow('x4', '2026-10-05', 1200, 'Expense'), paymentRow('x5', '2026-09-10', 50, 'Expense')],
+  };
+
+  const oct = buildProjectReport(src, { from: '2026-10-01', to: '2026-10-31' }, { leavePaid: false }, '2026-10-11');
+  eq('October materials spend excludes September purchase', oct.spend.materials, 40000);
+  eq('October labour = 1.5 days × 800', oct.spend.labour, 1200);
+  // Electricity bill has no date: it is dated to the Indian day it was entered (5 Oct, not 4 Oct UTC).
+  eq('October site expenses = fuel 1200 + electricity 900', oct.spend.expenses, 2100);
+  eq('Total recorded expenditure adds the four heads', oct.spend.total, 43300);
+  eq('Paid out counts only payments dated in October', oct.paidOut.total, 12000);
+  eq('Advance is part of money paid out', oct.paidOut.byType.find(t => t.key === 'Labour advances')?.total, 300);
+  eq('Supplier dues are as of now, all periods', oct.outstanding.suppliers, 34000);
+  // Earned all time 2.5 × 800 = 2000; paid 500; advance 300 → pending 1200
+  eq('Pending salary is all-time', oct.outstanding.salary, 1200);
+  eq('Unpaid expenses as of now', oct.outstanding.expenses, 1600);
+  eq('Deleted expense is ignored', oct.expenseRows.some(e => e.id === 'o3'), false);
+  eq('Materials: bought and used in period, stock now', [oct.materials[0].purchasedQty, oct.materials[0].usedQty, oct.materials[0].onHand], [100, 30, 75]);
+  eq('Labour row counts for the period', [oct.labour[0].counts.present, oct.labour[0].counts.half_day, oct.labour[0].days], [1, 1, 1.5]);
+  eq('Tool inventory row', [oct.tools[0].total, oct.tools[0].issued, oct.tools[0].available], [5, 2, 3]);
+  check('Overdue tool issue is flagged', oct.openToolIssues[0].overdue === true);
+  eq('One month row for October', oct.monthly.map(m => [m.month, m.total]), [['2026-10', 43300]]);
+
+  const allTime = buildProjectReport(src, {}, { leavePaid: false }, '2026-10-11');
+  eq('All-time spend includes September', allTime.spend.total, 4000 + 40000 + 2000 + 2800);
+  eq('All-time months are newest first', allTime.monthly.map(m => m.month), ['2026-10', '2026-09']);
+
+  const undated = flattenExpenses({ teaSnacks: [], poojas: [], water: [], otherExpenses: [], electricity: src.electricity });
+  eq('Undated bill uses the Indian entry day, not the UTC day', undated[0].date, '2026-10-05');
+
+  const csv = toCsv(['Name', 'Amount'], [['Sri Murugan, Traders', 1200], ['He said "ok"', 5], ['=SUM(A1:A9)', 1]]);
+  eq('CSV quotes commas and doubles quotes', csv.split('\r\n').slice(1, 3), ['"Sri Murugan, Traders",1200', '"He said ""ok""",5']);
+  check('CSV neutralises formula cells', csv.includes("'=SUM(A1:A9)"));
+  check('CSV ends each row with CRLF', csv.endsWith('\r\n'));
+  console.log(`\n✅ Domain logic incl. reports: all ${passed} checks passed.`);
+}

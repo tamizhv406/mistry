@@ -9,8 +9,7 @@ import {
   Wallet,
   Calculator,
   BarChart3,
-  Bell,
-  Settings,
+  Wrench,
   ShieldCheck,
   Trash2,
   Database,
@@ -69,57 +68,51 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     },
     {
       id: 'my-sites',
-      label: 'My Sites',
+      label: 'Projects',
       icon: <Building2 size={20} />,
       view: 'my-sites',
     },
     {
       id: 'floor-plans',
-      label: 'Floor Plan Creator',
+      label: 'Floor Planner',
       icon: <PenTool size={20} />,
       view: 'floor-plans',
     },
     {
-      id: 'materials',
-      label: 'Materials',
-      icon: <Layers size={20} />,
-      view: 'site-tab-materials',
+      id: 'labour',
+      label: 'Attendance & Salary',
+      icon: <Users size={20} />,
+      view: 'labour',
     },
     {
-      id: 'labour',
-      label: 'Labour',
-      icon: <Users size={20} />,
-      view: 'site-tab-labour',
+      id: 'stock',
+      label: 'Materials',
+      icon: <Layers size={20} />,
+      view: 'stock',
+    },
+    {
+      id: 'toolroom',
+      label: 'Tools',
+      icon: <Wrench size={20} />,
+      view: 'toolroom',
     },
     {
       id: 'expenses',
       label: 'Expenses',
       icon: <Wallet size={20} />,
-      view: 'site-tab-expenses',
+      view: 'expenses',
+    },
+    {
+      id: 'reports',
+      label: 'Reports',
+      icon: <BarChart3 size={20} />,
+      view: 'reports',
     },
     {
       id: 'estimator',
       label: 'Building Calculator',
       icon: <Calculator size={20} />,
       view: 'estimator',
-    },
-    {
-      id: 'reports',
-      label: 'Reports',
-      icon: <BarChart3 size={20} />,
-      view: 'site-tab-reports',
-    },
-    {
-      id: 'notifications',
-      label: 'Notifications',
-      icon: <Bell size={20} />,
-      view: 'notifications',
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: <Settings size={20} />,
-      view: 'backup',
     },
   ];
 
@@ -155,7 +148,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     if (item.view === 'dashboard' && currentView === 'dashboard') return true;
     if (item.view === 'my-sites' && currentView === 'my-sites') return true;
     if (item.view === 'floor-plans' && (currentView === 'floor-plans' || currentView === 'floor-plan-editor')) return true;
-    if (item.view === 'backup' && item.id === 'settings' && currentView === 'backup') return true;
+    if (item.view === 'labour' && currentView === 'worker') return true;
     return false;
   };
 

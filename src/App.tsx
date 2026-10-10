@@ -6,6 +6,10 @@ import { MobileTopBar, MobileBottomNav } from './components/mobile/MobileChrome'
 import { HomeView } from './views/mobile/HomeView';
 import { LabourView } from './views/mobile/LabourView';
 import { WorkerProfileView } from './views/mobile/WorkerProfileView';
+import { StockView } from './views/mobile/StockView';
+import { ToolRoomView } from './views/mobile/ToolRoomView';
+import { ExpensesView } from './views/mobile/ExpensesView';
+import { ReportsView } from './views/mobile/ReportsView';
 import { Toast, type ToastMessage } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AppShell } from './components/AppShell';
@@ -641,6 +645,44 @@ export function App() {
             }}
             onNotify={addToast}
           />
+        )}
+
+        {currentView === 'stock' && selectedSiteId && (
+          <StockView
+            user={currentUser}
+            siteId={selectedSiteId}
+            onBack={() => handleNavigate('dashboard')}
+            onOpenSteelPurchase={() => {
+              setRodToEdit(null);
+              setRodModalOpen(true);
+            }}
+            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'materials')}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'toolroom' && selectedSiteId && (
+          <ToolRoomView
+            user={currentUser}
+            siteId={selectedSiteId}
+            onBack={() => handleNavigate('dashboard')}
+            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'tools')}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'expenses' && selectedSiteId && (
+          <ExpensesView
+            user={currentUser}
+            siteId={selectedSiteId}
+            onBack={() => handleNavigate('dashboard')}
+            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'expenses')}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'reports' && selectedSiteId && (
+          <ReportsView siteId={selectedSiteId} onBack={() => handleNavigate('dashboard')} onNotify={addToast} />
         )}
 
         {currentView === 'floor-plans' && currentUser && (

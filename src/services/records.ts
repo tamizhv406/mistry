@@ -318,18 +318,28 @@ export async function saveAdvance(user: User, siteId: string, input: AdvanceInpu
   }).catch((e: Error) => fail(e.message));
 }
 
+/**
+ * Moves a record to the Recycle Bin together with its payment ledger rows, so money that
+ * was never really paid does not stay in the cash-paid totals.
+ */
+async function softDeleteWithPayments(user: User, site: Site, table: EntityTable, id: string, what: string): Promise<Result> {
+  const now = nowIso();
+  return db.transaction('rw', db.table(table), db.payments, db.activityLogs, async () => {
+    const row = await db.table(table).get(id);
+    if (!row || row.siteId !== site.id) return fail('Record not found.');
+    await db.table(table).update(id, { isDeleted: true, deletedAt: now, updatedAt: now, updatedBy: user.id });
+    const linked = await db.payments.where('relatedRecordId').equals(id).filter(p => !p.isDeleted).toArray();
+    for (const p of linked) await db.payments.update(p.id, { isDeleted: true, deletedAt: now, updatedAt: now });
+    await log(user, site, 'SOFT_DELETE', `Moved ${what} to Recycle Bin`);
+    return { ok: true as const, value: undefined };
+  });
+}
+
 /** Moves a salary payment or advance to the Recycle Bin together with its ledger row. */
 export async function removeMoneyEntry(user: User, siteId: string, table: 'salaryPayments' | 'labourAdvances', id: string): Promise<Result> {
   const site = await writableSite(user, siteId);
   if (!site) return fail(NO_ACCESS);
-  const now = nowIso();
-  await db.transaction('rw', db.table(table), db.payments, db.activityLogs, async () => {
-    await db.table(table).update(id, { isDeleted: true, deletedAt: now, updatedAt: now, updatedBy: user.id });
-    const linked = await db.payments.where('relatedRecordId').equals(id).filter(p => !p.isDeleted).toArray();
-    for (const p of linked) await db.payments.update(p.id, { isDeleted: true, deletedAt: now, updatedAt: now });
-    await log(user, site, 'SOFT_DELETE', `Moved ${table === 'salaryPayments' ? 'salary payment' : 'advance'} to Recycle Bin`);
-  });
-  return { ok: true, value: undefined };
+  return softDeleteWithPayments(user, site, table, id, table === 'salaryPayments' ? 'salary payment' : 'advance');
 }
 
 // ---------------------------------------------------------------------------
@@ -718,6 +728,114 @@ export async function recordExpense(user: User, siteId: string, input: ExpenseIn
     await log(user, site, 'EXPENSE', `${label} ₹${amount}${payee ? ' to ' + payee : ''}`);
     return { ok: true as const, value: { table, id } };
   }).catch((e: Error) => fail(e.message));
+}
+
+export type ExpenseTable = 'teaSnacksExpenses' | 'poojaExpenses' | 'electricityBills' | 'waterBills' | 'otherExpenses';
+
+const EXPENSE_TOTAL_FIELD: Record<ExpenseTable, string> = {
+  teaSnacksExpenses: 'totalAmount',
+  poojaExpenses: 'totalAmount',
+  electricityBills: 'billAmount',
+  waterBills: 'billAmount',
+  otherExpenses: 'amount',
+};
+
+/** Moves an expense to the Recycle Bin, with its payment rows. */
+export async function removeExpense(user: User, siteId: string, table: ExpenseTable, id: string): Promise<Result> {
+  const site = await writableSite(user, siteId);
+  if (!site) return fail(NO_ACCESS);
+  return softDeleteWithPayments(user, site, table, id, 'expense');
+}
+
+/**
+ * Corrects an expense in place. The original entry time is kept, the change is logged, and
+ * the amount can only be changed here when that is unambiguous (the bill is fully paid in one
+ * payment, or not paid at all, and has no itemised breakdown).
+ */
+export async function correctExpense(
+  user: User,
+  siteId: string,
+  table: ExpenseTable,
+  id: string,
+  changes: { amount?: number; date?: string; payee?: string; notes?: string }
+): Promise<Result> {
+  const site = await writableSite(user, siteId);
+  if (!site) return fail(NO_ACCESS);
+  if (changes.date !== undefined) {
+    const dateError = checkEventDate(changes.date);
+    if (dateError) return fail(dateError);
+  }
+
+  return db.transaction('rw', db.table(table), db.payments, db.activityLogs, async () => {
+    const row = await db.table(table).get(id);
+    if (!row || row.isDeleted || row.siteId !== siteId) return fail('Expense not found.');
+    const totalField = EXPENSE_TOTAL_FIELD[table];
+    const oldTotal = Number(row[totalField]) || 0;
+    const oldPaid = Number(row.paidAmount) || 0;
+    const now = nowIso();
+    const patch: Record<string, unknown> = { updatedAt: now, updatedBy: user.id };
+
+    if (changes.payee !== undefined) {
+      patch.payee = changes.payee.trim();
+      if (table === 'waterBills') patch.supplier = changes.payee.trim();
+    }
+    if (changes.notes !== undefined) patch.notes = changes.notes.trim();
+    if (changes.date !== undefined && changes.date !== row.date) {
+      patch.date = changes.date;
+      if (table === 'electricityBills') patch.month = changes.date.slice(0, 7);
+    }
+
+    const amountChanged = changes.amount !== undefined && Math.abs(changes.amount - oldTotal) > 0.004;
+    const linked = await db.payments.where('relatedRecordId').equals(id).filter(p => !p.isDeleted).toArray();
+
+    if (amountChanged) {
+      const amount = roundMoney(changes.amount as number);
+      const amountError = checkAmount(amount);
+      if (amountError) return fail(amountError);
+
+      const parts =
+        table === 'teaSnacksExpenses'
+          ? [row.teaExpense, row.snacksExpense, row.juiceExpense, row.otherFoodExpense]
+          : table === 'poojaExpenses'
+          ? [row.materialsExpense, row.priestExpense, row.otherExpense]
+          : [];
+      if (parts.filter(v => (Number(v) || 0) > 0).length > 1) {
+        return fail('This entry has an itemised breakdown. Change its amounts in the ledger so the breakdown stays right.');
+      }
+      const fullyPaidOnce = linked.length === 1 && Math.abs(oldPaid - oldTotal) < 0.005;
+      const unpaid = linked.length === 0 && oldPaid === 0;
+      if (!fullyPaidOnce && !unpaid) {
+        return fail('This bill has part payments. Change the amount in the ledger, where each payment is listed.');
+      }
+
+      patch[totalField] = amount;
+      if (table === 'teaSnacksExpenses') {
+        const key = (['teaExpense', 'snacksExpense', 'juiceExpense', 'otherFoodExpense'] as const).find(k => (Number(row[k]) || 0) > 0) || 'teaExpense';
+        patch[key] = amount;
+      }
+      if (table === 'poojaExpenses') {
+        const key = (['materialsExpense', 'priestExpense', 'otherExpense'] as const).find(k => (Number(row[k]) || 0) > 0) || 'otherExpense';
+        patch[key] = amount;
+      }
+      const fin = calculateFinancialBalance(amount, fullyPaidOnce ? amount : 0);
+      patch.paidAmount = fin.paidAmount;
+      patch.balance = fin.balanceDue;
+      patch.extraPaid = fin.extraPaid;
+      if (fullyPaidOnce) await db.payments.update(linked[0].id, { amount, updatedAt: now });
+    }
+
+    // A payment made with the bill moves with the bill's date.
+    if (patch.date && linked.length === 1) await db.payments.update(linked[0].id, { date: patch.date as string, updatedAt: now });
+
+    await db.table(table).update(id, patch);
+    await log(
+      user,
+      site,
+      'EXPENSE_CORRECTED',
+      amountChanged ? `Expense corrected from ₹${oldTotal} to ₹${patch[totalField]}` : 'Expense details corrected'
+    );
+    return { ok: true as const, value: undefined };
+  });
 }
 
 // ---------------------------------------------------------------------------

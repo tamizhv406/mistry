@@ -220,6 +220,39 @@ async function run() {
   await svc.ensureCatalogSeeded();
   check('A removed built-in entry is not re-added', (await db.catalogItems.get('brand-cement-acc'))?.isDeleted === true);
 
+  console.log('\n--- 9. Correcting and removing expenses ---');
+  const teaId = tea.ok ? tea.value.id : '';
+  const teaBefore = await db.teaSnacksExpenses.get(teaId);
+  const fixed = await svc.correctExpense(owner, 's1', 'teaSnacksExpenses', teaId, { amount: 220, payee: 'Anna Tea Stall' });
+  const teaAfter = await db.teaSnacksExpenses.get(teaId);
+  check('Paid expense corrected: total and paid move together', fixed.ok && teaAfter?.totalAmount === 220 && teaAfter?.paidAmount === 220 && teaAfter?.balance === 0);
+  check('Correction keeps the original entry time', teaAfter?.createdAt === teaBefore?.createdAt && teaAfter?.updatedBy === owner.id);
+  const teaRows = (await ledgerRows()).filter(r => r.relatedRecordId === teaId);
+  check('Its single ledger row is updated, not duplicated', teaRows.length === 1 && teaRows[0].amount === 220, teaRows.map(r => r.amount));
+  check('Payee corrected', teaAfter?.payee === 'Anna Tea Stall');
+
+  const fuelId = fuel.ok ? fuel.value.id : '';
+  const fuelFix = await svc.correctExpense(owner, 's1', 'otherExpenses', fuelId, { amount: 1500, date: yesterday });
+  const fuelAfter = await db.otherExpenses.get(fuelId);
+  check('Unpaid expense corrected: stays unpaid with new balance', fuelFix.ok && fuelAfter?.amount === 1500 && fuelAfter?.paidAmount === 0 && fuelAfter?.balance === 1500 && fuelAfter?.date === yesterday);
+  check('Correction to a future date is refused', !(await svc.correctExpense(owner, 's1', 'otherExpenses', fuelId, { date: tomorrow })).ok);
+  check('Stranger cannot correct', !(await svc.correctExpense(stranger, 's1', 'otherExpenses', fuelId, { amount: 1 })).ok);
+
+  // A bill with a part payment cannot have its amount changed here.
+  await db.otherExpenses.update(fuelId, { paidAmount: 400, balance: 1100 });
+  await db.payments.put({ id: 'PAY-part', siteId: 's1', relatedRecordId: fuelId, module: 'Expense', date: today, amount: 400, paymentType: 'Cash', isDeleted: false, createdAt: stamp, updatedAt: stamp });
+  const partFix = await svc.correctExpense(owner, 's1', 'otherExpenses', fuelId, { amount: 2000 });
+  check('Part-paid bill amount change is refused with an explanation', !partFix.ok && /part payments/i.test(partFix.ok ? '' : partFix.error));
+  check('Part-paid bill notes can still be corrected', (await svc.correctExpense(owner, 's1', 'otherExpenses', fuelId, { notes: 'Bill no. 42' })).ok && (await db.otherExpenses.get(fuelId))?.notes === 'Bill no. 42');
+
+  // An itemised tea entry keeps its breakdown.
+  await db.teaSnacksExpenses.put({ id: 'tea-split', siteId: 's1', date: yesterday, teaExpense: 100, snacksExpense: 50, juiceExpense: 0, otherFoodExpense: 0, totalAmount: 150, paidAmount: 0, balance: 150, extraPaid: 0, isDeleted: false, createdAt: stamp, updatedAt: stamp });
+  check('Itemised entry amount change is refused', !(await svc.correctExpense(owner, 's1', 'teaSnacksExpenses', 'tea-split', { amount: 300 })).ok);
+
+  const removed = await svc.removeExpense(owner, 's1', 'teaSnacksExpenses', teaId);
+  check('Removed expense goes to the Recycle Bin', removed.ok && (await db.teaSnacksExpenses.get(teaId))?.isDeleted === true);
+  check('Its payment leaves the paid-out ledger too', (await ledgerRows()).filter(r => r.relatedRecordId === teaId).length === 0);
+
   console.log(`\n✅ Records service: all ${passed} checks passed.`);
 }
 
