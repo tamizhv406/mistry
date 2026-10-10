@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HardHat, Eye, EyeOff, Lock, User, Phone, Mail, ArrowRight, ShieldCheck, Crown, CheckCircle2 } from 'lucide-react';
-import { loginUser, registerUser } from '../services/auth';
+import { loginUser, registerUser, demoAccountsEnabled } from '../services/auth';
 import type { User as UserType } from '../db/types';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { ChangeInitialPasswordModal } from '../components/ChangeInitialPasswordModal';
@@ -333,12 +333,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 <span>Super Admin Portal: Sign in with registered administrator credentials above</span>
               </div>
 
-              {/* Demo Mistry Login Button */}
+              {/* Demo Mistry Login Button (development and demo builds only) */}
               <button
                 type="button"
                 className="btn btn-outline"
                 onClick={handleMistryLogin}
                 disabled={loading}
+                hidden={!demoAccountsEnabled()}
                 style={{
                   width: '100%',
                   borderColor: '#cbd5e1',
@@ -347,7 +348,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   fontSize: '0.85rem',
                   padding: '8px 14px',
                   borderRadius: '12px',
-                  display: 'flex',
+                  // The inline display would override the `hidden` attribute, so switch it here.
+                  display: demoAccountsEnabled() ? 'flex' : 'none',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',

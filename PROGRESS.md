@@ -73,19 +73,46 @@ Bugs fixed here: deleting a floor could overwrite another floor's walls; undo af
 the other floor; edits made within 3.5 s of leaving were lost; the saved thumbnail was a dead `blob:` link;
 autosave showed a toast every time; pinch zoom ran away; importing the app's own export failed.
 
+## Stabilization and Android pass
+
+Checkpoint before this pass: git tag `checkpoint/pre-stabilization`.
+
+Done and verified (automated tests plus a 390 px touch-emulated run on the production build):
+
+- Floor Planner performance, measured on a 262-wall / 120-room plan with 4x CPU throttling:
+  pan p95 frame time 167 ms -> 18 ms, pinch 333 ms -> 17 ms. Pan and pinch now move the drawing with a
+  CSS transform and write pan/zoom to state once, at the end; pointer moves are handled once per frame.
+- Touch safety: a drag only moves an element that is already selected (first tap selects); rooms that come
+  from walls are not dragged on their own.
+- Saves are one-at-a-time and revision-checked. If another tab or device saved the plan first, the save is
+  refused and the user chooses "Keep my version" or "Load the other version" (22 persistence checks).
+- Offline: the service worker now refreshes its cached app shell.
+- Release hygiene: demo accounts (public password) are not created and demo login is hidden in production
+  builds; in-app "Delete my account" removes the person's data only (tested).
+- Cloud backup: `mistry_records` migration, sync engine, sign-in UI and background sync
+  (25 checks against an in-memory stand-in). See docs/SUPABASE_SETUP.md.
+- Android: Capacitor project in `android/`; a debug APK builds (`android/app/build/outputs/apk/debug/app-debug.apk`).
+  See docs/ANDROID_RELEASE.md.
+- 3D preview opens and renders walls, rooms and doors from the same floor data (checked once, on the large plan).
+
 ## Not verified / known limits
 
-- The 3D preview opens from the editor and reads the same floor data, but it was not re-tested in this pass.
-- DXF export is unchanged (wall centre-lines only) and was not re-tested.
-- The classic "All ledgers" screens still work and now use the shared salary ledger, but keep their older look.
-- Not tested on a physical phone; testing used Edge with touch emulation at 390 x 844.
-- Supabase: nothing is synced. See README "Data and privacy".
+- **Supabase has not been exercised for real.** The only project on the connected account is paused; its
+  schema could not be read and the migration has not been applied. Cloud backup is off until
+  docs/SUPABASE_SETUP.md is followed.
+- **No real-device test.** The APK was built but not installed on a phone. All interaction testing used
+  Edge with touch emulation.
+- No release (signed) build was made; there is no keystore, privacy policy or Play listing yet.
+- Drawing a wall on a very large plan still re-renders every frame (about 130 ms p95 at 4x throttle with
+  260 walls); ordinary house plans are far smaller. Fixing it properly means splitting the 9,700-line editor
+  component so static layers do not re-render.
+- DXF export was not re-tested. The classic "All ledgers" screens work but keep their older look.
+- Android's WebView has no speech recognition, so voice input is unavailable in the packaged app.
 
 ## Next steps
 
-1. Try the app on a real Android phone (install from the browser menu) and note anything awkward.
-2. Decide whether cloud backup/sync is wanted. If yes: design tables to match `src/db/types.ts`, add RLS
-   per project owner, and sync from IndexedDB. Do not put a service-role key in the frontend.
-3. Re-test 3D preview and DXF export against multi-floor plans.
-4. Restyle the classic ledger screens with `src/styles/mobile.css`, or retire the ones the new screens replace.
+1. Install `app-debug.apk` on a real phone and walk through docs/ANDROID_RELEASE.md "Still open".
+2. Supabase: restore/choose the project, run migration 002, add the two env values, test with two devices.
+3. Decide the application ID, the initial-administrator question and Android auto-backup (all in the checklist).
+4. Create the upload keystore, privacy policy and Play listing; build the signed bundle.
 5. Merge: review the branch, then `git checkout main && git merge feature/mobile-first-overhaul`.

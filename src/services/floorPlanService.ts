@@ -1,4 +1,5 @@
 import { db } from '../db/db';
+import { recordTombstone } from './syncTombstones';
 import type {
   FloorPlan,
   User,
@@ -232,6 +233,7 @@ export async function permanentlyDeleteFloorPlan(
     return { success: false, error: 'Access Denied.' };
   }
   await db.floorPlans.delete(planId);
+  recordTombstone('floorPlans', planId); // so the cloud copy drops it too
   return { success: true };
 }
 

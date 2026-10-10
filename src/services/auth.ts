@@ -36,6 +36,18 @@ export async function hashPassword(password: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * The demo accounts (dmin and mistry_velu) use a password that is public. They exist for
+ * development and demos only: a production build does not create them or offer demo login,
+ * unless VITE_ENABLE_DEMO_LOGIN=true is set on purpose (for a public demo site).
+ */
+export function demoAccountsEnabled(): boolean {
+  const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || undefined;
+  if (!env) return true; // test runners and tools outside Vite
+  if (env.VITE_ENABLE_DEMO_LOGIN === 'true') return true;
+  return !env.PROD;
+}
+
 export function isSuperAdmin(user?: User | null): boolean {
   if (!user) return false;
   return (
@@ -93,6 +105,8 @@ export async function initDefaultUser(): Promise<void> {
       updatedAt: new Date().toISOString(),
     });
   }
+
+  if (!demoAccountsEnabled()) return;
 
   // 2. Default Mistry Velu account (Contractor demo profile)
   const mistryExists = await db.users.get('user-mistry-velu');

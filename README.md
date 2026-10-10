@@ -34,7 +34,7 @@ npm run build    # production build in dist/
 npm run lint
 ```
 
-Sign in with a registered account, or use **Try a sample project** on the home screen to explore with demo data.
+Register an account on the sign-in screen, then use **Try a sample project** on the home screen to explore with demo data. In development builds a one-tap demo login is also shown; production builds do not create the demo accounts.
 
 ## How the numbers are worked out
 
@@ -78,9 +78,15 @@ All records are stored **on the device**, in the browser's IndexedDB (via Dexie)
 - Deleted records go to the **Recycle Bin** and can be restored.
 - Passwords are stored as SHA-256 hashes on the device. This protects against casual access on a shared phone; it is not a substitute for a server-side account system.
 
-### Supabase
+### Cloud backup (Supabase)
 
-The repository contains a Supabase client (`src/services/supabase.ts`) used only for the password-recovery email flow, and a draft of row-level-security policies (`supabase/migrations/001_rls_policies.sql`). **Project data is not synced to Supabase.** The policies file targets tables that the app does not create or write, so it is a starting point, not a working backend.
+Optional. When it is set up, a user can sign in under More → Backup & Data → Cloud backup and their records are copied to their own Supabase account and restored on another phone. Each record is stored as one JSON document protected by row-level security; the newer copy of a record always wins.
+
+The code and migration are written and tested against a stand-in, but **have not yet been run against a real Supabase project**. Setup steps, security model and limits: [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
+
+## Android app
+
+The app is packaged for Android with Capacitor (`android/`). Build steps, signing, and the Play Store checklist with what is still open: [docs/ANDROID_RELEASE.md](docs/ANDROID_RELEASE.md).
 
 Optional environment variables (create `.env.local`; never commit it):
 
@@ -90,6 +96,7 @@ VITE_SUPABASE_ANON_KEY=       # public anon key only. Never put a service-role k
 VITE_INITIAL_ADMIN_EMAIL=     # optional
 VITE_INITIAL_ADMIN_USERNAME=  # optional
 VITE_INITIAL_ADMIN_HASH=      # optional, SHA-256 of the initial admin password
+VITE_ENABLE_DEMO_LOGIN=       # optional; `true` keeps the demo accounts in a production build (public password)
 ```
 
 Without these the app runs fully offline, which is the tested configuration.

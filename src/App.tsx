@@ -26,6 +26,7 @@ import { FloorPlanEditorView } from './views/FloorPlanEditorView';
 import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { checkPasswordRecoveryUrl, isSupabaseConfigured, supabase } from './services/supabase';
+import { runCloudSync } from './services/cloudSync';
 
 import { SiteModal } from './components/SiteModal';
 import { MaterialModal } from './components/MaterialModal';
@@ -283,7 +284,29 @@ export function App() {
     setToasts(prev => prev.filter(t => t.id !== id));
   };
 
+  // Cloud backup: when the user has signed in to it, sync quietly on start, when the
+  // connection returns, and every few minutes while the app is open. Records always save to
+  // this device first, so a failed or skipped sync never loses anything.
+  useEffect(() => {
+    if (!currentUser || !isSupabaseConfigured() || !supabase) return;
+    const client = supabase;
+    const user = currentUser;
+    const syncQuietly = () => {
+      if (navigator.onLine === false || document.visibilityState === 'hidden') return;
+      void runCloudSync(client, user);
+    };
+    syncQuietly();
+    window.addEventListener('online', syncQuietly);
+    const timer = window.setInterval(syncQuietly, 5 * 60 * 1000);
+    return () => {
+      window.removeEventListener('online', syncQuietly);
+      window.clearInterval(timer);
+    };
+  }, [currentUser]);
+
   const handleLogout = () => {
+    // The next person to use this device must not sync into this person's cloud account.
+    if (supabase) void supabase.auth.signOut();
     logoutUser();
     setCurrentUser(null);
     addToast('Signed out of Building Mistry', 'info');

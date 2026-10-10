@@ -1,5 +1,6 @@
 import { todayKey } from '../utils/datetime';
 import Dexie, { type Table } from 'dexie';
+import { recordTombstone } from '../services/syncTombstones';
 import type {
   Site,
   Material,
@@ -248,6 +249,7 @@ export class BuildingMistryDB extends Dexie {
   async permanentDelete(tableName: EntityTable, id: string): Promise<void> {
     const table = this.table(tableName);
     await table.delete(id);
+    recordTombstone(tableName, id); // so the cloud copy drops it too
   }
 
   // Log Activity Helper with full backward compatibility and user audit logging
@@ -471,6 +473,7 @@ export class BuildingMistryDB extends Dexie {
       throw new Error("Access Denied: You cannot permanently delete another contractor's record.");
     }
     await table.delete(id);
+    recordTombstone(tableName, id); // so the cloud copy drops it too
     await this.logActivity(
       user.id,
       user.fullName || user.username,

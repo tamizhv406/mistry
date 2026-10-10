@@ -13,6 +13,7 @@ import {
 import { exportDatabaseBackup, importDatabaseBackup } from '../db/backup';
 import { loadDemoData } from '../db/seedData';
 import { db } from '../db/db';
+import { AccountPanel } from '../components/mobile/AccountPanel';
 
 interface BackupViewProps {
   onBack: () => void;
@@ -98,6 +99,8 @@ export const BackupView: React.FC<BackupViewProps> = ({ onBack, onNotify }) => {
           Manage local IndexedDB storage, download offline backups, and restore your construction business records.
         </p>
       </div>
+
+      <AccountPanel onNotify={onNotify} />
 
       {/* Safety Info Card */}
       <div style={{

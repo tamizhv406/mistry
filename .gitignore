@@ -25,3 +25,12 @@ dist-ssr
 scratch/
 floor-plan-creator-application/
 
+
+# Android signing and local build settings (never commit)
+android/keystore.properties
+android/local.properties
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example

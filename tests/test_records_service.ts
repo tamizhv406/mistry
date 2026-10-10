@@ -253,6 +253,26 @@ async function run() {
   check('Removed expense goes to the Recycle Bin', removed.ok && (await db.teaSnacksExpenses.get(teaId))?.isDeleted === true);
   check('Its payment leaves the paid-out ledger too', (await ledgerRows()).filter(r => r.relatedRecordId === teaId).length === 0);
 
+  console.log('\n--- 10. Deleting an account removes only that person\'s data ---');
+  const { deleteAccountAndData } = await import('../src/services/account');
+  const leaver: User = { ...owner, id: 'u-leaver', username: 'leaver', fullName: 'Leaver', email: 'leaver@x.in' };
+  await db.users.bulkPut([owner, leaver]);
+  await db.sites.put({ ...site, id: 's-leaver', userId: leaver.id, name: 'Leaver Site' });
+  await db.workers.put({ ...worker, id: 'w-leaver', siteId: 's-leaver' });
+  await db.attendance.put({ id: 'att-leaver', siteId: 's-leaver', workerId: 'w-leaver', date: today, status: 'present', dayMultiplier: 1, isDeleted: false, createdAt: stamp, updatedAt: stamp });
+  await db.floorPlans.put({ id: 'fp-leaver', userId: leaver.id, siteId: 's-leaver', buildingName: 'L', floorName: 'G', plotLength: 10, plotWidth: 10, unit: 'feet', walls: [], rooms: [], doors: [], windows: [], isDeleted: false, createdAt: stamp, updatedAt: stamp });
+  const ownerSitesBefore = (await db.sites.toArray()).filter(s => s.userId === owner.id).length;
+  const ownerAttendanceBefore = (await db.attendance.toArray()).filter(a => a.siteId === 's1').length;
+  const gone = await deleteAccountAndData(leaver);
+  check('Account deletion succeeds and reports what was removed', gone.ok && gone.records === 4, gone);
+  check('The account is gone', (await db.users.get(leaver.id)) === undefined);
+  check('Their project, workers, attendance and plans are gone', (await db.sites.get('s-leaver')) === undefined && (await db.workers.get('w-leaver')) === undefined && (await db.attendance.get('att-leaver')) === undefined && (await db.floorPlans.get('fp-leaver')) === undefined);
+  check('Other people\'s data is untouched', (await db.sites.toArray()).filter(s => s.userId === owner.id).length === ownerSitesBefore && (await db.attendance.toArray()).filter(a => a.siteId === 's1').length === ownerAttendanceBefore && !!(await db.users.get(owner.id)));
+  check('Built-in catalog entries are kept', (await db.catalogItems.get('brand-cement-ramco')) !== undefined);
+  const superAdmin: User = { ...owner, id: 'u-super', username: 'root', role: 'SUPER_ADMIN' };
+  await db.users.put(superAdmin);
+  check('The main administrator account can not be deleted this way', !(await deleteAccountAndData(superAdmin)).ok && !!(await db.users.get('u-super')));
+
   console.log(`\n✅ Records service: all ${passed} checks passed.`);
 }
 
