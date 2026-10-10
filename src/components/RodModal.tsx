@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -70,7 +71,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       setInvoiceNumber(rodToEdit.invoiceNumber || '');
       setNotes(rodToEdit.notes || '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setDiameter('12 mm');
       setCustomDiameter('');
       setBrand('Tata Tiscon 550D');
@@ -137,7 +138,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       balance: fin.balanceDue,
       extraPaid: fin.extraPaid,
       supplier: supplier.trim(),
-      purchaseDate: purchaseDate || now.slice(0, 10),
+      purchaseDate: purchaseDate || todayKey(),
       invoiceNumber: invoiceNumber.trim(),
       notes: notes.trim(),
       isDeleted: false,
@@ -157,7 +158,7 @@ export const RodModal: React.FC<RodModalProps> = ({
           tableName: 'rodEntries',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: purchaseDate || now.slice(0, 10),
+          date: purchaseDate || todayKey(),
           notes: invoiceNumber ? `Weighbridge/Inv ${invoiceNumber}` : `Initial payment for Rod ${selectedDiameter}`,
           module: 'Rod',
           userId: currentUser?.id,

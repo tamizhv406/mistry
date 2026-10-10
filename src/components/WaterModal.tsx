@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Droplets, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -41,7 +42,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
       setDate(billToEdit.date);
       setNotes(billToEdit.notes || '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setSupplier('Cauvery Water Tanker Service');
       setQuantityLoads('2 Tankers (12,000 Litres)');
       setBillAmount('2400');
@@ -79,7 +80,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
     const record: WaterBill = {
       id,
       siteId,
-      date: date || now.slice(0, 10),
+      date: date || todayKey(),
       supplier: supplier.trim(),
       quantityLoads: quantityLoads.trim(),
       billAmount: numBill,
@@ -104,7 +105,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
           tableName: 'waterBills',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: date || now.slice(0, 10),
+          date: date || todayKey(),
           notes: `Water tanker delivery payment to ${supplier.trim()}`,
           module: 'Water',
           userId: currentUser?.id,

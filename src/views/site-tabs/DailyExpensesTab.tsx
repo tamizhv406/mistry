@@ -1,3 +1,4 @@
+import { addDays, todayKey } from '../../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import {
   Coffee,
@@ -119,8 +120,8 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
 
   // Filter Tea & Snacks by time window
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayStr = todayKey();
+  const sevenDaysAgo = addDays(todayKey(), -7);
   const currentMonthStr = todayStr.slice(0, 7);
 
   const filteredTea = teaSnacks.filter(t => {

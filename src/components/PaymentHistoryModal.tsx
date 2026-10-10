@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, IndianRupee, Receipt, CheckCircle, AlertCircle, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -63,7 +64,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
   useEffect(() => {
     if (isOpen && relatedRecordId) {
       loadPayments();
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(todayKey());
       setAmount('');
       setNotes('');
       setError('');
@@ -101,7 +102,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
         tableName,
         amount: numAmount,
         paymentType,
-        date: date || new Date().toISOString().slice(0, 10),
+        date: date || todayKey(),
         notes: notes.trim(),
         module,
         userId: currentUser?.id,

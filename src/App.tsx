@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, X, Download } from 'lucide-react';
 import { db } from './db/db';
-import { Navbar } from './components/Navbar';
-import { MobileBottomNav } from './components/MobileBottomNav';
+import { MobileTopBar, MobileBottomNav } from './components/mobile/MobileChrome';
+import { HomeView } from './views/mobile/HomeView';
+import { LabourView } from './views/mobile/LabourView';
+import { WorkerProfileView } from './views/mobile/WorkerProfileView';
 import { Toast, type ToastMessage } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AppShell } from './components/AppShell';
@@ -59,10 +61,22 @@ import type {
   User,
 } from './db/types';
 
+type AppViewName =
+  | 'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'estimator' | 'admin'
+  | 'floor-plans' | 'floor-plan-editor'
+  | 'labour' | 'worker' | 'stock' | 'toolroom' | 'expenses' | 'reports';
+
+const PROJECT_VIEWS: AppViewName[] = ['labour', 'worker', 'stock', 'toolroom', 'expenses', 'reports'];
+const CURRENT_SITE_KEY = 'mistry_current_site';
+
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
-  const [currentView, setCurrentView] = useState<'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'estimator' | 'admin' | 'floor-plans' | 'floor-plan-editor' | 'notifications'>('dashboard');
-  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<AppViewName>('dashboard');
+  // The current project is remembered on this device so the app reopens where the user left off.
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => {
+    try { return localStorage.getItem(CURRENT_SITE_KEY); } catch { return null; }
+  });
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [selectedFloorPlanId, setSelectedFloorPlanId] = useState<string | null>(null);
   const [currentSiteTab, setCurrentSiteTab] = useState<
     'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance'
@@ -83,11 +97,29 @@ export function App() {
   });
 
   // Query all active sites for the user (used by fast site switcher/picker)
-  const userSites =
-    useLiveQuery(async () => {
-      if (!currentUser) return [];
-      return await db.getSitesForUser(currentUser);
-    }, [currentUser]) || [];
+  const userSitesQuery = useLiveQuery(async () => {
+    if (!currentUser) return [];
+    return await db.getSitesForUser(currentUser);
+  }, [currentUser]);
+  const userSites = userSitesQuery || [];
+
+  // Keep the remembered project valid: drop it if it was deleted or belongs to another
+  // account, and pick the only project automatically when there is just one.
+  useEffect(() => {
+    if (!userSitesQuery) return;
+    const stillThere = selectedSiteId && userSitesQuery.some(s => s.id === selectedSiteId);
+    if (!stillThere) {
+      const next = userSitesQuery.length === 1 ? userSitesQuery[0].id : null;
+      if (next !== selectedSiteId) setSelectedSiteId(next);
+    }
+  }, [userSitesQuery, selectedSiteId]);
+
+  useEffect(() => {
+    try {
+      if (selectedSiteId) localStorage.setItem(CURRENT_SITE_KEY, selectedSiteId);
+      else localStorage.removeItem(CURRENT_SITE_KEY);
+    } catch { /* storage unavailable */ }
+  }, [selectedSiteId]);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -278,12 +310,29 @@ export function App() {
       setCurrentView('floor-plans');
     } else if (view === 'floor-plan-editor') {
       setCurrentView('floor-plan-editor');
-    } else if (view === 'notifications') {
-      setCurrentView('notifications');
+    } else if (PROJECT_VIEWS.includes(view as AppViewName)) {
+      if (siteId) setSelectedSiteId(siteId);
+      if (!siteId && !selectedSiteId) {
+        addToast(userSites.length ? 'Choose a project first' : 'Create your first project', 'info');
+        setCurrentView('dashboard');
+      } else {
+        setCurrentView(view as AppViewName);
+      }
     } else {
-      setSelectedSiteId(null);
       setCurrentView('dashboard');
     }
+    window.scrollTo(0, 0);
+  };
+
+  const handleSelectSite = (id: string) => {
+    setSelectedSiteId(id);
+    setSelectedWorkerId(null);
+    if (currentView === 'my-sites' || currentView === 'site-detail' || currentView === 'worker') setCurrentView('dashboard');
+  };
+
+  const openNewSiteModal = () => {
+    setSiteToEdit(null);
+    setSiteModalOpen(true);
   };
 
   // Direct Site Section opener from mobile bottom navigation
@@ -419,22 +468,23 @@ export function App() {
     );
   }
 
+  const chromeProps = {
+    user: currentUser,
+    currentView,
+    sites: userSites,
+    siteId: selectedSiteId,
+    onSelectSite: handleSelectSite,
+    onNavigate: (view: string) => handleNavigate(view),
+    onOpenClassic: () => selectedSiteId && handleNavigate('site-detail', selectedSiteId, 'overview'),
+    onNewSite: openNewSiteModal,
+    onLogout: handleLogout,
+    canInstall: !!installPromptEvent && !isPwaInstalled,
+    onInstall: handleInstallPwa,
+  };
+
   return (
-    <div className="app-container">
-      {/* Top Navbar — visible on mobile only (AppShell handles desktop sidebar) */}
-      <div className="desktop-navbar-hidden">
-        <Navbar
-          currentView={currentView}
-          selectedSiteId={selectedSiteId}
-          onNavigate={handleNavigate}
-          onOpenNewSiteModal={() => {
-            setSiteToEdit(null);
-            setSiteModalOpen(true);
-          }}
-          user={currentUser}
-          onLogout={handleLogout}
-        />
-      </div>
+    <div className={`app-container ${currentView === 'floor-plan-editor' ? 'm-immersive' : ''}`}>
+      <MobileTopBar {...chromeProps} />
 
       <AppShell
         user={currentUser}
@@ -452,26 +502,22 @@ export function App() {
         {/* Main View Router */}
         <main>
         {currentView === 'dashboard' && (
-          <DashboardView
-            onOpenSite={id => handleNavigate('site-detail', id)}
-            onOpenNewSiteModal={() => {
-              setSiteToEdit(null);
-              setSiteModalOpen(true);
-            }}
-            onEditSite={site => {
-              setSiteToEdit(site);
-              setSiteModalOpen(true);
-            }}
-            onDeleteSiteToTrash={site => handleSoftDelete('sites', site.id, site.name)}
-            onNotify={addToast}
+          <HomeView
             user={currentUser}
+            sites={userSites}
+            siteId={selectedSiteId}
+            onSelectSite={handleSelectSite}
+            onGo={view => handleNavigate(view)}
+            onOpenClassic={id => handleNavigate('site-detail', id, 'overview')}
+            onNewSite={openNewSiteModal}
+            onNotify={addToast}
           />
         )}
 
         {currentView === 'my-sites' && (
           <DashboardView
             onlySites={true}
-            onOpenSite={id => handleNavigate('site-detail', id)}
+            onOpenSite={handleSelectSite}
             onOpenNewSiteModal={() => {
               setSiteToEdit(null);
               setSiteModalOpen(true);
@@ -562,6 +608,41 @@ export function App() {
           />
         )}
 
+        {currentView === 'labour' && selectedSiteId && (
+          <LabourView
+            user={currentUser}
+            siteId={selectedSiteId}
+            onBack={() => handleNavigate('dashboard')}
+            onOpenWorker={id => {
+              setSelectedWorkerId(id);
+              setCurrentView('worker');
+              window.scrollTo(0, 0);
+            }}
+            onAddWorker={() => {
+              setWorkerToEdit(null);
+              setWorkerModalOpen(true);
+            }}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'worker' && selectedSiteId && selectedWorkerId && (
+          <WorkerProfileView
+            user={currentUser}
+            siteId={selectedSiteId}
+            workerId={selectedWorkerId}
+            onBack={() => {
+              setCurrentView('labour');
+              window.scrollTo(0, 0);
+            }}
+            onEditWorker={worker => {
+              setWorkerToEdit(worker);
+              setWorkerModalOpen(true);
+            }}
+            onNotify={addToast}
+          />
+        )}
+
         {currentView === 'floor-plans' && currentUser && (
           <FloorPlanListView
             user={currentUser}
@@ -610,12 +691,6 @@ export function App() {
           )
         )}
 
-        {currentView === 'notifications' && (
-          <div style={{ padding: '40px 24px', textAlign: 'center', color: '#64748b' }}>
-            <h2 style={{ color: '#1e293b', marginBottom: 12 }}>Notifications</h2>
-            <p>No new notifications at this time.</p>
-          </div>
-        )}
 
         {currentView === 'estimator' && (
           <EstimatorView
@@ -652,19 +727,7 @@ export function App() {
       </AppShell>
 
       {/* Mobile Bottom Navigation Bar */}
-      <MobileBottomNav
-        currentView={currentView}
-        selectedSiteId={selectedSiteId}
-        activeSiteTab={currentSiteTab}
-        activeExpenseSubSection={currentExpenseSubSection}
-        onNavigate={handleNavigate}
-        onOpenSiteTab={handleOpenSiteTab}
-        onLogout={handleLogout}
-        user={currentUser}
-        installPromptEvent={installPromptEvent}
-        onInstallPwa={handleInstallPwa}
-        isPwaInstalled={isPwaInstalled}
-      />
+      <MobileBottomNav {...chromeProps} />
 
       {/* Fast Mobile Site Selector Sheet */}
       {isSitePickerOpen && (

@@ -1,3 +1,4 @@
+import { todayKey } from '../../utils/datetime';
 import React, { useState } from 'react';
 import {
   Receipt,
@@ -84,7 +85,7 @@ export const PaymentsLedgerTab: React.FC<PaymentsLedgerTabProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Site_Payments_Ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `Site_Payments_Ledger_${todayKey()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

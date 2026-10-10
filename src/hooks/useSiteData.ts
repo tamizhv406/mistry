@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { SiteFinancialSummary } from '../db/types';
 import { calculateFinancialBalance } from '../utils/financial';
+import { buildSiteLabourSummary } from '../domain/salary';
 
 export type { SiteFinancialSummary };
 
@@ -28,32 +29,14 @@ export function useSiteData(siteId: string | null | undefined) {
     const advances = await db.labourAdvances.where('siteId').equals(siteId).filter(a => !a.isDeleted).toArray();
     const salaryPayments = await db.salaryPayments.where('siteId').equals(siteId).filter(s => !s.isDeleted).toArray();
 
-    // Calculate labour gross earnings based on attendance
-    const workerWageMap = new Map(workers.map(w => [w.id, Number(w.dailyWage) || 0]));
-    
-    let calculatedGrossWage = 0;
-    attendance.forEach(att => {
-      const wage = workerWageMap.get(att.workerId) || 0;
-      calculatedGrossWage += wage * (Number(att.dayMultiplier) || 0);
-    });
-
-    // Separate Recoverable vs Non-Recoverable Advances
-    // Recoverable advance: Include it in salary deduction/balance calculations.
-    // No Return / Non-Recoverable: Never deduct it from salary!
-    const recoverableAdvances = advances
-      .filter(a => a.advanceType === 'Recoverable')
-      .reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
-
-    const nonRecoverableAdvances = advances
-      .filter(a => a.advanceType !== 'Recoverable')
-      .reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
-
-    const totalAdvances = recoverableAdvances + nonRecoverableAdvances;
-    const labourPaid = salaryPayments.reduce((acc, s) => acc + (Number(s.paidAmount) || 0), 0);
-
-    // Net payable wages = Gross Wage - Recoverable Advances
-    const netSalaryPayable = Math.max(0, calculatedGrossWage - recoverableAdvances);
-    const labourFin = calculateFinancialBalance(netSalaryPayable, labourPaid);
+    // Labour figures come from the shared salary ledger (src/domain/salary.ts) so every
+    // screen agrees: per-worker pending and paid-ahead amounts are summed separately and
+    // only recoverable advances are deducted.
+    const labour = buildSiteLabourSummary(workers, attendance, advances, salaryPayments, { leavePaid: site.leavePaid });
+    const calculatedGrossWage = labour.earned;
+    const totalAdvances = labour.recoverableAdvances + labour.nonRecoverableAdvances;
+    const labourPaid = labour.salaryPaid;
+    const labourFin = { balanceDue: labour.pending, extraPaid: labour.overpaid };
 
     // 3. Tools
     const tools = await db.tools.where('siteId').equals(siteId).filter(t => !t.isDeleted).toArray();

@@ -1,3 +1,4 @@
+import { todayKey } from './datetime';
 import type {
   AreaUnit,
   ConstructionQuality,
@@ -255,7 +256,7 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     rate: rates.cementPerBag,
     estimatedCost: cementCost,
     supplierName: supplierInfo.cementSupplier || 'Market Rate',
-    priceDate: supplierInfo.priceDate || new Date().toISOString().slice(0, 10),
+    priceDate: supplierInfo.priceDate || todayKey(),
     factorUsed: factors.cementBagsPerSqFt,
     factorUnit: 'bags/sq.ft',
   });
@@ -270,7 +271,7 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
       rate: rates.sandPerCft,
       estimatedCost: sandCost,
       supplierName: supplierInfo.sandSupplier || 'Govt Depot / Market',
-      priceDate: supplierInfo.priceDate || new Date().toISOString().slice(0, 10),
+      priceDate: supplierInfo.priceDate || todayKey(),
       factorUsed: factors.sandCftPerSqFt,
       factorUnit: 'cft/sq.ft',
     });
@@ -285,7 +286,7 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     rate: rates.msandPerCft,
     estimatedCost: msandCost,
     supplierName: supplierInfo.msandSupplier || 'Crusher Quarry',
-    priceDate: supplierInfo.priceDate || new Date().toISOString().slice(0, 10),
+    priceDate: supplierInfo.priceDate || todayKey(),
     factorUsed: factors.msandCftPerSqFt,
     factorUnit: 'cft/sq.ft',
   });
@@ -299,7 +300,7 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     rate: rates.aggregatePerCft,
     estimatedCost: aggCost,
     supplierName: supplierInfo.aggregateSupplier || 'Crusher Quarry',
-    priceDate: supplierInfo.priceDate || new Date().toISOString().slice(0, 10),
+    priceDate: supplierInfo.priceDate || todayKey(),
     factorUsed: factors.aggregateCftPerSqFt,
     factorUnit: 'cft/sq.ft',
   });
@@ -313,7 +314,7 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     rate: rates.brickPerPiece,
     estimatedCost: brickCost,
     supplierName: supplierInfo.brickSupplier || 'Brick Works Kiln',
-    priceDate: supplierInfo.priceDate || new Date().toISOString().slice(0, 10),
+    priceDate: supplierInfo.priceDate || todayKey(),
     factorUsed: factors.bricksPiecesPerSqFt,
     factorUnit: 'pieces/sq.ft',
   });
@@ -327,7 +328,7 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     rate: rates.steelPerKg,
     estimatedCost: steelCost,
     supplierName: supplierInfo.steelSupplier || 'Steel Depot',
-    priceDate: supplierInfo.priceDate || new Date().toISOString().slice(0, 10),
+    priceDate: supplierInfo.priceDate || todayKey(),
     factorUsed: factors.steelKgPerSqFt,
     factorUnit: 'kg/sq.ft',
   });

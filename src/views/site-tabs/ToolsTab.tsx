@@ -1,3 +1,4 @@
+import { todayKey } from '../../utils/datetime';
 import React, { useState } from 'react';
 import {
   Wrench,
@@ -571,7 +572,7 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
                     paidAmount: 0,
                     balance: 500,
                     extraPaid: 0,
-                    purchaseDate: new Date().toISOString().slice(0, 10),
+                    purchaseDate: todayKey(),
                     isDeleted: false,
                     createdAt: '',
                     updatedAt: '',

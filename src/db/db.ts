@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import Dexie, { type Table } from 'dexie';
 import type {
   Site,
@@ -799,7 +800,7 @@ export class BuildingMistryDB extends Dexie {
     const existingCount = await this.materialPrices.count();
     if (existingCount > 0) return 0;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayKey();
     const quotes: MaterialPriceQuote[] = [
       // Cement
       {

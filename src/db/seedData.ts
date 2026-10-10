@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import { db } from './db';
 import type {
   Site,
@@ -18,7 +19,7 @@ import type {
 
 export async function loadDemoData(): Promise<void> {
   const now = new Date().toISOString();
-  const todayStr = now.slice(0, 10);
+  const todayStr = todayKey();
   const demoSiteId = 'demo-site-sri-murugan';
   const demoUserId = 'user-mistry-velu';
 

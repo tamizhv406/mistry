@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Zap, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -105,7 +106,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
           tableName: 'electricityBills',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: now.slice(0, 10),
+          date: todayKey(),
           notes: `Electricity bill payment for ${month.trim()}`,
           module: 'Electricity',
           userId: currentUser?.id,

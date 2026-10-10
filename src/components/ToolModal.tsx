@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Wrench, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -79,7 +80,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       setNotes(toolToEdit.notes || '');
       setImageUrl(toolToEdit.imageUrl || '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setToolName(COMMON_TOOLS[0]);
       setCustomName('');
       setQuantity('1');
@@ -133,7 +134,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       paidAmount: fin.paidAmount,
       balance: fin.balanceDue,
       extraPaid: fin.extraPaid,
-      purchaseDate: purchaseDate || now.slice(0, 10),
+      purchaseDate: purchaseDate || todayKey(),
       supplier: supplier.trim(),
       notes: notes.trim(),
       imageUrl: imageUrl || undefined,
@@ -153,7 +154,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
           tableName: 'tools',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: purchaseDate || now.slice(0, 10),
+          date: purchaseDate || todayKey(),
           notes: `Initial payment for Tool ${type}: ${finalName}`,
           module: 'Tool',
           userId: currentUser?.id,

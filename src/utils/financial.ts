@@ -1,3 +1,4 @@
+import { todayKey } from './datetime';
 import { db } from '../db/db';
 import type { PaymentTransaction, EntityTable } from '../db/types';
 
@@ -110,7 +111,7 @@ export async function recordPaymentTransaction(params: {
     siteId: params.siteId,
     relatedRecordId: params.relatedRecordId,
     module: params.module,
-    date: params.date || now.slice(0, 10),
+    date: params.date || todayKey(),
     amount: numAmount,
     paymentType: params.paymentType || 'Cash',
     notes: params.notes?.trim() || '',

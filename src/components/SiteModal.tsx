@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Building2, Save, Mic, MicOff, Sparkles, CheckCircle2 } from 'lucide-react';
 import { db } from '../db/db';
@@ -69,7 +70,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
       setArea('');
       setDistrict('');
       setBuildingType('Residential House');
-      setStartDate(new Date().toISOString().slice(0, 10));
+      setStartDate(todayKey());
       setExpectedCompletionDate('');
       setStatus('Active');
       setNotes('');
@@ -149,7 +150,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
       area: area.trim(),
       district: district.trim() || undefined,
       buildingType: buildingType.trim(),
-      startDate: startDate || now.slice(0, 10),
+      startDate: startDate || todayKey(),
       expectedCompletionDate: expectedCompletionDate || '',
       status,
       notes: notes.trim(),

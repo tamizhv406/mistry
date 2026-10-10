@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, UserCheck } from 'lucide-react';
 import { db } from '../db/db';
@@ -49,7 +50,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
       setCategory('PERIYAAL');
       setCustomCategory('');
       setDailyWage('900');
-      setJoiningDate(new Date().toISOString().slice(0, 10));
+      setJoiningDate(todayKey());
       setNotes('');
       setError('');
       setIsSubmitting(false);
@@ -94,7 +95,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
       phone: phone.trim(),
       category: finalCategory,
       dailyWage: numWage,
-      joiningDate: joiningDate || now.slice(0, 10),
+      joiningDate: joiningDate || todayKey(),
       notes: notes.trim(),
       isDeleted: false,
       createdAt: workerToEdit ? workerToEdit.createdAt : now,

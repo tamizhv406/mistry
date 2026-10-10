@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Coffee, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -44,7 +45,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
       setPaidAmount(expenseToEdit.paidAmount?.toString() || '0');
       setNotes(expenseToEdit.notes || '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setDate(today);
       setTeaExpense('120');
       setSnacksExpense('180');
@@ -86,7 +87,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
       id,
       userId: targetUserId,
       siteId,
-      date: date || now.slice(0, 10),
+      date: date || todayKey(),
       teaExpense: numTea,
       snacksExpense: numSnacks,
       juiceExpense: numJuice,
@@ -113,7 +114,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
           tableName: 'teaSnacksExpenses',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: date || now.slice(0, 10),
+          date: date || todayKey(),
           notes: notes ? `Tea Stall payment: ${notes}` : `Tea & Refreshments settlement`,
           module: 'TeaSnacks',
           userId: targetUserId,

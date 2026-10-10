@@ -1,7 +1,10 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Check, Save } from 'lucide-react';
 import { db } from '../db/db';
 import type { LabourWorker, AttendanceStatus } from '../db/types';
+import { getCurrentUser } from '../services/auth';
+import { markAttendance } from '../services/records';
 
 interface AttendanceModalProps {
   isOpen: boolean;
@@ -23,7 +26,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(todayKey());
   const [attendanceMap, setAttendanceMap] = useState<Record<string, WorkerAttendanceState>>({});
   const [loading, setLoading] = useState(false);
 
@@ -85,43 +88,21 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
   };
 
   const handleSave = async () => {
+    const user = getCurrentUser();
+    if (!user) {
+      alert('Please sign in again to save attendance.');
+      return;
+    }
     setLoading(true);
-    const now = new Date().toISOString();
 
     try {
-      // Find existing records for this site and date
-      const existing = await db.attendance
-        .where('siteId')
-        .equals(siteId)
-        .filter(a => !a.isDeleted && a.date === selectedDate)
-        .toArray();
-
-      const existingMap = new Map(existing.map(e => [e.workerId, e]));
-
-      const toSave = workers.map(w => {
+      // Saved one worker at a time through the shared service, which keeps the wage of the
+      // day, who marked it, and a log of any correction to an earlier mark.
+      for (const w of workers) {
         const state = attendanceMap[w.id] || { status: 'present', notes: '' };
-        const existingRecord = existingMap.get(w.id);
-
-        let multiplier = 1.0;
-        if (state.status === 'half_day') multiplier = 0.5;
-        else if (state.status === 'absent') multiplier = 0;
-        else if (state.status === 'overtime') multiplier = 1.5;
-
-        return {
-          id: existingRecord ? existingRecord.id : `att-${w.id}-${selectedDate}`,
-          siteId,
-          workerId: w.id,
-          date: selectedDate,
-          status: state.status,
-          dayMultiplier: multiplier,
-          notes: state.notes.trim(),
-          isDeleted: false,
-          createdAt: existingRecord ? existingRecord.createdAt : now,
-          updatedAt: now,
-        };
-      });
-
-      await db.attendance.bulkPut(toSave);
+        const res = await markAttendance(user, siteId, w, selectedDate, state.status, state.notes);
+        if (!res.ok) throw new Error(res.error);
+      }
       onSuccess(`Attendance recorded for ${workers.length} workers on ${selectedDate}`);
       onClose();
     } catch (err: any) {
@@ -160,6 +141,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
               <label style={{ fontWeight: 700, fontSize: '0.9rem' }}>Date:</label>
               <input
                 type="date"
+                max={todayKey()}
                 value={selectedDate}
                 onChange={e => setSelectedDate(e.target.value)}
                 style={{ width: 'auto' }}
@@ -222,7 +204,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                     </div>
 
                     {/* Status Toggle Buttons */}
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                       <button
                         type="button"
                         onClick={() => handleStatusChange(w.id, 'present')}
@@ -269,6 +251,22 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                         }}
                       >
                         Overtime (1.5)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleStatusChange(w.id, 'leave')}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          backgroundColor: current.status === 'leave' ? '#1d4ed8' : '#f1f5f9',
+                          color: current.status === 'leave' ? '#ffffff' : '#475569',
+                          border: current.status === 'leave' ? '1px solid #1e40af' : '1px solid #cbd5e1',
+                        }}
+                      >
+                        Leave
                       </button>
 
                       <button

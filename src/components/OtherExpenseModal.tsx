@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Wallet, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -50,7 +51,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
       setPaidAmount(expenseToEdit.paidAmount.toString());
       setNotes(expenseToEdit.notes || '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setDate(today);
       setCategory('Transport');
       setDescription('Scaffolding pipe transport lorry');
@@ -88,7 +89,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
     const record: OtherExpense = {
       id,
       siteId,
-      date: date || now.slice(0, 10),
+      date: date || todayKey(),
       category,
       description: description.trim(),
       amount: numAmount,
@@ -113,7 +114,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
           tableName: 'otherExpenses',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: date || now.slice(0, 10),
+          date: date || todayKey(),
           notes: `${category}: ${description.trim()}`,
           module: 'OtherExpense',
           userId: currentUser?.id,

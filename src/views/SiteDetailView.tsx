@@ -994,6 +994,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           advances={advances}
           salaryPayments={salaryPayments}
           initialSubTab={labourSubTab}
+          leavePaid={site.leavePaid}
           onOpenWorkerModal={onOpenWorkerModal}
           onOpenAttendanceModal={onOpenAttendanceModal}
           onOpenAdvanceModal={onOpenAdvanceModal}

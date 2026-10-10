@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Layers, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -70,7 +71,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
         setCustomBrand(materialToEdit.brand);
       }
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setPurchaseDate(today);
       setPaidAmount('0'); // Default: Paid Amount = 0 as instructed
       setPaymentMode('Cash');
@@ -177,7 +178,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
       paidAmount: fin.paidAmount,
       balance: fin.balanceDue,
       extraPaid: fin.extraPaid,
-      purchaseDate: purchaseDate || now.slice(0, 10),
+      purchaseDate: purchaseDate || todayKey(),
       invoiceNumber: invoiceNumber.trim(),
       notes: notes.trim(),
       isDeleted: false,
@@ -197,7 +198,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
           tableName: 'materials',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: purchaseDate || now.slice(0, 10),
+          date: purchaseDate || todayKey(),
           notes: invoiceNumber ? `Invoice ${invoiceNumber} payment` : `Initial payment for ${finalName}`,
           module: 'Material',
           userId: currentUser?.id,

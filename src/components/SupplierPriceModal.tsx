@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Tag, IndianRupee, MapPin, Building, Calendar, Check, AlertCircle } from 'lucide-react';
 import { db } from '../db/db';
@@ -27,7 +28,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
   const [supplier, setSupplier] = useState('');
   const [district, setDistrict] = useState('Coimbatore');
   const [area, setArea] = useState('');
-  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10));
+  const [effectiveDate, setEffectiveDate] = useState(todayKey());
   const [source, setSource] = useState('Retail Shop');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -43,7 +44,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
       setSupplier(priceToEdit.supplier || '');
       setDistrict(priceToEdit.district || 'Coimbatore');
       setArea(priceToEdit.area || '');
-      setEffectiveDate(priceToEdit.effectiveDate || new Date().toISOString().slice(0, 10));
+      setEffectiveDate(priceToEdit.effectiveDate || todayKey());
       setSource(priceToEdit.source || 'Retail Shop');
     } else {
       setMaterial(defaultMaterial);
@@ -55,7 +56,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
       setSupplier('');
       setDistrict('Coimbatore');
       setArea('');
-      setEffectiveDate(new Date().toISOString().slice(0, 10));
+      setEffectiveDate(todayKey());
       setSource('Retail Shop');
     }
     setError(null);
@@ -88,7 +89,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
     try {
       setSaving(true);
       const id = priceToEdit ? priceToEdit.id : `price-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      const now = new Date().toISOString().slice(0, 10);
+      const now = todayKey();
 
       const quote: MaterialPriceQuote = {
         id,

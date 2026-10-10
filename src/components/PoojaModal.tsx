@@ -1,3 +1,4 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Sparkles, ArrowUpRight } from 'lucide-react';
 import { db } from '../db/db';
@@ -62,7 +63,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
       setPaidAmount(poojaToEdit.paidAmount.toString());
       setNotes(poojaToEdit.notes || '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayKey();
       setDate(today);
       setPoojaName(COMMON_POOJAS[0]);
       setCustomPoojaName('');
@@ -109,7 +110,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
       id,
       siteId,
       poojaName: finalName,
-      date: date || now.slice(0, 10),
+      date: date || todayKey(),
       materialsExpense: numMat,
       priestExpense: numPriest,
       otherExpense: numOther,
@@ -135,7 +136,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
           tableName: 'poojaExpenses',
           amount: fin.paidAmount,
           paymentType: paymentMode,
-          date: date || now.slice(0, 10),
+          date: date || todayKey(),
           notes: `Pooja payment for ${finalName}`,
           module: 'Pooja',
           userId: currentUser?.id,

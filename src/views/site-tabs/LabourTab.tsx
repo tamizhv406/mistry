@@ -28,6 +28,7 @@ import {
 } from '../../components/ui/interactive-hover-links';
 import { ItemDetailsModal, type DetailField } from '../../components/ui/ItemDetailsModal';
 import { getWorkerVisual } from '../../utils/constructionVisuals';
+import { buildWorkerLedger } from '../../domain/salary';
 
 interface LabourTabProps {
   siteId: string;
@@ -36,6 +37,8 @@ interface LabourTabProps {
   advances: LabourAdvance[];
   salaryPayments: SalaryPayment[];
   initialSubTab?: 'salary' | 'roster' | 'attendance' | 'advances';
+  /** Site pay rule for Leave days; undefined means not chosen yet (leave counted as unpaid). */
+  leavePaid?: boolean;
   onOpenWorkerModal: (worker?: LabourWorker) => void;
   onOpenAttendanceModal: () => void;
   onOpenAdvanceModal: (advance?: LabourAdvance) => void;
@@ -53,6 +56,7 @@ export const LabourTab: React.FC<LabourTabProps> = ({
   advances,
   salaryPayments,
   initialSubTab = 'salary',
+  leavePaid,
   onOpenWorkerModal,
   onOpenAttendanceModal,
   onOpenAdvanceModal,
@@ -92,26 +96,16 @@ export const LabourTab: React.FC<LabourTabProps> = ({
   }, [initialSubTab]);
 
   // Compute live salary ledger for every worker based on ACTUAL attendance & RECOVERABLE advances!
+  // All figures come from the shared salary ledger (src/domain/salary.ts).
   const workerLedgers = workers.map(w => {
-    const wAtt = attendance.filter(a => a.workerId === w.id);
-    const wAdv = advances.filter(a => a.workerId === w.id);
-    const wSal = salaryPayments.filter(s => s.workerId === w.id);
-
-    const daysWorked = wAtt.reduce((acc, a) => acc + (a.dayMultiplier || 0), 0);
-    const grossSalary = Math.round(daysWorked * (Number(w.dailyWage) || 0));
-    
-    // STRICT RECOVERABLE LOGIC: Deduct ONLY Recoverable advances from salary balance
-    const recoverableAdvances = wAdv.filter(a => a.advanceType !== 'Non-Recoverable');
-    const nonRecoverableAdvances = wAdv.filter(a => a.advanceType === 'Non-Recoverable');
-    const totalRecoverableAdvance = recoverableAdvances.reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
-    const totalNonRecoverableAdvance = nonRecoverableAdvances.reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
-
-    const totalPaid = wSal.reduce((acc, s) => acc + (Number(s.paidAmount) || 0), 0);
-    const totalSettled = totalPaid + totalRecoverableAdvance;
-
-    // Financial formulas: no negative balance
-    const balanceDue = Math.max(0, grossSalary - totalSettled);
-    const extraPaid = Math.max(0, totalSettled - grossSalary);
+    const ledger = buildWorkerLedger(w, attendance, advances, salaryPayments, { leavePaid });
+    const daysWorked = ledger.workedDayEquivalents;
+    const grossSalary = ledger.earned;
+    const totalRecoverableAdvance = ledger.recoverableAdvances;
+    const totalNonRecoverableAdvance = ledger.nonRecoverableAdvances;
+    const totalPaid = ledger.salaryPaid;
+    const balanceDue = ledger.pending;
+    const extraPaid = ledger.overpaid;
 
     return {
       worker: w,
@@ -346,10 +340,10 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                           id: l.worker.id,
                           title: l.worker.name,
                           tamilTitle: vis.tamilName,
-                          description: `${l.worker.category} • ₹{l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
+                          description: `${l.worker.category} • ₹${l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
                           imageUrl: l.worker.imageUrl || vis.imageUrl,
                           imageAlt: l.worker.name,
-                          badge: `${l.worker.category} • ₹{l.worker.dailyWage}/d`,
+                          badge: `${l.worker.category} • ₹${l.worker.dailyWage}/d`,
                           badgeVariant:
                             catName === 'MISTRY'
                               ? 'primary'
@@ -359,21 +353,21 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                           stats: [
                             {
                               label: 'Gross Salary',
-                              value: `₹{l.grossSalary.toLocaleString('en-IN')}`,
+                              value: `₹${l.grossSalary.toLocaleString('en-IN')}`,
                             },
                             {
                               label: 'Advance Taken',
-                              value: `₹{l.totalRecoverableAdvance.toLocaleString('en-IN')}`,
+                              value: `₹${l.totalRecoverableAdvance.toLocaleString('en-IN')}`,
                               color: l.totalRecoverableAdvance > 0 ? '#f87171' : '#94a3b8',
                             },
                             {
                               label: 'Paid Amount',
-                              value: `₹{l.totalPaid.toLocaleString('en-IN')}`,
+                              value: `₹${l.totalPaid.toLocaleString('en-IN')}`,
                               color: '#34d399',
                             },
                             {
                               label: 'Balance Due',
-                              value: `₹{l.balanceDue.toLocaleString('en-IN')}`,
+                              value: `₹${l.balanceDue.toLocaleString('en-IN')}`,
                               color: l.balanceDue > 0 ? '#f87171' : '#34d399',
                             },
                           ],
@@ -412,7 +406,7 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                           id: l.worker.id,
                           title: l.worker.name,
                           tamilTitle: vis.tamilName,
-                          description: `${l.worker.category} • ₹{l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
+                          description: `${l.worker.category} • ₹${l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
                           imageUrl: l.worker.imageUrl || vis.imageUrl,
                           imageAlt: l.worker.name,
                           badge: l.worker.category,
@@ -420,21 +414,21 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                           stats: [
                             {
                               label: 'Gross Salary',
-                              value: `₹{l.grossSalary.toLocaleString('en-IN')}`,
+                              value: `₹${l.grossSalary.toLocaleString('en-IN')}`,
                             },
                             {
                               label: 'Advance Taken',
-                              value: `₹{l.totalRecoverableAdvance.toLocaleString('en-IN')}`,
+                              value: `₹${l.totalRecoverableAdvance.toLocaleString('en-IN')}`,
                               color: l.totalRecoverableAdvance > 0 ? '#f87171' : '#94a3b8',
                             },
                             {
                               label: 'Paid Amount',
-                              value: `₹{l.totalPaid.toLocaleString('en-IN')}`,
+                              value: `₹${l.totalPaid.toLocaleString('en-IN')}`,
                               color: '#34d399',
                             },
                             {
                               label: 'Balance Due',
-                              value: `₹{l.balanceDue.toLocaleString('en-IN')}`,
+                              value: `₹${l.balanceDue.toLocaleString('en-IN')}`,
                               color: l.balanceDue > 0 ? '#f87171' : '#34d399',
                             },
                           ],

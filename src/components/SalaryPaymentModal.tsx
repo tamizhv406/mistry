@@ -1,9 +1,13 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, Coins, ArrowUpRight, CheckCircle, ShieldCheck } from 'lucide-react';
 import { db } from '../db/db';
 import type { LabourWorker, SalaryPayment, AttendanceRecord, LabourAdvance } from '../db/types';
-import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { calculateFinancialBalance } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
+import { buildWorkerLedger } from '../domain/salary';
+import { saveSalaryPayment } from '../services/records';
 
 interface SalaryPaymentModalProps {
   isOpen: boolean;
@@ -47,7 +51,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       setPeriodNotes(paymentToEdit.notes || '');
     } else {
       setWorkerId(workers[0]?.id || '');
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(todayKey());
       setPaidAmount('0'); // Default: Paid Amount = 0
       setPaymentMode('Cash');
       setPeriodNotes('');
@@ -56,29 +60,26 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
     }
   }, [paymentToEdit, isOpen, workers]);
 
-  // Compute stats for selected worker
+  const site = useLiveQuery(() => db.sites.get(siteId), [siteId]);
+
+  // Figures for the selected worker come from the shared salary ledger (src/domain/salary.ts).
+  // When correcting a payment, that payment is left out so the form shows what was due before it.
   const selectedWorker = workers.find(w => w.id === workerId);
-  const workerAttendance = attendance.filter(a => a.workerId === workerId);
-  const workerAdvances = advances.filter(a => a.workerId === workerId);
-  const workerPayments = pastPayments.filter(p => p.workerId === workerId && (!paymentToEdit || p.id !== paymentToEdit.id));
+  const ledger = buildWorkerLedger(
+    selectedWorker || { id: workerId, dailyWage: 0 },
+    attendance,
+    advances,
+    pastPayments.filter(p => !paymentToEdit || p.id !== paymentToEdit.id),
+    { leavePaid: site?.leavePaid }
+  );
 
-  const totalDaysWorked = workerAttendance.reduce((acc, a) => acc + (a.dayMultiplier || 0), 0);
+  const totalDaysWorked = ledger.workedDayEquivalents;
   const dailyWage = selectedWorker?.dailyWage || 0;
-  const grossSalary = Math.round(totalDaysWorked * dailyWage);
-
-  // LABOUR ADVANCE RULE:
-  // Recoverable advance: Include it in salary deduction/balance calculations.
-  // No Return / Non-Recoverable: Never deduct it from salary!
-  const recoverableAdvances = workerAdvances
-    .filter(a => a.advanceType === 'Recoverable')
-    .reduce((acc, a) => acc + (a.amount || 0), 0);
-
-  const nonRecoverableAdvances = workerAdvances
-    .filter(a => a.advanceType !== 'Recoverable')
-    .reduce((acc, a) => acc + (a.amount || 0), 0);
-
-  const totalAlreadyPaid = workerPayments.reduce((acc, p) => acc + (p.paidAmount || 0), 0);
-  const netPayableWage = Math.max(0, grossSalary - recoverableAdvances - totalAlreadyPaid);
+  const grossSalary = ledger.earned;
+  const recoverableAdvances = ledger.recoverableAdvances;
+  const nonRecoverableAdvances = ledger.nonRecoverableAdvances;
+  const totalAlreadyPaid = ledger.salaryPaid;
+  const netPayableWage = ledger.pending;
 
   const numPaid = Math.max(0, parseFloat(paidAmount) || 0);
   const fin = calculateFinancialBalance(netPayableWage, numPaid);
@@ -93,49 +94,45 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       setError('Please select a worker.');
       return;
     }
-    if (numPaid < 0) {
-      setError('Payment amount cannot be negative.');
+    if (!(numPaid > 0)) {
+      setError('Enter a payment amount greater than ₹0.');
+      return;
+    }
+    if (!currentUser) {
+      setError('Please sign in again to record a payment.');
       return;
     }
 
-    const now = new Date().toISOString();
-    const id = paymentToEdit ? paymentToEdit.id : `sal-${Date.now()}`;
-
-    const paymentRecord: SalaryPayment = {
-      id,
-      siteId,
-      workerId,
-      date: date || now.slice(0, 10),
-      daysWorked: totalDaysWorked,
-      grossSalary,
-      advanceDeducted: recoverableAdvances,
-      paidAmount: numPaid,
-      balance: fin.balanceDue,
-      extraPaid: fin.extraPaid,
-      paymentMode,
-      notes: periodNotes.trim(),
-      isDeleted: false,
-      createdAt: paymentToEdit ? paymentToEdit.createdAt : now,
-      updatedAt: now,
-    };
-
     setIsSubmitting(true);
     try {
-      await db.salaryPayments.put(paymentRecord);
-
-      // Record individual payment transaction if payment amount > 0
-      if (numPaid > 0) {
-        await recordPaymentTransaction({
-          siteId,
-          relatedRecordId: id,
-          tableName: 'salaryPayments',
+      // The shared service keeps a single ledger row per payment, so correcting an amount
+      // replaces it instead of adding to it, and an identical repeat entry is stopped.
+      let res = await saveSalaryPayment(currentUser, siteId, {
+        id: paymentToEdit?.id,
+        workerId,
+        date: date || todayKey(),
+        amount: numPaid,
+        paymentMode,
+        notes: periodNotes.trim(),
+      });
+      if (!res.ok && res.duplicateOf) {
+        const again = window.confirm(
+          `A salary payment of ₹${numPaid.toLocaleString('en-IN')} to ${selectedWorker?.name || 'this worker'} on this date is already recorded.\n\nRecord a second, separate payment?`
+        );
+        if (!again) return;
+        res = await saveSalaryPayment(currentUser, siteId, {
+          id: paymentToEdit?.id,
+          workerId,
+          date: date || todayKey(),
           amount: numPaid,
-          paymentType: paymentMode,
-          date: date || now.slice(0, 10),
-          notes: `Salary payment to ${selectedWorker?.name}: ${periodNotes.trim() || 'Wage disbursement'}`,
-          module: 'Salary',
-          userId: currentUser?.id,
+          paymentMode,
+          notes: periodNotes.trim(),
+          allowDuplicate: true,
         });
+      }
+      if (!res.ok) {
+        setError(res.error);
+        return;
       }
 
       onSuccess(

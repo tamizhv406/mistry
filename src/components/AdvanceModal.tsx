@@ -1,9 +1,11 @@
+import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Save, IndianRupee, AlertCircle, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { db } from '../db/db';
 import type { LabourWorker, LabourAdvance } from '../db/types';
 import { recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
+import { saveAdvance } from '../services/records';
 
 interface AdvanceModalProps {
   isOpen: boolean;
@@ -44,7 +46,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       setNotes(advanceToEdit.notes || '');
     } else {
       setWorkerId(workers[0]?.id || '');
-      setDate(new Date().toISOString().slice(0, 10));
+      setDate(todayKey());
       setAmount('');
       // As required: "Never automatically assume an advance is recoverable" -> Require explicit selection
       setAdvanceType('');
@@ -77,40 +79,38 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       return;
     }
 
-    const now = new Date().toISOString();
-    const id = advanceToEdit ? advanceToEdit.id : `adv-${Date.now()}`;
     const selectedWorker = workers.find(w => w.id === workerId);
-
-    const record: LabourAdvance = {
-      id,
-      siteId,
-      workerId,
-      date: date || now.slice(0, 10),
-      amount: numAmount,
-      advanceType,
-      reason: reason.trim(),
-      notes: notes.trim(),
-      isDeleted: false,
-      createdAt: advanceToEdit ? advanceToEdit.createdAt : now,
-      updatedAt: now,
-    };
+    if (!currentUser) {
+      setError('Please sign in again to record an advance.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      await db.labourAdvances.put(record);
-
-      // Record individual payment transaction
-      await recordPaymentTransaction({
-        siteId,
-        relatedRecordId: id,
-        tableName: 'labourAdvances',
+      // The shared service keeps one ledger row per advance (a correction replaces it rather
+      // than adding a second row) and stops an identical repeat entry.
+      const input = {
+        id: advanceToEdit?.id,
+        workerId,
+        date: date || todayKey(),
         amount: numAmount,
-        paymentType: paymentMode,
-        date: date || now.slice(0, 10),
-        notes: `Advance to ${selectedWorker?.name} (${advanceType}): ${reason.trim()}`,
-        module: 'Advance',
-        userId: currentUser?.id,
-      });
+        advanceType: advanceType as 'Recoverable' | 'Non-Recoverable',
+        paymentMode,
+        reason: reason.trim(),
+        notes: notes.trim(),
+      };
+      let res = await saveAdvance(currentUser, siteId, input);
+      if (!res.ok && res.duplicateOf) {
+        const again = window.confirm(
+          `An advance of ₹${numAmount.toLocaleString('en-IN')} to ${selectedWorker?.name || 'this worker'} on this date is already recorded.\n\nRecord a second, separate advance?`
+        );
+        if (!again) return;
+        res = await saveAdvance(currentUser, siteId, { ...input, allowDuplicate: true });
+      }
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
 
       onSuccess(
         advanceToEdit
