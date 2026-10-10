@@ -107,19 +107,31 @@ export async function getFloorPlanById(
 export async function updateFloorPlan(
   user: User,
   planId: string,
-  data: Partial<Omit<FloorPlan, 'id' | 'userId' | 'createdAt'>>
-): Promise<{ success: boolean; error?: string }> {
-  const plan = await db.floorPlans.get(planId);
-  if (!plan) return { success: false, error: 'Floor plan not found.' };
-  if (!isElevatedUser(user) && plan.userId !== user.id) {
-    return { success: false, error: 'Access Denied: You cannot edit this floor plan.' };
-  }
+  data: Partial<Omit<FloorPlan, 'id' | 'userId' | 'createdAt'>>,
+  /** The revision this change was made from. Omit only for changes that can not conflict. */
+  expectedRevision?: number
+): Promise<{ success: boolean; error?: string; conflict?: boolean; revision?: number }> {
   try {
-    await db.floorPlans.update(planId, {
-      ...data,
-      updatedAt: new Date().toISOString(),
+    // Read, check and write in one transaction, so two saves can not interleave.
+    return await db.transaction('rw', db.floorPlans, async () => {
+      const plan = await db.floorPlans.get(planId);
+      if (!plan) return { success: false, error: 'Floor plan not found.' };
+      if (!isElevatedUser(user) && plan.userId !== user.id) {
+        return { success: false, error: 'Access Denied: You cannot edit this floor plan.' };
+      }
+      const stored = plan.revision || 0;
+      if (expectedRevision !== undefined && expectedRevision !== stored) {
+        return {
+          success: false,
+          conflict: true,
+          revision: stored,
+          error: 'This plan was changed somewhere else (another tab or device) after you opened it.',
+        };
+      }
+      const revision = stored + 1;
+      await db.floorPlans.update(planId, { ...data, revision, updatedAt: new Date().toISOString() });
+      return { success: true, revision };
     });
-    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Failed to update floor plan.' };
   }

@@ -850,7 +850,10 @@ export interface FloorPlan {
   ceilingHeight?: number; // e.g. 10 ft
   status?: 'draft' | 'completed';
   notes?: string;
-  thumbnailDataUrl?: string;  // PNG thumbnail (not the full geometry)
+  thumbnailDataUrl?: string;  // small self-contained preview (data URL)
+  // Counts saves. A save must name the revision it started from; if the stored revision has
+  // moved on (another tab or device saved first) the save is refused instead of overwriting.
+  revision?: number;
   isDeleted: boolean;
   deletedAt?: string;
   createdAt: string;

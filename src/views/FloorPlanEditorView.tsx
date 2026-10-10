@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback, useReducer, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useReducer, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import {
   ArrowLeft, Save, Undo2, Redo2, ZoomIn, ZoomOut, Maximize2,
   Trash2, Copy, MousePointer2, Pencil, Square, DoorOpen, AppWindow,
@@ -723,9 +724,20 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const dragStartStateRef = useRef<EditorState | null>(null);
   const jointDragRef = useRef<{ walls: FloorPlanWall[]; origin: { x: number; y: number } } | null>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pendingSelectRef = useRef<SelectedElement>(null);
+  const pendingViewRef = useRef<{ panX: number; panY: number; zoom: number } | null>(null);
+  const pendingMoveRef = useRef<{ x: number; y: number; shiftKey: boolean; altKey: boolean } | null>(null);
+  const moveFrameRef = useRef(0);
+  const latestInputRef = useRef<{
+    handleMouseDown: (e: React.MouseEvent<SVGSVGElement>) => void;
+    handleMouseMove: (e: React.MouseEvent<SVGSVGElement>) => void;
+    handleMouseUp: () => void;
+    isDrawingWall: boolean;
+  }>({ handleMouseDown: () => {}, handleMouseMove: () => {}, handleMouseUp: () => {}, isDrawingWall: false });
   const gestureRef = useRef<{
     kind: 'none' | 'single' | 'pinch';
     onElement: boolean;
+    pendingSelect: SelectedElement;
     downAt: { x: number; y: number };
     moved: boolean;
     dragDrawing: boolean;
@@ -734,7 +746,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     startDist: number;
     startZoom: number;
     anchor: { x: number; y: number };
-  }>({ kind: 'none', onElement: false, downAt: { x: 0, y: 0 }, moved: false, dragDrawing: false, panning: false, waitForAllUp: false, startDist: 1, startZoom: 1, anchor: { x: 0, y: 0 } });
+  }>({ kind: 'none', onElement: false, pendingSelect: null, downAt: { x: 0, y: 0 }, moved: false, dragDrawing: false, panning: false, waitForAllUp: false, startDist: 1, startZoom: 1, anchor: { x: 0, y: 0 } });
 
   // Layer Helpers
   const isLayerVisible = useCallback((layerId?: string) => {
@@ -778,6 +790,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         historyRef.current = new PlanHistory(UNDO_HISTORY_LIMIT);
         activeFloorIdRef.current = initialFloors[0].id;
         historyRef.current.reset(initialFloors[0].id, state);
+        revisionRef.current = loaded.revision || 0;
+        conflictRef.current = false;
+        setSaveConflict(false);
         setHistoryTick(t => t + 1);
         setSaveStatus('saved');
 
@@ -889,6 +904,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     markUnsaved();
   }, [markUnsaved]);
 
+  useLayoutEffect(() => {
+    if (!pendingViewRef.current && svgRef.current) svgRef.current.style.transform = '';
+  }, [panX, panY, zoom]);
+
   // ── Coordinate Conversion ────────────────────────────
 
   const svgToWorld = useCallback(
@@ -908,54 +927,116 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   latestRef.current = { plan, floors: floorLevels, activeIndex: activeFloorIndex, state: editorState, dirty: saveStatus !== 'saved' };
   const saveSeqRef = useRef(0);
+  const revisionRef = useRef(0);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const saveQueuedRef = useRef<{ announce: boolean } | null>(null);
+  const conflictRef = useRef(false);
+  const [saveConflict, setSaveConflict] = useState(false);
 
   /**
    * Writes every floor to the database. Always reads the latest drawing, so it is safe to call
    * from a timer, from the Back button or while the page is being closed.
    * `announce` is true only when the user pressed Save; autosave reports through the status chip.
    */
-  const saveNow = useCallback(async (announce = false): Promise<boolean> => {
-    const { plan: p, floors, activeIndex, state } = latestRef.current;
-    if (!p) return false;
-    const seq = ++saveSeqRef.current;
-    setSaving(true);
-    setSaveStatus('saving');
-    try {
-      const payload = buildSavePayload(p, floors, activeIndex, state);
-      const res = await updateFloorPlan(user, p.id, payload);
-      if (seq !== saveSeqRef.current) return res.success; // a newer save has started
-      if (res.success) {
-        // If the drawing changed while this save was in flight, it is still unsaved.
-        const stillSame = latestRef.current.state === state && latestRef.current.floors === floors;
-        setSaveStatus(stillSame ? 'saved' : 'unsaved');
-        if (announce) onNotify('Floor plan saved', 'success');
-      } else {
+  const saveNow = useCallback(async (announce = false, overwrite = false): Promise<boolean> => {
+    // One save at a time. A save asked for while another is running is not started in
+    // parallel; it runs once, right after, with whatever is newest by then.
+    if (saveInFlightRef.current) {
+      saveQueuedRef.current = saveQueuedRef.current || { announce: false };
+      saveQueuedRef.current.announce = saveQueuedRef.current.announce || announce;
+      return saveInFlightRef.current;
+    }
+    const run = async (): Promise<boolean> => {
+      const { plan: p, floors, activeIndex, state } = latestRef.current;
+      if (!p || conflictRef.current) return false;
+      saveSeqRef.current += 1;
+      setSaving(true);
+      setSaveStatus('saving');
+      try {
+        const payload = buildSavePayload(p, floors, activeIndex, state);
+        // The revision check refuses the save if another tab or device saved this plan first,
+        // instead of silently overwriting their newer work.
+        const res = await updateFloorPlan(user, p.id, payload, overwrite ? undefined : revisionRef.current);
+        if (res.success) {
+          revisionRef.current = res.revision ?? revisionRef.current + 1;
+          // If the drawing changed while this save was in flight, it is still unsaved.
+          const stillSame = latestRef.current.state === state && latestRef.current.floors === floors;
+          setSaveStatus(stillSame ? 'saved' : 'unsaved');
+          if (announce) onNotify('Floor plan saved', 'success');
+          return true;
+        }
         setSaveStatus('unsaved');
-        onNotify(res.error || 'The plan could not be saved. Your drawing is still open; try Save again.', 'error');
-      }
-      return res.success;
-    } catch (err) {
-      if (seq === saveSeqRef.current) {
+        if (res.conflict) {
+          conflictRef.current = true;
+          setSaveConflict(true);
+        } else {
+          onNotify(res.error || 'The plan could not be saved. Your drawing is still open; try Save again.', 'error');
+        }
+        return false;
+      } catch (err) {
         setSaveStatus('unsaved');
         onNotify('The plan could not be saved: ' + (err as Error).message, 'error');
+        return false;
+      } finally {
+        setSaving(false);
       }
-      return false;
-    } finally {
-      if (seq === saveSeqRef.current) setSaving(false);
-    }
+    };
+    const flight = run().finally(() => {
+      saveInFlightRef.current = null;
+      const queued = saveQueuedRef.current;
+      saveQueuedRef.current = null;
+      if (queued && latestRef.current.dirty && !conflictRef.current) void saveNow(queued.announce);
+    });
+    saveInFlightRef.current = flight;
+    return flight;
   }, [user, onNotify]);
+
+  /** After a conflict: keep this device's drawing (overwrite) or load the other one. */
+  const resolveConflict = useCallback(async (keepMine: boolean) => {
+    const p = latestRef.current.plan;
+    if (!p) return;
+    if (keepMine) {
+      conflictRef.current = false;
+      setSaveConflict(false);
+      const ok = await saveNow(true, true);
+      if (!ok) onNotify('Your version could not be saved. Try again.', 'error');
+      return;
+    }
+    try {
+      const fresh = await getFloorPlanById(user, p.id);
+      if (!fresh) throw new Error('The plan is no longer available.');
+      const floors = loadFloors(fresh);
+      const state = levelToState(floors[0]);
+      setPlan(fresh);
+      setFloorLevels(floors);
+      setActiveFloorIndex(0);
+      dispatch({ type: 'SET_STATE', payload: state });
+      historyRef.current = new PlanHistory(UNDO_HISTORY_LIMIT);
+      activeFloorIdRef.current = floors[0].id;
+      historyRef.current.reset(floors[0].id, state);
+      revisionRef.current = fresh.revision || 0;
+      setHistoryTick(t => t + 1);
+      setSelectedElement(null);
+      conflictRef.current = false;
+      setSaveConflict(false);
+      setSaveStatus('saved');
+      onNotify('Loaded the other version of this plan', 'info');
+    } catch (err) {
+      onNotify('The other version could not be loaded: ' + (err as Error).message, 'error');
+    }
+  }, [user, onNotify, saveNow]);
 
   const handleSave = useCallback(() => { void saveNow(true); }, [saveNow]);
 
   // Autosave shortly after the last change.
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (saveStatus === 'unsaved' && plan) {
+    if (saveStatus === 'unsaved' && plan && !saveConflict) {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
       autoSaveTimer.current = setTimeout(() => { void saveNow(false); }, 1500);
     }
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
-  }, [editorState, floorLevels, saveStatus, saveNow, plan]);
+  }, [editorState, floorLevels, saveStatus, saveNow, plan, saveConflict]);
 
   // Never lose the last few seconds of work: save when the app goes to the background, when
   // the page is closed or refreshed, and when the editor itself is left.
@@ -2365,6 +2446,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           }
         } else if (type === 'room') {
           const snap = dragElementSnapshot as FloorPlanRoom;
+          if (snap.fromWalls) return; // move its walls instead; the room follows them
           dispatch({
             type: 'UPDATE_ROOM', id,
             changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) },
@@ -2668,6 +2750,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       id: string
     ) => {
       if (activeTool !== 'select') return;
+      // On a touch screen a drag that happens to start on a wall or room must not move it.
+      // The first tap selects; only an element that is already selected can be dragged.
+      if ((e as React.PointerEvent).pointerType === 'touch' && selectedElement?.id !== id) {
+        pendingSelectRef.current = { type, id } as SelectedElement;
+        return;
+      }
       // Tell the canvas handler that this press landed on an element (so it does not start
       // panning), while still letting it track the pointer for pinch detection.
       elementHitRef.current = true;
@@ -2709,7 +2797,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setDragHostedOpeningsSnapshot(null);
       }
     },
-    [activeTool, getSvgPos, editorState]
+    [activeTool, getSvgPos, editorState, selectedElement]
   );
 
   // ── Pointer input: mouse, touch and pen through one path ──────────────
@@ -2742,14 +2830,75 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     ? { onPointerDown: (e: React.PointerEvent) => beginJointDrag(e, wall, endpoint) }
     : { onMouseDown: (e: React.MouseEvent) => beginJointDrag(e, wall, endpoint) });
 
-  const fakeMouse = (x: number, y: number) => ({
-    clientX: x, clientY: y, button: 0, buttons: 1, shiftKey: false, altKey: false,
+  const fakeMouse = (x: number, y: number, shiftKey = false, altKey = false) => ({
+    clientX: x, clientY: y, button: 0, buttons: 1, shiftKey, altKey,
     preventDefault: () => {}, stopPropagation: () => {},
   }) as unknown as React.MouseEvent<SVGSVGElement>;
+
+  // The newest handlers, for code that runs after this render (animation frames, flushes).
+  latestInputRef.current = { handleMouseDown, handleMouseMove, handleMouseUp, isDrawingWall };
+
+  // ── Smooth view gestures ───────────────────────────────────────────────
+  // Re-rendering a large plan for every finger movement is slow (profiled: ~170 ms per move
+  // for 260 walls on a mid-range phone). While panning or pinching, the drawing is therefore
+  // moved with a CSS transform only, and the new pan/zoom is written to state once, when the
+  // gesture ends. `pendingViewRef` holds the view that is on screen but not yet in state.
+  const showPendingView = (view: { panX: number; panY: number; zoom: number }) => {
+    pendingViewRef.current = view;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const s = view.zoom / zoom;
+    svg.style.transformOrigin = '0 0';
+    svg.style.transform = `translate(${view.panX - s * panX}px, ${view.panY - s * panY}px) scale(${s})`;
+  };
+
+  const commitPendingView = () => {
+    const view = pendingViewRef.current;
+    pendingViewRef.current = null;
+    if (!view) return;
+    if (view.panX === panX && view.panY === panY && view.zoom === zoom) {
+      if (svgRef.current) svgRef.current.style.transform = '';
+      return;
+    }
+    // The transform is cleared in a layout effect, in the same frame as the re-render.
+    setZoom(view.zoom);
+    setPanX(view.panX);
+    setPanY(view.panY);
+  };
+
+  // ── One move per animation frame ───────────────────────────────────────
+  // Pointer moves can arrive faster than the plan can re-render. Only the latest position
+  // is processed each frame, so the drawing never falls behind the finger.
+  const queueMove = (x: number, y: number, shiftKey = false, altKey = false) => {
+    pendingMoveRef.current = { x, y, shiftKey, altKey };
+    if (moveFrameRef.current) return;
+    moveFrameRef.current = requestAnimationFrame(() => {
+      moveFrameRef.current = 0;
+      const m = pendingMoveRef.current;
+      pendingMoveRef.current = null;
+      if (m) latestInputRef.current.handleMouseMove(fakeMouse(m.x, m.y, m.shiftKey, m.altKey));
+    });
+  };
+
+  /** Applies a still-waiting move now and re-renders, so "up" sees the final position. */
+  const flushMove = () => {
+    if (moveFrameRef.current) {
+      cancelAnimationFrame(moveFrameRef.current);
+      moveFrameRef.current = 0;
+    }
+    const m = pendingMoveRef.current;
+    pendingMoveRef.current = null;
+    if (m) flushSync(() => latestInputRef.current.handleMouseMove(fakeMouse(m.x, m.y, m.shiftKey, m.altKey)));
+  };
 
   /** Undoes whatever a single finger had started, so a pinch never leaves a mark on the plan. */
   const cancelSingleGesture = () => {
     const g = gestureRef.current;
+    if (moveFrameRef.current) {
+      cancelAnimationFrame(moveFrameRef.current);
+      moveFrameRef.current = 0;
+    }
+    pendingMoveRef.current = null;
     if ((isDragging || resizingWall) && dragStartStateRef.current) {
       dispatch({ type: 'SET_STATE', payload: dragStartStateRef.current });
     }
@@ -2777,16 +2926,20 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const pinchPoints = () => {
     const [a, b] = Array.from(pointersRef.current.values());
     const rect = svgRef.current!.getBoundingClientRect();
+    // The rectangle already includes any gesture transform, so measure against the container.
+    const host = containerRef.current?.getBoundingClientRect() || rect;
     return {
       dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
-      midX: (a.x + b.x) / 2 - rect.left,
-      midY: (a.y + b.y) / 2 - rect.top,
+      midX: (a.x + b.x) / 2 - host.left,
+      midY: (a.y + b.y) / 2 - host.top,
     };
   };
 
   const onCanvasPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const onElement = elementHitRef.current;
     elementHitRef.current = false;
+    const pendingSelect = pendingSelectRef.current;
+    pendingSelectRef.current = null;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture is a nicety */ }
 
     if (e.pointerType === 'mouse') {
@@ -2798,25 +2951,26 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     const g = gestureRef.current;
     if (pointersRef.current.size === 1) {
       Object.assign(g, {
-        kind: 'single', onElement, downAt: { x: e.clientX, y: e.clientY },
-        moved: false, dragDrawing: false, panning: false, waitForAllUp: false,
+        kind: 'single', onElement, pendingSelect, downAt: { x: e.clientX, y: e.clientY },
+        moved: false, dragDrawing: false, panning: false,
       });
-      const immediate = activeTool === 'select' || activeTool === 'pan' || activeTool === 'ai_draw';
-      if (immediate && !onElement) handleMouseDown(fakeMouse(e.clientX, e.clientY));
+      // Freehand sketching starts at once; everything else waits to see tap or drag.
+      if (activeTool === 'ai_draw') handleMouseDown(fakeMouse(e.clientX, e.clientY));
     } else if (pointersRef.current.size === 2) {
       cancelSingleGesture();
+      const base = pendingViewRef.current || { panX, panY, zoom };
       const p = pinchPoints();
       Object.assign(g, {
-        kind: 'pinch', startDist: p.dist, startZoom: zoom,
+        kind: 'pinch', startDist: p.dist, startZoom: base.zoom,
         // The plan point between the fingers; it stays between them while pinching.
-        anchor: { x: (p.midX - panX) / (GRID_SIZE_PX * zoom), y: (p.midY - panY) / (GRID_SIZE_PX * zoom) },
+        anchor: { x: (p.midX - base.panX) / (GRID_SIZE_PX * base.zoom), y: (p.midY - base.panY) / (GRID_SIZE_PX * base.zoom) },
       });
     }
   };
 
   const onCanvasPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.pointerType === 'mouse') {
-      handleMouseMove(e as unknown as React.MouseEvent<SVGSVGElement>);
+      queueMove(e.clientX, e.clientY, e.shiftKey, e.altKey);
       return;
     }
     if (!pointersRef.current.has(e.pointerId)) return;
@@ -2828,9 +2982,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const p = pinchPoints();
       // Zoom is always worked out from where the pinch started, so it can not run away.
       const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +((g.startZoom * p.dist) / g.startDist).toFixed(3)));
-      setZoom(nextZoom);
-      setPanX(Math.round(p.midX - g.anchor.x * GRID_SIZE_PX * nextZoom));
-      setPanY(Math.round(p.midY - g.anchor.y * GRID_SIZE_PX * nextZoom));
+      showPendingView({
+        zoom: nextZoom,
+        panX: Math.round(p.midX - g.anchor.x * GRID_SIZE_PX * nextZoom),
+        panY: Math.round(p.midY - g.anchor.y * GRID_SIZE_PX * nextZoom),
+      });
       return;
     }
     if (g.kind !== 'single') return;
@@ -2838,30 +2994,31 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (!g.moved && Math.hypot(e.clientX - g.downAt.x, e.clientY - g.downAt.y) > 8) g.moved = true;
     if (!g.moved) return;
 
-    const immediate = activeTool === 'select' || activeTool === 'pan' || activeTool === 'ai_draw';
-    if (!immediate && !g.onElement) {
-      if (activeTool === 'wall') {
-        if (!isDrawingWall && !g.dragDrawing) {
-          // Drag to draw: the wall starts where the finger first touched.
-          g.dragDrawing = true;
-          handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
-          return;
-        }
-      } else if (!g.panning) {
-        g.panning = true;
-        const rect = svgRef.current!.getBoundingClientRect();
-        panMovedRef.current = true;
-        setIsPanning(true);
-        setPanStart({ x: g.downAt.x - rect.left, y: g.downAt.y - rect.top, panX, panY });
+    // Dragging a selected element / wall corner, or sketching freehand.
+    if (g.onElement || activeTool === 'ai_draw') {
+      queueMove(e.clientX, e.clientY);
+      return;
+    }
+    if (activeTool === 'wall') {
+      if (!latestInputRef.current.isDrawingWall && !g.dragDrawing) {
+        // Drag to draw: the wall starts where the finger first touched.
+        g.dragDrawing = true;
+        handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
         return;
       }
+      queueMove(e.clientX, e.clientY);
+      return;
     }
-    handleMouseMove(fakeMouse(e.clientX, e.clientY));
+    // Any other tool: a one-finger drag moves the view. Nothing is placed or changed.
+    g.panning = true;
+    panMovedRef.current = true;
+    showPendingView({ zoom, panX: Math.round(panX + e.clientX - g.downAt.x), panY: Math.round(panY + e.clientY - g.downAt.y) });
   };
 
   const onCanvasPointerUp = (e: React.PointerEvent<SVGSVGElement>, cancelled = false) => {
     if (e.pointerType === 'mouse') {
-      handleMouseUp();
+      flushMove();
+      latestInputRef.current.handleMouseUp();
       return;
     }
     if (!pointersRef.current.has(e.pointerId)) return;
@@ -2871,7 +3028,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
     if (g.kind === 'pinch') {
       // The finger left on the screen after a pinch does nothing until the screen is clear.
-      if (pointersRef.current.size === 0) g.kind = 'none';
+      if (pointersRef.current.size === 0) {
+        g.kind = 'none';
+        commitPendingView();
+      }
       return;
     }
     if (g.kind !== 'single') return;
@@ -2879,28 +3039,30 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
     if (cancelled) {
       cancelSingleGesture();
+      commitPendingView();
       return;
     }
-    const immediate = activeTool === 'select' || activeTool === 'pan' || activeTool === 'ai_draw';
-    if (immediate || g.onElement) {
-      handleMouseUp();
+    flushMove();
+    const input = latestInputRef.current;
+
+    if (g.onElement || activeTool === 'ai_draw') {
+      input.handleMouseUp();
       return;
     }
     if (g.panning) {
       g.panning = false;
-      setIsPanning(false);
-      setPanStart(null);
+      commitPendingView();
       return;
     }
     if (activeTool === 'wall') {
-      if (g.moved && isDrawingWall) {
-        handleMouseDown(fakeMouse(e.clientX, e.clientY)); // the wall ends where the finger lifts
+      if (g.moved && input.isDrawingWall) {
+        input.handleMouseDown(fakeMouse(e.clientX, e.clientY)); // the wall ends where the finger lifts
         if (g.dragDrawing) {
           setIsDrawingWall(false);
           setWallStart(null);
         }
       } else if (!g.moved) {
-        handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
+        input.handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
       } else if (g.dragDrawing) {
         setIsDrawingWall(false);
         setWallStart(null);
@@ -2910,11 +3072,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setSnapIndicator(null);
       return;
     }
-    if (!g.moved) {
-      // A tap with a placing tool places the item at the tapped point.
-      handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
-      handleMouseUp();
+    if (g.moved) return;
+    if (activeTool === 'select' || activeTool === 'pan') {
+      // A tap selects what was tapped, or clears the selection on empty space.
+      setSelectedElement(g.pendingSelect);
+      return;
     }
+    // A tap with a placing tool places the item at the tapped point.
+    input.handleMouseDown(fakeMouse(g.downAt.x, g.downAt.y));
+    input.handleMouseUp();
   };
 
   const canvasInputProps = supportsPointer
@@ -9163,6 +9329,26 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             placeholder="e.g. First Floor"
           />
         </Field>
+      </Sheet>
+
+      <Sheet
+        open={saveConflict}
+        title="This plan was changed somewhere else"
+        onClose={() => { /* a choice is needed; the drawing stays open either way */ }}
+        footer={
+          <>
+            <button type="button" className="m-btn" onClick={() => resolveConflict(false)}>Load the other version</button>
+            <button type="button" className="m-btn is-primary" onClick={() => resolveConflict(true)}>Keep my version</button>
+          </>
+        }
+      >
+        <Note tone="warn">
+          The same plan was saved from another tab or device after you opened it here. Nothing has been overwritten.
+        </Note>
+        <p style={{ marginTop: 12, color: 'var(--m-ink-2)', lineHeight: 1.5 }}>
+          <strong>Keep my version</strong> saves what is on this screen and replaces the other one.{' '}
+          <strong>Load the other version</strong> discards the changes on this screen that were not saved.
+        </p>
       </Sheet>
 
       <ConfirmSheet
