@@ -88,8 +88,8 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
 
     // ── Scene ─────────────────────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0b1329');
-    scene.fog = new THREE.FogExp2('#0b1329', 0.008);
+    scene.background = new THREE.Color('#eef1f4');
+    scene.fog = new THREE.FogExp2('#eef1f4', 0.008);
     sceneRef.current = scene;
 
     // ── Camera ────────────────────────────────────────
@@ -117,12 +117,12 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
     sun.shadow.bias = -0.0005;
     scene.add(sun);
 
-    const fill = new THREE.DirectionalLight('#38bdf8', 0.4);
+    const fill = new THREE.DirectionalLight('#fde6cf', 0.4);
     fill.position.set(-25, 20, -15);
     scene.add(fill);
 
     // ── Grid Helper ───────────────────────────────────
-    const grid = new THREE.GridHelper(100, 100, '#2563eb', '#1e293b');
+    const grid = new THREE.GridHelper(100, 100, '#a8a29e', '#d6d3d1');
     scene.add(grid);
 
     // ── Floor (plot boundary) ─────────────────────────
@@ -578,13 +578,13 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
 
         {/* View presets & options */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div className="fp-3d-presets" style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.08)', padding: 3, borderRadius: 6 }}>
+          <div className="fp-3d-presets" style={{ display: 'flex', gap: 4, background: '#f5f5f4', padding: 3, borderRadius: 8 }}>
             <button
               type="button"
               className={`fp-3d-preset-btn ${activePreset === 'iso' ? 'active' : ''}`}
               onClick={() => setViewPreset('iso')}
               title="Isometric 3D view"
-              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 4, background: activePreset === 'iso' ? '#0284c7' : 'transparent', color: '#fff', border: 'none', cursor: 'pointer' }}
+              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 6, fontWeight: 600, background: activePreset === 'iso' ? '#ea580c' : 'transparent', color: activePreset === 'iso' ? '#fff' : '#57534e', border: 'none', cursor: 'pointer' }}
             >
               Perspective
             </button>
@@ -593,7 +593,7 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
               className={`fp-3d-preset-btn ${activePreset === 'top' ? 'active' : ''}`}
               onClick={() => setViewPreset('top')}
               title="Top 2D/3D Plan view"
-              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 4, background: activePreset === 'top' ? '#0284c7' : 'transparent', color: '#fff', border: 'none', cursor: 'pointer' }}
+              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 6, fontWeight: 600, background: activePreset === 'top' ? '#ea580c' : 'transparent', color: activePreset === 'top' ? '#fff' : '#57534e', border: 'none', cursor: 'pointer' }}
             >
               Top Plan
             </button>
@@ -602,7 +602,7 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
               className={`fp-3d-preset-btn ${activePreset === 'front' ? 'active' : ''}`}
               onClick={() => setViewPreset('front')}
               title="Front Elevation view"
-              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 4, background: activePreset === 'front' ? '#0284c7' : 'transparent', color: '#fff', border: 'none', cursor: 'pointer' }}
+              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 6, fontWeight: 600, background: activePreset === 'front' ? '#ea580c' : 'transparent', color: activePreset === 'front' ? '#fff' : '#57534e', border: 'none', cursor: 'pointer' }}
             >
               Front
             </button>
@@ -611,7 +611,7 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
               className={`fp-3d-preset-btn ${activePreset === 'side' ? 'active' : ''}`}
               onClick={() => setViewPreset('side')}
               title="Side Elevation view"
-              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 4, background: activePreset === 'side' ? '#0284c7' : 'transparent', color: '#fff', border: 'none', cursor: 'pointer' }}
+              style={{ padding: '4px 8px', fontSize: '0.75rem', borderRadius: 6, fontWeight: 600, background: activePreset === 'side' ? '#ea580c' : 'transparent', color: activePreset === 'side' ? '#fff' : '#57534e', border: 'none', cursor: 'pointer' }}
             >
               Side
             </button>

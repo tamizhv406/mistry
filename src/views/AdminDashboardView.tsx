@@ -427,7 +427,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     totalBillsSpend;
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="admin-portal space-y-6 pb-16">
       {/* Admin Portal Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 border-2 border-indigo-500/40 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
         <div className="absolute -right-6 -bottom-6 w-48 h-48 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />

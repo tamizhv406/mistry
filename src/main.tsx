@@ -2,13 +2,15 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import './styles/mobile.css';
+import './styles/ai-surfaces.css';
+import './styles/admin-portal.css';
 import App from './App.tsx';
 
 // Register Service Worker for PWA offline capabilities
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('./sw.js')
+      .register(`${import.meta.env.BASE_URL}sw.js`)
       .then(reg => {
         console.log('✓ Building Mistry Service Worker active:', reg.scope);
       })

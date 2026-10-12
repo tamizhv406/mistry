@@ -199,17 +199,17 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             position: 'sticky',
             top: 0,
             zIndex: 100,
-            backgroundColor: '#1e1b4b',
-            borderBottom: '2px solid #6366f1',
+            backgroundColor: '#eef2ff',
+            border: '1px solid #c7d2fe',
             borderRadius: '12px',
-            color: '#ffffff',
+            color: '#312e81',
             padding: '12px 18px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '12px',
-            boxShadow: '0 8px 20px -4px rgba(79, 70, 229, 0.35)',
+            boxShadow: '0 1px 3px rgba(28, 25, 23, 0.06)',
             marginBottom: '18px',
           }}
         >
@@ -219,7 +219,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 width: '36px',
                 height: '36px',
                 borderRadius: '10px',
-                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                background: '#4f46e5',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -230,13 +230,13 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               <ShieldCheck size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#312e81', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span>Inspecting Site: <strong>{site.name}</strong></span>
-                <span style={{ backgroundColor: 'rgba(99, 102, 241, 0.35)', color: '#c7d2fe', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                <span style={{ backgroundColor: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
                   Admin View / அட்மின் பார்வை
                 </span>
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+              <div style={{ fontSize: '0.78rem', color: '#57534e' }}>
                 Super Admin Active Inspection — All project modifications are audit-logged
               </div>
             </div>
@@ -247,7 +247,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             className="btn btn-sm"
             onClick={onReturnToAdmin}
             style={{
-              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              background: '#4f46e5',
               color: '#ffffff',
               fontWeight: 700,
               fontSize: '0.85rem',
@@ -258,7 +258,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               padding: '8px 16px',
               borderRadius: '10px',
               cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.4)',
+              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
               minHeight: '44px',
             }}
           >
@@ -279,7 +279,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             <button
               className="btn btn-sm"
               style={{
-                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                background: '#4f46e5',
                 color: '#fff',
                 fontWeight: 'bold',
                 display: 'flex',
@@ -335,7 +335,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               {site.ownerPhone && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Phone size={16} color="#f59e0b" />
-                  <a href={`tel:${site.ownerPhone}`} style={{ color: '#cbd5e1', textDecoration: 'none' }}>
+                  <a href={`tel:${site.ownerPhone}`} style={{ color: 'var(--primary-hover)', fontWeight: 600, textDecoration: 'none' }}>
                     {site.ownerPhone}
                   </a>
                 </span>

@@ -6,17 +6,19 @@
  */
 
 :root {
-  --m-bg: #f5f6f8;
+  /* Warm light neutrals with one construction-orange accent: the same palette as the planner. */
+  --m-bg: #f6f5f4;
   --m-surface: #ffffff;
-  --m-surface-2: #f8fafc;
-  --m-line: #e3e8ef;
-  --m-line-strong: #cbd5e1;
-  --m-ink: #0f172a;
-  --m-ink-2: #475569;
-  --m-ink-3: #64748b;
-  --m-accent: #c2620a;        /* 4.6:1 on white */
-  --m-accent-strong: #9a4a04;
-  --m-accent-soft: #fff4e2;
+  --m-surface-2: #fafaf9;
+  --m-line: #e7e5e4;
+  --m-line-strong: #d6d3d1;
+  --m-ink: #1c1917;
+  --m-ink-2: #44403c;
+  --m-ink-3: #78716c;         /* 4.8:1 on white */
+  --m-accent: #c2410c;        /* 5.2:1 on white: text, links and text buttons */
+  --m-accent-strong: #9a3412;
+  --m-accent-soft: #fff1e6;
+  --m-accent-bright: #ea580c; /* the round "main action" buttons and the brand tile */
   --m-ok: #047857;
   --m-ok-soft: #e3f7ee;
   --m-warn: #a15c00;
@@ -30,7 +32,9 @@
   --m-radius: 14px;
   --m-radius-sm: 10px;
   --m-tap: 48px;
-  --m-nav-h: 64px;
+  /* Space the floating navigation pill takes at the bottom of a phone screen
+     (its 64px height plus the gap under it). */
+  --m-nav-h: 78px;
   --m-top-h: 56px;
   --m-safe-b: env(safe-area-inset-bottom, 0px);
   --m-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
@@ -106,7 +110,7 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: var(--m-accent);
+  background: var(--m-accent-bright);
   color: #fff;
   flex-shrink: 0;
 }
@@ -141,8 +145,9 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: var(--m-ink);
-  color: #fff;
+  background: var(--m-accent-soft);
+  border: 1px solid #fdba74;
+  color: var(--m-accent-strong);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -154,18 +159,23 @@
   display: none;
 }
 
+/* Bottom navigation (phone): a floating pill. Four labelled tabs, and the Floor Planner,
+   the heart of the app, as the round orange button in the middle. */
 @media (max-width: 768px) {
   .m-nav {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: 1fr 1fr 76px 1fr 1fr;
+    align-items: center;
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: calc(var(--m-nav-h) + var(--m-safe-b));
-    padding-bottom: var(--m-safe-b);
-    background: var(--m-surface);
-    border-top: 1px solid var(--m-line);
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + var(--m-safe-b));
+    height: 64px;
+    padding: 5px;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid var(--m-line);
+    border-radius: 999px;
+    box-shadow: 0 10px 28px rgba(28, 25, 23, 0.16), 0 2px 6px rgba(28, 25, 23, 0.06);
     z-index: 1000;
   }
 }
@@ -176,22 +186,64 @@
   align-items: center;
   justify-content: center;
   gap: 3px;
+  height: 52px;
   min-height: var(--m-tap);
+  min-width: 0;
+  border-radius: 999px;
   color: var(--m-ink-3);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
   position: relative;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.m-nav-btn[aria-current='page'] { color: var(--m-accent); }
-.m-nav-btn[aria-current='page']::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  width: 28px;
-  height: 3px;
-  border-radius: 0 0 3px 3px;
+.m-nav-btn:active { background: var(--m-surface-2); }
+
+.m-nav-btn[aria-current='page'] {
+  background: #ffedd5;
+  color: var(--m-accent);
+  font-weight: 700;
+}
+
+/* The middle button: a raised orange circle with its label under it. */
+.m-nav-btn.is-core {
+  justify-content: flex-end;
+  gap: 2px;
+  padding-bottom: 3px;
+  color: var(--m-accent);
+  font-weight: 700;
+}
+
+.m-nav-btn.is-core,
+.m-nav-btn.is-core:active,
+.m-nav-btn.is-core[aria-current='page'] {
+  background: transparent;
+}
+
+.m-nav-core {
+  width: 52px;
+  height: 52px;
+  margin-top: -30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--m-accent-bright);
+  color: #fff;
+  border: 4px solid #fff;
+  box-shadow: 0 8px 18px rgba(234, 88, 12, 0.36);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.m-nav-btn.is-core:active .m-nav-core {
+  transform: scale(0.94);
   background: var(--m-accent);
+}
+
+.m-nav-btn.is-core[aria-current='page'] .m-nav-core { background: var(--m-accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-nav-core { transition: none; }
 }
 
 /* Full-screen tools (floor plan editor) take the whole viewport. */
@@ -429,7 +481,7 @@ button.m-stat:active { background: var(--m-surface-2); }
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 6px 16px rgba(154, 74, 4, 0.35);
+  box-shadow: 0 6px 16px rgba(194, 65, 12, 0.32);
   z-index: 80;
 }
 
@@ -479,24 +531,27 @@ button.m-stat:active { background: var(--m-surface-2); }
   width: 100%;
   padding: 16px;
   border-radius: var(--m-radius);
-  background: var(--m-ink);
-  color: #fff;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fdba74;
+  color: var(--m-ink);
   text-align: left;
 }
 
-.m-hero:active { background: #1e293b; }
+.m-hero:active { background: #ffedd5; }
+.m-hero > svg { color: var(--m-accent); flex-shrink: 0; }
 .m-hero-icon {
   width: 48px;
   height: 48px;
   border-radius: 14px;
-  background: var(--m-accent);
+  background: var(--m-accent-bright);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 .m-hero-title { font-family: var(--font-heading); font-weight: 700; font-size: 1.08rem; }
-.m-hero-sub { font-size: 0.84rem; color: #cbd5e1; margin-top: 2px; }
+.m-hero-sub { font-size: 0.84rem; color: var(--m-ink-2); margin-top: 2px; }
 
 /* ------------------------------------------------------------------ Chips, badges, segments */
 
@@ -525,9 +580,9 @@ button.m-stat:active { background: var(--m-surface-2); }
 }
 
 .m-chip[aria-pressed='true'] {
-  background: var(--m-ink);
-  border-color: var(--m-ink);
-  color: #fff;
+  background: #ffedd5;
+  border-color: var(--m-accent);
+  color: var(--m-accent-strong);
 }
 
 .m-badge {
@@ -614,7 +669,7 @@ button.m-stat:active { background: var(--m-surface-2); }
 .m-sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(28, 25, 23, 0.45);
   z-index: 1250;
   display: flex;
   align-items: flex-end;
@@ -877,16 +932,6 @@ button.m-stat:active { background: var(--m-surface-2); }
 
 .fp-canvas-svg { touch-action: none; -webkit-user-select: none; user-select: none; }
 
-.fp-mobile-mode-bar .fp-mobile-history-btn {
-  flex: 0 0 46px;
-  min-height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #e2e8f0;
-}
-.fp-mobile-mode-bar .fp-mobile-history-btn:disabled { opacity: 0.3; }
-
 @media (max-width: 768px) {
   /* Comfortable touch targets in the editor chrome. */
   .fp-mobile-back-btn, .fp-mobile-menu-btn { min-width: 44px; min-height: 44px; }
@@ -896,4 +941,106 @@ button.m-stat:active { background: var(--m-surface-2); }
   .fp-mobile-tool-btn { min-height: 52px; }
   .fp-mobile-tool-label { font-size: 0.68rem; }
   .fp-mobile-sub-btn { min-height: 38px; }
+}
+
+/* ------------------------------------------------------------------ Older screens on a phone
+   The projects, ledger, calculator, floor-plan list, backup and recycle-bin pages were laid
+   out for a desktop. These rules give them the margins, heading sizes and stacking of the
+   newer screens, so nothing is cramped, cut off or wider than the phone. */
+
+/* The calculator page had no page margins at all. */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+@media (max-width: 768px) {
+  .container { padding: 14px 12px; }
+
+  /* Page titles: one comfortable size instead of 1.8rem lines that wrap three times. */
+  .main-wrapper h1,
+  .main-wrapper h2,
+  .container h1,
+  .container h2,
+  .fp-list-title {
+    font-size: 1.35rem !important;
+    line-height: 1.25;
+  }
+
+  .main-wrapper h3,
+  .container h3 {
+    font-size: 1.05rem !important;
+    line-height: 1.3;
+  }
+
+  /* Text buttons may wrap rather than run off the screen. */
+  .main-wrapper .btn,
+  .container .btn,
+  .floor-plan-list-view .btn {
+    white-space: normal;
+    text-align: center;
+    min-height: 44px;
+  }
+
+  /* Floor plan list: title, then the actions as a grid, then small stat tiles. */
+  .floor-plan-list-view { padding: 14px 12px 24px; }
+  .fp-list-header { margin-bottom: 16px; }
+
+  .fp-list-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .fp-list-title-row > div:last-child {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px !important;
+  }
+
+  .fp-list-title-row > div:last-child .btn { justify-content: center; }
+
+  .fp-list-title-row > div:last-child .btn-primary {
+    grid-column: 1 / -1;
+    order: -1;
+    min-height: 48px;
+  }
+
+  .fp-list-subtitle { font-size: 0.84rem; }
+
+  .fp-dashboard-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .fp-stat-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .fp-stat-icon-wrap { width: 32px; height: 32px; border-radius: 10px; }
+  .fp-stat-icon-wrap svg { width: 16px; height: 16px; }
+  .fp-stat-val { font-size: 1rem; overflow-wrap: anywhere; }
+  .fp-stat-lbl { font-size: 0.62rem; white-space: normal; letter-spacing: 0.2px; }
+
+  .fp-list-toolbar { gap: 8px; }
+  .fp-list-site-filter { flex: 1; min-width: 0; }
+  .fp-cards-grid { grid-template-columns: 1fr; }
+
+  /* An empty table shows its message in the middle of the screen, not off to the right. */
+  .data-table-wrapper:has(.empty-state) table { min-width: 0 !important; width: 100%; }
+  .data-table-wrapper:has(.empty-state) thead { display: none; }
+  .data-table-wrapper:has(.empty-state) td { padding: 28px 12px !important; }
+
+  /* Site page: the summary figures sit two to a row. */
+  .site-header-banner { padding: 16px; border-radius: 16px; }
+  .banner-title-area h2 { font-size: 1.3rem !important; }
+  .banner-financial-bar { grid-template-columns: 1fr 1fr; padding: 12px 14px; }
+  .banner-fin-stat span { font-size: 0.68rem; }
+  .banner-fin-stat strong { font-size: 1.1rem; }
 }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HardHat, Eye, EyeOff, Lock, User, Phone, Mail, ArrowRight, ShieldCheck, Crown, CheckCircle2 } from 'lucide-react';
-import { loginUser, registerUser, demoAccountsEnabled } from '../services/auth';
+import { loginUser, registerUser, demoAccountsEnabled, loginDemoContractor } from '../services/auth';
 import type { User as UserType } from '../db/types';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { ChangeInitialPasswordModal } from '../components/ChangeInitialPasswordModal';
@@ -98,7 +98,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await loginUser('mistry_velu', 'mistry123', true);
+      const res = await loginDemoContractor();
       if (res.success && res.user) {
         if (res.user.mustChangePassword) {
           setPendingInitialPasswordUser(res.user);
@@ -121,7 +121,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: '#0f172a',
+      backgroundColor: 'var(--bg-main)',
       padding: '20px',
       position: 'relative',
       overflow: 'hidden',
@@ -133,7 +133,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         right: '-10%',
         width: '450px',
         height: '450px',
-        background: 'radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, rgba(245, 158, 11, 0) 70%)',
+        background: 'radial-gradient(circle, rgba(234, 88, 12, 0.14) 0%, rgba(234, 88, 12, 0) 70%)',
         borderRadius: '50%',
         pointerEvents: 'none',
       }} />
@@ -144,7 +144,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         left: '-10%',
         width: '400px',
         height: '400px',
-        background: 'radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, rgba(59, 130, 246, 0) 70%)',
+        background: 'radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0) 70%)',
         borderRadius: '50%',
         pointerEvents: 'none',
       }} />
@@ -156,7 +156,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         backgroundColor: '#ffffff',
         borderRadius: '24px',
         padding: '36px 30px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+        border: '1px solid var(--border-light)',
+        boxShadow: '0 18px 40px -16px rgba(28, 25, 23, 0.22)',
         position: 'relative',
         zIndex: 10,
       }}>
@@ -166,12 +167,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             width: '64px',
             height: '64px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+            background: 'var(--primary)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#ffffff',
-            boxShadow: '0 8px 16px rgba(245, 158, 11, 0.35)',
+            boxShadow: '0 8px 16px rgba(234, 88, 12, 0.28)',
             marginBottom: '12px',
           }}>
             <HardHat size={36} strokeWidth={2.4} />
@@ -179,7 +180,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
           <h2 style={{
             fontSize: '1.75rem',
-            color: '#0f172a',
+            color: 'var(--text-main)',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
             marginBottom: '4px',
@@ -277,7 +278,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </div>
 
             {/* Remember & Forgot Password Option */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '6px 12px', fontSize: '0.85rem' }}>
               <label htmlFor="login-remember" style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#475569' }}>
                 <input
                   id="login-remember"
@@ -294,7 +295,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 type="button"
                 onClick={() => setIsForgotPasswordOpen(true)}
                 style={{
-                  color: '#d97706',
+                  color: 'var(--primary-hover)',
                   fontWeight: 700,
                   fontSize: '0.85rem',
                   border: 'none',
@@ -311,7 +312,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               type="submit"
               className="btn btn-primary btn-lg"
               disabled={loading}
-              style={{ width: '100%', marginTop: '6px' }}
+              style={{ width: '100%', marginTop: '6px', whiteSpace: 'normal', lineHeight: 1.3 }}
             >
               {loading ? 'Verifying...' : 'Sign In to Site Portal / உள்நுழைக'}
               <ArrowRight size={18} />
@@ -319,7 +320,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
             <div style={{ textAlign: 'center', marginTop: '6px' }}>
               <span
-                style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', fontSize: '0.88rem' }}
+                style={{ color: 'var(--primary-hover)', fontWeight: 600, cursor: 'pointer', fontSize: '0.88rem' }}
                 onClick={() => setIsRegister(true)}
               >
                 New contractor? Register Account (புதிய கணக்கு தொடங்குக)
@@ -342,11 +343,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 hidden={!demoAccountsEnabled()}
                 style={{
                   width: '100%',
-                  borderColor: '#cbd5e1',
-                  color: '#334155',
-                  backgroundColor: '#f8fafc',
+                  borderColor: 'var(--border-medium)',
+                  color: 'var(--text-main)',
+                  backgroundColor: 'var(--bg-subtle)',
                   fontSize: '0.85rem',
-                  padding: '8px 14px',
+                  padding: '10px 14px',
+                  whiteSpace: 'normal',
+                  lineHeight: 1.3,
+                  textAlign: 'center',
                   borderRadius: '12px',
                   // The inline display would override the `hidden` attribute, so switch it here.
                   display: demoAccountsEnabled() ? 'flex' : 'none',
@@ -356,7 +360,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   cursor: 'pointer',
                 }}
               >
-                <HardHat size={16} color="#d97706" />
+                <HardHat size={16} color="#c2410c" style={{ flexShrink: 0 }} />
                 <span>👷 Demo Contractor Login / மாதிரி மேஸ்திரி (mistry_velu)</span>
               </button>
             </div>

@@ -334,9 +334,9 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontSize: '0.72rem', color: '#64748b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontSize: '0.72rem', color: '#78716c' }}>
               <span>{totalResultsCount} shapes • Click option to open</span>
-              <span style={{ fontSize: '0.68rem', color: '#38bdf8' }}>1 open at a time</span>
+              <span style={{ fontSize: '0.68rem', color: '#c2410c' }}>1 open at a time</span>
             </div>
           )}
         </div>
@@ -410,7 +410,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
                         onClick={e => handleToggleFavorite(e, item.id)}
                         title={isFav ? 'Remove from Favorites' : 'Add to Favorites'}
                       >
-                        <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#f59e0b' : '#94a3b8'} />
+                        <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#b45309' : '#57534e'} />
                       </button>
                       {item.isCustom && (
                         <button
@@ -495,7 +495,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
                               onClick={e => handleToggleFavorite(e, item.id)}
                               title={isFav ? 'Remove from Favorites' : 'Add to Favorites'}
                             >
-                              <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#f59e0b' : '#94a3b8'} />
+                              <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#b45309' : '#57534e'} />
                             </button>
                             {item.isCustom && (
                               <button

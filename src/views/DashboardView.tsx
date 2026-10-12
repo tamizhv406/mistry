@@ -109,12 +109,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {isAdmin(user) && (
         <div
           style={{
-            background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)',
-            border: '2px solid #f59e0b',
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%)',
+            border: '1px solid #fcd34d',
             borderRadius: '18px',
             padding: '16px 20px',
             marginBottom: '20px',
-            boxShadow: '0 10px 25px -5px rgba(245, 158, 11, 0.2)',
+            boxShadow: '0 1px 3px rgba(28, 25, 23, 0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -128,25 +128,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 width: '42px',
                 height: '42px',
                 borderRadius: '12px',
-                backgroundColor: 'rgba(245, 158, 11, 0.2)',
-                border: '1px solid rgba(245, 158, 11, 0.4)',
+                backgroundColor: '#fef3c7',
+                border: '1px solid #fcd34d',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#f59e0b',
+                color: '#b45309',
               }}
             >
               <Crown size={24} />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <strong style={{ color: '#fbbf24', fontSize: '1rem', fontWeight: 800 }}>
+                <strong style={{ color: '#92400e', fontSize: '1rem', fontWeight: 800 }}>
                   Real Admin Master Access Active
                 </strong>
                 <span
                   style={{
-                    backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                    color: '#fef3c7',
+                    backgroundColor: '#fef3c7',
+                    color: '#92400e',
                     fontSize: '0.7rem',
                     padding: '2px 8px',
                     borderRadius: '10px',
@@ -157,7 +157,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Full Cross-Contractor Oversight
                 </span>
               </div>
-              <p style={{ color: '#cbd5e1', fontSize: '0.82rem', margin: '2px 0 0 0' }}>
+              <p style={{ color: '#57534e', fontSize: '0.82rem', margin: '2px 0 0 0' }}>
                 You have unrestricted administrative authority across all registered mistries, sites, materials, labour ledgers, and audit trails.
               </p>
             </div>
@@ -166,9 +166,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               style={{
-                color: '#93c5fd',
+                color: '#1d4ed8',
                 fontSize: '0.8rem',
-                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                backgroundColor: '#dbeafe',
                 padding: '4px 12px',
                 borderRadius: '20px',
                 fontWeight: 600,
@@ -431,35 +431,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 whileHover={{ y: -4, transition: { duration: 0.2 } }}
                 style={{ overflow: 'hidden', padding: 0 }}
               >
-                {/* Visual Image Header */}
-                <div style={{ position: 'relative', width: '100%', height: '140px', overflow: 'hidden', backgroundColor: '#0f172a' }}>
-                  <SafeImage
-                    src={site.imageUrl || SITE_VISUAL}
-                    alt={site.name}
-                    fallbackCategory="site"
-                    fallbackSrc={SITE_VISUAL}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
-                    }}
-                    className="group-hover:scale-105"
-                  />
-                  <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    background: 'linear-gradient(to top, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.2) 60%, rgba(15, 23, 42, 0.6) 100%)',
-                  }} />
-                  <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    left: '14px',
-                    right: '14px',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}>
+                {/* Header: the site photo when it has one, then status, actions and the name */}
+                {site.imageUrl && (
+                  <div style={{ width: '100%', height: '120px', overflow: 'hidden', backgroundColor: '#f5f5f4' }}>
+                    <SafeImage
+                      src={site.imageUrl}
+                      alt={site.name}
+                      fallbackCategory="site"
+                      fallbackSrc={SITE_VISUAL}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </div>
+                )}
+                <div style={{ padding: '14px 16px 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                       <span className={`badge ${statusClass}`}>
                         {site.status}
@@ -472,41 +457,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <button
                         className="btn btn-sm"
                         title="Edit Site Details"
+                        aria-label="Edit site details"
                         onClick={() => onEditSite(site)}
                         style={{
-                          padding: '6px',
-                          borderRadius: '6px',
-                          backgroundColor: 'rgba(15, 23, 42, 0.7)',
-                          color: '#e2e8f0',
-                          border: '1px solid rgba(255, 255, 255, 0.2)',
-                          backdropFilter: 'blur(4px)',
+                          width: '38px',
+                          height: '38px',
+                          padding: 0,
+                          borderRadius: '10px',
+                          backgroundColor: '#ffffff',
+                          color: '#44403c',
+                          border: '1px solid var(--border-light)',
                         }}
                       >
-                        <Edit2 size={14} />
+                        <Edit2 size={16} />
                       </button>
                       <button
                         className="btn btn-sm"
                         title="Move to Recycle Bin"
+                        aria-label="Move site to recycle bin"
                         onClick={() => onDeleteSiteToTrash(site)}
                         style={{
-                          padding: '6px',
-                          borderRadius: '6px',
-                          backgroundColor: 'rgba(239, 68, 68, 0.7)',
-                          color: '#fff',
-                          border: '1px solid rgba(239, 68, 68, 0.4)',
-                          backdropFilter: 'blur(4px)',
+                          width: '38px',
+                          height: '38px',
+                          padding: 0,
+                          borderRadius: '10px',
+                          backgroundColor: '#fef2f2',
+                          color: '#b91c1c',
+                          border: '1px solid #fecaca',
                         }}
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
 
-                  <div style={{ position: 'absolute', bottom: '10px', left: '14px', right: '14px' }}>
-                    <h3 className="site-card-title" style={{ margin: 0, color: '#f8fafc', textShadow: '0 2px 4px rgba(0,0,0,0.6)' }}>
-                      {site.name}
-                    </h3>
-                  </div>
+                  <h3 className="site-card-title" style={{ margin: '10px 0 0' }}>
+                    {site.name}
+                  </h3>
                 </div>
 
                 {/* Body */}
@@ -554,13 +541,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     gap: '6px',
                     marginTop: '12px',
                     padding: '10px',
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    backgroundColor: 'var(--bg-subtle)',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border-light)',
                   }}>
                     <div style={{ textAlign: 'center' }}>
                       <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Total</span>
-                      <strong style={{ fontSize: '0.85rem', color: '#f8fafc' }}>
+                      <strong style={{ fontSize: '0.85rem', color: 'var(--text-main)' }}>
                         ₹{fin.totalAmount.toLocaleString('en-IN')}
                       </strong>
                     </div>
@@ -595,8 +582,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '10px 16px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                    borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                    backgroundColor: 'var(--bg-subtle)',
+                    borderTop: '1px solid var(--border-light)',
                   }}
                 >
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

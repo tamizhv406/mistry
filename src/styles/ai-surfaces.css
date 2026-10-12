@@ -1,0 +1,277 @@
+/* AI assistant panel and AI dialogs.
+   These components are written with utility class names (flex, px-3, text-sm, …). The project has
+   no utility framework, so this file supplies exactly the classes they use, scoped to the panel
+   (.fp-ai-panel) and the dialogs (.fp-ai-dialog), in the planner's light stone / orange palette.
+   Generated from the class names in the four component files; add a class here when one of them
+   starts using a new one. */
+
+/* Base: what a utility framework's reset would give these elements. Zero specificity, so any
+   class still wins. */
+:where(.fp-ai-panel, .fp-ai-dialog) :where(*) {
+  border: 0 solid #e7e5e4;
+}
+
+:where(.fp-ai-panel, .fp-ai-dialog) :where(button) {
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+:where(.fp-ai-panel, .fp-ai-dialog) :where(button:disabled) { cursor: not-allowed; }
+
+:where(.fp-ai-panel, .fp-ai-dialog) :where(input, textarea, select) {
+  font: inherit;
+  color: inherit;
+}
+
+:where(.fp-ai-panel, .fp-ai-dialog) :where(input, textarea)::placeholder { color: #a8a29e; }
+
+.fp-ai-panel,
+.fp-ai-dialog {
+  color: #1c1917;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+/* The app-wide input rule (full width, 44px tall) must not stretch tick boxes. */
+:is(.fp-ai-panel, .fp-ai-dialog) input[type='checkbox'],
+:is(.fp-ai-panel, .fp-ai-dialog) input[type='radio'] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  flex-shrink: 0;
+  accent-color: #ea580c;
+}
+
+.fp-ai-panel .no-scrollbar,
+.fp-ai-dialog .no-scrollbar { scrollbar-width: none; }
+.fp-ai-panel .no-scrollbar::-webkit-scrollbar,
+.fp-ai-dialog .no-scrollbar::-webkit-scrollbar { display: none; }
+
+@keyframes ai-enter {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes ai-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-ai-panel .animate-pulse,
+  .fp-ai-panel .animate-in,
+  .fp-ai-dialog .animate-pulse,
+  .fp-ai-dialog .animate-in { animation: none; }
+}
+
+/* ── Layout, spacing, type ── then colours ─────────────────────────────── */
+:is(.fp-ai-panel, .fp-ai-dialog) .animate-in, :is(.fp-ai-panel, .fp-ai-dialog).animate-in { animation: ai-enter 0.2s ease-out; }
+:is(.fp-ai-panel, .fp-ai-dialog) .animate-pulse, :is(.fp-ai-panel, .fp-ai-dialog).animate-pulse { animation: ai-pulse 2s ease-in-out infinite; }
+:is(.fp-ai-panel, .fp-ai-dialog) .backdrop-blur-sm, :is(.fp-ai-panel, .fp-ai-dialog).backdrop-blur-sm { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-gradient-to-tr, :is(.fp-ai-panel, .fp-ai-dialog).bg-gradient-to-tr { background-image: linear-gradient(to top right, var(--ai-from, transparent), var(--ai-to, transparent)); }
+:is(.fp-ai-panel, .fp-ai-dialog) .block, :is(.fp-ai-panel, .fp-ai-dialog).block { display: block; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border, :is(.fp-ai-panel, .fp-ai-dialog).border { border-width: 1px; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-b, :is(.fp-ai-panel, .fp-ai-dialog).border-b { border-bottom-width: 1px; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-dashed, :is(.fp-ai-panel, .fp-ai-dialog).border-dashed { border-style: dashed; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-t, :is(.fp-ai-panel, .fp-ai-dialog).border-t { border-top-width: 1px; }
+:is(.fp-ai-panel, .fp-ai-dialog) .cursor-pointer, :is(.fp-ai-panel, .fp-ai-dialog).cursor-pointer { cursor: pointer; }
+:is(.fp-ai-panel, .fp-ai-dialog) .duration-200, :is(.fp-ai-panel, .fp-ai-dialog).duration-200 { transition-duration: 0.2s; }
+:is(.fp-ai-panel, .fp-ai-dialog) .fixed, :is(.fp-ai-panel, .fp-ai-dialog).fixed { position: fixed; }
+:is(.fp-ai-panel, .fp-ai-dialog) .flex, :is(.fp-ai-panel, .fp-ai-dialog).flex { display: flex; }
+:is(.fp-ai-panel, .fp-ai-dialog) .flex-1, :is(.fp-ai-panel, .fp-ai-dialog).flex-1 { flex: 1 1 0%; min-width: 0; min-height: 0; }
+:is(.fp-ai-panel, .fp-ai-dialog) .flex-col, :is(.fp-ai-panel, .fp-ai-dialog).flex-col { flex-direction: column; }
+:is(.fp-ai-panel, .fp-ai-dialog) .flex-wrap, :is(.fp-ai-panel, .fp-ai-dialog).flex-wrap { flex-wrap: wrap; }
+:is(.fp-ai-panel, .fp-ai-dialog) .font-bold, :is(.fp-ai-panel, .fp-ai-dialog).font-bold { font-weight: 700; }
+:is(.fp-ai-panel, .fp-ai-dialog) .font-extrabold, :is(.fp-ai-panel, .fp-ai-dialog).font-extrabold { font-weight: 800; }
+:is(.fp-ai-panel, .fp-ai-dialog) .font-medium, :is(.fp-ai-panel, .fp-ai-dialog).font-medium { font-weight: 500; }
+:is(.fp-ai-panel, .fp-ai-dialog) .font-mono, :is(.fp-ai-panel, .fp-ai-dialog).font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+:is(.fp-ai-panel, .fp-ai-dialog) .font-semibold, :is(.fp-ai-panel, .fp-ai-dialog).font-semibold { font-weight: 600; }
+:is(.fp-ai-panel, .fp-ai-dialog) .gap-1, :is(.fp-ai-panel, .fp-ai-dialog).gap-1 { gap: 0.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .gap-1\.5, :is(.fp-ai-panel, .fp-ai-dialog).gap-1\.5 { gap: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .gap-2, :is(.fp-ai-panel, .fp-ai-dialog).gap-2 { gap: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .gap-3, :is(.fp-ai-panel, .fp-ai-dialog).gap-3 { gap: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .gap-4, :is(.fp-ai-panel, .fp-ai-dialog).gap-4 { gap: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .grid, :is(.fp-ai-panel, .fp-ai-dialog).grid { display: grid; }
+:is(.fp-ai-panel, .fp-ai-dialog) .grid-cols-2, :is(.fp-ai-panel, .fp-ai-dialog).grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:is(.fp-ai-panel, .fp-ai-dialog) .grid-cols-3, :is(.fp-ai-panel, .fp-ai-dialog).grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:is(.fp-ai-panel, .fp-ai-dialog) .grid-cols-4, :is(.fp-ai-panel, .fp-ai-dialog).grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-10, :is(.fp-ai-panel, .fp-ai-dialog).h-10 { height: 2.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-12, :is(.fp-ai-panel, .fp-ai-dialog).h-12 { height: 3rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-3, :is(.fp-ai-panel, .fp-ai-dialog).h-3 { height: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-3\.5, :is(.fp-ai-panel, .fp-ai-dialog).h-3\.5 { height: 0.875rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-4, :is(.fp-ai-panel, .fp-ai-dialog).h-4 { height: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-5, :is(.fp-ai-panel, .fp-ai-dialog).h-5 { height: 1.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .h-8, :is(.fp-ai-panel, .fp-ai-dialog).h-8 { height: 2rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .inset-0, :is(.fp-ai-panel, .fp-ai-dialog).inset-0 { inset: 0; }
+:is(.fp-ai-panel, .fp-ai-dialog) .items-center, :is(.fp-ai-panel, .fp-ai-dialog).items-center { align-items: center; }
+:is(.fp-ai-panel, .fp-ai-dialog) .items-start, :is(.fp-ai-panel, .fp-ai-dialog).items-start { align-items: flex-start; }
+:is(.fp-ai-panel, .fp-ai-dialog) .justify-between, :is(.fp-ai-panel, .fp-ai-dialog).justify-between { justify-content: space-between; }
+:is(.fp-ai-panel, .fp-ai-dialog) .justify-center, :is(.fp-ai-panel, .fp-ai-dialog).justify-center { justify-content: center; }
+:is(.fp-ai-panel, .fp-ai-dialog) .justify-end, :is(.fp-ai-panel, .fp-ai-dialog).justify-end { justify-content: flex-end; }
+:is(.fp-ai-panel, .fp-ai-dialog) .leading-relaxed, :is(.fp-ai-panel, .fp-ai-dialog).leading-relaxed { line-height: 1.625; }
+:is(.fp-ai-panel, .fp-ai-dialog) .leading-tight, :is(.fp-ai-panel, .fp-ai-dialog).leading-tight { line-height: 1.25; }
+:is(.fp-ai-panel, .fp-ai-dialog) .max-h-\[85vh\], :is(.fp-ai-panel, .fp-ai-dialog).max-h-\[85vh\] { max-height: 85vh; }
+:is(.fp-ai-panel, .fp-ai-dialog) .max-h-\[90vh\], :is(.fp-ai-panel, .fp-ai-dialog).max-h-\[90vh\] { max-height: 90vh; }
+:is(.fp-ai-panel, .fp-ai-dialog) .max-w-\[88\%\], :is(.fp-ai-panel, .fp-ai-dialog).max-w-\[88\%\] { max-width: 88%; }
+:is(.fp-ai-panel, .fp-ai-dialog) .max-w-2xl, :is(.fp-ai-panel, .fp-ai-dialog).max-w-2xl { max-width: 42rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .max-w-sm, :is(.fp-ai-panel, .fp-ai-dialog).max-w-sm { max-width: 24rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .max-w-xl, :is(.fp-ai-panel, .fp-ai-dialog).max-w-xl { max-width: 36rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mb-1, :is(.fp-ai-panel, .fp-ai-dialog).mb-1 { margin-bottom: 0.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mb-1\.5, :is(.fp-ai-panel, .fp-ai-dialog).mb-1\.5 { margin-bottom: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mb-2, :is(.fp-ai-panel, .fp-ai-dialog).mb-2 { margin-bottom: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mb-3, :is(.fp-ai-panel, .fp-ai-dialog).mb-3 { margin-bottom: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .ml-0\.5, :is(.fp-ai-panel, .fp-ai-dialog).ml-0\.5 { margin-left: 0.125rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mt-0\.5, :is(.fp-ai-panel, .fp-ai-dialog).mt-0\.5 { margin-top: 0.125rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mt-1, :is(.fp-ai-panel, .fp-ai-dialog).mt-1 { margin-top: 0.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mt-2, :is(.fp-ai-panel, .fp-ai-dialog).mt-2 { margin-top: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mt-3, :is(.fp-ai-panel, .fp-ai-dialog).mt-3 { margin-top: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .mx-auto, :is(.fp-ai-panel, .fp-ai-dialog).mx-auto { margin-left: auto; margin-right: auto; }
+:is(.fp-ai-panel, .fp-ai-dialog) .overflow-hidden, :is(.fp-ai-panel, .fp-ai-dialog).overflow-hidden { overflow: hidden; }
+:is(.fp-ai-panel, .fp-ai-dialog) .overflow-x-auto, :is(.fp-ai-panel, .fp-ai-dialog).overflow-x-auto { overflow-x: auto; }
+:is(.fp-ai-panel, .fp-ai-dialog) .overflow-y-auto, :is(.fp-ai-panel, .fp-ai-dialog).overflow-y-auto { overflow-y: auto; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-1\.5, :is(.fp-ai-panel, .fp-ai-dialog).p-1\.5 { padding: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-2, :is(.fp-ai-panel, .fp-ai-dialog).p-2 { padding: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-2\.5, :is(.fp-ai-panel, .fp-ai-dialog).p-2\.5 { padding: 0.625rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-3, :is(.fp-ai-panel, .fp-ai-dialog).p-3 { padding: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-3\.5, :is(.fp-ai-panel, .fp-ai-dialog).p-3\.5 { padding: 0.875rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-4, :is(.fp-ai-panel, .fp-ai-dialog).p-4 { padding: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .p-6, :is(.fp-ai-panel, .fp-ai-dialog).p-6 { padding: 1.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .pt-2, :is(.fp-ai-panel, .fp-ai-dialog).pt-2 { padding-top: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .pt-3, :is(.fp-ai-panel, .fp-ai-dialog).pt-3 { padding-top: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .px-1\.5, :is(.fp-ai-panel, .fp-ai-dialog).px-1\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .px-2, :is(.fp-ai-panel, .fp-ai-dialog).px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .px-2\.5, :is(.fp-ai-panel, .fp-ai-dialog).px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .px-3, :is(.fp-ai-panel, .fp-ai-dialog).px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .px-4, :is(.fp-ai-panel, .fp-ai-dialog).px-4 { padding-left: 1rem; padding-right: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .px-6, :is(.fp-ai-panel, .fp-ai-dialog).px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-0\.5, :is(.fp-ai-panel, .fp-ai-dialog).py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-1, :is(.fp-ai-panel, .fp-ai-dialog).py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-1\.5, :is(.fp-ai-panel, .fp-ai-dialog).py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-12, :is(.fp-ai-panel, .fp-ai-dialog).py-12 { padding-top: 3rem; padding-bottom: 3rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-2, :is(.fp-ai-panel, .fp-ai-dialog).py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-2\.5, :is(.fp-ai-panel, .fp-ai-dialog).py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-3, :is(.fp-ai-panel, .fp-ai-dialog).py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .py-4, :is(.fp-ai-panel, .fp-ai-dialog).py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .rounded, :is(.fp-ai-panel, .fp-ai-dialog).rounded { border-radius: 0.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .rounded-2xl, :is(.fp-ai-panel, .fp-ai-dialog).rounded-2xl { border-radius: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .rounded-full, :is(.fp-ai-panel, .fp-ai-dialog).rounded-full { border-radius: 9999px; }
+:is(.fp-ai-panel, .fp-ai-dialog) .rounded-lg, :is(.fp-ai-panel, .fp-ai-dialog).rounded-lg { border-radius: 0.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .rounded-md, :is(.fp-ai-panel, .fp-ai-dialog).rounded-md { border-radius: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .rounded-xl, :is(.fp-ai-panel, .fp-ai-dialog).rounded-xl { border-radius: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .shadow-2xl, :is(.fp-ai-panel, .fp-ai-dialog).shadow-2xl { box-shadow: 0 24px 48px -12px rgba(28, 25, 23, 0.22); }
+:is(.fp-ai-panel, .fp-ai-dialog) .shadow-md, :is(.fp-ai-panel, .fp-ai-dialog).shadow-md { box-shadow: 0 4px 10px -2px rgba(28, 25, 23, 0.1), 0 2px 4px -2px rgba(28, 25, 23, 0.06); }
+:is(.fp-ai-panel, .fp-ai-dialog) .shadow-sm, :is(.fp-ai-panel, .fp-ai-dialog).shadow-sm { box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06); }
+:is(.fp-ai-panel, .fp-ai-dialog) .shrink-0, :is(.fp-ai-panel, .fp-ai-dialog).shrink-0 { flex-shrink: 0; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-\[10px\], :is(.fp-ai-panel, .fp-ai-dialog).text-\[10px\] { font-size: 10px; line-height: 1.4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-\[11px\], :is(.fp-ai-panel, .fp-ai-dialog).text-\[11px\] { font-size: 11px; line-height: 1.4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-\[12px\], :is(.fp-ai-panel, .fp-ai-dialog).text-\[12px\] { font-size: 12px; line-height: 1.4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-base, :is(.fp-ai-panel, .fp-ai-dialog).text-base { font-size: 1rem; line-height: 1.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-center, :is(.fp-ai-panel, .fp-ai-dialog).text-center { text-align: center; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-left, :is(.fp-ai-panel, .fp-ai-dialog).text-left { text-align: left; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-lg, :is(.fp-ai-panel, .fp-ai-dialog).text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-right, :is(.fp-ai-panel, .fp-ai-dialog).text-right { text-align: right; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-sm, :is(.fp-ai-panel, .fp-ai-dialog).text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-xs, :is(.fp-ai-panel, .fp-ai-dialog).text-xs { font-size: 0.75rem; line-height: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .tracking-wider, :is(.fp-ai-panel, .fp-ai-dialog).tracking-wider { letter-spacing: 0.05em; }
+:is(.fp-ai-panel, .fp-ai-dialog) .transition-all, :is(.fp-ai-panel, .fp-ai-dialog).transition-all { transition: all 0.15s ease; }
+:is(.fp-ai-panel, .fp-ai-dialog) .transition-colors, :is(.fp-ai-panel, .fp-ai-dialog).transition-colors { transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease; }
+:is(.fp-ai-panel, .fp-ai-dialog) .truncate, :is(.fp-ai-panel, .fp-ai-dialog).truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.fp-ai-panel, .fp-ai-dialog) .uppercase, :is(.fp-ai-panel, .fp-ai-dialog).uppercase { text-transform: uppercase; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-10, :is(.fp-ai-panel, .fp-ai-dialog).w-10 { width: 2.5rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-12, :is(.fp-ai-panel, .fp-ai-dialog).w-12 { width: 3rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-3, :is(.fp-ai-panel, .fp-ai-dialog).w-3 { width: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-3\.5, :is(.fp-ai-panel, .fp-ai-dialog).w-3\.5 { width: 0.875rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-4, :is(.fp-ai-panel, .fp-ai-dialog).w-4 { width: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-5, :is(.fp-ai-panel, .fp-ai-dialog).w-5 { width: 1.25rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-8, :is(.fp-ai-panel, .fp-ai-dialog).w-8 { width: 2rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .w-full, :is(.fp-ai-panel, .fp-ai-dialog).w-full { width: 100%; }
+:is(.fp-ai-panel, .fp-ai-dialog) .z-50, :is(.fp-ai-panel, .fp-ai-dialog).z-50 { z-index: 50; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-amber-100, :is(.fp-ai-panel, .fp-ai-dialog).bg-amber-100 { background-color: #fef3c7; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-amber-200\/60, :is(.fp-ai-panel, .fp-ai-dialog).bg-amber-200\/60 { background-color: rgba(253, 230, 138, 0.6); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-amber-50, :is(.fp-ai-panel, .fp-ai-dialog).bg-amber-50 { background-color: #fffbeb; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-amber-50\/90, :is(.fp-ai-panel, .fp-ai-dialog).bg-amber-50\/90 { background-color: rgba(255, 251, 235, 0.9); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-amber-500\/10, :is(.fp-ai-panel, .fp-ai-dialog).bg-amber-500\/10 { background-color: rgba(245, 158, 11, 0.1); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-black\/60, :is(.fp-ai-panel, .fp-ai-dialog).bg-black\/60 { background-color: rgba(28, 25, 23, 0.45); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-emerald-100, :is(.fp-ai-panel, .fp-ai-dialog).bg-emerald-100 { background-color: #d1fae5; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-emerald-50, :is(.fp-ai-panel, .fp-ai-dialog).bg-emerald-50 { background-color: #ecfdf5; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-emerald-50\/70, :is(.fp-ai-panel, .fp-ai-dialog).bg-emerald-50\/70 { background-color: rgba(236, 253, 245, 0.7); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-emerald-500\/10, :is(.fp-ai-panel, .fp-ai-dialog).bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.1); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-emerald-600, :is(.fp-ai-panel, .fp-ai-dialog).bg-emerald-600 { background-color: #059669; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-indigo-50, :is(.fp-ai-panel, .fp-ai-dialog).bg-indigo-50 { background-color: #fff7ed; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-indigo-50\/60, :is(.fp-ai-panel, .fp-ai-dialog).bg-indigo-50\/60 { background-color: rgba(255, 247, 237, 0.6); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-indigo-500\/10, :is(.fp-ai-panel, .fp-ai-dialog).bg-indigo-500\/10 { background-color: rgba(249, 115, 22, 0.1); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-indigo-600, :is(.fp-ai-panel, .fp-ai-dialog).bg-indigo-600 { background-color: #ea580c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-100, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-100 { background-color: #f5f5f4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-100\/70, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-100\/70 { background-color: rgba(245, 245, 244, 0.7); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-200\/70, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-200\/70 { background-color: rgba(231, 229, 228, 0.7); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-50, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-50 { background-color: #fafaf9; }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-50\/50, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-50\/50 { background-color: rgba(250, 250, 249, 0.5); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-50\/60, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-50\/60 { background-color: rgba(250, 250, 249, 0.6); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-slate-50\/70, :is(.fp-ai-panel, .fp-ai-dialog).bg-slate-50\/70 { background-color: rgba(250, 250, 249, 0.7); }
+:is(.fp-ai-panel, .fp-ai-dialog) .bg-white, :is(.fp-ai-panel, .fp-ai-dialog).bg-white { background-color: #ffffff; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-amber-200, :is(.fp-ai-panel, .fp-ai-dialog).border-amber-200 { border-color: #fde68a; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-amber-300, :is(.fp-ai-panel, .fp-ai-dialog).border-amber-300 { border-color: #fcd34d; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-emerald-200, :is(.fp-ai-panel, .fp-ai-dialog).border-emerald-200 { border-color: #a7f3d0; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-emerald-300, :is(.fp-ai-panel, .fp-ai-dialog).border-emerald-300 { border-color: #6ee7b7; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-indigo-200, :is(.fp-ai-panel, .fp-ai-dialog).border-indigo-200 { border-color: #fed7aa; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-slate-200, :is(.fp-ai-panel, .fp-ai-dialog).border-slate-200 { border-color: #e7e5e4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-slate-200\/80, :is(.fp-ai-panel, .fp-ai-dialog).border-slate-200\/80 { border-color: rgba(231, 229, 228, 0.8); }
+:is(.fp-ai-panel, .fp-ai-dialog) .border-slate-300, :is(.fp-ai-panel, .fp-ai-dialog).border-slate-300 { border-color: #d6d3d1; }
+:is(.fp-ai-panel, .fp-ai-dialog) .from-amber-500, :is(.fp-ai-panel, .fp-ai-dialog).from-amber-500 { --ai-from: #f59e0b; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-amber-500, :is(.fp-ai-panel, .fp-ai-dialog).text-amber-500 { color: #f59e0b; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-amber-600, :is(.fp-ai-panel, .fp-ai-dialog).text-amber-600 { color: #d97706; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-amber-700, :is(.fp-ai-panel, .fp-ai-dialog).text-amber-700 { color: #b45309; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-amber-800, :is(.fp-ai-panel, .fp-ai-dialog).text-amber-800 { color: #92400e; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-amber-900, :is(.fp-ai-panel, .fp-ai-dialog).text-amber-900 { color: #78350f; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-blue-500, :is(.fp-ai-panel, .fp-ai-dialog).text-blue-500 { color: #3b82f6; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-emerald-500, :is(.fp-ai-panel, .fp-ai-dialog).text-emerald-500 { color: #10b981; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-emerald-600, :is(.fp-ai-panel, .fp-ai-dialog).text-emerald-600 { color: #059669; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-emerald-700, :is(.fp-ai-panel, .fp-ai-dialog).text-emerald-700 { color: #047857; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-emerald-800, :is(.fp-ai-panel, .fp-ai-dialog).text-emerald-800 { color: #065f46; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-indigo-500, :is(.fp-ai-panel, .fp-ai-dialog).text-indigo-500 { color: #f97316; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-indigo-600, :is(.fp-ai-panel, .fp-ai-dialog).text-indigo-600 { color: #ea580c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-indigo-700, :is(.fp-ai-panel, .fp-ai-dialog).text-indigo-700 { color: #c2410c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-rose-500, :is(.fp-ai-panel, .fp-ai-dialog).text-rose-500 { color: #f43f5e; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-slate-400, :is(.fp-ai-panel, .fp-ai-dialog).text-slate-400 { color: #78716c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-slate-500, :is(.fp-ai-panel, .fp-ai-dialog).text-slate-500 { color: #6a635e; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-slate-600, :is(.fp-ai-panel, .fp-ai-dialog).text-slate-600 { color: #57534e; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-slate-700, :is(.fp-ai-panel, .fp-ai-dialog).text-slate-700 { color: #44403c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-slate-800, :is(.fp-ai-panel, .fp-ai-dialog).text-slate-800 { color: #292524; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-slate-900, :is(.fp-ai-panel, .fp-ai-dialog).text-slate-900 { color: #1c1917; }
+:is(.fp-ai-panel, .fp-ai-dialog) .text-white, :is(.fp-ai-panel, .fp-ai-dialog).text-white { color: #ffffff; }
+:is(.fp-ai-panel, .fp-ai-dialog) .to-indigo-600, :is(.fp-ai-panel, .fp-ai-dialog).to-indigo-600 { --ai-to: #ea580c; }
+
+/* ── Children ──────────────────────────────────────────────────────────── */
+:is(.fp-ai-panel, .fp-ai-dialog) .divide-slate-200 > * + *, :is(.fp-ai-panel, .fp-ai-dialog).divide-slate-200 > * + * { border-color: #e7e5e4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .divide-y > * + *, :is(.fp-ai-panel, .fp-ai-dialog).divide-y > * + * { border-top-width: 1px; }
+:is(.fp-ai-panel, .fp-ai-dialog) .space-y-1\.5 > * + *, :is(.fp-ai-panel, .fp-ai-dialog).space-y-1\.5 > * + * { margin-top: 0.375rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .space-y-2\.5 > * + *, :is(.fp-ai-panel, .fp-ai-dialog).space-y-2\.5 > * + * { margin-top: 0.625rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .space-y-3 > * + *, :is(.fp-ai-panel, .fp-ai-dialog).space-y-3 > * + * { margin-top: 0.75rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .space-y-4 > * + *, :is(.fp-ai-panel, .fp-ai-dialog).space-y-4 > * + * { margin-top: 1rem; }
+:is(.fp-ai-panel, .fp-ai-dialog) .space-y-5 > * + *, :is(.fp-ai-panel, .fp-ai-dialog).space-y-5 > * + * { margin-top: 1.25rem; }
+
+/* ── States ────────────────────────────────────────────────────────────── */
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:underline:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:underline:hover { text-decoration: underline; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-amber-100:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-amber-100:hover { background-color: #fef3c7; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-emerald-100:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-emerald-100:hover { background-color: #d1fae5; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-emerald-700:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-emerald-700:hover { background-color: #047857; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-indigo-100:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-indigo-100:hover { background-color: #ffedd5; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-indigo-700:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-indigo-700:hover { background-color: #c2410c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-slate-100:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-slate-100:hover { background-color: #f5f5f4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-slate-200:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-slate-200:hover { background-color: #e7e5e4; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-slate-300:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-slate-300:hover { background-color: #d6d3d1; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:bg-slate-50:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:bg-slate-50:hover { background-color: #fafaf9; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:text-slate-600:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:text-slate-600:hover { color: #57534e; }
+:is(.fp-ai-panel, .fp-ai-dialog) .hover\:text-slate-700:hover, :is(.fp-ai-panel, .fp-ai-dialog).hover\:text-slate-700:hover { color: #44403c; }
+:is(.fp-ai-panel, .fp-ai-dialog) .focus\:outline-none:focus, :is(.fp-ai-panel, .fp-ai-dialog).focus\:outline-none:focus { outline: none; }
+:is(.fp-ai-panel, .fp-ai-dialog) .focus\:ring-1:focus, :is(.fp-ai-panel, .fp-ai-dialog).focus\:ring-1:focus { box-shadow: 0 0 0 1px var(--ai-ring, #ea580c); }
+:is(.fp-ai-panel, .fp-ai-dialog) .focus\:ring-emerald-500:focus, :is(.fp-ai-panel, .fp-ai-dialog).focus\:ring-emerald-500:focus { --ai-ring: #10b981; }
+:is(.fp-ai-panel, .fp-ai-dialog) .focus\:ring-indigo-500:focus, :is(.fp-ai-panel, .fp-ai-dialog).focus\:ring-indigo-500:focus { --ai-ring: #f97316; }
+:is(.fp-ai-panel, .fp-ai-dialog) .disabled\:opacity-40:disabled, :is(.fp-ai-panel, .fp-ai-dialog).disabled\:opacity-40:disabled { opacity: 0.4; }
+
+@media (min-width: 640px) {
+  :is(.fp-ai-panel, .fp-ai-dialog) .sm\:grid-cols-4, :is(.fp-ai-panel, .fp-ai-dialog).sm\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
