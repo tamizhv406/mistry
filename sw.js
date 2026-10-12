@@ -1,5 +1,5 @@
 // Building Mistry Service Worker
-const CACHE_NAME = 'building-mistry-v1';
+const CACHE_NAME = 'building-mistry-v2';
 
 const STATIC_ASSETS = [
   './',
@@ -51,9 +51,17 @@ self.addEventListener('fetch', event => {
   // Strategy for Navigation (HTML page loads)
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match('./') || caches.match('./index.html');
-      })
+      fetch(request)
+        .then(response => {
+          // Keep the offline copy of the page current. Without this the app shell cached at
+          // install time is served forever when offline, even after the app has been updated.
+          if (response && response.status === 200 && response.type === 'basic') {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put('./', copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match('./').then(cached => cached || caches.match('./index.html')))
     );
     return;
   }
