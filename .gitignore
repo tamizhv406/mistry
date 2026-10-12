@@ -34,3 +34,10 @@ android/local.properties
 .env
 .env.*
 !.env.example
+
+# Vercel CLI link to the hosting project (local to this computer)
+.vercel
+
+# Other people's projects downloaded for reference; not part of this app
+.github/workflows/Home_View-main/
+.github/workflows/PlaceIt-master/

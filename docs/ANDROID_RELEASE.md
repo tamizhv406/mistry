@@ -69,7 +69,10 @@ Put them in `.env.production.local` (git ignores `*.local`). They are compiled i
 VITE_SUPABASE_URL=            # optional: turns on cloud backup
 VITE_SUPABASE_ANON_KEY=       # the public anon / publishable key ONLY. Never a service-role key.
 VITE_ENABLE_DEMO_LOGIN=       # leave unset for release. "true" re-enables the demo accounts (public password).
+VITE_INITIAL_ADMIN_HASH=      # optional: SHA-256 of a first-login administrator password. Unset = no administrator account.
 ```
+
+All names are listed with notes in `.env.example`.
 
 ## Release checklist
 
@@ -94,5 +97,5 @@ Still open (yours to do or decide):
 - [ ] **Android auto-backup**: `android:allowBackup="true"` lets Android copy app data to the user's Google account. Keep it (easier restore) or set it to `false` in `AndroidManifest.xml` (stricter privacy), and describe your choice in the privacy policy.
 - [ ] **Target API level**: the project targets API 36. Check Play Console's current minimum when you submit.
 - [ ] **Play Console**: developer account, content rating questionnaire, target audience (adults), store listing (512×512 icon, 1024×500 feature graphic, phone screenshots, short and full description), and any closed-testing period Play requires for new personal accounts.
-- [ ] **Initial administrator account**: every install creates a hidden `SUPER_ADMIN` account for the address in `VITE_INITIAL_ADMIN_EMAIL` (default in `src/services/auth.ts`) with a first-login password hash that is in the public repository. On a customer's phone this account can see all data on that phone. Decide whether release builds should create it.
+- [ ] **Initial administrator account**: a production build creates the hidden `SUPER_ADMIN` account only when `VITE_INITIAL_ADMIN_HASH` is set for that build, and never with the development password, which is public (it is in this repository's tests). Without the variable a release has no administrator account. On a customer's phone that account can see all data on that phone, so decide whether release builds should set it.
 - [ ] Voice input uses the Web Speech API, which Android's WebView does not provide; the microphone button hides itself when unsupported. Confirm on a device.

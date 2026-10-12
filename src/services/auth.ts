@@ -16,11 +16,32 @@ export const INITIAL_ADMIN_USERNAME = (
   'tamilthilagan'
 ).toLowerCase();
 
-// Precomputed one-way cryptographic SHA-256 hashes for initial bootstrapping
-// (NEVER stores or exposes plaintext passwords in source code)
-const BOOTSTRAP_ADMIN_HASH =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_HASH) ||
+// True in a production build (the public website and release Android builds). Tests and tools
+// outside Vite have no build environment and count as development.
+const IS_PRODUCTION_BUILD: boolean =
+  typeof import.meta !== 'undefined' && (import.meta as any).env?.PROD === true;
+
+// SHA-256 of the development first-login password. That password is written in this
+// repository's tests, so it is public: a production build neither creates an account with it
+// nor accepts it at login.
+const PUBLIC_DEV_ADMIN_HASH =
   '36cecdf471b373885a397270477a1fddb78792d58b1c34eecf648524cf44e26d';
+
+const CONFIGURED_ADMIN_HASH: string = String(
+  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_HASH) || ''
+).trim().toLowerCase();
+
+/**
+ * First-login password hash of the initial administrator, or '' when this build must not
+ * create that account. Development uses the public default. A production build creates the
+ * account only when VITE_INITIAL_ADMIN_HASH (a SHA-256 hex digest) is set for it on purpose,
+ * and never with the public default.
+ */
+const BOOTSTRAP_ADMIN_HASH: string = !IS_PRODUCTION_BUILD
+  ? CONFIGURED_ADMIN_HASH || PUBLIC_DEV_ADMIN_HASH
+  : /^[0-9a-f]{64}$/.test(CONFIGURED_ADMIN_HASH) && CONFIGURED_ADMIN_HASH !== PUBLIC_DEV_ADMIN_HASH
+    ? CONFIGURED_ADMIN_HASH
+    : '';
 
 const BOOTSTRAP_DEMO_HASH =
   '93f2452221b58a02a6f126c60c1527de0a956bfa5ea042396372b5c688bc9707';
@@ -42,10 +63,7 @@ export async function hashPassword(password: string): Promise<string> {
  * unless VITE_ENABLE_DEMO_LOGIN=true is set on purpose (for a public demo site).
  */
 export function demoAccountsEnabled(): boolean {
-  const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || undefined;
-  if (!env) return true; // test runners and tools outside Vite
-  if (env.VITE_ENABLE_DEMO_LOGIN === 'true') return true;
-  return !env.PROD;
+  return !IS_PRODUCTION_BUILD || (import.meta as any).env?.VITE_ENABLE_DEMO_LOGIN === 'true';
 }
 
 export function isSuperAdmin(user?: User | null): boolean {
@@ -81,32 +99,44 @@ export async function initDefaultUser(): Promise<void> {
     .first();
 
   if (!existingRealAdmin) {
-    const realAdmin: User = {
-      id: 'user-super-admin-tamil',
-      username: INITIAL_ADMIN_USERNAME,
-      fullName: 'Tamil Thilagan (Real Admin)',
-      mobile: '98401 99887',
-      phoneNormalized: '9840199887',
-      email: INITIAL_ADMIN_EMAIL,
-      passwordHash: BOOTSTRAP_ADMIN_HASH,
-      role: 'SUPER_ADMIN',
-      isActive: true,
-      mustChangePassword: true,
-      createdAt: '2026-01-01T00:00:00.000Z',
-    };
-    await db.users.put(realAdmin);
+    // No first-login password for this build means no administrator account is created.
+    if (BOOTSTRAP_ADMIN_HASH) {
+      const realAdmin: User = {
+        id: 'user-super-admin-tamil',
+        username: INITIAL_ADMIN_USERNAME,
+        fullName: 'Tamil Thilagan (Real Admin)',
+        mobile: '98401 99887',
+        phoneNormalized: '9840199887',
+        email: INITIAL_ADMIN_EMAIL,
+        passwordHash: BOOTSTRAP_ADMIN_HASH,
+        role: 'SUPER_ADMIN',
+        isActive: true,
+        mustChangePassword: true,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      };
+      await db.users.put(realAdmin);
+    }
   } else {
+    // An account left on the public development password by an earlier build, and never
+    // signed in to, moves to the first-login password this build was given.
+    const stillOnPublicDefault =
+      existingRealAdmin.mustChangePassword === true &&
+      existingRealAdmin.passwordHash === PUBLIC_DEV_ADMIN_HASH &&
+      Boolean(BOOTSTRAP_ADMIN_HASH);
     // Ensure email and role remain locked to SUPER_ADMIN without resetting the user's password
     await db.users.update(existingRealAdmin.id, {
       email: INITIAL_ADMIN_EMAIL,
       role: 'SUPER_ADMIN',
       isActive: true,
       phoneNormalized: normalizeIndianPhone(existingRealAdmin.mobile || '9840199887'),
+      ...(stillOnPublicDefault ? { passwordHash: BOOTSTRAP_ADMIN_HASH } : {}),
       updatedAt: new Date().toISOString(),
     });
   }
 
-  if (!demoAccountsEnabled()) return;
+  // The same rule as demoAccountsEnabled(), written out in full: the bundler settles these
+  // expressions where they stand, and can then leave the demo accounts out of a production build.
+  if ((import.meta as any).env?.PROD === true && (import.meta as any).env?.VITE_ENABLE_DEMO_LOGIN !== 'true') return;
 
   // 2. Default Mistry Velu account (Contractor demo profile)
   const mistryExists = await db.users.get('user-mistry-velu');
@@ -178,6 +208,11 @@ export async function loginUser(
     return { success: false, error: 'Your account is deactivated. Please contact administrator.' };
   }
 
+  // The development first-login password is public, so a production build never accepts it.
+  if (IS_PRODUCTION_BUILD && user.passwordHash === PUBLIC_DEV_ADMIN_HASH) {
+    return { success: false, error: 'This account has not been set up on this device. Please contact your administrator.' };
+  }
+
   const inputHash = await hashPassword(password);
   if (user.passwordHash !== inputHash) {
     return { success: false, error: 'Incorrect password. Please try again.' };
@@ -205,6 +240,18 @@ export async function loginUser(
   );
 
   return { success: true, user };
+}
+
+/**
+ * Signs in as the demo contractor. The demo password is written only here, behind the same
+ * rule as the demo accounts (written out in full, as in initDefaultUser), so a production
+ * build does not carry it.
+ */
+export async function loginDemoContractor(): Promise<{ success: boolean; user?: User; error?: string }> {
+  if ((import.meta as any).env?.PROD === true && (import.meta as any).env?.VITE_ENABLE_DEMO_LOGIN !== 'true') {
+    return { success: false, error: 'Demo login is not available.' };
+  }
+  return loginUser('mistry_velu', 'mistry123', true);
 }
 
 /**

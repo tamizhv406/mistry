@@ -88,15 +88,24 @@ The code and migration are written and tested against a stand-in, but **have not
 
 The app is packaged for Android with Capacitor (`android/`). Build steps, signing, and the Play Store checklist with what is still open: [docs/ANDROID_RELEASE.md](docs/ANDROID_RELEASE.md).
 
-Optional environment variables (create `.env.local`; never commit it):
+## Website (Vercel)
+
+The website is built by Vercel from this repository: `npm run build`, output in `dist/` (`vercel.json`). A push to the production branch publishes a new version. Unknown paths are answered with the app itself.
+
+Records are stored per website address. What was entered at `http://localhost:5173` or on another address does not appear on the website: move it with Backup & Data (save to a file, then restore), or with cloud backup once that is set up.
+
+## Environment variables
+
+All optional. For development create `.env.local` (never commit it); for the website set them in Vercel under Project → Settings → Environment Variables and redeploy. `.env.example` lists them with notes. Every `VITE_` value is compiled into the app and is public.
 
 ```
 VITE_SUPABASE_URL=            # project URL
 VITE_SUPABASE_ANON_KEY=       # public anon key only. Never put a service-role key in the frontend.
+VITE_AI_DESIGN_FUNCTION=      # name of the deployed AI Edge Function; the AI key stays on the server
 VITE_INITIAL_ADMIN_EMAIL=     # optional
 VITE_INITIAL_ADMIN_USERNAME=  # optional
-VITE_INITIAL_ADMIN_HASH=      # optional, SHA-256 of the initial admin password
-VITE_ENABLE_DEMO_LOGIN=       # optional; `true` keeps the demo accounts in a production build (public password)
+VITE_INITIAL_ADMIN_HASH=      # SHA-256 of a first-login admin password; a production build creates no admin account without it
+VITE_ENABLE_DEMO_LOGIN=       # `true` keeps the demo accounts in a production build (public password)
 ```
 
 Without these the app runs fully offline, which is the tested configuration.
