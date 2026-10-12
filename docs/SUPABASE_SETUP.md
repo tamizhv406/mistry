@@ -43,8 +43,9 @@ deletes, failed sync, clock set back).
    VITE_SUPABASE_URL=https://<project-ref>.supabase.co
    VITE_SUPABASE_ANON_KEY=<anon or publishable key>
    ```
-   For the GitHub Pages deployment, add the same two values as repository secrets and pass them to the
-   build step in `.github/workflows/deploy.yml`. Never use the service-role key in the app.
+   For the website on Vercel, set the same two names under Project → Settings → Environment Variables
+   and redeploy. The GitHub Pages copy is built on this computer by `npm run deploy`, so it reads
+   `.env.production.local`. Never use the service-role key in the app.
 5. **Verify with two devices or browsers**: sign in on both, add a worker on one, sync, see it on the
    other; edit on both and confirm the later edit wins; delete on one and confirm it disappears on the
    other; check in the dashboard that a second account can not see the first account's rows.
