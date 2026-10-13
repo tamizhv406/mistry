@@ -37,7 +37,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
     setLoadingExport(true);
     try {
       await exportDatabaseBackup(user);
-      onNotify('Full database backup file (.json) downloaded to your computer!', 'success');
+      onNotify('Backup of records available to your account (.json) downloaded to your computer.', 'success');
     } catch (err: any) {
       onNotify('Backup export failed: ' + err.message, 'error');
     } finally {
@@ -102,7 +102,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
           Database Backup & Safety Center
         </h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem' }}>
-          Manage local IndexedDB storage, download offline backups, and restore your construction business records.
+          Manage local IndexedDB storage, download offline backups of records available to your account, and restore your construction business records.
         </p>
       </div>
 

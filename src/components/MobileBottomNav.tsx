@@ -404,7 +404,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Database className="w-5 h-5 text-amber-400" />
                   <div>
                     <div className="text-sm font-bold">Data Backup & Export</div>
-                    <div className="text-xs text-slate-400">Save complete offline database backup</div>
+                    <div className="text-xs text-slate-400">Download an offline backup of accessible records</div>
                   </div>
                 </div>
               </button>
