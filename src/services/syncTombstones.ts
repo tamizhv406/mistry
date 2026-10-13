@@ -19,6 +19,7 @@ export interface Tombstone {
   table: string;
   id: string;
   at: string;
+  ownerId?: string;
 }
 
 const TOMBSTONE_KEY = 'mistry_sync_tombstones';
@@ -35,19 +36,23 @@ export function readTombstones(): Tombstone[] {
 }
 
 /** Remembers a permanent delete so the cloud copy (and other devices) drop the record too. */
-export function recordTombstone(table: string, id: string): void {
+export function recordTombstone(table: string, id: string, ownerId?: string): void {
   if (!hasStorage() || !SYNC_TABLES.includes(table)) return;
   try {
-    const list = readTombstones().filter(t => !(t.table === table && t.id === id));
-    list.push({ table, id, at: new Date().toISOString() });
+    const list = readTombstones().filter(t =>
+      !(t.table === table && t.id === id && t.ownerId === ownerId)
+    );
+    list.push({ table, id, at: new Date().toISOString(), ownerId });
     localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(list.slice(-2000)));
   } catch { /* storage full or unavailable: the delete still happened locally */ }
 }
 
 export function forgetTombstones(sent: Tombstone[]): void {
   if (!hasStorage() || sent.length === 0) return;
-  const done = new Set(sent.map(t => `${t.table}|${t.id}|${t.at}`));
+  const done = new Set(sent.map(t => `${t.table}|${t.id}|${t.at}|${t.ownerId || ''}`));
   try {
-    localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(readTombstones().filter(t => !done.has(`${t.table}|${t.id}|${t.at}`))));
+    localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(readTombstones().filter(t =>
+      !done.has(`${t.table}|${t.id}|${t.at}|${t.ownerId || ''}`)
+    )));
   } catch { /* ignore */ }
 }

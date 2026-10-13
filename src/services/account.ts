@@ -52,7 +52,7 @@ export async function deleteAccountAndData(user: User): Promise<DeleteAccountRes
     await db.users.delete(user.id);
   });
 
-  purged.forEach(([table, id]) => recordTombstone(table, id));
+  purged.forEach(([table, id]) => recordTombstone(table, id, user.id));
   setCurrentUser(null);
   return { ok: true, records };
 }

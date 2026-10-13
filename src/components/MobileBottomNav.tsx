@@ -176,7 +176,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
             <div className="mobile-drawer-header">
               <div>
-                <h3 className="mobile-drawer-title">More Menu (விருப்பங்கள்)</h3>
+                <h3 className="mobile-drawer-title">More</h3>
                 <p className="mobile-drawer-sub">Quick access to all site ledgers & tools</p>
               </div>
               <button
@@ -228,7 +228,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Wrench size={20} />
                 </div>
                 <span className="mobile-drawer-label">Tools</span>
-                <span className="mobile-drawer-tamil">கருவிகள்</span>
               </button>
 
               {/* 2. Expenses */}
@@ -243,7 +242,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Wallet size={20} />
                 </div>
                 <span className="mobile-drawer-label">Expenses</span>
-                <span className="mobile-drawer-tamil">செலவுகள்</span>
               </button>
 
               {/* 3. Tea/Snacks */}
@@ -258,7 +256,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Coffee size={20} />
                 </div>
                 <span className="mobile-drawer-label">Tea / Snacks</span>
-                <span className="mobile-drawer-tamil">டீ, ஸ்நாக்ஸ்</span>
               </button>
 
               {/* 4. Pooja */}
@@ -273,7 +270,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Sparkles size={20} />
                 </div>
                 <span className="mobile-drawer-label">Pooja</span>
-                <span className="mobile-drawer-tamil">பூஜை செலவு</span>
               </button>
 
               {/* 5. Electricity */}
@@ -288,7 +284,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Zap size={20} />
                 </div>
                 <span className="mobile-drawer-label">Electricity</span>
-                <span className="mobile-drawer-tamil">மின்சார கட்டணம்</span>
               </button>
 
               {/* 6. Water */}
@@ -303,7 +298,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Droplets size={20} />
                 </div>
                 <span className="mobile-drawer-label">Water</span>
-                <span className="mobile-drawer-tamil">தண்ணீர் டேங்கர்</span>
               </button>
 
               {/* 7. Comments */}
@@ -318,7 +312,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <MessageSquare size={20} />
                 </div>
                 <span className="mobile-drawer-label">Comments</span>
-                <span className="mobile-drawer-tamil">தள குறிப்புகள்</span>
               </button>
 
               {/* 8. Reports */}
@@ -333,7 +326,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <FileText size={20} />
                 </div>
                 <span className="mobile-drawer-label">Reports</span>
-                <span className="mobile-drawer-tamil">அறிக்கைகள்</span>
               </button>
 
               {/* 9. Trash */}
@@ -346,7 +338,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Trash2 size={20} />
                 </div>
                 <span className="mobile-drawer-label">Trash</span>
-                <span className="mobile-drawer-tamil">குப்பைத் தொட்டி</span>
                 {trashCount > 0 && (
                   <span className="mobile-drawer-badge">{trashCount}</span>
                 )}
@@ -364,7 +355,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   <Settings size={20} />
                 </div>
                 <span className="mobile-drawer-label">Settings</span>
-                <span className="mobile-drawer-tamil">அமைப்புகள்</span>
               </button>
             </div>
           </div>

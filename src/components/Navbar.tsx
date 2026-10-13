@@ -208,7 +208,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
-                    backgroundColor: user.role === 'ADMIN' ? '#6366f1' : '#f59e0b',
+                    backgroundColor: isAdmin(user) ? '#6366f1' : '#f59e0b',
                     color: '#ffffff',
                     fontWeight: 800,
                     fontSize: '0.88rem',
@@ -239,14 +239,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                         ? '#fde047'
                         : user.role === 'SUB_ADMIN'
                         ? '#c4b5fd'
-                        : user.role === 'ADMIN'
-                        ? '#a5b4fc'
                         : '#94a3b8',
                       fontWeight: isAdmin(user) ? 700 : 500,
                     }}
                   >
                     {isSuperAdmin(user)
-                      ? '👑 Real Admin'
+                      ? '👑 Super Admin'
                       : user.role === 'SUB_ADMIN'
                       ? '🛡️ Sub-Admin'
                       : user.role}
@@ -296,7 +294,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 style={{
                   backgroundColor: isSuperAdmin(user)
                     ? '#f59e0b'
-                    : user.role === 'ADMIN' || user.role === 'SUB_ADMIN'
+                    : isAdmin(user)
                     ? '#6366f1'
                     : '#0ea5e9',
                 }}

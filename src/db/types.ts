@@ -117,6 +117,8 @@ export interface RodEntry {
   diameter: string; // '6 mm', '8 mm', '10 mm', '12 mm', '16 mm', '20 mm', '25 mm' or custom
   brand?: string;
   quantityPieces?: number;
+  /** Recorded total rod length in metres; separate from diameter and weight. */
+  lengthMetres?: number;
   unit: string; // 'kg', 'Tons', 'Bundles'
   weightKg: number;
   ratePerKg: number;
@@ -428,12 +430,11 @@ export interface PaymentTransaction {
 export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN';
 
 export function isAdminRole(role?: string): boolean {
-  return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN' || role === 'ADMIN';
+  return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN';
 }
 
-export function isSuperAdminRole(role?: string, email?: string): boolean {
-  const initialAdminEmail = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) || 'tamilthilagan82@gmail.com';
-  return role === 'SUPER_ADMIN' || (email || '').toLowerCase() === initialAdminEmail.toLowerCase();
+export function isSuperAdminRole(role?: string): boolean {
+  return role === 'SUPER_ADMIN';
 }
 
 export interface User {
@@ -445,11 +446,56 @@ export interface User {
   email: string;
   passwordHash: string;
   role: UserRole;
+  permissions?: Record<string, { read: boolean; write: boolean }>;
   isActive: boolean;
+  offlineLimited?: boolean;
   mustChangePassword?: boolean;
   lastLoginAt?: string;
   createdAt: string;
   updatedAt?: string;
+}
+
+const RECORD_PERMISSION_SCOPE: Record<string, string> = {
+  sites: 'projects',
+  siteComments: 'projects',
+  workers: 'labour',
+  attendance: 'labour',
+  salaryPayments: 'payroll',
+  labourAdvances: 'payroll',
+  materials: 'materials',
+  rodEntries: 'materials',
+  stockMovements: 'materials',
+  catalogItems: 'materials',
+  tools: 'expenses',
+  toolAssets: 'expenses',
+  toolIssues: 'expenses',
+  teaSnacksExpenses: 'expenses',
+  poojaExpenses: 'expenses',
+  electricityBills: 'expenses',
+  waterBills: 'expenses',
+  otherExpenses: 'expenses',
+  payments: 'expenses',
+  floorPlans: 'floor_plans',
+  estimates: 'estimates',
+  materialPrices: 'estimates',
+  users: 'users',
+};
+
+/** Client-side UI gate only; Supabase RLS remains the authorization boundary. */
+export function userCanAccessRecord(
+  user: User,
+  table: string,
+  access: 'read' | 'write',
+  ownerId: string | undefined
+): boolean {
+  if (user.role === 'SUPER_ADMIN') return true;
+  if (ownerId === user.id) return true;
+  if (user.role === 'SUB_ADMIN') {
+    const scope = RECORD_PERMISSION_SCOPE[table];
+    const permission = scope ? user.permissions?.[scope] : undefined;
+    return access === 'write' ? permission?.write === true : permission?.read === true || permission?.write === true;
+  }
+  return false;
 }
 
 export interface OtpSession {
@@ -561,6 +607,21 @@ export interface BuildingEstimate {
   totalEstimatedCost: number;
   boqSteelSchedule?: BOQSteelItem[];
   notes?: string;
+  /**
+   * Estimates saved by the four-step calculator (optional, so older estimates still load).
+   * In those, `plotArea` is the plot when it was given, otherwise the building size on one
+   * floor; in older estimates it is always the size of one floor.
+   */
+  plotSqFt?: number | null;        // null: the plot size was not given
+  footprintSqFt?: number;          // building size on one floor
+  labourRatePerSqFt?: number;
+  finishingRatePerSqFt?: number;   // 0: finishes and services not included
+  finishingCost?: number;
+  ratesUsed?: Record<string, number>;   // material needed per sq.ft, as used
+  ratesChanged?: string[];              // which of those the user changed
+  assumptions?: string[];
+  /** The calculator's inputs exactly as entered, so the estimate reopens as it was. */
+  inputs?: unknown;
   createdAt: string;
   updatedAt: string;
   isDeleted: boolean;
@@ -864,7 +925,7 @@ export interface FloorPlan {
 // Stock, catalog and tool tracking (schema v8, additive)
 // ============================================================
 
-export type CatalogKind = 'material' | 'brand' | 'tool';
+export type CatalogKind = 'material' | 'brand' | 'tool' | 'cement_type';
 
 export interface CatalogItem {
   id: string;
@@ -872,7 +933,13 @@ export interface CatalogItem {
   name: string;
   category: string;        // material category, or tool category
   unit?: string;           // default unit for materials
+  lowStockThreshold?: number | null;
+  lowStockThresholdUnit?: string;
   description?: string;
+  group?: string;          // materials: the shelf it is shown under (see MATERIAL_GROUPS)
+  materialType?: string;   // cement types: composition, e.g. 'OPC' | 'PPC' | 'PSC'
+  grade?: string;          // cement types: strength grade, e.g. '43' | '53'
+  standard?: string;       // cement types: the Indian Standard, e.g. 'IS 269'
   imageUrl?: string;       // bundled path or user-supplied data URL
   imageCredit?: string;    // author + license for bundled photos
   isBuiltIn?: boolean;

@@ -2,7 +2,6 @@ import React from 'react';
 
 export interface VisualItem {
   id: string;
-  tamil: string;
   english: string;
   emoji: string;
   subtext?: string;
@@ -13,7 +12,6 @@ export interface VisualItem {
 export const MATERIAL_VISUALS: VisualItem[] = [
   {
     id: 'sand',
-    tamil: 'மணல்',
     english: 'River Sand',
     emoji: '🏖️',
     subtext: 'Plastering & Masonry',
@@ -22,7 +20,6 @@ export const MATERIAL_VISUALS: VisualItem[] = [
   },
   {
     id: 'msand',
-    tamil: 'எம்-சாண்ட்',
     english: 'M-Sand / P-Sand',
     emoji: '⛰️',
     subtext: 'RCC Concrete & Mortar',
@@ -31,7 +28,6 @@ export const MATERIAL_VISUALS: VisualItem[] = [
   },
   {
     id: 'cement',
-    tamil: 'சிமெண்ட்',
     english: 'Cement Bags',
     emoji: '🏛️',
     subtext: 'OPC / PPC 50kg',
@@ -40,7 +36,6 @@ export const MATERIAL_VISUALS: VisualItem[] = [
   },
   {
     id: 'rod',
-    tamil: 'கம்பி',
     english: 'TMT Steel Rod',
     emoji: '🏗️',
     subtext: '8mm, 10mm, 12mm, 16mm',
@@ -49,7 +44,6 @@ export const MATERIAL_VISUALS: VisualItem[] = [
   },
   {
     id: 'bricks',
-    tamil: 'செங்கல்',
     english: 'Clay Bricks / Blocks',
     emoji: '🧱',
     subtext: 'Red Wire-Cut / Flyash',
@@ -58,7 +52,6 @@ export const MATERIAL_VISUALS: VisualItem[] = [
   },
   {
     id: 'aggregate',
-    tamil: 'ஜல்லி',
     english: 'Blue Metals (20mm)',
     emoji: '🪨',
     subtext: 'Concrete Aggregates',
@@ -70,7 +63,6 @@ export const MATERIAL_VISUALS: VisualItem[] = [
 export const WORKER_VISUALS: VisualItem[] = [
   {
     id: 'Mistry',
-    tamil: 'மேஸ்திரி',
     english: 'Chief Mistry',
     emoji: '👷‍♂️',
     subtext: 'Master Builder / Lead',
@@ -79,7 +71,6 @@ export const WORKER_VISUALS: VisualItem[] = [
   },
   {
     id: 'Periyaal',
-    tamil: 'பெரியாள்',
     english: 'Mason (Periyaal)',
     emoji: '🔨',
     subtext: 'Skilled Bricklayer',
@@ -88,7 +79,6 @@ export const WORKER_VISUALS: VisualItem[] = [
   },
   {
     id: 'Sithaal',
-    tamil: 'சித்தாள்',
     english: 'Helper (Sithaal)',
     emoji: '🧤',
     subtext: 'Mortar & Material Handler',
@@ -97,7 +87,6 @@ export const WORKER_VISUALS: VisualItem[] = [
   },
   {
     id: 'Bar Bender',
-    tamil: 'கம்பி ஆள்',
     english: 'Bar Bender',
     emoji: '⛓️',
     subtext: 'Steel TMT Fabrication',
@@ -106,7 +95,6 @@ export const WORKER_VISUALS: VisualItem[] = [
   },
   {
     id: 'Carpenter',
-    tamil: 'தச்சர்',
     english: 'Centering Carpenter',
     emoji: '🪚',
     subtext: 'Shuttering & Formwork',
@@ -118,7 +106,6 @@ export const WORKER_VISUALS: VisualItem[] = [
 export const REFRESHMENT_VISUALS: VisualItem[] = [
   {
     id: 'tea',
-    tamil: 'டீ (தேநீர்)',
     english: 'Tea / Coffee',
     emoji: '☕',
     subtext: 'Morning & Evening rounds',
@@ -127,7 +114,6 @@ export const REFRESHMENT_VISUALS: VisualItem[] = [
   },
   {
     id: 'snacks',
-    tamil: 'ஸ்நாக்ஸ்',
     english: 'Snacks / Samosa / Vada',
     emoji: '🍪',
     subtext: 'Biscuits, Sundal, Bonda',
@@ -136,7 +122,6 @@ export const REFRESHMENT_VISUALS: VisualItem[] = [
   },
   {
     id: 'juice',
-    tamil: 'ஜூஸ்',
     english: 'Fresh Juice / Cool Drinks',
     emoji: '🧃',
     subtext: 'Lemon, Sugarcane, Buttermilk',
@@ -146,21 +131,21 @@ export const REFRESHMENT_VISUALS: VisualItem[] = [
 ];
 
 export const TOOL_VISUALS: VisualItem[] = [
-  { id: 'hammer', tamil: 'சுத்தியல்', english: 'Hammer', emoji: '🔨' },
-  { id: 'trowel', tamil: 'கரண்டி', english: 'Trowel', emoji: '📐' },
-  { id: 'shovel', tamil: 'மண்வெட்டி', english: 'Spade / Shovel', emoji: '⛏️' },
-  { id: 'mixer', tamil: 'கலவை மெஷின்', english: 'Concrete Mixer', emoji: '🔄' },
-  { id: 'vibrator', tamil: 'வைப்ரேட்டர்', english: 'Needle Vibrator', emoji: '⚡' },
-  { id: 'ladder', tamil: 'ஏணி', english: 'Ladder / Scaffolding', emoji: '🪜' },
-  { id: 'tape', tamil: 'டேப்', english: 'Measuring Tape', emoji: '📏' },
-  { id: 'drill', tamil: 'டிரில் மெஷின்', english: 'Drill Machine', emoji: '🔩' },
+  { id: 'hammer', english: 'Hammer', emoji: '🔨' },
+  { id: 'trowel', english: 'Trowel', emoji: '📐' },
+  { id: 'shovel', english: 'Spade / Shovel', emoji: '⛏️' },
+  { id: 'mixer', english: 'Concrete Mixer', emoji: '🔄' },
+  { id: 'vibrator', english: 'Needle Vibrator', emoji: '⚡' },
+  { id: 'ladder', english: 'Ladder / Scaffolding', emoji: '🪜' },
+  { id: 'tape', english: 'Measuring Tape', emoji: '📏' },
+  { id: 'drill', english: 'Drill Machine', emoji: '🔩' },
 ];
 
 export const UTILITY_VISUALS: VisualItem[] = [
-  { id: 'pooja', tamil: 'பூஜை', english: 'Bhoomi Pooja', emoji: '🪔', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/40' },
-  { id: 'electricity', tamil: 'மின்சாரம் (EB)', english: 'EB Current Bill', emoji: '⚡', bgColor: 'bg-yellow-500/10', borderColor: 'border-yellow-500/40' },
-  { id: 'water', tamil: 'தண்ணீர் டேங்கர்', english: 'Water Tanker', emoji: '💧', bgColor: 'bg-sky-500/10', borderColor: 'border-sky-500/40' },
-  { id: 'fuel', tamil: 'டீசல் / பெட்ரோல்', english: 'Fuel & Transport', emoji: '⛽', bgColor: 'bg-rose-500/10', borderColor: 'border-rose-500/40' },
+  { id: 'pooja', english: 'Bhoomi Pooja', emoji: '🪔', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/40' },
+  { id: 'electricity', english: 'EB Current Bill', emoji: '⚡', bgColor: 'bg-yellow-500/10', borderColor: 'border-yellow-500/40' },
+  { id: 'water', english: 'Water Tanker', emoji: '💧', bgColor: 'bg-sky-500/10', borderColor: 'border-sky-500/40' },
+  { id: 'fuel', english: 'Fuel & Transport', emoji: '⛽', bgColor: 'bg-rose-500/10', borderColor: 'border-rose-500/40' },
 ];
 
 interface VisualCardProps {
@@ -209,8 +194,7 @@ export const VisualCard: React.FC<VisualCardProps> = ({
       )}
       <span className={`${emojiSizes[size]} drop-shadow-sm`}>{item.emoji}</span>
       <div className="flex flex-col items-center leading-tight">
-        <span className="font-bold text-slate-100 tracking-wide">{item.tamil}</span>
-        <span className="text-xs text-slate-400 font-medium">{item.english}</span>
+        <span className="font-bold text-slate-100 tracking-wide">{item.english}</span>
         {item.subtext && (
           <span className="text-[10px] text-slate-500 mt-0.5 max-w-[120px] truncate">
             {item.subtext}

@@ -898,6 +898,60 @@ button.m-stat:active { background: var(--m-surface-2); }
 .m-tool-name { font-weight: 700; font-size: 0.94rem; line-height: 1.2; }
 .m-tool-counts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 
+/* Step-by-step screens (Building Calculator) */
+.m-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; list-style: none; margin: 0 0 14px; padding: 0; }
+.m-steps li button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
+  min-height: var(--m-tap);
+  color: var(--m-ink-3);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.m-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--m-surface-2);
+  border: 1px solid var(--m-line-strong);
+  font-size: 0.82rem;
+}
+.m-steps li.is-current button { color: var(--m-ink); }
+.m-steps li.is-current .m-step-dot { background: var(--m-accent); border-color: var(--m-accent); color: #fff; }
+.m-steps li.is-done button { color: var(--m-ink-2); }
+.m-steps li.is-done .m-step-dot { background: var(--m-ok-soft); border-color: transparent; color: var(--m-ok); }
+.m-step-title { font-size: 1.15rem; margin: 0 0 10px; }
+.m-step-card-title { font-weight: 700; margin-bottom: 10px; }
+.m-row.is-picked { background: var(--m-accent-soft); }
+.m-option-list { display: grid; gap: 8px; }
+.m-option {
+  min-height: var(--m-tap);
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--m-line-strong);
+  background: var(--m-surface);
+  color: var(--m-ink);
+  font-weight: 600;
+  text-align: left;
+}
+.m-option[aria-pressed="true"] { border-color: var(--m-accent); background: var(--m-accent-soft); color: var(--m-accent-strong); }
+.m-estimate-hero {
+  text-align: center;
+  padding: 18px 14px;
+  border-radius: var(--m-radius);
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1px solid #fdba74;
+}
+.m-estimate-total { font-family: var(--font-heading); font-weight: 800; font-size: 2rem; line-height: 1.15; margin: 6px 0 2px; }
+.m-plain-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 0.9rem; line-height: 1.45; color: var(--m-ink-2); }
+
 /* Report tables */
 .m-table-wrap { overflow-x: auto; }
 .m-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }

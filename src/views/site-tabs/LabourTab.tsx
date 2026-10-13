@@ -339,7 +339,6 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                         const hoverItem: InteractiveHoverItem = {
                           id: l.worker.id,
                           title: l.worker.name,
-                          tamilTitle: vis.tamilName,
                           description: `${l.worker.category} • ₹${l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
                           imageUrl: l.worker.imageUrl || vis.imageUrl,
                           imageAlt: l.worker.name,
@@ -405,7 +404,6 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                         const hoverItem: InteractiveHoverItem = {
                           id: l.worker.id,
                           title: l.worker.name,
-                          tamilTitle: vis.tamilName,
                           description: `${l.worker.category} • ₹${l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
                           imageUrl: l.worker.imageUrl || vis.imageUrl,
                           imageAlt: l.worker.name,
@@ -874,7 +872,7 @@ export const LabourTab: React.FC<LabourTabProps> = ({
             isOpen={!!selectedWorkerForDetails}
             onClose={() => setSelectedWorkerForDetails(null)}
             title={selectedWorkerForDetails.name}
-            subtitle={`${vis.tamilName} • ${selectedWorkerForDetails.category}`}
+            subtitle={selectedWorkerForDetails.category}
             categoryBadge={`${selectedWorkerForDetails.category} • ₹${selectedWorkerForDetails.dailyWage}/day`}
             badgeVariant={
               selectedWorkerForDetails.category === 'MISTRY'

@@ -40,6 +40,7 @@ export const RodModal: React.FC<RodModalProps> = ({
   const [weightKg, setWeightKg] = useState<string>('500');
   const [ratePerKg, setRatePerKg] = useState<string>('68');
   const [quantityPieces, setQuantityPieces] = useState<string>('0');
+  const [lengthMetres, setLengthMetres] = useState<string>('');
   const [unit, setUnit] = useState('kg');
   const [paidAmount, setPaidAmount] = useState<string>('0'); // Default: Paid Amount = 0
   const [paymentMode, setPaymentMode] = useState('Cash');
@@ -65,6 +66,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       setWeightKg(rodToEdit.weightKg.toString());
       setRatePerKg(rodToEdit.ratePerKg.toString());
       setQuantityPieces(rodToEdit.quantityPieces ? rodToEdit.quantityPieces.toString() : '0');
+      setLengthMetres(rodToEdit.lengthMetres?.toString() || '');
       setUnit(rodToEdit.unit || 'kg');
       setPaidAmount(rodToEdit.paidAmount.toString());
       setPurchaseDate(rodToEdit.purchaseDate || '');
@@ -79,6 +81,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       setWeightKg('500');
       setRatePerKg('68');
       setQuantityPieces('0');
+      setLengthMetres('');
       setUnit('kg');
       setPaidAmount('0'); // Default: Paid Amount = 0
       setPaymentMode('Cash');
@@ -116,6 +119,11 @@ export const RodModal: React.FC<RodModalProps> = ({
       setError('Weight must be greater than 0 kg.');
       return;
     }
+    const recordedLength = lengthMetres.trim() ? Number(lengthMetres) : undefined;
+    if (recordedLength !== undefined && (!Number.isFinite(recordedLength) || recordedLength <= 0)) {
+      setError('Recorded total length must be greater than 0 metres.');
+      return;
+    }
     if (numRate <= 0) {
       setError('Rate per kg must be greater than ₹0.');
       return;
@@ -130,6 +138,7 @@ export const RodModal: React.FC<RodModalProps> = ({
       diameter: selectedDiameter,
       brand: brand.trim(),
       quantityPieces: parseInt(quantityPieces) || 0,
+      lengthMetres: recordedLength,
       unit,
       weightKg: numWeight,
       ratePerKg: numRate,
@@ -240,7 +249,6 @@ export const RodModal: React.FC<RodModalProps> = ({
             <div className="form-grid-2">
               <VoiceInputField
                 label="Supplier / Steel Yard"
-                tamilLabel="கம்பி கடை"
                 placeholder="e.g. Sri Ram Steel Traders, Annai Steels"
                 value={supplier}
                 onChange={setSupplier}
@@ -282,6 +290,22 @@ export const RodModal: React.FC<RodModalProps> = ({
                   value={ratePerKg}
                   onChange={e => setRatePerKg(e.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label>Total Rod Length (m)</label>
+                <input
+                  type="number"
+                  step="any"
+                  min="0.01"
+                  inputMode="decimal"
+                  placeholder="Optional; recorded separately from weight"
+                  value={lengthMetres}
+                  onChange={e => setLengthMetres(e.target.value)}
+                />
+                <span className="form-hint">Length is tracked in metres and is not converted to kilograms.</span>
               </div>
             </div>
 
@@ -394,7 +418,6 @@ export const RodModal: React.FC<RodModalProps> = ({
 
               <VoiceInputField
                 label="Notes / Structural Usage"
-                tamilLabel="குறிப்புகள்"
                 placeholder="e.g. Stirrups for 1st floor beams"
                 value={notes}
                 onChange={setNotes}

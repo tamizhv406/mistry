@@ -169,17 +169,17 @@ const stock = buildStock(
 );
 eq('One stock item', stock.length, 1);
 const item = stock[0];
-eq('Purchased', item.purchased, 150);
-eq('Used', item.used, 30);
-eq('Returned', item.returned, 10);
-eq('On hand = 150 − 30 − 10 − 2 + 1', item.onHand, 109);
+eq('Purchased bags are normalized to kilograms', item.purchased, 7500);
+eq('Used bags are normalized to kilograms', item.used, 1500);
+eq('Returned bags are normalized to kilograms', item.returned, 500);
+eq('On hand = 7,500 − 1,500 − 500 − 100 + 50 kg', item.onHand, 5450);
 eq('Purchase cost', item.purchaseCost, 60000);
-eq('Running balance is chronological', item.lines.filter(l => !l.voided).map(l => l.balanceAfter), [100, 70, 120, 110, 108, 109]);
+eq('Running balance is chronological', item.lines.filter(l => !l.voided).map(l => l.balanceAfter), [5000, 3500, 6000, 5500, 5400, 5450]);
 check('Voided movement stays in history but not in the balance', item.lines.some(l => l.id === 'v5' && l.voided && l.signed === 0));
 check('Stock never went negative', item.isNegative === false);
 
 const negative = buildStock([], [], [mv('x', 'usage', 5, '2026-10-01')]);
-check('Usage without stock is flagged negative', negative[0].isNegative && negative[0].onHand === -5);
+check('Usage without stock is converted and flagged negative', negative[0].isNegative && negative[0].onHand === -250);
 
 check('Outgoing more than stock is refused', validateMovement(109, 'usage', 110).ok === false);
 eq('Shortfall is reported', validateMovement(109, 'usage', 110).shortBy, 1);
@@ -257,7 +257,7 @@ import type { OtherExpense, PaymentTransaction, ElectricityBill } from '../src/d
   eq('Pending salary is all-time', oct.outstanding.salary, 1200);
   eq('Unpaid expenses as of now', oct.outstanding.expenses, 1600);
   eq('Deleted expense is ignored', oct.expenseRows.some(e => e.id === 'o3'), false);
-  eq('Materials: bought and used in period, stock now', [oct.materials[0].purchasedQty, oct.materials[0].usedQty, oct.materials[0].onHand], [100, 30, 75]);
+  eq('Materials: bought and used in period, stock now (kg)', [oct.materials[0].purchasedQty, oct.materials[0].usedQty, oct.materials[0].onHand], [5000, 1500, 3750]);
   eq('Labour row counts for the period', [oct.labour[0].counts.present, oct.labour[0].counts.half_day, oct.labour[0].days], [1, 1, 1.5]);
   eq('Tool inventory row', [oct.tools[0].total, oct.tools[0].issued, oct.tools[0].available], [5, 2, 3]);
   check('Overdue tool issue is flagged', oct.openToolIssues[0].overdue === true);

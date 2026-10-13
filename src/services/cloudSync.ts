@@ -14,13 +14,14 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { db } from '../db/db';
-import type { User } from '../db/types';
+import { userCanAccessRecord, type User } from '../db/types';
 import { SYNC_TABLES, USER_TABLES, forgetTombstones, readTombstones, type Tombstone } from './syncTombstones';
 
 export { SYNC_TABLES, readTombstones, recordTombstone } from './syncTombstones';
 export type { Tombstone } from './syncTombstones';
 
 export interface RemoteRow {
+  owner_id: string;
   table_name: string;
   record_id: string;
   site_id: string | null;
@@ -58,10 +59,9 @@ const time = (iso: string | undefined | null): number => {
   return Number.isNaN(t) ? 0 : t;
 };
 
-function ownedBy(table: string, row: any, user: User, siteIds: Set<string>): boolean {
-  if (table === 'catalogItems') return !row.isBuiltIn && row.userId === user.id;
-  if ((USER_TABLES as readonly string[]).includes(table)) return row.userId === user.id;
-  return siteIds.has(row.siteId);
+function ownerForRecord(table: string, row: any, siteOwners: Map<string, string>): string | undefined {
+  if ((USER_TABLES as readonly string[]).includes(table)) return row.userId;
+  return row.siteId ? siteOwners.get(row.siteId) : undefined;
 }
 
 /**
@@ -100,9 +100,9 @@ export async function syncOnce(
       if (local && time(stampOf(local)) >= time(row.client_updated_at)) continue; // local copy is as new or newer
 
       const incoming: any = { ...row.data, id: row.record_id };
-      // Records are owned by the cloud account. On this phone they belong to whoever is
-      // signed in to it, whatever local user id they had on the phone that created them.
-      if ('userId' in incoming || (USER_TABLES as readonly string[]).includes(row.table_name)) incoming.userId = user.id;
+      if (row.owner_id && ('userId' in incoming || (USER_TABLES as readonly string[]).includes(row.table_name))) {
+        incoming.userId = row.owner_id;
+      }
       await table.put(incoming);
       justPulled.add(`${row.table_name}|${row.record_id}`);
       pulled += 1;
@@ -112,7 +112,7 @@ export async function syncOnce(
 
   // ---- Push -------------------------------------------------------------
   const sites = await db.sites.toArray();
-  const siteIds = new Set(sites.filter(s => s.userId === user.id).map(s => s.id));
+  const siteOwners = new Map(sites.map(site => [site.id, site.userId]));
   // If this device's clock is now behind the last push time (clock was changed), a time
   // comparison could skip real edits. In that case everything owned is sent again; the server
   // keeps the newer copy of each record, so this is safe.
@@ -123,12 +123,14 @@ export async function syncOnce(
   for (const name of SYNC_TABLES) {
     const rows: any[] = await db.table(name).toArray();
     for (const row of rows) {
-      if (!row?.id || !ownedBy(name, row, user, siteIds)) continue;
+      const ownerId = row?.id ? ownerForRecord(name, row, siteOwners) : undefined;
+      if (!row?.id || !ownerId || !userCanAccessRecord(user, name, 'write', ownerId)) continue;
       if (justPulled.has(`${name}|${row.id}`)) continue; // it just came from the server
       const stamp = stampOf(row);
       if (since > 0 && time(stamp) <= since) continue; // unchanged since the last push
       const { passwordHash: _never, ...data } = row; // defensive: no table here should carry one
       outgoing.push({
+        owner_id: ownerId,
         table_name: name,
         record_id: String(row.id),
         site_id: name === 'sites' ? String(row.id) : row.siteId ? String(row.siteId) : null,
@@ -138,9 +140,10 @@ export async function syncOnce(
       });
     }
   }
-  const sentTombstones = tombstones.filter(t => SYNC_TABLES.includes(t.table));
+  const sentTombstones = tombstones
+    .filter(t => SYNC_TABLES.includes(t.table) && userCanAccessRecord(user, t.table, 'write', t.ownerId || user.id));
   for (const t of sentTombstones) {
-    outgoing.push({ table_name: t.table, record_id: t.id, site_id: null, data: { id: t.id, purged: true }, is_deleted: true, client_updated_at: t.at });
+    outgoing.push({ owner_id: t.ownerId || user.id, table_name: t.table, record_id: t.id, site_id: null, data: { id: t.id, purged: true }, is_deleted: true, client_updated_at: t.at });
   }
 
   for (let i = 0; i < outgoing.length; i += CHUNK) await remote.push(outgoing.slice(i, i + CHUNK));
@@ -166,7 +169,7 @@ export function supabaseRemote(client: SupabaseClient): RemoteStore {
     async pull(since, limit, offset) {
       let query = client
         .from('mistry_records')
-        .select('table_name,record_id,site_id,data,is_deleted,client_updated_at,server_updated_at')
+        .select('owner_id,table_name,record_id,site_id,data,is_deleted,client_updated_at,server_updated_at')
         .order('server_updated_at', { ascending: true })
         .order('record_id', { ascending: true })
         .range(offset, offset + limit - 1);

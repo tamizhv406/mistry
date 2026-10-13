@@ -1,18 +1,7 @@
 import 'fake-indexeddb/auto';
 import { db } from '../src/db/db';
 import { loadDemoData } from '../src/db/seedData';
-import {
-  hashPassword,
-  registerUser,
-  loginUser,
-  getCurrentUser,
-  logoutUser,
-  initAuth,
-  isSuperAdmin,
-  createSubAdmin,
-  changeUserRole,
-  toggleUserActive,
-} from '../src/services/auth';
+import { demoAccountsEnabled, isSuperAdmin } from '../src/services/auth';
 import { toSqFt, fromSqFt, calculateBuildingEstimate } from '../src/utils/estimator';
 import { parseVoiceInput, parseSiteVoiceInput } from '../src/utils/voiceParser';
 import {
@@ -38,6 +27,17 @@ async function runAllTests() {
   if (demoSites.length !== 1) throw new Error('Demo site failed to load');
 
   const demoSiteId = demoSites[0].id;
+  const testAdmin: User = {
+    id: 'test-admin',
+    username: 'test-admin',
+    fullName: 'Test Admin',
+    mobile: '',
+    email: 'admin@example.test',
+    passwordHash: '',
+    role: 'SUPER_ADMIN',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  };
 
   // Test 3: Materials & Auto-calculations
   console.log('\n[Test 3] Testing Material records & calculations...');
@@ -117,7 +117,7 @@ async function runAllTests() {
   // Delete a material to trash
   const matToDelete = materials[0];
   console.log(`  Moving material "${matToDelete.materialName}" to Recycle Bin...`);
-  await db.softDelete('materials', matToDelete.id);
+  await db.softDelete('materials', matToDelete.id, testAdmin);
 
   const activeMaterialsAfterDelete = await db.materials.where('siteId').equals(demoSiteId).filter(m => !m.isDeleted).toArray();
   const trashAfterDelete = await db.getAllTrash();
@@ -133,7 +133,7 @@ async function runAllTests() {
 
   // Test 7: Restore from Trash
   console.log('\n[Test 7] Testing Restore from Recycle Bin...');
-  await db.restoreRecord('materials', matToDelete.id);
+  await db.restoreRecord('materials', matToDelete.id, testAdmin);
   const activeMaterialsAfterRestore = await db.materials.where('siteId').equals(demoSiteId).filter(m => !m.isDeleted).toArray();
   const trashAfterRestore = await db.getAllTrash();
 
@@ -147,8 +147,8 @@ async function runAllTests() {
 
   // Test 8: Permanent Delete
   console.log('\n[Test 8] Testing Permanent Delete...');
-  await db.softDelete('materials', matToDelete.id);
-  await db.permanentDelete('materials', matToDelete.id);
+  await db.softDelete('materials', matToDelete.id, testAdmin);
+  await db.permanentDelete(testAdmin, 'materials', matToDelete.id);
   const rawRecord = await db.materials.get(matToDelete.id);
   if (rawRecord !== undefined) {
     throw new Error('Record was not permanently deleted!');
@@ -183,12 +183,12 @@ async function runAllTests() {
   console.log(`✓ Created Other Expense: ${createdExp.category} - ${createdExp.description} | Total: ₹${createdExp.amount} | Due: ₹${createdExp.balance}`);
 
   // Test soft delete on other expense
-  await db.softDelete('otherExpenses', createdExp.id);
+  await db.softDelete('otherExpenses', createdExp.id, testAdmin);
   const trashWithOther = await db.getAllTrash();
   const otherInTrash = trashWithOther.find(t => t.id === createdExp.id);
   if (!otherInTrash) throw new Error('Other Expense not found in Recycle Bin after soft delete');
   console.log(`✓ Other Expense soft deleted to Trash: "${otherInTrash.title}"`);
-  await db.restoreRecord('otherExpenses', createdExp.id);
+  await db.restoreRecord('otherExpenses', createdExp.id, testAdmin);
   console.log(`✓ Other Expense restored back to site records`);
 
   // Test 10: Activity Logging
@@ -204,41 +204,13 @@ async function runAllTests() {
   if (activities.length === 0) throw new Error('Activity log was not recorded');
   console.log(`✓ Activity log recorded: [${activities[activities.length - 1].action}] ${activities[activities.length - 1].description}`);
 
-  // Test 11: Authentication & Password Hashing
-  console.log('\n[Test 11] Testing Authentication & Security...');
-  await initAuth();
-  const adminUser = await db.users.where('username').equals('admin').first();
-  if (!adminUser) throw new Error('Default admin supervisor was not seeded');
-  console.log(`✓ Default supervisor initialized: ${adminUser.username} (${adminUser.role})`);
-
-  // Test password hashing
-  const hash1 = await hashPassword('mistry123');
-  const hash2 = await hashPassword('mistry123');
-  if (hash1 !== hash2) throw new Error('SHA-256 password hash is not deterministic');
-  if (hash1 === 'mistry123') throw new Error('Password was stored in plain text');
-  console.log(`✓ SHA-256 Password Hash verified: ${hash1.slice(0, 16)}...`);
-
-  // Test login with correct password
-  const loginRes = await loginUser('admin', 'mistry123');
-  if (!loginRes.success || !loginRes.user || loginRes.user.username !== 'admin') throw new Error('Login with correct password failed');
-  console.log(`✓ Valid credentials authentication succeeded for: ${loginRes.user.fullName}`);
-
-  // Test login with incorrect password
-  const badLogin = await loginUser('admin', 'wrongpass999');
-  if (badLogin.success) throw new Error('Login should have failed with incorrect password');
-  console.log(`✓ Invalid password correctly rejected: "${badLogin.error}"`);
-
-  // Test new user registration
-  const regRes = await registerUser(
-    'site_engineer',
-    'Karthik Raja',
-    '98401 23456',
-    'karthik@example.com',
-    'password456',
-    'Supervisor'
-  );
-  if (!regRes.success || !regRes.user || regRes.user.username !== 'site_engineer') throw new Error('New user registration failed');
-  console.log(`✓ New user registration succeeded: ${regRes.user.fullName} (${regRes.user.role})`);
+  // Test 11: Auth-backed account bootstrap
+  console.log('\n[Test 11] Testing that the local account bootstrap is disabled...');
+  if (demoAccountsEnabled()) throw new Error('Local demo accounts must stay disabled.');
+  if (isSuperAdmin(await db.users.where('role').equals('SUPER_ADMIN').first())) {
+    throw new Error('Demo data must not bootstrap a local Super Admin.');
+  }
+  console.log('✓ Demo data does not create local credentials or elevated accounts.');
 
   // Test 12: Site Creation & Data Persistence
   console.log('\n[Test 12] Testing Site Creation via Modal Logic & Persistence...');
@@ -330,9 +302,10 @@ async function runAllTests() {
   const steelMat = estCalc.materials.find(m => m.material === 'Steel');
   const bricksMat = estCalc.materials.find(m => m.material === 'Bricks');
 
-  if (!cementMat || cementMat.quantity !== 420) throw new Error(`Cement bags unexpected: ${cementMat?.quantity}`);
-  if (!steelMat || steelMat.quantity !== 3800) throw new Error(`Steel kg unexpected: ${steelMat?.quantity}`);
-  if (!bricksMat || bricksMat.quantity !== 20000) throw new Error(`Bricks pieces unexpected: ${bricksMat?.quantity}`);
+  // Standard takes the middle of each published range: 0.45 bags, 4 kg and 8 bricks per sq.ft.
+  if (!cementMat || cementMat.quantity !== 450) throw new Error(`Cement bags unexpected: ${cementMat?.quantity}`);
+  if (!steelMat || steelMat.quantity !== 4000) throw new Error(`Steel kg unexpected: ${steelMat?.quantity}`);
+  if (!bricksMat || bricksMat.quantity !== 8000) throw new Error(`Bricks pieces unexpected: ${bricksMat?.quantity}`);
 
   console.log(`✓ 1,000 sq.ft Standard RCC building estimated:`);
   console.log(`  • Cement: ${cementMat.quantity} Bags (₹${cementMat.estimatedCost.toLocaleString('en-IN')})`);
@@ -344,7 +317,7 @@ async function runAllTests() {
 
   // BOQ Steel schedule distribution check
   const totalBoqWeight = estCalc.boqSteelSchedule.reduce((a, b) => a + b.weightKg, 0);
-  if (Math.abs(totalBoqWeight - 3800) > 10) throw new Error(`BOQ Steel total weight ${totalBoqWeight} != 3800`);
+  if (Math.abs(totalBoqWeight - 4000) > 10) throw new Error(`BOQ Steel total weight ${totalBoqWeight} != 4000`);
   console.log(`✓ BOQ Steel Rebar Schedule distributed across 8mm, 10mm, 12mm, 16mm, 20mm (Total: ${totalBoqWeight} kg)`);
 
   // Test 16: Supplier Market Pricing & Multi-Supplier Comparison
@@ -400,12 +373,12 @@ async function runAllTests() {
   console.log(`✓ Estimate persisted: "${savedEst.estimateName}" linked to site "${savedEst.siteName}"`);
 
   // Soft delete estimate and restore from trash
-  await db.softDelete('estimates', testEstimateId);
+  await db.softDelete('estimates', testEstimateId, testAdmin);
   const trashItems = await db.getAllTrash();
   const deletedEst = trashItems.find(t => t.id === testEstimateId);
   if (!deletedEst) throw new Error('Estimate not found in Recycle Bin after soft delete');
   console.log(`✓ Estimate soft-deleted to Recycle Bin: "${deletedEst.title}"`);
-  await db.restoreRecord('estimates', testEstimateId);
+  await db.restoreRecord('estimates', testEstimateId, testAdmin);
   const restoredEst = await db.estimates.get(testEstimateId);
   if (!restoredEst || restoredEst.isDeleted) throw new Error('Estimate failed to restore');
   console.log(`✓ Estimate successfully restored from Recycle Bin!`);
@@ -475,16 +448,17 @@ async function runAllTests() {
   if (!karthikSites.some(s => s.id === karthikSiteId)) throw new Error('Mistry Karthik cannot find his own site');
   console.log(`✓ Strict Data Isolation verified: Mistry Velu sees only his sites, Access Denied thrown for Mistry Karthik's data.`);
 
-  // Test 19: Admin Cross-User Visibility & Audit Logging
-  console.log('\n[Test 19] Testing Admin Cross-User Governance & Audit Logging...');
+  // This checks the local cache view only; server access is enforced by Supabase RLS.
+  // Test 19: Super Admin local cache visibility and activity logging
+  console.log('\n[Test 19] Testing Super Admin local cache view & activity logging...');
   const adminSupervisor: User = {
     id: 'user-admin-default',
-    username: 'admin',
+    username: 'supervisor_test',
     fullName: 'Chief Site Administrator',
     mobile: '98401 99887',
-    email: 'admin@buildingmistry.com',
+    email: 'supervisor@example.test',
     passwordHash: 'hash',
-    role: 'ADMIN',
+    role: 'SUPER_ADMIN',
     isActive: true,
     createdAt: new Date().toISOString(),
   };
@@ -494,9 +468,59 @@ async function runAllTests() {
   const adminHasKarthik = adminSites.some(s => s.userId === 'user-mistry-karthik');
   if (!adminHasVelu || !adminHasKarthik) throw new Error('Admin missing cross-contractor site visibility');
 
+  const scopedSubAdmin: User = {
+    ...adminSupervisor,
+    id: 'user-labour-reader',
+    role: 'SUB_ADMIN',
+    permissions: { projects: { read: true, write: false }, labour: { read: true, write: false } },
+  };
+  if (!(await db.getSitesForUser(scopedSubAdmin)).some(s => s.id === karthikSiteId)) {
+    throw new Error('A scoped Sub-admin with project read permission cannot view authorized sites');
+  }
+  const protectedWorkerId = 'worker-karthik-protected';
+  await db.workers.put({
+    id: protectedWorkerId,
+    siteId: karthikSiteId,
+    name: 'Protected Worker',
+    phone: '',
+    category: 'PERIYAAL',
+    dailyWage: 800,
+    joiningDate: '2026-03-01',
+    isDeleted: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  let scopedWriteDenied = false;
+  try {
+    await db.softDelete('workers', protectedWorkerId, scopedSubAdmin);
+  } catch (error) {
+    scopedWriteDenied = error instanceof Error && error.message.includes('Access Denied');
+  }
+  if (!scopedWriteDenied || (await db.workers.get(protectedWorkerId))?.isDeleted) {
+    throw new Error('A read-only Sub-admin must not change labour records.');
+  }
+  const labourWriter: User = {
+    ...scopedSubAdmin,
+    id: 'user-labour-writer',
+    permissions: { projects: { read: true, write: false }, labour: { read: true, write: true } },
+  };
+  await db.softDelete('workers', protectedWorkerId, labourWriter);
+  if (!(await db.getAllTrash(scopedSubAdmin)).some(item => item.id === protectedWorkerId)) {
+    throw new Error('A Sub-admin with labour read permission must see authorized trash records.');
+  }
+  let scopeLimitedWriteDenied = false;
+  try {
+    await db.permanentDelete(scopedSubAdmin, 'workers', protectedWorkerId);
+  } catch (error) {
+    scopeLimitedWriteDenied = error instanceof Error && error.message.includes('Access Denied');
+  }
+  if (!scopeLimitedWriteDenied || !(await db.workers.get(protectedWorkerId))) {
+    throw new Error('A read-only Sub-admin must not permanently delete labour records.');
+  }
+
   await db.logAdminAudit(adminSupervisor, 'Inspect Sites', 'Admin audited all active contractor sites');
   const recentAudit = await db.activityLogs.filter(a => a.action === 'Inspect Sites').first();
-  if (!recentAudit || recentAudit.userName !== adminSupervisor.fullName || recentAudit.userRole !== 'ADMIN') {
+  if (!recentAudit || recentAudit.userName !== adminSupervisor.fullName || recentAudit.userRole !== 'SUPER_ADMIN') {
     throw new Error('Admin audit log record invalid or missing');
   }
   console.log(`✓ Admin Cross-Site Governance & Audit Trail verified: Admin sees all sites (${adminSites.length}) and audit generated.`);
@@ -538,99 +562,13 @@ async function runAllTests() {
   if (siteParsed.district !== 'Tambaram') throw new Error('Voice location extraction failed');
   console.log(`✓ Voice Site Auto-Fill parsed successfully: Site: "${siteParsed.name}", Owner: "${siteParsed.ownerName}", Phone: "${siteParsed.ownerPhone}", Area: "${siteParsed.area}", District: "${siteParsed.district}"`);
 
-  // Test 22: Real Admin Authentication, Super Admin Checks, and Sub-Admin Creation & Governance
-  console.log('\n[Test 22] Testing Real Admin (tamilthilagan82@gmail.com) Auth & Sub-Admin Governance...');
-  // 1. Authenticate as Real Admin
-  const realAdminLoginRes = await loginUser('tamilthilagan82@gmail.com', 'tamil406@##', true);
-  if (!realAdminLoginRes.success || !realAdminLoginRes.user) {
-    throw new Error('Real Admin login failed with valid credentials: ' + realAdminLoginRes.error);
-  }
-  const realAdmin = realAdminLoginRes.user;
-  if (!isSuperAdmin(realAdmin)) {
-    throw new Error('isSuperAdmin returned false for Real Admin account');
-  }
-  console.log(`✓ Real Admin logged in successfully: ${realAdmin.fullName} (${realAdmin.email}), Role: ${realAdmin.role}`);
-
-  // 2. Real Admin creates a Sub-Admin
-  const subAdminRes = await createSubAdmin(realAdmin, {
-    fullName: 'Anbu Site Supervisor',
-    username: 'anbu_supervisor',
-    mobile: '98401 77889',
-    email: 'anbu@mistry.com',
-    password: 'subpassword123',
-  });
-  if (!subAdminRes.success || !subAdminRes.user) {
-    throw new Error('Real Admin failed to create Sub-Admin: ' + subAdminRes.error);
-  }
-  const anbuSubAdmin = subAdminRes.user;
-  if (anbuSubAdmin.role !== 'SUB_ADMIN') throw new Error('New user role is not SUB_ADMIN');
-  console.log(`✓ Real Admin created Sub-Admin: ${anbuSubAdmin.fullName} (@${anbuSubAdmin.username}) with SUB_ADMIN role.`);
-
-  // 3. Verify Sub-Admin has cross-site visibility
-  const subAdminSites = await db.getSitesForUser(anbuSubAdmin);
-  if (subAdminSites.length === 0) throw new Error('Sub-Admin has no site visibility');
-  console.log(`✓ Sub-Admin verified to have elevated access to ${subAdminSites.length} sites.`);
-
-  // 4. Verify Normal Mistry (Velu) CANNOT create a Sub-Admin
-  const mistrySubAdminAttempt = await createSubAdmin(veluUser, {
-    fullName: 'Illegal Sub-Admin',
-    username: 'illegal_sub',
-    mobile: '98401 00000',
-    email: 'illegal@mistry.com',
-    password: 'password123',
-  });
-  if (mistrySubAdminAttempt.success) throw new Error('Security flaw: Mistry was able to create a Sub-Admin!');
-  console.log(`✓ Permission Denied enforced: Normal Mistry blocked from creating Sub-Admin (${mistrySubAdminAttempt.error}).`);
-
-  // 5. Verify Real Admin is protected: cannot be deactivated
-  const deactivationAttempt = await toggleUserActive(anbuSubAdmin, realAdmin.id, false);
-  if (deactivationAttempt.success) throw new Error('Security flaw: Sub-Admin was able to deactivate Real Admin!');
-  console.log(`✓ Real Admin protection enforced: Cannot be deactivated (${deactivationAttempt.error}).`);
-
-  // 6. Verify Real Admin role cannot be demoted
-  const demoteAttempt = await changeUserRole(realAdmin, realAdmin.id, 'MISTRY');
-  if (demoteAttempt.success) throw new Error('Security flaw: Real Admin role was changed!');
-  console.log(`✓ Real Admin role immutability verified: Cannot demote Master Real Admin (${demoteAttempt.error}).`);
-
-  // 7. Verify Real Admin can promote and demote other users
-  const promoteRes = await changeUserRole(realAdmin, karthikUser.id, 'SUB_ADMIN');
-  if (!promoteRes.success) throw new Error('Real Admin failed to promote Mistry Karthik to Sub-Admin');
-  const updatedKarthik = await db.users.get(karthikUser.id);
-  if (updatedKarthik?.role !== 'SUB_ADMIN') throw new Error('Mistry Karthik role not updated to SUB_ADMIN');
-  console.log(`✓ Real Admin successfully promoted Mistry Karthik to Sub-Admin.`);
-
-  const demoteRes = await changeUserRole(realAdmin, karthikUser.id, 'MISTRY');
-  if (!demoteRes.success) throw new Error('Real Admin failed to demote Karthik back to Mistry');
-  console.log(`✓ Real Admin successfully demoted user back to Mistry.`);
-
-  // Test 23: Admin ID Reservation & Public Registration Isolation
-  console.log('\n[Test 23] Testing Admin ID Reservation & Public Registration Isolation...');
-  // 1. Attempt to register with Real Admin email
-  const fakeAdminReg1 = await registerUser('fake_admin1', 'Fake Admin', '9840100000', 'tamilthilagan82@gmail.com', 'hack123');
-  if (fakeAdminReg1.success) throw new Error('Security flaw: Someone was able to register with the Real Admin email!');
-  console.log(`✓ Real Admin email reservation enforced: ${fakeAdminReg1.error}`);
-
-  // 2. Attempt to register with reserved admin usernames
-  const fakeAdminReg2 = await registerUser('tamilthilagan', 'Fake Tamil', '9840100000', 'other@mail.com', 'hack123');
-  if (fakeAdminReg2.success) throw new Error('Security flaw: Someone was able to register with the reserved admin username!');
-  console.log(`✓ Real Admin username reservation enforced: ${fakeAdminReg2.error}`);
-
-  const fakeAdminReg3 = await registerUser('admin', 'Fake Admin', '9840100000', 'other2@mail.com', 'hack123');
-  if (fakeAdminReg3.success) throw new Error('Security flaw: Someone was able to register with the reserved "admin" username!');
-  console.log(`✓ System Admin username reservation enforced: ${fakeAdminReg3.error}`);
-
-  // 3. Normal user registering cannot self-elevate to ADMIN
-  const normalMistryReg = await registerUser('mistry_dinesh', 'Dinesh Contractor', '9840199000', 'dinesh@mail.com', 'mistrypass', 'ADMIN' as any);
-  if (!normalMistryReg.success || !normalMistryReg.user) throw new Error('Legitimate registration failed');
-  if (normalMistryReg.user.role !== 'MISTRY') throw new Error('Security flaw: Self-registered user gained elevated role!');
-  console.log(`✓ Self-registration role enforcement verified: User registered with role: ${normalMistryReg.user.role} (Elevation blocked)`);
-
-  // 4. Verify Real Admin can access all sites while Mistry Dinesh sees 0 sites
-  const realAdminAllSites = await db.getSitesForUser(realAdmin);
-  const dineshSites = await db.getSitesForUser(normalMistryReg.user);
-  if (realAdminAllSites.length === 0) throw new Error('Real admin has no sites');
-  if (dineshSites.length !== 0) throw new Error('New mistry should have 0 sites initially');
-  console.log(`✓ Complete Data Access Verified: Real Admin sees all ${realAdminAllSites.length} sites; new Mistry sees ${dineshSites.length} sites.`);
+  // Test 22: Retired local account bootstrap is disabled
+  console.log('\n[Test 22] Testing that local demo/admin authentication is disabled...');
+  if (demoAccountsEnabled()) throw new Error('Demo accounts must remain disabled.');
+  if (isSuperAdmin(veluUser)) throw new Error('A normal local user must not be considered a Super Admin.');
+  const demoSuperAdmins = await db.users.where('role').equals('SUPER_ADMIN').toArray();
+  if (demoSuperAdmins.length > 0) throw new Error('Demo seeding must not create Super Admin accounts.');
+  console.log('✓ No demo authentication or local Super Admin bootstrap is enabled.');
 
   // Test 24: Universal Payment Calculation Logic
   console.log('\n[Test 24] Testing Universal Payment Calculation Formulas (No Negative Balances)...');
@@ -697,7 +635,7 @@ async function runAllTests() {
     amount: 5000,
     paymentType: 'UPI',
     notes: 'Advance installment for aggregate',
-    userId: realAdmin.id,
+    userId: adminSupervisor.id,
   });
   if (!payTx1.id.startsWith('PAY-')) throw new Error('Payment ID format invalid');
 
@@ -716,7 +654,7 @@ async function runAllTests() {
     amount: 12000,
     paymentType: 'Cash',
     notes: 'Settlement with cash tip',
-    userId: realAdmin.id,
+    userId: adminSupervisor.id,
   });
 
   const matAfterTx2 = await db.materials.get(testMatId);
@@ -812,5 +750,3 @@ runAllTests().catch(err => {
   console.error('❌ Test failed:', err);
   process.exit(1);
 });
-
-

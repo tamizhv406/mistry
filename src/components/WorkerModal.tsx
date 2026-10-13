@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, UserCheck } from 'lucide-react';
 import { db } from '../db/db';
 import type { LabourWorker, LabourCategory } from '../db/types';
+import { getCurrentUser } from '../services/auth';
+import { writableSite } from '../services/records';
 import { VoiceInputField } from './VoiceInputField';
 
 interface WorkerModalProps {
@@ -87,23 +89,31 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
     const finalCategory = category === 'Other' ? (customCategory.trim() || 'Worker') : category;
     const now = new Date().toISOString();
     const id = workerToEdit ? workerToEdit.id : `worker-${Date.now()}`;
-
-    const record: LabourWorker = {
-      id,
-      siteId,
-      name: name.trim(),
-      phone: phone.trim(),
-      category: finalCategory,
-      dailyWage: numWage,
-      joiningDate: joiningDate || todayKey(),
-      notes: notes.trim(),
-      isDeleted: false,
-      createdAt: workerToEdit ? workerToEdit.createdAt : now,
-      updatedAt: now,
-    };
+    const currentUser = getCurrentUser();
 
     setIsSubmitting(true);
     try {
+      const site = currentUser && await writableSite(currentUser, siteId, 'workers');
+      if (!currentUser || !site) {
+        setError('You do not have permission to edit labour records for this project.');
+        return;
+      }
+
+      const record: LabourWorker = {
+        id,
+        userId: site.userId || currentUser.id,
+        siteId,
+        name: name.trim(),
+        phone: phone.trim(),
+        category: finalCategory,
+        dailyWage: numWage,
+        joiningDate: joiningDate || todayKey(),
+        notes: notes.trim(),
+        isDeleted: false,
+        createdAt: workerToEdit ? workerToEdit.createdAt : now,
+        updatedAt: now,
+      };
+
       await db.workers.put(record);
       onSuccess(workerToEdit ? `Worker "${record.name}" updated` : `Worker "${record.name}" added to roster`);
       onClose();
@@ -145,7 +155,6 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
             <div className="form-grid-2">
               <VoiceInputField
                 label="Worker Full Name"
-                tamilLabel="தொழிலாளி பெயர்"
                 placeholder="e.g. M. Senthil Kumar"
                 value={name}
                 onChange={setName}
@@ -210,7 +219,6 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
 
               <VoiceInputField
                 label="Notes / Skills / Native Place"
-                tamilLabel="குறிப்புகள்"
                 placeholder="e.g. Plastering expert, from Villupuram"
                 value={notes}
                 onChange={setNotes}

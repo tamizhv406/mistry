@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { Lock, Eye, EyeOff, ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react';
-import { updateSupabasePassword, isSupabaseConfigured, supabase } from '../services/supabase';
+import { updateSupabasePassword } from '../services/supabase';
 import { validatePasswordStrength } from '../services/otpService';
-import { hashPassword } from '../services/auth';
-import { db } from '../db/db';
 
 interface ResetPasswordModalProps {
   isOpen: boolean;
@@ -42,55 +40,18 @@ export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({
     setError('');
 
     try {
-      let emailUpdated = '';
-      if (isSupabaseConfigured() && supabase) {
-        const updateRes = await updateSupabasePassword(newPassword);
-        if (!updateRes.success) {
-          setError(updateRes.error || 'Failed to update password with authentication service.');
-          setLoading(false);
-          return;
-        }
-
-        // Get authenticated email to sync local Dexie record
-        try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user?.email) {
-            emailUpdated = user.email.toLowerCase();
-          }
-        } catch {
-          // non-blocking
-        }
+      const updateRes = await updateSupabasePassword(newPassword);
+      if (!updateRes.success) {
+        setError(updateRes.error || 'Failed to update password with the authentication service.');
+        return;
       }
 
-      // Sync local Dexie user if matching account exists
-      if (emailUpdated) {
-        const localUsers = await db.users.toArray();
-        const matched = localUsers.find(u => (u.email || '').toLowerCase() === emailUpdated);
-        if (matched) {
-          const newHash = await hashPassword(newPassword);
-          await db.users.update(matched.id, {
-            passwordHash: newHash,
-            mustChangePassword: false,
-            updatedAt: new Date().toISOString(),
-          });
-          await db.logSecurityAudit(
-            'PASSWORD_RECOVERY_COMPLETE',
-            matched,
-            matched.id,
-            'users',
-            'SUCCESS',
-            `Password securely reset via Supabase email recovery for ${emailUpdated}`
-          );
-        }
-      }
-
-      // Clean up URL tokens from hash/search so user doesn't re-trigger recovery on refresh
       if (typeof window !== 'undefined') {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
 
       setIsDone(true);
-      onSuccess('Password updated successfully! You can now sign in with your new password.');
+      onSuccess('Password updated successfully. You can now sign in with your new password.');
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred while resetting password.');
     } finally {

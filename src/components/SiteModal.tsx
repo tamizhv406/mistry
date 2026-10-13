@@ -205,10 +205,10 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-100 uppercase tracking-wider">
-                      Voice Auto-Fill Assistant (குரல் உதவி)
+                      Voice Auto-Fill Assistant
                     </h4>
                     <p className="text-[11px] text-slate-400">
-                      Tap mic and say site name, owner, phone, area in Tamil or English!
+                      Say the site name, owner, phone, and area to fill the form by voice.
                     </p>
                   </div>
                 </div>
@@ -280,7 +280,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
 
             <VoiceInputField
               label="Site / Project Name"
-              tamilLabel="தளத்தின் பெயர்"
               value={name}
               onChange={setName}
               placeholder="e.g. Sri Murugan Illam (G+1)"
@@ -290,7 +289,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <VoiceInputField
                 label="Owner Name"
-                tamilLabel="உரிமையாளர் பெயர்"
                 value={ownerName}
                 onChange={setOwnerName}
                 placeholder="e.g. R. Sundaram"
@@ -299,7 +297,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
 
               <VoiceInputField
                 label="Owner Phone Number"
-                tamilLabel="தொலைபேசி எண்"
                 type="text"
                 value={ownerPhone}
                 onChange={setOwnerPhone}
@@ -310,7 +307,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <VoiceInputField
                 label="Area / Location"
-                tamilLabel="இடம் / ஏரியா"
                 value={area}
                 onChange={setArea}
                 placeholder="e.g. Tambaram East, Chennai"
@@ -319,9 +315,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <span>Building Type</span>
-                  <span className="text-[11px] font-normal text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                    கட்டட வகை
-                  </span>
                 </label>
                 <select
                   value={buildingType}
@@ -343,7 +336,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
 
             <VoiceInputField
               label="Site Full Address"
-              tamilLabel="முழு முகவரி"
               type="textarea"
               rows={2}
               value={address}
@@ -355,9 +347,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <span>Start Date</span>
-                  <span className="text-[11px] font-normal text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                    துவக்க தேதி
-                  </span>
                 </label>
                 <input
                   type="date"
@@ -370,9 +359,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <span>Expected Completion</span>
-                  <span className="text-[11px] font-normal text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                    முடிவு தேதி
-                  </span>
                 </label>
                 <input
                   type="date"
@@ -385,9 +371,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <span>Status</span>
-                  <span className="text-[11px] font-normal text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                    நிலை
-                  </span>
                 </label>
                 <select
                   value={status}
@@ -406,9 +389,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
             <div className="form-group space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <span>Site Photo / Elevation Plan</span>
-                <span className="text-[11px] font-normal text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                  கட்டட புகைப்படம்
-                </span>
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <div style={{
@@ -477,7 +457,6 @@ export const SiteModal: React.FC<SiteModalProps> = ({
 
             <VoiceInputField
               label="Notes / Specifications"
-              tamilLabel="குறிப்புகள்"
               type="textarea"
               rows={2}
               value={notes}

@@ -52,6 +52,7 @@ import type {
   OtherExpense,
   SiteComment,
   BuildingEstimate,
+  FloorPlan,
   AdminAuditLog,
   ActivityLog,
   TrashRecord,
@@ -66,21 +67,34 @@ import {
   adminResetUserPassword,
   type AdminUserListItem,
 } from '../services/auth';
+import { getAdminAuditLogs, getAuthorizedRecords, groupAuthorizedRecords } from '../services/adminData';
+
+const SUB_ADMIN_SCOPES = [
+  ['users', 'Accounts'],
+  ['projects', 'Projects'],
+  ['labour', 'Labour and attendance'],
+  ['payroll', 'Salaries and advances'],
+  ['materials', 'Materials and stock'],
+  ['expenses', 'Expenses'],
+  ['floor_plans', 'Floor plans'],
+  ['estimates', 'Estimates'],
+] as const;
+
+type ScopePermissions = Record<string, { read: boolean; write: boolean }>;
 
 interface AdminDashboardViewProps {
   currentUser: User;
-  onSelectSite: (site: Site) => void;
   onShowToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   currentUser,
-  onSelectSite,
   onShowToast,
 }) => {
   const [activeTab, setActiveTab] = useState<
     | 'users'
     | 'sites'
+    | 'floorPlans'
     | 'materials'
     | 'labour'
     | 'attendance'
@@ -98,6 +112,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   // Master Data
   const [users, setUsers] = useState<AdminUserListItem[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [floorPlans, setFloorPlans] = useState<FloorPlan[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [workers, setWorkers] = useState<LabourWorker[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -121,14 +136,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
   // Drilldown Modal: Inspect User Sites
   const [inspectingUser, setInspectingUser] = useState<AdminUserListItem | null>(null);
+  const [inspectingSite, setInspectingSite] = useState<Site | null>(null);
 
   // Password Reset Assist Modal State
   const [resetModalUser, setResetModalUser] = useState<AdminUserListItem | null>(null);
-  const [tempPassword, setTempPassword] = useState('');
   const [resetError, setResetError] = useState('');
   const [resetSuccessMessage, setResetSuccessMessage] = useState('');
   const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [copiedPassword, setCopiedPassword] = useState(false);
 
   // Sub-Admin Creation Modal State
   const [isSubAdminModalOpen, setIsSubAdminModalOpen] = useState(false);
@@ -136,7 +150,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [subAdminUsername, setSubAdminUsername] = useState('');
   const [subAdminMobile, setSubAdminMobile] = useState('');
   const [subAdminEmail, setSubAdminEmail] = useState('');
-  const [subAdminPassword, setSubAdminPassword] = useState('');
+  const [subAdminPermissions, setSubAdminPermissions] = useState<ScopePermissions>({});
+  const [permissionTarget, setPermissionTarget] = useState<AdminUserListItem | null>(null);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [subAdminError, setSubAdminError] = useState('');
   const [isCreatingSubAdmin, setIsCreatingSubAdmin] = useState(false);
   const [roleChangingUserId, setRoleChangingUserId] = useState<string | null>(null);
@@ -144,64 +160,35 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const loadAdminData = async () => {
     setLoading(true);
     try {
-      const [
-        uList,
-        sList,
-        mList,
-        wList,
-        attList,
-        salList,
-        advList,
-        toolsList,
-        tList,
-        pList,
-        oList,
-        eList,
-        wtList,
-        cList,
-        estList,
-        aList,
-        secAuditList,
-        trList,
-      ] = await Promise.all([
+      const [uList, records, auditLogs, aList] = await Promise.all([
         getAllUsers(currentUser),
-        db.sites.toArray(),
-        db.materials.toArray(),
-        db.workers.toArray(),
-        db.attendance.toArray(),
-        db.salaryPayments.toArray(),
-        db.labourAdvances.toArray(),
-        db.tools.toArray(),
-        db.teaSnacksExpenses.toArray(),
-        db.poojaExpenses.toArray(),
-        db.otherExpenses.toArray(),
-        db.electricityBills.toArray(),
-        db.waterBills.toArray(),
-        db.siteComments.toArray(),
-        db.estimates.toArray(),
+        getAuthorizedRecords(),
+        getAdminAuditLogs(),
         db.activityLogs.reverse().limit(100).toArray(),
-        db.getAllAdminAuditLogs ? db.getAllAdminAuditLogs(currentUser) : Promise.resolve([]),
-        db.getAllTrash(currentUser),
       ]);
+      const rows = groupAuthorizedRecords(records);
+      const tableRows = <T,>(name: string): T[] =>
+        (rows.get(name) || []) as unknown as T[];
 
       setUsers(uList);
-      setSites(sList.filter(s => !s.isDeleted));
-      setMaterials(mList.filter(m => !m.isDeleted));
-      setWorkers(wList.filter(w => !w.isDeleted));
-      setAttendance(attList.filter(a => !a.isDeleted));
-      setSalaries(salList.filter(sp => !sp.isDeleted));
-      setAdvances(advList.filter(adv => !adv.isDeleted));
-      setTools(toolsList.filter(t => !t.isDeleted));
-      setTeaExpenses(tList.filter(t => !t.isDeleted));
-      setPoojaExpenses(pList.filter(p => !p.isDeleted));
-      setOtherExpenses(oList.filter(o => !o.isDeleted));
-      setElectricityBills(eList.filter(e => !e.isDeleted));
-      setWaterBills(wtList.filter(w => !w.isDeleted));
-      setSiteComments(cList.filter(c => !c.isDeleted));
-      setEstimates(estList.filter(est => !est.isDeleted));
-      setActivityLogs(aList);
-      setSecurityAuditLogs(secAuditList || []);
-      setTrashItems(trList);
+      setSites(tableRows<Site>('sites').filter(record => !record.isDeleted));
+      setFloorPlans(tableRows<FloorPlan>('floorPlans').filter(record => !record.isDeleted));
+      setMaterials(tableRows<Material>('materials').filter(record => !record.isDeleted));
+      setWorkers(tableRows<LabourWorker>('workers').filter(record => !record.isDeleted));
+      setAttendance(tableRows<AttendanceRecord>('attendance').filter(record => !record.isDeleted));
+      setSalaries(tableRows<SalaryPayment>('salaryPayments').filter(record => !record.isDeleted));
+      setAdvances(tableRows<LabourAdvance>('labourAdvances').filter(record => !record.isDeleted));
+      setTools(tableRows<ToolItem>('tools').filter(record => !record.isDeleted));
+      setTeaExpenses(tableRows<TeaSnacksExpense>('teaSnacksExpenses').filter(record => !record.isDeleted));
+      setPoojaExpenses(tableRows<PoojaExpense>('poojaExpenses').filter(record => !record.isDeleted));
+      setOtherExpenses(tableRows<OtherExpense>('otherExpenses').filter(record => !record.isDeleted));
+      setElectricityBills(tableRows<ElectricityBill>('electricityBills').filter(record => !record.isDeleted));
+      setWaterBills(tableRows<WaterBill>('waterBills').filter(record => !record.isDeleted));
+      setSiteComments(tableRows<SiteComment>('siteComments').filter(record => !record.isDeleted));
+      setEstimates(tableRows<BuildingEstimate>('estimates').filter(record => !record.isDeleted));
+      setActivityLogs(aList.filter(log => !log.userId || log.userId === currentUser.id));
+      setSecurityAuditLogs(auditLogs);
+      setTrashItems([]);
     } catch (err: any) {
       onShowToast('Failed to load master admin data: ' + err.message, 'error');
     } finally {
@@ -233,8 +220,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       setSubAdminError('Username must be at least 3 characters.');
       return;
     }
-    if (!subAdminPassword || subAdminPassword.length < 6) {
-      setSubAdminError('Password must be at least 6 characters.');
+    if (!subAdminEmail.trim()) {
+      setSubAdminError('Enter an email address for the invitation.');
       return;
     }
 
@@ -246,17 +233,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         username: subAdminUsername,
         mobile: subAdminMobile,
         email: subAdminEmail,
-        password: subAdminPassword,
+        permissions: subAdminPermissions,
       });
 
       if (res.success && res.user) {
-        onShowToast(`Sub-Admin "${res.user.fullName}" created successfully!`, 'success');
+        onShowToast(`Invitation sent to ${res.user.email}.`, 'success');
         setIsSubAdminModalOpen(false);
         setSubAdminFullName('');
         setSubAdminUsername('');
         setSubAdminMobile('');
         setSubAdminEmail('');
-        setSubAdminPassword('');
+        setSubAdminPermissions({});
         await loadAdminData();
       } else {
         setSubAdminError(res.error || 'Failed to create Sub-Admin');
@@ -316,31 +303,29 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  const handleOpenPermissionEditor = (targetUser: AdminUserListItem) => {
+    setPermissionTarget(targetUser);
+    setSubAdminPermissions(targetUser.permissions || {});
+    setSubAdminError('');
+  };
+
   // Password Reset Assist Handlers
   const handleOpenResetAssist = (user: AdminUserListItem) => {
     setResetModalUser(user);
-    setTempPassword(`Mistry@${Math.floor(1000 + Math.random() * 9000)}`);
     setResetError('');
     setResetSuccessMessage('');
-    setCopiedPassword(false);
   };
 
   const handleExecutePasswordResetAssist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetModalUser) return;
-    if (tempPassword.length < 8) {
-      setResetError('Temporary password must be at least 8 characters.');
-      return;
-    }
     setIsResettingPassword(true);
     setResetError('');
     try {
-      const res = await adminResetUserPassword(currentUser, resetModalUser.id, tempPassword);
+      const res = await adminResetUserPassword(currentUser, resetModalUser.id);
       if (res.success) {
-        setResetSuccessMessage(
-          `Password reset successful! Provide the temporary password below to ${resetModalUser.fullName}. They will be forced to change it on their next login.`
-        );
-        onShowToast(`Password reset assist completed for ${resetModalUser.fullName}`, 'success');
+        setResetSuccessMessage(`A secure password recovery link was sent to ${resetModalUser.email}.`);
+        onShowToast(`Recovery email sent to ${resetModalUser.email}.`, 'success');
         await loadAdminData();
       } else {
         setResetError(res.error || 'Failed to reset user password.');
@@ -352,12 +337,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
-  const handleCopyPassword = () => {
-    if (!tempPassword) return;
-    navigator.clipboard.writeText(tempPassword);
-    setCopiedPassword(true);
-    setTimeout(() => setCopiedPassword(false), 2500);
-    onShowToast('Temporary password copied to clipboard!', 'info');
+  const handleSavePermissions = async () => {
+    if (!permissionTarget) return;
+    setIsSavingPermissions(true);
+    try {
+      const result = await changeUserRole(currentUser, permissionTarget.id, 'SUB_ADMIN', subAdminPermissions);
+      if (!result.success) throw new Error(result.error || 'Could not update permissions.');
+      onShowToast(`Permissions updated for ${permissionTarget.fullName}.`, 'success');
+      setPermissionTarget(null);
+      await loadAdminData();
+    } catch (error) {
+      onShowToast(error instanceof Error ? error.message : 'Could not update permissions.', 'error');
+    } finally {
+      setIsSavingPermissions(false);
+    }
   };
 
   // Maps for fast lookups
@@ -474,7 +467,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-amber-500/20"
               >
                 <UserPlus className="w-4 h-4 text-slate-950" />
-                <span>Create Sub-Admin (துணை அட்மின்)</span>
+                <span>Invite Sub-admin</span>
               </button>
             )}
 
@@ -569,6 +562,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         >
           <Layers className="w-3.5 h-3.5" />
           <span>Materials ({materials.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('floorPlans')}
+          className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all whitespace-nowrap ${
+            activeTab === 'floorPlans'
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 ring-2 ring-indigo-500/50'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+          }`}
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          <span>Floor plans ({floorPlans.length})</span>
         </button>
 
         <button
@@ -735,8 +740,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
           {/* User Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredUsers.map(u => {
-              const isThisRealAdmin =
-                u.email?.toLowerCase() === 'tamilthilagan82@gmail.com' || u.role === 'SUPER_ADMIN';
+              const isThisRealAdmin = u.role === 'SUPER_ADMIN';
               const isThisSubAdmin = u.role === 'SUB_ADMIN';
 
               return (
@@ -852,7 +856,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <span>View Sites ({u.sitesCount})</span>
                       </button>
 
-                      {!isThisRealAdmin && (
+                      {isSuperAdmin(currentUser) && !isThisRealAdmin && (
                         <button
                           onClick={() => handleOpenResetAssist(u)}
                           className="py-1.5 px-2.5 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all active:scale-95"
@@ -878,6 +882,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               <span>Make Sub-Admin</span>
                             </button>
                           ) : (
+                            <>
+                              <button
+                                onClick={() => handleOpenPermissionEditor(u)}
+                                disabled={roleChangingUserId === u.id}
+                                className="py-1 px-2.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 rounded-xl text-[11px] font-semibold flex items-center gap-1 transition-all"
+                              >
+                                <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                                <span>Manage Access</span>
+                              </button>
                             <button
                               onClick={() => handleDemoteToMistry(u)}
                               disabled={roleChangingUserId === u.id}
@@ -886,12 +899,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                               <Users className="w-3 h-3 text-amber-400" />
                               <span>Demote to Mistry</span>
                             </button>
+                            </>
                           )}
                         </>
                       )}
 
                       {/* Enable / Disable User */}
-                      {!isThisRealAdmin && u.id !== currentUser.id && (
+                      {isSuperAdmin(currentUser) && !isThisRealAdmin && u.id !== currentUser.id && (
                         <button
                           onClick={() => handleToggleUserStatus(u)}
                           className={`py-1 px-2.5 rounded-xl text-[11px] font-semibold flex items-center gap-1 transition-all ${
@@ -960,7 +974,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <div>
                         <h3
                           className="font-bold text-slate-100 text-sm hover:text-amber-400 transition-colors cursor-pointer"
-                          onClick={() => onSelectSite(site)}
+                          onClick={() => setInspectingSite(site)}
                         >
                           {site.name}
                         </h3>
@@ -1005,17 +1019,57 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
                   <div className="pt-3 border-t border-slate-800/80">
                     <button
-                      onClick={() => onSelectSite(site)}
+                      onClick={() => setInspectingSite(site)}
                       className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
                     >
                       <Eye className="w-3.5 h-3.5 text-slate-950" />
-                      <span>Select Site (Enter Site Dashboard)</span>
+                      <span>View project data</span>
                     </button>
                   </div>
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'floorPlans' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {floorPlans.map(plan => {
+            const site = plan.siteId ? siteMap.get(plan.siteId) : undefined;
+            const owner = userMap.get(plan.userId) || 'Account';
+            const preview = /^data:image\/(png|jpeg|webp);base64,/i.test(plan.thumbnailDataUrl || '')
+              ? plan.thumbnailDataUrl
+              : undefined;
+            return (
+              <article key={plan.id} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 space-y-3">
+                {preview ? (
+                  <img src={preview} alt={`${plan.buildingName} ${plan.floorName} floor plan`} className="w-full h-44 object-contain rounded-xl bg-slate-950" />
+                ) : (
+                  <div className="h-28 rounded-xl bg-slate-950 flex items-center justify-center text-slate-500">
+                    <Building2 size={28} />
+                  </div>
+                )}
+                <div>
+                  <h3 className="font-bold text-slate-100">{plan.buildingName} · {plan.floorName}</h3>
+                  <p className="text-xs text-slate-400">{site?.name || plan.siteName || 'Unlinked site'} · {owner}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                  <span>Rooms: {plan.rooms?.length || 0}</span>
+                  <span>Walls: {plan.walls?.length || 0}</span>
+                  <span>Doors: {plan.doors?.length || 0}</span>
+                  <span>Windows: {plan.windows?.length || 0}</span>
+                  <span>Size: {plan.plotLength} × {plan.plotWidth} {plan.unit}</span>
+                  <span>Updated: {plan.updatedAt ? new Date(plan.updatedAt).toLocaleDateString('en-IN') : '—'}</span>
+                </div>
+              </article>
+            );
+          })}
+          {floorPlans.length === 0 && (
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 text-sm text-slate-400">
+              No floor plans are available for your account permissions.
+            </div>
+          )}
         </div>
       )}
 
@@ -1056,7 +1110,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       <td className="p-3 font-semibold text-amber-400">
                         {s ? (
                           <button
-                            onClick={() => onSelectSite(s)}
+                            onClick={() => setInspectingSite(s)}
                             className="hover:underline text-left"
                             title="Open site dashboard"
                           >
@@ -1546,7 +1600,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </td>
                         <td className="p-3">
                           <button
-                            onClick={() => onSelectSite(s)}
+                            onClick={() => setInspectingSite(s)}
                             className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition-all"
                           >
                             Open Dashboard
@@ -1762,12 +1816,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         <button
                           onClick={() => {
                             setInspectingUser(null);
-                            onSelectSite(s);
+                            setInspectingSite(s);
                           }}
                           className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow active:scale-95 transition-all whitespace-nowrap"
                         >
                           <Eye className="w-4 h-4" />
-                          <span>Select Site (Open Dashboard)</span>
+                          <span>View project data</span>
                         </button>
                       </div>
                     ))}
@@ -1788,6 +1842,63 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
+      {inspectingSite && (
+        <div className="modal-overlay" onClick={() => setInspectingSite(null)} role="dialog" aria-modal="true">
+          <div className="modal-dialog max-w-2xl w-full" onClick={e => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+            <div className="modal-header bg-slate-900 border-b border-slate-800 p-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-100">{inspectingSite.name}</h3>
+                <p className="text-xs text-slate-400">
+                  {userMap.get(inspectingSite.userId) || 'Account'} · {inspectingSite.buildingType} · {inspectingSite.status}
+                </p>
+              </div>
+              <button className="modal-close-btn" onClick={() => setInspectingSite(null)} type="button" aria-label="Close project details">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div><dt className="text-xs text-slate-500">Owner</dt><dd className="text-slate-200">{inspectingSite.ownerName} · {inspectingSite.ownerPhone || 'No phone'}</dd></div>
+                <div><dt className="text-xs text-slate-500">Location</dt><dd className="text-slate-200">{inspectingSite.area || inspectingSite.address || 'Not provided'}</dd></div>
+                <div><dt className="text-xs text-slate-500">Start date</dt><dd className="text-slate-200">{inspectingSite.startDate || '—'}</dd></div>
+                <div><dt className="text-xs text-slate-500">Expected completion</dt><dd className="text-slate-200">{inspectingSite.expectedCompletionDate || '—'}</dd></div>
+              </dl>
+              <p className="text-xs text-slate-400">Related records are available only for your assigned permission scopes.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { label: 'Materials', tab: 'materials' as const, count: materials.filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Labour', tab: 'labour' as const, count: workers.filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Attendance', tab: 'attendance' as const, count: attendance.filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Salaries', tab: 'salary' as const, count: salaries.filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Advances', tab: 'advances' as const, count: advances.filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Expenses', tab: 'expenses' as const, count: [...teaExpenses, ...poojaExpenses, ...otherExpenses].filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Bills', tab: 'bills' as const, count: [...electricityBills, ...waterBills].filter(row => row.siteId === inspectingSite.id).length },
+                  { label: 'Floor plans', tab: 'floorPlans' as const, count: floorPlans.filter(row => row.siteId === inspectingSite.id || (!row.siteId && row.siteName === inspectingSite.name)).length },
+                  { label: 'Estimates', tab: 'reports' as const, count: estimates.filter(row => row.siteId === inspectingSite.id).length },
+                ].map(section => (
+                  <button
+                    key={section.label}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(section.tab);
+                      setInspectingSite(null);
+                    }}
+                    className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-3 py-3 text-left text-sm text-slate-200 hover:border-indigo-500"
+                  >
+                    <span>{section.label}</span><strong>{section.count}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="modal-footer p-4 border-t border-slate-800 bg-slate-900/90 flex justify-end">
+              <button type="button" onClick={() => setInspectingSite(null)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Password Reset Assist Modal */}
       {resetModalUser && (
         <div className="modal-overlay" onClick={() => setResetModalUser(null)} role="dialog" aria-modal="true">
@@ -1795,7 +1906,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="modal-header bg-gradient-to-r from-indigo-950 via-slate-900 to-slate-900 border-b border-indigo-500/30 p-4">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 <KeyRound className="w-5 h-5 text-indigo-400" />
-                <span>Password Reset Assist (கடவுச்சொல் மீட்டமைப்பு)</span>
+                <span>Password recovery</span>
               </h3>
               <button className="modal-close-btn" onClick={() => setResetModalUser(null)} type="button">
                 <X size={20} />
@@ -1805,7 +1916,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <form onSubmit={handleExecutePasswordResetAssist}>
               <div className="modal-body p-5 space-y-4">
                 <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-3 text-xs text-indigo-300">
-                  Assisting password reset for contractor <strong>{resetModalUser.fullName}</strong> (@{resetModalUser.username}). Setting a temporary password will require them to choose their own private password upon their next login.
+                  Send a secure password recovery link to <strong>{resetModalUser.email}</strong>. The account holder chooses their own password.
                 </div>
 
                 {resetError && (
@@ -1816,52 +1927,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 )}
 
                 {resetSuccessMessage ? (
-                  <div className="space-y-3">
-                    <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 p-3.5 rounded-xl text-xs">
-                      {resetSuccessMessage}
-                    </div>
-
-                    <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-3 flex items-center justify-between">
-                      <div>
-                        <span className="text-[11px] text-slate-400 block font-semibold">Temporary Password:</span>
-                        <code className="text-base font-mono font-bold text-amber-400">{tempPassword}</code>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleCopyPassword}
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                        <span>{copiedPassword ? 'Copied!' : 'Copy'}</span>
-                      </button>
-                    </div>
+                  <div className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 p-3.5 rounded-xl text-xs">
+                    {resetSuccessMessage}
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-                        <span>New Temporary Password (min 8 chars):</span>
-                        <button
-                          type="button"
-                          onClick={() => setTempPassword(`Mistry@${Math.floor(1000 + Math.random() * 9000)}`)}
-                          className="text-[11px] text-amber-400 hover:underline font-semibold"
-                        >
-                          Generate New
-                        </button>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        minLength={8}
-                        value={tempPassword}
-                        onChange={e => setTempPassword(e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-400">
-                      Requirement: Must be at least 8 characters long and contain both letters and numbers.
-                    </p>
-                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    The recovery link expires according to your Supabase Auth email settings.
+                  </p>
                 )}
               </div>
 
@@ -1880,7 +1952,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all"
                   >
                     <KeyRound className="w-4 h-4" />
-                    <span>{isResettingPassword ? 'Resetting...' : 'Confirm Reset Password'}</span>
+                    <span>{isResettingPassword ? 'Sending...' : 'Send Recovery Link'}</span>
                   </button>
                 )}
               </div>
@@ -1905,7 +1977,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             <div className="modal-header bg-gradient-to-r from-purple-950 via-slate-900 to-slate-900 border-b border-purple-500/30 p-4">
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: '#f1f5f9' }}>
                 <ShieldCheck size={22} color="#c084fc" />
-                <span>Create New Sub-Admin (துணை அட்மின் உருவாக்கம்)</span>
+                <span>Invite Sub-admin</span>
               </h3>
               <button
                 className="modal-close-btn"
@@ -1923,9 +1995,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <Crown className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <strong className="block text-slate-100 font-bold mb-0.5">
-                      Real Admin Authority (உண்மையான அட்மின் அனுமதி):
+                      Super Admin controls access
                     </strong>
-                    Sub-Admins receive elevated supervisory oversight across all construction sites, materials, and worker attendance ledgers. However, they cannot create or modify other admins.
+                    The account holder sets a password through the email invitation. Select only the data scopes this Sub-admin needs.
                   </div>
                 </div>
 
@@ -1939,7 +2011,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Full Name (முழு பெயர்)</span>
+                    <span>Full name</span>
                     <span className="text-rose-400">*</span>
                   </label>
                   <input
@@ -1955,7 +2027,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Username (பயனர் பெயர்)</span>
+                    <span>Username</span>
                     <span className="text-rose-400">*</span>
                   </label>
                   <input
@@ -1972,7 +2044,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Phone className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Mobile (தொலைபேசி)</span>
+                      <span>Mobile</span>
                     </label>
                     <input
                       type="tel"
@@ -1986,10 +2058,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
                       <Mail className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Email (மின்னஞ்சல்)</span>
+                      <span>Email</span>
                     </label>
                     <input
                       type="email"
+                      required
                       placeholder="e.g. kumar@mistry.com"
                       value={subAdminEmail}
                       onChange={e => setSubAdminEmail(e.target.value)}
@@ -1998,22 +2071,43 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Password (கடவுச்சொல் - min 6 chars)</span>
-                    <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    placeholder="Enter safe password"
-                    value={subAdminPassword}
-                    onChange={e => setSubAdminPassword(e.target.value)}
-                    className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
+                <fieldset className="space-y-2">
+                  <legend className="text-xs font-bold text-slate-300">Data access</legend>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {SUB_ADMIN_SCOPES.map(([scope, label]) => {
+                      const access = subAdminPermissions[scope] || { read: false, write: false };
+                      return (
+                        <div key={scope} className="rounded-lg border border-slate-700 bg-slate-800/60 p-2">
+                          <span className="block text-xs text-slate-200">{label}</span>
+                          <div className="mt-1 flex gap-4 text-[11px] text-slate-400">
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={access.read}
+                                onChange={event => setSubAdminPermissions(previous => ({
+                                  ...previous,
+                                  [scope]: { read: event.target.checked, write: event.target.checked && access.write },
+                                }))}
+                              />
+                              Read
+                            </label>
+                            <label className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                checked={access.write}
+                                onChange={event => setSubAdminPermissions(previous => ({
+                                  ...previous,
+                                  [scope]: { read: event.target.checked || access.read, write: event.target.checked },
+                                }))}
+                              />
+                              Edit
+                            </label>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </fieldset>
               </div>
 
               <div className="modal-footer flex items-center justify-end gap-3 p-4 border-t border-slate-800 bg-slate-900/95">
@@ -2022,7 +2116,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   onClick={() => setIsSubAdminModalOpen(false)}
                   className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all active:scale-95"
                 >
-                  Cancel (ரத்து செய்)
+                  Cancel
                 </button>
                 <button
                   type="submit"
@@ -2030,10 +2124,75 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 flex items-center gap-1.5 transition-all active:scale-95"
                 >
                   <ShieldCheck className="w-4 h-4" />
-                  <span>{isCreatingSubAdmin ? 'Creating...' : 'Create Sub-Admin (உருவாக்கு)'}</span>
+                  <span>{isCreatingSubAdmin ? 'Sending...' : 'Send invitation'}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {permissionTarget && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPermissionTarget(null)}
+        >
+          <div className="modal-dialog w-full max-w-lg" onClick={event => event.stopPropagation()}>
+            <div className="modal-header p-4 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="font-bold text-slate-100">Manage access for {permissionTarget.fullName}</h3>
+              <button className="modal-close-btn" type="button" onClick={() => setPermissionTarget(null)} aria-label="Close">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body p-5 space-y-3">
+              {SUB_ADMIN_SCOPES.map(([scope, label]) => {
+                const access = subAdminPermissions[scope] || { read: false, write: false };
+                return (
+                  <div key={scope} className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+                    <span className="text-sm text-slate-200">{label}</span>
+                    <div className="flex gap-4 text-xs text-slate-400">
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={access.read}
+                          onChange={event => setSubAdminPermissions(previous => ({
+                            ...previous,
+                            [scope]: { read: event.target.checked, write: event.target.checked && access.write },
+                          }))}
+                        />
+                        Read
+                      </label>
+                      <label className="flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={access.write}
+                          onChange={event => setSubAdminPermissions(previous => ({
+                            ...previous,
+                            [scope]: { read: event.target.checked || access.read, write: event.target.checked },
+                          }))}
+                        />
+                        Edit
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="modal-footer p-4 border-t border-slate-800 flex justify-end gap-2">
+              <button type="button" className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300" onClick={() => setPermissionTarget(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSavingPermissions}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold disabled:opacity-50"
+                onClick={handleSavePermissions}
+              >
+                {isSavingPermissions ? 'Saving...' : 'Save access'}
+              </button>
+            </div>
           </div>
         </div>
       )}

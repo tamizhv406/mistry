@@ -29,22 +29,22 @@ interface ToolsTabProps {
 
 // 15 Standard Core Tools + Custom Tool catalog
 const STANDARD_15_TOOLS = [
-  { name: 'Hammer', tamil: 'சுத்தியல்', desc: 'Steel claw hammer for masonry and carpentry' },
-  { name: 'Trowel', tamil: 'கரண்டி', desc: 'Masonry plastering and finishing trowel' },
-  { name: 'Brick Trowel', tamil: 'செங்கல் கரண்டி', desc: 'Pointed bricklaying and masonry trowel' },
-  { name: 'Shovel', tamil: 'மண்வெட்டி', desc: 'Heavy gauge steel spade for mortar & earthwork' },
-  { name: 'Pickaxe', tamil: 'பிக்காஸ் / கோடாரி', desc: 'Drop forged steel trenching and excavation pickaxe' },
-  { name: 'Crowbar', tamil: 'கடப்பாரை', desc: 'Hexagonal tempered steel demolition pry bar' },
-  { name: 'Measuring Tape', tamil: 'டேப்', desc: '5M/30M heavy duty steel layout measuring tape' },
-  { name: 'Bucket', tamil: 'வாளி', desc: 'Reinforced mortar and concrete handling bucket' },
-  { name: 'Wheelbarrow', tamil: 'தள்ளுவண்டி', desc: 'Dual-handle heavy duty site mortar wheelbarrow' },
-  { name: 'Ladder', tamil: 'ஏணி / சாரம்', desc: 'Aluminium extension staging and scaffolding ladder' },
-  { name: 'Drill Machine', tamil: 'துளையிடும் இயந்திரம்', desc: 'Heavy SDS hammer drill for masonry core holes' },
-  { name: 'Grinder', tamil: 'கட்டிங் மெஷின்', desc: 'High-speed angle grinder with diamond cutting disc' },
-  { name: 'Concrete Mixer', tamil: 'கலவை இயந்திரம்', desc: '10/7 CFT rotating drum site concrete mixer' },
-  { name: 'Tool Box', tamil: 'டூல் பாக்ஸ்', desc: 'Heavy duty steel cantilever site toolbox' },
-  { name: 'Saw', tamil: 'மரம் அறுக்கும் வாள்', desc: 'Hand carpentry saw for centering and formwork' },
-  { name: 'Custom Tool', tamil: 'தனிப்பயன் உபகரணம்', desc: 'Custom construction machinery, vibrator & power tools' },
+  { name: 'Hammer', desc: 'Steel claw hammer for masonry and carpentry' },
+  { name: 'Trowel', desc: 'Masonry plastering and finishing trowel' },
+  { name: 'Brick Trowel', desc: 'Pointed bricklaying and masonry trowel' },
+  { name: 'Shovel', desc: 'Heavy gauge steel spade for mortar & earthwork' },
+  { name: 'Pickaxe', desc: 'Drop forged steel trenching and excavation pickaxe' },
+  { name: 'Crowbar', desc: 'Hexagonal tempered steel demolition pry bar' },
+  { name: 'Measuring Tape', desc: '5M/30M heavy duty steel layout measuring tape' },
+  { name: 'Bucket', desc: 'Reinforced mortar and concrete handling bucket' },
+  { name: 'Wheelbarrow', desc: 'Dual-handle heavy duty site mortar wheelbarrow' },
+  { name: 'Ladder', desc: 'Aluminium extension staging and scaffolding ladder' },
+  { name: 'Drill Machine', desc: 'Heavy SDS hammer drill for masonry core holes' },
+  { name: 'Grinder', desc: 'High-speed angle grinder with diamond cutting disc' },
+  { name: 'Concrete Mixer', desc: '10/7 CFT rotating drum site concrete mixer' },
+  { name: 'Tool Box', desc: 'Heavy duty steel cantilever site toolbox' },
+  { name: 'Saw', desc: 'Hand carpentry saw for centering and formwork' },
+  { name: 'Custom Tool', desc: 'Custom construction machinery, vibrator & power tools' },
 ];
 
 export const ToolsTab: React.FC<ToolsTabProps> = ({
@@ -57,7 +57,6 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
   const [selectedToolForDetails, setSelectedToolForDetails] = useState<ToolItem | null>(null);
   const [catalogDetailTool, setCatalogDetailTool] = useState<{
     name: string;
-    tamil: string;
     desc: string;
   } | null>(null);
 
@@ -85,7 +84,6 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
     return {
       id: tool.id,
       title: tool.toolName,
-      tamilTitle: visual.tamilName,
       description: tool.notes || visual.description,
       imageUrl: tool.imageUrl || visual.imageUrl,
       imageAlt: visual.imageAlt,
@@ -299,7 +297,6 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
                 <span className="text-[11px] font-bold text-slate-200 group-hover:text-amber-400 mt-1 line-clamp-1">
                   {st.name}
                 </span>
-                <span className="text-[9px] text-slate-400 line-clamp-1">{st.tamil}</span>
                 {siteTool && (
                   <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 shadow-sm" title="Active on site" />
                 )}
@@ -489,7 +486,7 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
           isOpen={!!selectedToolForDetails}
           onClose={() => setSelectedToolForDetails(null)}
           title={selectedToolForDetails.toolName}
-          subtitle={`${activeToolVisual.tamilName} • ${selectedToolForDetails.type}`}
+          subtitle={selectedToolForDetails.type}
           categoryBadge={`${selectedToolForDetails.type} • ${selectedToolForDetails.quantity} Nos`}
           badgeVariant={selectedToolForDetails.type === 'Rental' ? 'warning' : 'primary'}
           imageUrl={selectedToolForDetails.imageUrl || activeToolVisual.imageUrl}
@@ -532,7 +529,7 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
             isOpen={!!catalogDetailTool}
             onClose={() => setCatalogDetailTool(null)}
             title={catalogDetailTool.name}
-            subtitle={catalogDetailTool.tamil}
+            subtitle="Standard construction tool"
             categoryBadge="Standard Tool Catalog"
             badgeVariant="info"
             imageUrl={catVisual.imageUrl}
@@ -543,11 +540,6 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
                 value: catalogDetailTool.name,
                 icon: <Wrench size={14} className="text-amber-400" />,
                 highlight: true,
-              },
-              {
-                label: 'Tamil Term',
-                value: catalogDetailTool.tamil,
-                icon: <Tag size={14} className="text-sky-400" />,
               },
               {
                 label: 'Usage & Description',

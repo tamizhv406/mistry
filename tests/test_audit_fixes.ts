@@ -51,7 +51,7 @@ async function runAuditFixesTests() {
   console.log(`✓ All ${expectedVisualKeys.length} categories have valid, self-contained SVG fallback data URIs.`);
 
   // Test 2: 15 Tools + Custom Tool Resolution
-  console.log('\n[Test 2] Verifying 15 Standard Tools + Custom Tool Visuals & Tamil metadata...');
+  console.log('\n[Test 2] Verifying English tool labels, descriptions, and rendered visuals...');
   const toolNames = [
     'Hammer',
     'Trowel',
@@ -73,23 +73,22 @@ async function runAuditFixesTests() {
 
   for (const tool of toolNames) {
     const visual = getToolVisual(tool);
-    if (!visual.tamilName || visual.tamilName.trim().length === 0) {
-      throw new Error(`Tool "${tool}" is missing a Tamil translation.`);
-    }
-    if (!visual.description || visual.description.trim().length === 0) {
-      throw new Error(`Tool "${tool}" is missing a description.`);
+    if (!visual.name || !visual.description || /\p{Script=Tamil}/u.test(`${visual.name} ${visual.description}`)) {
+      throw new Error(`Tool "${tool}" is missing English display text.`);
     }
     if (!visual.imageUrl || visual.imageUrl.trim().length === 0) {
       throw new Error(`Tool "${tool}" is missing an imageUrl.`);
     }
+    const svg = decodeURIComponent(visual.imageUrl.slice(visual.imageUrl.indexOf(',') + 1));
+    if (/\p{Script=Tamil}/u.test(svg)) throw new Error(`Tool "${tool}" renders Tamil text in its image.`);
   }
 
   // Also test unknown tool fallback
   const fallbackTool = getToolVisual('Alien Laser Cutter');
-  if (!fallbackTool.imageUrl || !fallbackTool.tamilName) {
+  if (!fallbackTool.imageUrl || !fallbackTool.name) {
     throw new Error('Unknown tool did not provide graceful fallback visual.');
   }
-  console.log(`✓ Verified 15 standard tools + Custom Tool + unknown fallback resolution (${toolNames.length + 1} checks passed).`);
+  console.log(`✓ Verified ${toolNames.length} tools and unknown fallback have English visible content.`);
 
   // Test 3: 8 Daily Expense Categories Resolution
   console.log('\n[Test 3] Verifying 8 Expense Categories (Tea, Snacks, Juice, Food, Pooja, Other, Electricity, Water)...');
@@ -99,30 +98,31 @@ async function runAuditFixesTests() {
 
   for (const exp of expenseCategories) {
     const visual = getExpenseVisual(exp);
-    if (!visual.imageUrl || !visual.name || !visual.tamilName) {
+    if (!visual.imageUrl || !visual.name || !visual.description || /\p{Script=Tamil}/u.test(`${visual.name} ${visual.description}`)) {
       throw new Error(`Expense category "${exp}" missing required visual properties.`);
     }
-    if (!visual.description) {
-      throw new Error(`Expense category "${exp}" missing description.`);
-    }
+    const svg = decodeURIComponent(visual.imageUrl.slice(visual.imageUrl.indexOf(',') + 1));
+    if (/\p{Script=Tamil}/u.test(svg)) throw new Error(`Expense category "${exp}" renders Tamil text in its image.`);
   }
-  console.log(`✓ All 8 expense category visuals resolved with Tamil titles, descriptions, and images.`);
+  console.log('✓ All 8 expense category visuals use English visible text.');
 
   // Test 4: Materials & Worker Categories Resolution
   console.log('\n[Test 4] Verifying Core Construction Material & Worker Visuals...');
   const materialCategories = ['cement', 'sand', 'msand', 'bricks', 'rod', 'aggregate'];
   for (const mat of materialCategories) {
     const visual = getMaterialVisual(mat);
-    if (!visual.imageUrl || !visual.name || !visual.tamilName) {
+    if (!visual.imageUrl || !visual.name || /\p{Script=Tamil}/u.test(visual.name)) {
       throw new Error(`Material category "${mat}" missing required visual properties.`);
     }
+    const svg = decodeURIComponent(visual.imageUrl.slice(visual.imageUrl.indexOf(',') + 1));
+    if (/\p{Script=Tamil}/u.test(svg)) throw new Error(`Material category "${mat}" renders Tamil text in its image.`);
   }
 
   const workerVisual = getWorkerVisual('PERIYAAL');
-  if (!workerVisual.imageUrl || !workerVisual.tamilName) {
+  if (!workerVisual.imageUrl || !workerVisual.name) {
     throw new Error('Worker visual resolution failed.');
   }
-  console.log(`✓ All 6 construction material categories and worker categories resolved with Tamil titles and images.`);
+  console.log('✓ Material and worker visuals use English visible text.');
 
   // Test 5: Universal Payment Rule (Never Negative Balance)
   console.log('\n[Test 5] Verifying Universal Payment Rule (Never Negative Balance)...');
@@ -241,18 +241,18 @@ async function runAuditFixesTests() {
   }
 
   const forgotPwdContent = fs.readFileSync(path.resolve(process.cwd(), 'src/components/ForgotPasswordModal.tsx'), 'utf8');
-  if (!forgotPwdContent.includes('autoComplete="one-time-code"') || !forgotPwdContent.includes('id="fp-otp"')) {
-    throw new Error('ForgotPasswordModal.tsx missing autoComplete="one-time-code"');
+  if (!forgotPwdContent.includes('type="email"') || !forgotPwdContent.includes('requestEmailPasswordReset') || forgotPwdContent.includes('fp-otp')) {
+    throw new Error('ForgotPasswordModal.tsx must use email-based Supabase recovery, not a local OTP.');
   }
   console.log('✓ Verified native browser credential autofill and semantic attributes across all login/auth modals.');
 
   // Test 8: Super Admin Sticky Inspection Banner in SiteDetailView
   console.log('\n[Test 8] Verifying Super Admin Sticky Inspection Banner in SiteDetailView...');
   const siteDetailContent = fs.readFileSync(path.resolve(process.cwd(), 'src/views/SiteDetailView.tsx'), 'utf8');
-  if (!siteDetailContent.includes('Inspecting Site:') || !siteDetailContent.includes('Admin View / அட்மின் பார்வை')) {
+  if (!siteDetailContent.includes('Inspecting Site:') || !siteDetailContent.includes('Admin view')) {
     throw new Error('SiteDetailView.tsx missing Super Admin Inspection Banner');
   }
-  if (!siteDetailContent.includes('Return to Admin Dashboard (அட்மின் முகப்புக்குத் திரும்பு)')) {
+  if (!siteDetailContent.includes('Return to Admin dashboard')) {
     throw new Error('SiteDetailView.tsx missing Return to Admin Dashboard button in banner');
   }
   console.log('✓ Verified Super Admin Inspection Banner and return navigation in SiteDetailView.');
@@ -281,4 +281,3 @@ runAuditFixesTests().catch(err => {
   console.error('\n❌ AUDIT FIXES TEST SUITE FAILED:', err);
   process.exit(1);
 });
-

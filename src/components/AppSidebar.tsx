@@ -266,7 +266,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               style={{
                 backgroundColor: isSuperAdmin(user)
                   ? '#f59e0b'
-                  : user.role === 'ADMIN' || user.role === 'SUB_ADMIN'
+                  : user.role === 'SUB_ADMIN'
                   ? '#6366f1'
                   : '#0ea5e9',
               }}

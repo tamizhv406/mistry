@@ -13,14 +13,16 @@ import {
 import { exportDatabaseBackup, importDatabaseBackup } from '../db/backup';
 import { loadDemoData } from '../db/seedData';
 import { db } from '../db/db';
+import type { User } from '../db/types';
 import { AccountPanel } from '../components/mobile/AccountPanel';
 
 interface BackupViewProps {
+  user: User | null;
   onBack: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-export const BackupView: React.FC<BackupViewProps> = ({ onBack, onNotify }) => {
+export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }) => {
   const [loadingExport, setLoadingExport] = useState(false);
   const [loadingImport, setLoadingImport] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
@@ -28,9 +30,13 @@ export const BackupView: React.FC<BackupViewProps> = ({ onBack, onNotify }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
+    if (!user) {
+      onNotify('Sign in before exporting a backup.', 'error');
+      return;
+    }
     setLoadingExport(true);
     try {
-      await exportDatabaseBackup();
+      await exportDatabaseBackup(user);
       onNotify('Full database backup file (.json) downloaded to your computer!', 'success');
     } catch (err: any) {
       onNotify('Backup export failed: ' + err.message, 'error');

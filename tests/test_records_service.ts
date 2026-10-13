@@ -17,7 +17,7 @@ function check(name: string, cond: boolean, detail?: unknown) {
 const stamp = '2026-10-01T04:00:00.000Z';
 const owner: User = { id: 'u-owner', username: 'owner', fullName: 'Owner', mobile: '', email: 'o@x.in', passwordHash: 'x', role: 'MISTRY', isActive: true, createdAt: stamp };
 const stranger: User = { ...owner, id: 'u-other', username: 'other', fullName: 'Other', email: 'other@x.in' };
-const admin: User = { ...owner, id: 'u-admin', username: 'boss', fullName: 'Boss', email: 'boss@x.in', role: 'ADMIN' };
+const admin: User = { ...owner, id: 'u-admin', username: 'boss', fullName: 'Boss', email: 'boss@x.in', role: 'SUPER_ADMIN' };
 
 async function run() {
   console.log('\n--- 1. Schema v7 → v8 keeps existing data ---');
@@ -81,6 +81,11 @@ async function run() {
   check('Another contractor cannot', (await svc.writableSite(stranger, 's1')) === null);
   check('Admin can', (await svc.writableSite(admin, 's1'))?.id === 's1');
   check('Signed-out user cannot', (await svc.writableSite(null, 's1')) === null);
+  const subAdminOwner: User = { ...owner, role: 'SUB_ADMIN', permissions: {} };
+  const unscopedSubAdmin: User = { ...stranger, role: 'SUB_ADMIN', permissions: { projects: { read: true, write: false } } };
+  check('Sub-admin retains write access to own materials without a scope grant', (await svc.writableSite(subAdminOwner, 's1', 'materials'))?.id === 's1');
+  check('Sub-admin without materials scope cannot write another owner site', (await svc.writableSite(unscopedSubAdmin, 's1', 'materials')) === null);
+  check('Sub-admin without labour scope cannot write another owner site', (await svc.writableSite(unscopedSubAdmin, 's1', 'workers')) === null);
   const denied = await svc.markAttendance(stranger, 's1', worker, today, 'present');
   check('Stranger attendance write is refused', !denied.ok && (await db.attendance.count()) === 1);
   const deniedPay = await svc.saveSalaryPayment(stranger, 's1', { workerId: 'w1', date: today, amount: 100 });
@@ -166,15 +171,15 @@ async function run() {
   const itemKey = (await stockNow())[0].key;
 
   const use = await svc.recordStockMovement(owner, 's1', { itemKey, itemName: 'Ramco PPC Cement', category: 'cement', unit: 'Bags', movementType: 'usage', quantity: 30, eventDate: today, reason: 'Roof slab' });
-  check('Usage recorded', use.ok && (await stockNow())[0].onHand === 70);
+  check('Usage recorded in canonical kilograms', use.ok && (await stockNow())[0].onHand === 3500);
   const tooMuch = await svc.recordStockMovement(owner, 's1', { itemKey, itemName: 'Ramco PPC Cement', category: 'cement', unit: 'Bags', movementType: 'usage', quantity: 71, eventDate: today });
-  check('Usage beyond stock is refused', !tooMuch.ok && (await stockNow())[0].onHand === 70);
+  check('Usage beyond stock is refused', !tooMuch.ok && (await stockNow())[0].onHand === 3500);
   const back = await svc.recordStockMovement(owner, 's1', { itemKey, itemName: 'Ramco PPC Cement', category: 'cement', unit: 'Bags', movementType: 'return', quantity: 5, eventDate: today });
-  check('Return to supplier recorded', back.ok && (await stockNow())[0].onHand === 65);
+  check('Return to supplier recorded in canonical kilograms', back.ok && (await stockNow())[0].onHand === 3250);
   check('Void needs a reason', !(await svc.voidStockMovement(owner, 's1', use.ok ? use.value.id : '', ' ')).ok);
   const voided = await svc.voidStockMovement(owner, 's1', use.ok ? use.value.id : '', 'Entered twice');
   const afterVoid = (await stockNow())[0];
-  check('Voided usage returns to stock', voided.ok && afterVoid.onHand === 95);
+  check('Voided usage returns to stock', voided.ok && afterVoid.onHand === 4750);
   check('Voided entry is still in the history', afterVoid.lines.some(l => l.voided && l.voidReason === 'Entered twice'));
   check('Movement row was not deleted', (await db.stockMovements.count()) === 2);
   check('Stranger cannot move stock', !(await svc.recordStockMovement(stranger, 's1', { itemKey, itemName: 'x', category: 'cement', unit: 'Bags', movementType: 'usage', quantity: 1, eventDate: today })).ok);
@@ -216,7 +221,7 @@ async function run() {
   const custom = await svc.saveCatalogItem(owner, { kind: 'brand', category: 'cement', name: 'Penna' });
   check('Custom brand can be added without code changes', custom.ok && (await db.catalogItems.get(custom.value.id))?.isBuiltIn === false);
   check('Duplicate brand name is refused', !(await svc.saveCatalogItem(owner, { kind: 'brand', category: 'cement', name: 'penna' })).ok);
-  await svc.removeCatalogItem('brand-cement-acc');
+  await svc.removeCatalogItem(owner, 'brand-cement-acc');
   await svc.ensureCatalogSeeded();
   check('A removed built-in entry is not re-added', (await db.catalogItems.get('brand-cement-acc'))?.isDeleted === true);
 

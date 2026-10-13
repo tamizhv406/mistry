@@ -64,12 +64,12 @@ After any change to the web app, repeat `npm run build && npx cap sync android`.
 ## Environment variables (set before `npm run build`)
 
 Put them in `.env.production.local` (git ignores `*.local`). They are compiled into the app, so only public values belong here.
+Keep this file UTF-8 without a BOM; a BOM can prevent Vite from reading the first setting. After changing these values, rebuild, sync, and install a new APK.
 
 ```
-VITE_SUPABASE_URL=            # optional: turns on cloud backup
-VITE_SUPABASE_ANON_KEY=       # the public anon / publishable key ONLY. Never a service-role key.
-VITE_ENABLE_DEMO_LOGIN=       # leave unset for release. "true" re-enables the demo accounts (public password).
-VITE_INITIAL_ADMIN_HASH=      # optional: SHA-256 of a first-login administrator password. Unset = no administrator account.
+VITE_SUPABASE_URL=            # Supabase project URL
+VITE_SUPABASE_ANON_KEY=       # public anon / publishable key ONLY; never a service-role key
+VITE_AI_DESIGN_FUNCTION=      # optional deployed AI Edge Function name
 ```
 
 All names are listed with notes in `.env.example`.
@@ -97,5 +97,5 @@ Still open (yours to do or decide):
 - [ ] **Android auto-backup**: `android:allowBackup="true"` lets Android copy app data to the user's Google account. Keep it (easier restore) or set it to `false` in `AndroidManifest.xml` (stricter privacy), and describe your choice in the privacy policy.
 - [ ] **Target API level**: the project targets API 36. Check Play Console's current minimum when you submit.
 - [ ] **Play Console**: developer account, content rating questionnaire, target audience (adults), store listing (512×512 icon, 1024×500 feature graphic, phone screenshots, short and full description), and any closed-testing period Play requires for new personal accounts.
-- [ ] **Initial administrator account**: a production build creates the hidden `SUPER_ADMIN` account only when `VITE_INITIAL_ADMIN_HASH` is set for that build, and never with the development password, which is public (it is in this repository's tests). Without the variable a release has no administrator account. On a customer's phone that account can see all data on that phone, so decide whether release builds should set it.
+- [ ] **Administrator provisioning**: there is no build-time or local Super Admin bootstrap. Only promote a confirmed Supabase Auth account after the reviewed authorization migration has been approved and applied; follow [docs/SUPABASE_SETUP.md](./SUPABASE_SETUP.md). Do not add privileged role settings to `VITE_*` variables.
 - [ ] Voice input uses the Web Speech API, which Android's WebView does not provide; the microphone button hides itself when unsupported. Confirm on a device.

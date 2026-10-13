@@ -1,5 +1,6 @@
 import { db } from '../db/db';
 import { recordTombstone } from './syncTombstones';
+import { userCanAccessRecord } from '../db/types';
 import type {
   FloorPlan,
   User,
@@ -12,19 +13,6 @@ import type {
   FloorPlanFurniture,
   FloorPlanUnit,
 } from '../db/types';
-
-const INITIAL_ADMIN_EMAIL =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) ||
-  'tamilthilagan82@gmail.com';
-
-function isElevatedUser(user: User): boolean {
-  return (
-    user.role === 'ADMIN' ||
-    user.role === 'SUPER_ADMIN' ||
-    user.role === 'SUB_ADMIN' ||
-    (user.email || '').toLowerCase() === INITIAL_ADMIN_EMAIL.toLowerCase()
-  );
-}
 
 /**
  * Create a new floor plan for a user
@@ -64,17 +52,11 @@ export async function createFloorPlan(
 }
 
 /**
- * Get all floor plans for a user (scoped by userId, elevated users see all)
+ * Get floor plans visible under the user's project permissions.
  */
 export async function getFloorPlansForUser(user: User): Promise<FloorPlan[]> {
-  if (isElevatedUser(user)) {
-    return db.floorPlans
-      .filter(fp => !fp.isDeleted)
-      .reverse()
-      .sortBy('createdAt');
-  }
   return db.floorPlans
-    .filter(fp => !fp.isDeleted && fp.userId === user.id)
+    .filter(fp => !fp.isDeleted && userCanAccessRecord(user, 'floorPlans', 'read', fp.userId))
     .reverse()
     .sortBy('createdAt');
 }
@@ -96,7 +78,7 @@ export async function getFloorPlanById(
 ): Promise<FloorPlan | null> {
   const plan = await db.floorPlans.get(planId);
   if (!plan || plan.isDeleted) return null;
-  if (!isElevatedUser(user) && plan.userId !== user.id) {
+  if (!userCanAccessRecord(user, 'floorPlans', 'read', plan.userId)) {
     throw new Error('Access Denied: You do not have permission to view this floor plan.');
   }
   return plan;
@@ -117,7 +99,7 @@ export async function updateFloorPlan(
     return await db.transaction('rw', db.floorPlans, async () => {
       const plan = await db.floorPlans.get(planId);
       if (!plan) return { success: false, error: 'Floor plan not found.' };
-      if (!isElevatedUser(user) && plan.userId !== user.id) {
+      if (!userCanAccessRecord(user, 'floorPlans', 'write', plan.userId)) {
         return { success: false, error: 'Access Denied: You cannot edit this floor plan.' };
       }
       const stored = plan.revision || 0;
@@ -147,7 +129,7 @@ export async function softDeleteFloorPlan(
 ): Promise<{ success: boolean; error?: string }> {
   const plan = await db.floorPlans.get(planId);
   if (!plan) return { success: false, error: 'Floor plan not found.' };
-  if (!isElevatedUser(user) && plan.userId !== user.id) {
+  if (!userCanAccessRecord(user, 'floorPlans', 'write', plan.userId)) {
     return { success: false, error: 'Access Denied: You cannot delete this floor plan.' };
   }
   const now = new Date().toISOString();
@@ -177,7 +159,7 @@ export async function restoreFloorPlan(
 ): Promise<{ success: boolean; error?: string }> {
   const plan = await db.floorPlans.get(planId);
   if (!plan) return { success: false, error: 'Floor plan not found.' };
-  if (!isElevatedUser(user) && plan.userId !== user.id) {
+  if (!userCanAccessRecord(user, 'floorPlans', 'write', plan.userId)) {
     return { success: false, error: 'Access Denied.' };
   }
   const now = new Date().toISOString();
@@ -229,11 +211,11 @@ export async function permanentlyDeleteFloorPlan(
 ): Promise<{ success: boolean; error?: string }> {
   const plan = await db.floorPlans.get(planId);
   if (!plan) return { success: false, error: 'Floor plan not found.' };
-  if (!isElevatedUser(user) && plan.userId !== user.id) {
+  if (!userCanAccessRecord(user, 'floorPlans', 'write', plan.userId)) {
     return { success: false, error: 'Access Denied.' };
   }
   await db.floorPlans.delete(planId);
-  recordTombstone('floorPlans', planId); // so the cloud copy drops it too
+  recordTombstone('floorPlans', planId, plan.userId); // so the cloud copy drops it too
   return { success: true };
 }
 

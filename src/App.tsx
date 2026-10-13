@@ -75,7 +75,7 @@ const PROJECT_VIEWS: AppViewName[] = ['labour', 'worker', 'stock', 'toolroom', '
 const CURRENT_SITE_KEY = 'mistry_current_site';
 
 export function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<AppViewName>('dashboard');
   // The current project is remembered on this device so the app reopens where the user left off.
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => {
@@ -83,6 +83,8 @@ export function App() {
   });
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [selectedFloorPlanId, setSelectedFloorPlanId] = useState<string | null>(null);
+  // A floor area handed from the Floor Planner to the Building Calculator.
+  const [estimatorAreaSqFt, setEstimatorAreaSqFt] = useState<number | null>(null);
   const [currentSiteTab, setCurrentSiteTab] = useState<
     'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance'
   >('overview');
@@ -136,7 +138,13 @@ export function App() {
       const u = getCurrentUser();
       if (u) {
         setCurrentUser(u);
+        if (u.offlineLimited) {
+          addToast('Cloud profile unavailable. Using local records only; elevated access is disabled until reconnected.', 'info');
+        }
       }
+    }).catch(error => {
+      setCurrentUser(null);
+      addToast(error instanceof Error ? error.message : 'Could not verify your secure account.', 'error');
     });
 
     if (checkPasswordRecoveryUrl()) {
@@ -149,6 +157,7 @@ export function App() {
         if (event === 'PASSWORD_RECOVERY') {
           setIsRecoveryModalOpen(true);
         }
+        if (event === 'SIGNED_OUT') setCurrentUser(null);
       });
       authSub = data?.subscription || null;
     }
@@ -326,6 +335,7 @@ export function App() {
     } else if (view === 'my-sites') {
       setCurrentView('my-sites');
     } else if (view === 'estimator') {
+      setEstimatorAreaSqFt(null);
       setCurrentView('estimator');
     } else if (view === 'admin') {
       if (isAdmin(currentUser)) {
@@ -397,7 +407,8 @@ export function App() {
       type: 'trash',
       onConfirm: async () => {
         try {
-          await db.softDelete(tableName, id);
+          if (!currentUser) throw new Error('Sign in is required to modify records.');
+          await db.softDelete(tableName, id, currentUser);
           addToast(`"${displayName}" moved to Recycle Bin`, 'info');
           if (tableName === 'sites' && selectedSiteId === id) {
             handleNavigate('dashboard');
@@ -422,7 +433,8 @@ export function App() {
       type: 'restore',
       onConfirm: async () => {
         try {
-          await db.restoreRecord(item.tableName, item.id);
+          if (!currentUser) throw new Error('Sign in is required to modify records.');
+          await db.restoreRecord(item.tableName, item.id, currentUser);
           addToast(`"${item.title}" successfully restored!`, 'success');
         } catch (err: any) {
           addToast('Failed to restore: ' + err.message, 'error');
@@ -444,7 +456,8 @@ export function App() {
       type: 'permanent-delete',
       onConfirm: async () => {
         try {
-          await db.permanentDelete(item.tableName, item.id);
+          if (!currentUser) throw new Error('Sign in is required to modify records.');
+          await db.permanentDelete(currentUser, item.tableName, item.id);
           addToast(`"${item.title}" permanently erased from database.`, 'info');
         } catch (err: any) {
           addToast('Failed to permanently delete: ' + err.message, 'error');
@@ -466,9 +479,10 @@ export function App() {
       type: 'permanent-delete',
       onConfirm: async () => {
         try {
-          const trash = await db.getAllTrash();
+          if (!currentUser) throw new Error('Sign in is required to modify records.');
+          const trash = await db.getAllTrash(currentUser, 'write');
           for (const item of trash) {
-            await db.permanentDelete(item.tableName, item.id);
+            await db.permanentDelete(currentUser, item.tableName, item.id);
           }
           addToast(`Emptied Recycle Bin (${trash.length} records erased).`, 'info');
         } catch (err: any) {
@@ -737,7 +751,8 @@ export function App() {
               onNotify={addToast}
               onOpenEstimator={(areaSqFt) => {
                 handleNavigate('estimator');
-                addToast(`Floor plan area: ${areaSqFt.toFixed(0)} sq.ft passed to estimator`, 'info');
+                setEstimatorAreaSqFt(areaSqFt);
+                addToast(`Floor plan area ${areaSqFt.toFixed(0)} sq.ft is set as the building size on one floor`, 'info');
               }}
             />
           ) : (
@@ -759,6 +774,9 @@ export function App() {
 
         {currentView === 'estimator' && (
           <EstimatorView
+            user={currentUser}
+            initialBuildingSqFt={estimatorAreaSqFt}
+            onBack={() => handleNavigate('dashboard')}
             onOpenSite={siteId => handleNavigate('site-detail', siteId)}
             onNotify={addToast}
           />
@@ -767,7 +785,6 @@ export function App() {
         {currentView === 'admin' && isAdmin(currentUser) && (
           <AdminDashboardView
             currentUser={currentUser}
-            onSelectSite={site => handleNavigate('site-detail', site.id)}
             onShowToast={addToast}
           />
         )}
@@ -784,6 +801,7 @@ export function App() {
 
         {currentView === 'backup' && (
           <BackupView
+            user={currentUser}
             onBack={() => handleNavigate('dashboard')}
             onNotify={addToast}
           />

@@ -8,18 +8,18 @@
  *  - keeps the shared `payments` ledger in step without ever counting a payment twice.
  */
 import { db } from '../db/db';
+import { userCanAccessRecord } from '../db/types';
 import type {
   AttendanceRecord, AttendanceStatus, CatalogItem, ElectricityBill, LabourAdvance, LabourWorker, Material,
   MaterialCategory, OtherExpense, OtherExpenseCategory, PoojaExpense, SalaryPayment, Site, StockMovement,
   StockMovementType, TeaSnacksExpense, ToolAsset, ToolCondition, ToolIssue, User, WaterBill, EntityTable,
 } from '../db/types';
 import { storedMultiplier, findDuplicateMoneyEntry } from '../domain/salary';
-import { buildStock, stockItemKey, validateMovement } from '../domain/stock';
+import { buildStock, convertStockQuantity, findDuplicateMovement, findDuplicatePurchase, stockItemKey, validateMovementOn } from '../domain/stock';
 import { buildToolStatus, minimumTotal, validateIssue, validateReturn } from '../domain/toolTracking';
 import { calculateFinancialBalance, generatePaymentId, syncParentRecordFinances } from '../utils/financial';
 import { isDayKey, nowIso, todayKey } from '../utils/datetime';
 import { roundMoney } from '../utils/money';
-import { isAdmin } from './auth';
 import { builtInCatalog } from '../domain/catalog';
 
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string; duplicateOf?: string };
@@ -35,13 +35,15 @@ export function newId(prefix: string): string {
 }
 
 /** The site, if this user may write to it. */
-export async function writableSite(user: User | null | undefined, siteId: string): Promise<Site | null> {
+export async function writableSite(
+  user: User | null | undefined,
+  siteId: string,
+  recordTable: EntityTable = 'sites'
+): Promise<Site | null> {
   if (!user) return null;
   const site = await db.sites.get(siteId);
   if (!site || site.isDeleted) return null;
-  if (isAdmin(user)) return site;
-  // Sites created before ownership was recorded have no userId; they stay usable.
-  if (site.userId && site.userId !== user.id) return null;
+  if (!userCanAccessRecord(user, recordTable, 'write', site.userId)) return null;
   return site;
 }
 
@@ -77,7 +79,7 @@ export async function markAttendance(
   status: AttendanceStatus,
   notes?: string
 ): Promise<Result<AttendanceRecord>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'attendance');
   if (!site) return fail(NO_ACCESS);
   const dateError = checkEventDate(date);
   if (dateError) return fail(dateError);
@@ -131,7 +133,7 @@ export async function markAttendance(
 
 /** Removes a mark (moves it to the Recycle Bin) so the day shows as "not marked". */
 export async function clearAttendance(user: User, siteId: string, workerId: string, date: string): Promise<Result> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'attendance');
   if (!site) return fail(NO_ACCESS);
   const rows = await db.attendance.where('workerId').equals(workerId).filter(a => !a.isDeleted && a.date === date && a.siteId === siteId).toArray();
   const now = nowIso();
@@ -140,7 +142,7 @@ export async function clearAttendance(user: User, siteId: string, workerId: stri
 }
 
 export async function setLeavePolicy(user: User, siteId: string, leavePaid: boolean): Promise<Result> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'sites');
   if (!site) return fail(NO_ACCESS);
   await db.sites.update(siteId, { leavePaid, updatedAt: nowIso() });
   await log(user, site, 'PAY_POLICY', `Leave days set to ${leavePaid ? 'paid' : 'unpaid'}`);
@@ -202,7 +204,7 @@ function checkAmount(amount: number): string | null {
 }
 
 export async function saveSalaryPayment(user: User, siteId: string, input: MoneyEntryInput): Promise<Result<SalaryPayment>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'salaryPayments');
   if (!site) return fail(NO_ACCESS);
   const amount = roundMoney(input.amount);
   const err = checkAmount(amount) || checkEventDate(input.date);
@@ -265,7 +267,7 @@ export interface AdvanceInput extends MoneyEntryInput {
 }
 
 export async function saveAdvance(user: User, siteId: string, input: AdvanceInput): Promise<Result<LabourAdvance>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'labourAdvances');
   if (!site) return fail(NO_ACCESS);
   const amount = roundMoney(input.amount);
   const err = checkAmount(amount) || checkEventDate(input.date);
@@ -337,7 +339,7 @@ async function softDeleteWithPayments(user: User, site: Site, table: EntityTable
 
 /** Moves a salary payment or advance to the Recycle Bin together with its ledger row. */
 export async function removeMoneyEntry(user: User, siteId: string, table: 'salaryPayments' | 'labourAdvances', id: string): Promise<Result> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, table);
   if (!site) return fail(NO_ACCESS);
   return softDeleteWithPayments(user, site, table, id, table === 'salaryPayments' ? 'salary payment' : 'advance');
 }
@@ -362,10 +364,12 @@ export interface PurchaseInput {
   purchaseDate: string;
   invoiceNumber?: string;
   notes?: string;
+  /** Set after the user has confirmed a purchase that looks like a repeat. */
+  allowDuplicate?: boolean;
 }
 
 export async function recordPurchase(user: User, siteId: string, input: PurchaseInput): Promise<Result<Material>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'materials');
   if (!site) return fail(NO_ACCESS);
   const name = input.materialName.trim();
   if (!name) return fail('Enter the material name.');
@@ -407,6 +411,21 @@ export async function recordPurchase(user: User, siteId: string, input: Purchase
   };
 
   return db.transaction('rw', db.materials, db.payments, db.activityLogs, async () => {
+    // Checked inside the transaction, so a double tap can not save the same purchase twice.
+    if (!input.allowDuplicate) {
+      const saved = await db.materials.where('siteId').equals(siteId).toArray();
+      const dup = findDuplicatePurchase(saved, {
+        category: record.category, name, unit: record.unit, quantity: record.quantity, rate: record.rate,
+        purchaseDate: record.purchaseDate, supplier: record.supplier,
+      });
+      if (dup) {
+        return {
+          ok: false as const,
+          error: 'The same purchase is already recorded for this date: same material, quantity, price and supplier.',
+          duplicateOf: dup.id,
+        };
+      }
+    }
     await db.materials.put(record);
     if (fin.paidAmount > 0) {
       const linked = await upsertSinglePayment({
@@ -432,10 +451,12 @@ export interface MovementInput {
   eventDate: string;
   reason?: string;
   notes?: string;
+  /** Set after the user has confirmed an entry that looks like a repeat. */
+  allowDuplicate?: boolean;
 }
 
 export async function recordStockMovement(user: User, siteId: string, input: MovementInput): Promise<Result<StockMovement>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'stockMovements');
   if (!site) return fail(NO_ACCESS);
   const name = input.itemName.trim();
   if (!name) return fail('Choose a material.');
@@ -451,8 +472,18 @@ export async function recordStockMovement(user: User, siteId: string, input: Mov
       db.stockMovements.where('siteId').equals(siteId).toArray(),
     ]);
     const item = buildStock(materials, rods, movements).find(i => i.key === itemKey);
-    const check = validateMovement(item?.onHand || 0, input.movementType, input.quantity);
+    const normalized = convertStockQuantity(input.category, input.unit, input.quantity);
+    const check = validateMovementOn(item, input.movementType, normalized.quantity, input.eventDate);
     if (!check.ok) return fail(check.error || 'Invalid quantity.');
+    if (!input.allowDuplicate) {
+      const dup = findDuplicateMovement(movements, {
+        itemName: name, category: input.category, unit: input.unit,
+        movementType: input.movementType, quantity: input.quantity, eventDate: input.eventDate,
+      });
+      if (dup) {
+        return { ok: false as const, error: 'The same entry is already recorded for this material on this date.', duplicateOf: dup.id };
+      }
+    }
 
     const now = nowIso();
     const record: StockMovement = {
@@ -462,9 +493,9 @@ export async function recordStockMovement(user: User, siteId: string, input: Mov
       itemKey,
       itemName: item?.name || name,
       category: item?.category || input.category,
-      unit: item?.unit || input.unit,
+      unit: item?.unit || normalized.unit,
       movementType: input.movementType,
-      quantity: input.quantity,
+      quantity: normalized.quantity,
       eventDate: input.eventDate,
       reason: (input.reason || '').trim(),
       notes: (input.notes || '').trim(),
@@ -482,7 +513,7 @@ export async function recordStockMovement(user: User, siteId: string, input: Mov
 
 /** Voids a movement: it stays in the history, marked void, and no longer affects the balance. */
 export async function voidStockMovement(user: User, siteId: string, movementId: string, reason: string): Promise<Result> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'stockMovements');
   if (!site) return fail(NO_ACCESS);
   if (!reason.trim()) return fail('Say why this entry is being cancelled.');
   return db.transaction('rw', db.materials, db.rodEntries, db.stockMovements, db.activityLogs, async () => {
@@ -494,9 +525,12 @@ export async function voidStockMovement(user: User, siteId: string, movementId: 
       db.rodEntries.where('siteId').equals(siteId).toArray(),
       db.stockMovements.where('siteId').equals(siteId).toArray(),
     ]);
+    const itemKey = stockItemKey({ category: mv.category, name: mv.itemName, unit: mv.unit });
+    const before = buildStock(materials, rods, movements).find(i => i.key === itemKey);
     const after = buildStock(materials, rods, movements.map(m => (m.id === movementId ? { ...m, isDeleted: true } : m)))
-      .find(i => i.key === mv.itemKey);
-    if (after && after.onHand < 0) {
+      .find(i => i.key === itemKey);
+    // Below zero today, or on any earlier day in the history that was not already below zero.
+    if (after && (after.onHand < 0 || (after.isNegative && !before?.isNegative))) {
       return fail('Cancelling this entry would leave stock below zero. Cancel the later usage entries first.');
     }
     const now = nowIso();
@@ -523,7 +557,7 @@ export interface ToolAssetInput {
 }
 
 export async function saveToolAsset(user: User, siteId: string, input: ToolAssetInput): Promise<Result<ToolAsset>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'toolAssets');
   if (!site) return fail(NO_ACCESS);
   if (!input.name.trim()) return fail('Enter the tool name.');
   if (!Number.isInteger(input.totalQuantity) || input.totalQuantity < 1) return fail('Enter a whole quantity of 1 or more.');
@@ -564,7 +598,7 @@ export async function issueTool(
   siteId: string,
   input: { toolAssetId: string; quantity: number; issuedTo: string; workerId?: string; expectedReturnDate?: string; notes?: string }
 ): Promise<Result<ToolIssue>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'toolIssues');
   if (!site) return fail(NO_ACCESS);
   if (input.expectedReturnDate && !isDayKey(input.expectedReturnDate)) return fail('Choose a valid expected return date.');
   if (input.expectedReturnDate && input.expectedReturnDate < todayKey()) return fail('Expected return date cannot be in the past.');
@@ -604,7 +638,7 @@ export async function returnTool(
   siteId: string,
   input: { issueId: string; quantity: number; condition: ToolCondition; notes?: string }
 ): Promise<Result<ToolIssue>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'toolIssues');
   if (!site) return fail(NO_ACCESS);
   return db.transaction('rw', db.toolAssets, db.toolIssues, db.activityLogs, async () => {
     const issue = await db.toolIssues.get(input.issueId);
@@ -659,7 +693,7 @@ export interface ExpenseInput {
 }
 
 export async function recordExpense(user: User, siteId: string, input: ExpenseInput): Promise<Result<{ table: EntityTable; id: string }>> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, 'otherExpenses');
   if (!site) return fail(NO_ACCESS);
   const amount = roundMoney(input.amount);
   const err = checkAmount(amount) || checkEventDate(input.date);
@@ -742,7 +776,7 @@ const EXPENSE_TOTAL_FIELD: Record<ExpenseTable, string> = {
 
 /** Moves an expense to the Recycle Bin, with its payment rows. */
 export async function removeExpense(user: User, siteId: string, table: ExpenseTable, id: string): Promise<Result> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, table);
   if (!site) return fail(NO_ACCESS);
   return softDeleteWithPayments(user, site, table, id, 'expense');
 }
@@ -759,7 +793,7 @@ export async function correctExpense(
   id: string,
   changes: { amount?: number; date?: string; payee?: string; notes?: string }
 ): Promise<Result> {
-  const site = await writableSite(user, siteId);
+  const site = await writableSite(user, siteId, table);
   if (!site) return fail(NO_ACCESS);
   if (changes.date !== undefined) {
     const dateError = checkEventDate(changes.date);
@@ -844,12 +878,21 @@ export async function correctExpense(
 
 export async function saveCatalogItem(
   user: User,
-  input: Pick<CatalogItem, 'kind' | 'name' | 'category'> & Partial<Pick<CatalogItem, 'id' | 'unit' | 'description' | 'imageUrl' | 'imageCredit'>>
+  input: Pick<CatalogItem, 'kind' | 'name' | 'category'> &
+    Partial<Pick<CatalogItem, 'id' | 'unit' | 'lowStockThreshold' | 'lowStockThresholdUnit' | 'description' | 'imageUrl' | 'imageCredit' | 'group' | 'materialType' | 'grade' | 'standard'>>
 ): Promise<Result<CatalogItem>> {
   const name = input.name.trim();
   if (!name) return fail('Enter a name.');
+  if (input.lowStockThreshold != null &&
+      (!Number.isFinite(input.lowStockThreshold) || input.lowStockThreshold < 0)) {
+    return fail('The reorder threshold must be a finite, non-negative quantity.');
+  }
   const now = nowIso();
   const previous = input.id ? await db.catalogItems.get(input.id) : undefined;
+  if (previous && !previous.isBuiltIn &&
+      !userCanAccessRecord(user, 'catalogItems', 'write', previous.userId)) {
+    return fail('You do not have permission to change this catalog item.');
+  }
   const clash = await db.catalogItems
     .where('kind').equals(input.kind)
     .filter(c => !c.isDeleted && c.id !== input.id && c.category === input.category && c.name.toLowerCase() === name.toLowerCase())
@@ -862,9 +905,15 @@ export async function saveCatalogItem(
     name,
     category: input.category,
     unit: input.unit ?? previous?.unit,
+    lowStockThreshold: input.lowStockThreshold !== undefined ? input.lowStockThreshold : previous?.lowStockThreshold,
+    lowStockThresholdUnit: input.lowStockThresholdUnit ?? previous?.lowStockThresholdUnit,
     description: input.description ?? previous?.description,
     imageUrl: input.imageUrl ?? previous?.imageUrl,
     imageCredit: input.imageCredit ?? previous?.imageCredit,
+    group: input.group ?? previous?.group,
+    materialType: input.materialType ?? previous?.materialType,
+    grade: input.grade ?? previous?.grade,
+    standard: input.standard ?? previous?.standard,
     isBuiltIn: previous?.isBuiltIn || false,
     userId: previous?.userId || user.id,
     isDeleted: false,
@@ -875,10 +924,16 @@ export async function saveCatalogItem(
   return { ok: true, value: record };
 }
 
-export async function removeCatalogItem(id: string): Promise<void> {
+export async function removeCatalogItem(user: User, id: string): Promise<Result> {
+  const item = await db.catalogItems.get(id);
+  if (!item) return fail('Catalog item not found.');
+  if (!item.isBuiltIn && !userCanAccessRecord(user, 'catalogItems', 'write', item.userId)) {
+    return fail('You do not have permission to remove this catalog item.');
+  }
   const now = nowIso();
   // Soft delete, so a removed built-in entry is not re-seeded on the next start.
   await db.catalogItems.update(id, { isDeleted: true, deletedAt: now, updatedAt: now });
+  return { ok: true, value: undefined };
 }
 
 let catalogSeeded: Promise<void> | null = null;
@@ -896,9 +951,12 @@ export function ensureCatalogSeeded(): Promise<void> {
         const current = existing.get(seed.id);
         if (!current) {
           missing.push(seed);
-        } else if (current.isBuiltIn && !current.imageUrl && seed.imageUrl) {
-          // A photo was bundled after this entry was first seeded.
-          await db.catalogItems.update(seed.id, { imageUrl: seed.imageUrl, imageCredit: seed.imageCredit });
+        } else if (current.isBuiltIn) {
+          // A photo or a shelf was added to this built-in entry after it was first seeded.
+          const patch: Partial<CatalogItem> = {};
+          if (!current.imageUrl && seed.imageUrl) { patch.imageUrl = seed.imageUrl; patch.imageCredit = seed.imageCredit; }
+          if (!current.group && seed.group) patch.group = seed.group;
+          if (Object.keys(patch).length) await db.catalogItems.update(seed.id, patch);
         }
       }
       if (missing.length) await db.catalogItems.bulkPut(missing);

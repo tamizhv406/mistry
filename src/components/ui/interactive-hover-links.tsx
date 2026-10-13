@@ -8,7 +8,6 @@ export interface InteractiveHoverItem {
   id: string;
   title: string;
   subtitle?: string;
-  tamilTitle?: string;
   description?: string;
   icon?: React.ReactNode;
   imageUrl: string;
@@ -150,11 +149,6 @@ export const InteractiveHoverCard: React.FC<InteractiveHoverCardProps> = ({
               <h4 className="text-base font-bold text-slate-100 group-hover:text-amber-400 transition-colors drop-shadow-sm leading-tight">
                 {item.title}
               </h4>
-              {item.tamilTitle && (
-                <span className="text-xs font-medium text-slate-400 drop-shadow-sm">
-                  {item.tamilTitle}
-                </span>
-              )}
             </div>
           </div>
         </div>

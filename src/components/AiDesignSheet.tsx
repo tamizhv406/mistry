@@ -241,7 +241,7 @@ export const AiDesignSheet: React.FC<AiDesignSheetProps> = ({ open, onClose, con
           <div className="fp-aid-intro">
             <p>
               {defaultSource === 'model'
-                ? 'Tell me the plot size and the rooms you want, in English, Tamil or Tanglish. I draw a draft; nothing changes until you tap Apply.'
+                ? 'Describe the plot size and rooms you need. I will prepare a draft for review; nothing changes until you select Apply.'
                 : 'Type a plot size, BHK and room names. A draft is made by fixed layout rules; nothing changes until you tap Apply.'}
             </p>
             <p className="fp-aid-muted">

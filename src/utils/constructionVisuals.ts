@@ -26,7 +26,8 @@ export interface VisualItemMeta {
 
 // Utility to create encoded SVG data URIs
 function svgToUri(svgString: string): string {
-  const cleanSvg = svgString.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
+  const englishOnlySvg = svgString.replace(/\s*[•/]\s*[\u0B80-\u0BFF]+/g, '').replace(/[\u0B80-\u0BFF]+/g, '');
+  const cleanSvg = englishOnlySvg.trim().replace(/\n/g, ' ').replace(/\s+/g, ' ');
   return `data:image/svg+xml;utf8,${encodeURIComponent(cleanSvg)}`;
 }
 

@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import type { FloorPlan, FloorPlanUnit, Site, User } from '../db/types';
+import { isAdminRole, type FloorPlan, type FloorPlanUnit, type Site, type User } from '../db/types';
 import {
   softDeleteFloorPlan,
   duplicateFloorPlan,
@@ -69,12 +69,7 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
 
   const floorPlans =
     useLiveQuery(async () => {
-      const isElevated =
-        user.role === 'ADMIN' ||
-        user.role === 'SUPER_ADMIN' ||
-        user.role === 'SUB_ADMIN';
-
-      if (isElevated) {
+      if (isAdminRole(user.role)) {
         return db.floorPlans
           .filter(fp => !fp.isDeleted)
           .reverse()

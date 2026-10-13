@@ -233,7 +233,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#312e81', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span>Inspecting Site: <strong>{site.name}</strong></span>
                 <span style={{ backgroundColor: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
-                  Admin View / அட்மின் பார்வை
+                  Admin view
                 </span>
               </div>
               <div style={{ fontSize: '0.78rem', color: '#57534e' }}>
@@ -263,7 +263,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             }}
           >
             <ArrowLeft size={16} />
-            <span>← Return to Admin Dashboard (அட்மின் முகப்புக்குத் திரும்பு)</span>
+            <span>Return to Admin dashboard</span>
           </button>
         </div>
       )}
@@ -293,7 +293,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               onClick={onReturnToAdmin}
             >
               <ShieldCheck size={16} />
-              <span>Admin Dashboard (அட்மின் முகப்பு)</span>
+              <span>Admin dashboard</span>
             </button>
           )}
         </div>

@@ -39,43 +39,6 @@ if (isSupabaseConfigured()) {
 export const supabase = supabaseInstance;
 
 /**
- * Super Admin password reset helper via Supabase Edge Function or secure API
- * Client NEVER uses service_role key directly in frontend code.
- */
-export async function remoteAdminResetPassword(
-  targetEmail: string,
-  newTemporaryPassword: string
-): Promise<{ success: boolean; error?: string }> {
-  if (!isSupabaseConfigured() || !supabase) {
-    return {
-      success: false,
-      error: 'Supabase is not configured or in offline mode. Local password reset applied.',
-    };
-  }
-
-  try {
-    // Invoke secure Edge function 'admin-reset-password' if deployed
-    const { data, error } = await supabase.functions.invoke('admin-reset-password', {
-      body: {
-        email: targetEmail,
-        newTemporaryPassword,
-      },
-    });
-
-    if (error) {
-      return { success: false, error: error.message };
-    }
-
-    return { success: true, ...data };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message || 'Failed to call remote reset function.',
-    };
-  }
-}
-
-/**
  * Checks if the current URL contains a Supabase password recovery token or hash
  */
 export function checkPasswordRecoveryUrl(): boolean {

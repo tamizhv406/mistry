@@ -110,7 +110,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label htmlFor="init-new-password" style={{ fontWeight: 600 }}>New Private Password (புதிய கடவுச்சொல்)</label>
+              <label htmlFor="init-new-password" style={{ fontWeight: 600 }}>New password</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
@@ -143,7 +143,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
             </div>
 
             <div className="form-group">
-              <label htmlFor="init-confirm-password" style={{ fontWeight: 600 }}>Confirm New Password (கடவுச்சொல் உறுதிப்படுத்தல்)</label>
+              <label htmlFor="init-confirm-password" style={{ fontWeight: 600 }}>Confirm new password</label>
               <div style={{ position: 'relative' }}>
                 <Lock size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                 <input
@@ -165,7 +165,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
               disabled={loading || !newPassword || !confirmPassword}
               style={{ width: '100%', marginTop: '6px' }}
             >
-              {loading ? 'Securing Account...' : 'Set Password & Enter Dashboard / புதிய கடவுச்சொல் அமைத்து தொடரவும்'}
+              {loading ? 'Securing account...' : 'Set password and continue'}
             </button>
           </form>
         </div>

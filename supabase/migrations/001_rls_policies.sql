@@ -1,21 +1,15 @@
 -- ==============================================================================
 -- BUILDING MISTRY — SUPABASE POSTGRESQL ROW LEVEL SECURITY (RLS) POLICIES
--- Multi-Tenant Isolation & Super Admin Override
+-- Multi-Tenant Isolation. Privileged access is configured by the later
+-- auth-backed membership migration, never by a client profile or email address.
 -- ==============================================================================
 
--- 1. Helper function: Check if authenticated caller is Super Admin
+-- 1. Legacy helper. The role source used by this migration predates Supabase Auth;
+-- fail closed until the auth-backed membership policies are installed.
 CREATE OR REPLACE FUNCTION public.is_super_admin()
 RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN (
-    EXISTS (
-      SELECT 1 FROM public.users
-      WHERE id = auth.uid()::text
-        AND (role = 'SUPER_ADMIN' OR email = 'tamilthilagan82@gmail.com')
-        AND is_active = true
-    )
-    OR (auth.jwt() ->> 'role') = 'service_role'
-  );
+  RETURN false;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 

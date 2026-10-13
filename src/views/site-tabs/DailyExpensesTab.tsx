@@ -375,8 +375,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-tea',
       title: 'Tea & Coffee',
-      tamilTitle: 'டீ & காபி',
-      description: 'Morning & evening hot tea, filter coffee & milk for site workers • தொழிலாளர் காலை & மாலை தேநீர்',
+      description: 'Morning and evening tea, coffee, and milk for site workers',
       imageUrl: getExpenseVisual('tea').imageUrl,
       imageAlt: 'Tea & Coffee',
       fallbackCategory: 'tea',
@@ -391,7 +390,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Tea & Coffee (தேநீர் & காபி)',
+          title: 'Tea & Coffee',
           subtitle: 'Daily site hot tea, filter coffee & milk for workforce',
           categoryBadge: 'Refreshments',
           badgeVariant: 'warning',
@@ -404,7 +403,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${teaFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${teaFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Filtered Days Logged', value: `${filteredTea.length} days` },
-            { label: 'Tamil Translation', value: 'டீ மற்றும் காபி செலவுகள்' },
           ],
           financials: {
             totalAmount: teaFin.totalAmount,
@@ -416,8 +414,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-snacks',
       title: 'Snacks & Vada',
-      tamilTitle: 'ஸ்நாக்ஸ் & வடை',
-      description: 'Medu vada, bajji, samosa, bun butter & biscuits for labour crew • மாலை சிற்றுண்டி மற்றும் வடை வகைகள்',
+      description: 'Vada, bajji, samosa, buns, and biscuits for the site team',
       imageUrl: getExpenseVisual('snacks').imageUrl,
       imageAlt: 'Snacks & Vada',
       fallbackCategory: 'snacks',
@@ -432,7 +429,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Snacks & Vada (சிற்றுண்டி & வடை)',
+          title: 'Snacks & Vada',
           subtitle: 'Morning & evening tea-break snacks for labour crew',
           categoryBadge: 'Snacks',
           badgeVariant: 'warning',
@@ -445,7 +442,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${snacksFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${snacksFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Snack Items', value: 'Medu Vada, Masala Vada, Bajji, Samosa, Biscuits' },
-            { label: 'Tamil Translation', value: 'மாலை நேர சிற்றுண்டி' },
           ],
           financials: {
             totalAmount: snacksFin.totalAmount,
@@ -457,8 +453,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-juice',
       title: 'Juice & Cooling',
-      tamilTitle: 'பழச்சாறு & குளிர்பானம்',
-      description: 'Fresh lemon juice, tender coconut, buttermilk & summer cooling • கோடை தாகம் தணிக்கும் பழச்சாறு',
+      description: 'Juice, tender coconut, and buttermilk for hot weather',
       imageUrl: getExpenseVisual('juice').imageUrl,
       imageAlt: 'Juice & Cooling',
       fallbackCategory: 'juice',
@@ -473,7 +468,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Juice & Cooling (பழச்சாறு & குளிர்பானம்)',
+          title: 'Juice & Cooling',
           subtitle: 'Summer cooling juices, lemon hydration, and tender coconut for workers',
           categoryBadge: 'Beverages',
           badgeVariant: 'success',
@@ -486,7 +481,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${juiceFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${juiceFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Beverage Types', value: 'Lemon Juice, Sugarcane, Buttermilk, Tender Coconut' },
-            { label: 'Tamil Translation', value: 'கோடை குளிர்பானங்கள்' },
           ],
           financials: {
             totalAmount: juiceFin.totalAmount,
@@ -498,8 +492,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-food',
       title: 'Meals & Food',
-      tamilTitle: 'உணவு & சாப்பாடு',
-      description: 'Worker lunch meals, overtime tiffin & night concrete parcels • மதிய உணவு & இரவு உணவு பொட்டலங்கள்',
+      description: 'Worker meals, overtime snacks, and night shift food',
       imageUrl: getExpenseVisual('food').imageUrl,
       imageAlt: 'Meals & Food',
       fallbackCategory: 'food',
@@ -514,7 +507,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Meals & Food (உணவு & சாப்பாடு)',
+          title: 'Meals & Food',
           subtitle: 'Overtime food parcels and noon meal expenses for concreting crew',
           categoryBadge: 'Food',
           badgeVariant: 'info',
@@ -527,7 +520,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${foodFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${foodFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Meal Types', value: 'Full Meals, Biryani parcels, Night shift tiffin' },
-            { label: 'Tamil Translation', value: 'தொழிலாளர் சாப்பாடு மற்றும் சிற்றுண்டி' },
           ],
           financials: {
             totalAmount: foodFin.totalAmount,
@@ -539,8 +531,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-pooja',
       title: 'Pooja',
-      tamilTitle: 'பூஜை & சடங்கு',
-      description: 'Bhoomi Pooja, Pillar/Vasthu Pooja, and Roof Slab ceremonies • பூமி பூஜை, வாஸ்து மற்றும் கூரை மங்கல சடங்குகள்',
+      description: 'Site opening, foundation, and roof slab ceremonies',
       imageUrl: getExpenseVisual('pooja').imageUrl,
       imageAlt: 'Pooja Ceremony',
       fallbackCategory: 'pooja',
@@ -555,7 +546,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Site Pooja & Ceremonies (பூஜை செலவுகள்)',
+          title: 'Site Ceremonies',
           subtitle: 'Auspicious site rituals, flowers, fruits & priest sambhavana',
           categoryBadge: 'Pooja',
           badgeVariant: 'warning',
@@ -568,7 +559,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${poojaFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${poojaFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Total Ceremonies', value: `${poojas.length} rituals recorded` },
-            { label: 'Tamil Translation', value: 'மங்களகரமான தள பூஜைகள்' },
           ],
           financials: {
             totalAmount: poojaFin.totalAmount,
@@ -580,8 +570,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-other',
       title: 'Other Expenses',
-      tamilTitle: 'இதர தள செலவுகள்',
-      description: 'Vehicle transport, diesel fuel, machinery repairs, safety gear • வாகன போக்குவரத்து, டீசல் மற்றும் பழுது செலவு',
+      description: 'Transport, fuel, equipment repairs, and safety gear',
       imageUrl: getExpenseVisual('other').imageUrl,
       imageAlt: 'Other Expenses',
       fallbackCategory: 'other',
@@ -596,7 +585,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Other Expenses (இதர செலவுகள்)',
+          title: 'Other Expenses',
           subtitle: 'Site transport, fuel, machine servicing, scaffolding and ad-hoc operations',
           categoryBadge: 'Site Operations',
           badgeVariant: 'primary',
@@ -609,7 +598,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${otherFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${otherFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Total Entries', value: `${otherExpenses.length} records logged` },
-            { label: 'Tamil Translation', value: 'இதர செயல்பாட்டு செலவுகள்' },
           ],
           financials: {
             totalAmount: otherFin.totalAmount,
@@ -621,8 +609,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-electricity',
       title: 'Electricity',
-      tamilTitle: 'மின்சாரம் (EB)',
-      description: 'TANGEDCO temporary power connection charges and EB utility bills • தற்காலிக மின்சார வாரிய கட்டணங்கள்',
+      description: 'Temporary power connection charges and electricity bills',
       imageUrl: getExpenseVisual('electricity').imageUrl,
       imageAlt: 'Electricity',
       fallbackCategory: 'electricity',
@@ -637,7 +624,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Electricity Bills (மின்சார வாரிய கட்டணம்)',
+          title: 'Electricity Bills',
           subtitle: 'Temporary commercial / construction electrical supply and bills',
           categoryBadge: 'EB Current',
           badgeVariant: 'warning',
@@ -650,7 +637,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${elecFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${elecFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Total EB Bills', value: `${electricity.length} bills` },
-            { label: 'Tamil Translation', value: 'மின்சார வாரிய (EB) பில்' },
           ],
           financials: {
             totalAmount: elecFin.totalAmount,
@@ -662,8 +648,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     {
       id: 'cat-water',
       title: 'Water',
-      tamilTitle: 'தண்ணீர் டேங்கர்',
-      description: 'Tanker water loads for brickwork, slab curing & concrete mixing • கட்டுமான கான்கிரீட் மற்றும் நனைத்தல் தண்ணீர்',
+      description: 'Tanker water for brickwork, slab curing, and concrete mixing',
       imageUrl: getExpenseVisual('water').imageUrl,
       imageAlt: 'Water Supply',
       fallbackCategory: 'water',
@@ -678,7 +663,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       ],
       onClick: () => {
         setExpenseModalData({
-          title: 'Water Supply (தண்ணீர் விநியோகம்)',
+          title: 'Water Supply',
           subtitle: 'Water tanker loads for column curing, brickwork, and plastering',
           categoryBadge: 'Water Supply',
           badgeVariant: 'info',
@@ -691,7 +676,6 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             { label: 'Balance Due', value: `₹${waterFin.balanceDue.toLocaleString('en-IN')}` },
             { label: 'Extra Paid', value: `₹${waterFin.extraPaid.toLocaleString('en-IN')}` },
             { label: 'Total Deliveries', value: `${water.length} tanker loads` },
-            { label: 'Tamil Translation', value: 'கட்டுமான தண்ணீர் லோடு' },
           ],
           financials: {
             totalAmount: waterFin.totalAmount,

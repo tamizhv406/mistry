@@ -166,7 +166,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
             )}
 
             <div className="form-group space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">Date (தேதி)</label>
+              <label className="text-xs font-semibold text-slate-300">Date</label>
               <input
                 type="date"
                 value={date}
@@ -178,7 +178,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  ☕ Tea Expense (டீ செலவு) (₹)
+                  ☕ Tea Expense (₹)
                 </label>
                 <input
                   type="number"
@@ -193,7 +193,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
 
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  🍪 Snacks Expense (வடை / பிஸ்கட்) (₹)
+                  🍪 Snacks Expense (₹)
                 </label>
                 <input
                   type="number"
@@ -207,7 +207,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
 
               <div className="form-group space-y-1.5">
                 <label className="text-xs font-semibold text-emerald-400">
-                  🧃 Fresh Juice (பழச்சாறு) (₹)
+                  🧃 Fresh Juice (₹)
                 </label>
                 <input
                   type="number"
@@ -222,7 +222,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
 
             <div className="form-group space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">
-                🍱 Other Food / Meals (உணவு / சாப்பாடு) (₹)
+                🍱 Other Food / Meals (₹)
               </label>
               <input
                 type="number"
@@ -329,7 +329,6 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
               <div className="form-group space-y-1.5">
                 <VoiceInputField
                   label="Notes / Tea Stall Name"
-                  tamilLabel="கடை பெயர் / குறிப்பு"
                   value={notes}
                   onChange={setNotes}
                   placeholder="e.g. Balaji Tea Stall, afternoon lemon juice"

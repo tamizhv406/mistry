@@ -5,6 +5,7 @@ import { db } from '../db/db';
 import type { Material, MaterialCategory } from '../db/types';
 import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
+import { writableSite } from '../services/records';
 import { VoiceInputField } from './VoiceInputField';
 
 interface MaterialModalProps {
@@ -52,6 +53,15 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentUser = getCurrentUser();
+  const supportedUnits = category === 'cement'
+    ? ['Bags', 'kg']
+    : category === 'sand' || category === 'msand'
+      ? ['cft', 'm³', 'Tonne', 'Unit']
+      : category === 'bricks'
+        ? ['Pieces']
+        : category === 'aggregate'
+          ? ['CFT', 'm³', 'Tonne', 'Unit']
+          : ['Units', 'Pieces', 'Loads', 'kg', 'Bags'];
 
   // Setup default units and naming based on category
   useEffect(() => {
@@ -164,30 +174,37 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
     const now = new Date().toISOString();
     const id = materialToEdit ? materialToEdit.id : `mat-${Date.now()}`;
 
-    const record: Material = {
-      id,
-      siteId,
-      category,
-      materialName: finalName,
-      brand: effectiveBrand,
-      supplier: supplier.trim(),
-      quantity: numQuantity,
-      unit: unit.trim(),
-      rate: numRate,
-      totalAmount: calculatedTotal,
-      paidAmount: fin.paidAmount,
-      balance: fin.balanceDue,
-      extraPaid: fin.extraPaid,
-      purchaseDate: purchaseDate || todayKey(),
-      invoiceNumber: invoiceNumber.trim(),
-      notes: notes.trim(),
-      isDeleted: false,
-      createdAt: materialToEdit ? materialToEdit.createdAt : now,
-      updatedAt: now,
-    };
-
     setIsSubmitting(true);
     try {
+      const site = currentUser && await writableSite(currentUser, siteId, 'materials');
+      if (!currentUser || !site) {
+        setError('You do not have permission to edit materials for this project.');
+        return;
+      }
+
+      const record: Material = {
+        id,
+        userId: site.userId || currentUser.id,
+        siteId,
+        category,
+        materialName: finalName,
+        brand: effectiveBrand,
+        supplier: supplier.trim(),
+        quantity: numQuantity,
+        unit: unit.trim(),
+        rate: numRate,
+        totalAmount: calculatedTotal,
+        paidAmount: fin.paidAmount,
+        balance: fin.balanceDue,
+        extraPaid: fin.extraPaid,
+        purchaseDate: purchaseDate || todayKey(),
+        invoiceNumber: invoiceNumber.trim(),
+        notes: notes.trim(),
+        isDeleted: false,
+        createdAt: materialToEdit ? materialToEdit.createdAt : now,
+        updatedAt: now,
+      };
+
       await db.materials.put(record);
 
       // Record individual payment transaction if initial payment made
@@ -273,7 +290,6 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
             <div className="form-grid-2">
               <VoiceInputField
                 label="Material Description / Type"
-                tamilLabel="பொருள் விவரம்"
                 placeholder="e.g. Plastering Sand / Wirecut Bricks"
                 value={materialName}
                 onChange={setMaterialName}
@@ -281,7 +297,6 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
 
               <VoiceInputField
                 label="Supplier / Hardware Shop"
-                tamilLabel="விற்பனையாளர்"
                 placeholder="e.g. Cauvery Traders / Sri Ram Hardware"
                 value={supplier}
                 onChange={setSupplier}
@@ -304,30 +319,31 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
               <div className="form-group">
                 <label>Unit</label>
                 <select value={unit} onChange={e => setUnit(e.target.value)}>
+                  {materialToEdit && !supportedUnits.includes(materialToEdit.unit) && (
+                    <option value={materialToEdit.unit}>{materialToEdit.unit} (existing unit)</option>
+                  )}
                   {category === 'sand' || category === 'msand' ? (
                     <>
-                      <option value="Unit">Unit (1 Unit = 100 cft)</option>
-                      <option value="Load">Load / Tipper Lorry</option>
-                      <option value="Brass">Brass</option>
-                      <option value="cft">cft (Cubic Feet)</option>
-                      <option value="Tons">Tons</option>
+                      <option value="cft">Cubic feet (cft)</option>
+                      <option value="m³">Cubic metres (m³)</option>
+                      <option value="Tonne">Tonnes</option>
+                      <option value="Unit">Unit (100 cft)</option>
                     </>
                   ) : category === 'cement' ? (
                     <>
                       <option value="Bags">Bags (50 kg)</option>
-                      <option value="Tons">Tons</option>
+                      <option value="kg">Kilograms (kg)</option>
                     </>
                   ) : category === 'bricks' ? (
                     <>
-                      <option value="Pieces">Pieces / Bricks</option>
-                      <option value="Load">Load</option>
-                      <option value="Thousand">Thousand (1000 pcs)</option>
+                      <option value="Pieces">Pieces</option>
                     </>
                   ) : category === 'aggregate' ? (
                     <>
-                      <option value="CFT">CFT (Cubic Feet)</option>
-                      <option value="Unit">Unit (100 CFT)</option>
-                      <option value="Tons">Tons</option>
+                      <option value="CFT">Cubic feet (cft)</option>
+                      <option value="m³">Cubic metres (m³)</option>
+                      <option value="Tonne">Tonnes</option>
+                      <option value="Unit">Unit (100 cft)</option>
                       <option value="Loads">Loads</option>
                     </>
                   ) : (
@@ -463,7 +479,6 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
 
               <VoiceInputField
                 label="Material Notes / Vehicle No"
-                tamilLabel="குறிப்புகள்"
                 placeholder="e.g. Lorry TN-22-AX-4433, unloaded at backyard"
                 value={notes}
                 onChange={setNotes}

@@ -1,4 +1,6 @@
 import { db } from './db';
+import { userCanAccessRecord, type User } from './types';
+import { USER_TABLES } from '../services/syncTombstones';
 import { todayKey } from '../utils/datetime';
 
 export interface BackupData {
@@ -32,7 +34,60 @@ export interface BackupData {
   };
 }
 
-export async function exportDatabaseBackup(): Promise<void> {
+type BackupRecord = { userId?: string; siteId?: string };
+
+function filterBackupRows<T extends BackupRecord>(
+  table: string,
+  rows: T[] | undefined,
+  user: User,
+  siteOwners: Map<string, string>
+): T[] | undefined {
+  if (!rows) return rows;
+  const userOwnedTable = (USER_TABLES as readonly string[]).includes(table);
+  return rows.filter(row => {
+    const ownerId = userOwnedTable
+      ? row.userId
+      : row.siteId
+        ? siteOwners.get(row.siteId)
+        : row.userId;
+    return userCanAccessRecord(user, table, 'read', ownerId);
+  });
+}
+
+export function filterBackupDataForUser(data: BackupData['data'], user: User): BackupData['data'] {
+  const siteOwners = new Map(data.sites.map(site => [site.id, site.userId]));
+  const filter = (table: string, rows: BackupRecord[] | undefined) =>
+    filterBackupRows(table, rows, user, siteOwners);
+
+  return {
+    ...data,
+    sites: filter('sites', data.sites) || [],
+    materials: filter('materials', data.materials) || [],
+    rodEntries: filter('rodEntries', data.rodEntries) || [],
+    workers: filter('workers', data.workers) || [],
+    attendance: filter('attendance', data.attendance) || [],
+    labourAdvances: filter('labourAdvances', data.labourAdvances) || [],
+    salaryPayments: filter('salaryPayments', data.salaryPayments) || [],
+    tools: filter('tools', data.tools) || [],
+    teaSnacksExpenses: filter('teaSnacksExpenses', data.teaSnacksExpenses) || [],
+    poojaExpenses: filter('poojaExpenses', data.poojaExpenses) || [],
+    electricityBills: filter('electricityBills', data.electricityBills) || [],
+    waterBills: filter('waterBills', data.waterBills) || [],
+    siteComments: filter('siteComments', data.siteComments) || [],
+    otherExpenses: filter('otherExpenses', data.otherExpenses) || [],
+    activityLogs: filter('activityLogs', data.activityLogs) || [],
+    materialPrices: filter('materialPrices', data.materialPrices),
+    estimates: filter('estimates', data.estimates),
+    payments: filter('payments', data.payments),
+    floorPlans: filter('floorPlans', data.floorPlans),
+    stockMovements: filter('stockMovements', data.stockMovements),
+    catalogItems: filter('catalogItems', data.catalogItems),
+    toolAssets: filter('toolAssets', data.toolAssets),
+    toolIssues: filter('toolIssues', data.toolIssues),
+  };
+}
+
+export async function exportDatabaseBackup(user: User): Promise<void> {
   const [
     sites,
     materials,
@@ -83,35 +138,37 @@ export async function exportDatabaseBackup(): Promise<void> {
     db.toolIssues.toArray(),
   ]);
 
+  const data = filterBackupDataForUser({
+    sites,
+    materials,
+    rodEntries,
+    workers,
+    attendance,
+    labourAdvances,
+    salaryPayments,
+    tools,
+    teaSnacksExpenses,
+    poojaExpenses,
+    electricityBills,
+    waterBills,
+    siteComments,
+    otherExpenses,
+    activityLogs,
+    materialPrices,
+    estimates,
+    payments,
+    floorPlans,
+    stockMovements,
+    catalogItems,
+    toolAssets,
+    toolIssues,
+  }, user);
+
   const backup: BackupData = {
     version: 5,
     appName: 'Building Mistry',
     exportedAt: new Date().toISOString(),
-    data: {
-      sites,
-      materials,
-      rodEntries,
-      workers,
-      attendance,
-      labourAdvances,
-      salaryPayments,
-      tools,
-      teaSnacksExpenses,
-      poojaExpenses,
-      electricityBills,
-      waterBills,
-      siteComments,
-      otherExpenses,
-      activityLogs,
-      materialPrices,
-      estimates,
-      payments,
-      floorPlans,
-      stockMovements,
-      catalogItems,
-      toolAssets,
-      toolIssues,
-    },
+    data,
   };
 
   const jsonStr = JSON.stringify(backup, null, 2);

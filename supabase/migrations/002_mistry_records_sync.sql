@@ -1,12 +1,14 @@
 -- ==============================================================================
 -- MISTRY — CLOUD COPY OF APP RECORDS (one JSONB document per record)
 --
--- NOT APPLIED AUTOMATICALLY. Review, then run it once in the Supabase SQL editor
--- (or with `supabase db push`) on the project the app should use.
+-- Apply this migration only in the intended project's Supabase SQL Editor after
+-- reviewing it. Do not run migration 001 or `supabase db push` for this setup.
 --
 -- What it does
---   * Adds ONE new table, public.mistry_records. It does not alter, rename or drop
---     anything that already exists, and it is safe to run more than once.
+--   * Creates public.mistry_records if absent. It does not alter, rename or drop
+--     other application tables. It replaces its own trigger function and drops/recreates
+--     only its specifically named trigger and policies on mistry_records.
+--   * It is safe to rerun when mistry_records already has the expected schema.
 --   * Every row belongs to the signed-in Supabase user (owner_id = auth.uid()).
 --     Row Level Security lets a user read and write only their own rows.
 --   * An older copy of a record can never overwrite a newer one (trigger below),

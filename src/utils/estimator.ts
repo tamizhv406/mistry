@@ -81,7 +81,7 @@ export function getAllUnitConversions(value: number, fromUnit: AreaUnit): UnitCo
   };
 }
 
-// Engineering thumb-rule factors per sq.ft of built-up area
+// Material needed per sq.ft of built-up area
 export interface EstimationFactors {
   cementBagsPerSqFt: number;
   sandCftPerSqFt: number;
@@ -92,48 +92,65 @@ export interface EstimationFactors {
   labourRatePerSqFt: number;
 }
 
+/**
+ * Published planning figures ("thumb rules") for an RCC-framed house in India, per sq.ft of
+ * built-up area. `low` and `high` are the range the sources below give; `typical` is the middle.
+ *
+ * They are for a first budget only. A real quantity comes from the drawings: the two sources
+ * do not agree with each other on bricks, which depend on wall thickness (a 9-inch wall takes
+ * about twice the bricks of a 4.5-inch wall) and on how many inside walls the plan has.
+ */
+export const THUMB_RULES = {
+  cement: { low: 0.4, typical: 0.45, high: 0.5, unit: 'bags' },
+  steel: { low: 3.5, typical: 4, high: 4.5, unit: 'kg' },
+  sand: { low: 0.8, typical: 0.9, high: 1, unit: 'cft' },
+  aggregate: { low: 1, typical: 1.1, high: 1.2, unit: 'cft' },
+  bricks: { low: 5, typical: 8, high: 10, unit: 'pieces' },
+} as const;
+
+export const THUMB_RULE_SOURCES = [
+  {
+    title: 'HouseYog: How to estimate materials for house construction in India',
+    url: 'https://www.houseyog.com/blog/construction-material-estimation-india-beginner-boq-guide/',
+    gives: 'cement 0.40–0.50 bags, steel 3.5–4.5 kg, sand 0.8–1.0 cft, aggregate 1.0–1.2 cft, bricks 5–5.5 per sq.ft',
+  },
+  {
+    title: 'InfraLens: Cement, sand and steel for a 1000 sq ft house',
+    url: 'https://infralens.in/knowledge/cement-sand-steel-for-1000-sqft-house',
+    gives: 'cement 0.4 bags, steel 3.5–4.0 kg, sand 0.8 cft, aggregate 1.0 cft per sq.ft; 8,000–10,000 bricks for 1,000 sq.ft',
+  },
+] as const;
+
+/**
+ * When river sand is used for plastering, this share of the sand is taken as river sand and
+ * the rest as M-sand. This split is the app's own assumption; it is not from the sources.
+ */
+export const RIVER_SAND_SHARE = 0.3;
+
+/** Labour rate the calculator starts from (₹ per sq.ft). A starting value to replace with a real quote. */
+export const STARTING_LABOUR_RATE: Record<ConstructionQuality, number> = { Economy: 280, Standard: 320, Premium: 360, Custom: 320 };
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * The rates an estimate starts from. The level picks where in each published range the rate
+ * is taken: Economy the low end, Standard the middle, Premium the high end.
+ */
 export function getQualityFactors(quality: ConstructionQuality, includeRiverSand: boolean): EstimationFactors {
-  let cement = 0.42;
-  let steel = 3.8;
-  let labour = 320;
+  const pick = (r: { low: number; typical: number; high: number }) =>
+    quality === 'Economy' ? r.low : quality === 'Premium' ? r.high : r.typical;
 
-  switch (quality) {
-    case 'Economy':
-      cement = 0.38;
-      steel = 3.2;
-      labour = 280;
-      break;
-    case 'Standard':
-      cement = 0.42;
-      steel = 3.8;
-      labour = 320;
-      break;
-    case 'Premium':
-      cement = 0.45;
-      steel = 4.4;
-      labour = 360;
-      break;
-    case 'Custom':
-      cement = 0.42;
-      steel = 4.0;
-      labour = 320;
-      break;
-  }
-
-  // If river sand is included, split sand requirement; otherwise 100% M-Sand
-  const sandCft = includeRiverSand ? 0.55 : 0.0;
-  const msandCft = includeRiverSand ? 1.30 : 1.75;
-  const aggregateCft = 0.65;
-  const bricks = 20.0;
+  const sand = pick(THUMB_RULES.sand);
+  const riverSand = includeRiverSand ? round2(sand * RIVER_SAND_SHARE) : 0;
 
   return {
-    cementBagsPerSqFt: cement,
-    sandCftPerSqFt: sandCft,
-    msandCftPerSqFt: msandCft,
-    aggregateCftPerSqFt: aggregateCft,
-    bricksPiecesPerSqFt: bricks,
-    steelKgPerSqFt: steel,
-    labourRatePerSqFt: labour,
+    cementBagsPerSqFt: pick(THUMB_RULES.cement),
+    sandCftPerSqFt: riverSand,
+    msandCftPerSqFt: round2(sand - riverSand),
+    aggregateCftPerSqFt: pick(THUMB_RULES.aggregate),
+    bricksPiecesPerSqFt: pick(THUMB_RULES.bricks),
+    steelKgPerSqFt: pick(THUMB_RULES.steel),
+    labourRatePerSqFt: STARTING_LABOUR_RATE[quality] ?? STARTING_LABOUR_RATE.Standard,
   };
 }
 
@@ -179,17 +196,24 @@ export interface EstimationCalculationResult {
 }
 
 export const PRELIMINARY_ESTIMATE_DISCLAIMER =
-  'This calculator provides preliminary material and cost estimates based on standard Indian civil thumb-rules. It is not a substitute for structural design, engineer-approved drawings or a detailed BOQ. Never use this calculator to automatically design structural members (footings, columns, beams, slab thickness, reinforcement diameter/spacing).';
+  'This is an approximate first budget made from published rule-of-thumb rates, not from drawings. It is not a structural design or a bill of quantities, and it must not be used to size footings, columns, beams, slabs or reinforcement. Get quantities from your engineer\'s drawings before ordering.';
 
 /**
- * Calculates preliminary construction material quantities, itemized costs,
- * steel rebar BOQ distribution, and total preliminary project budget.
+ * Approximate material quantities and cost for a building.
+ *
+ *   quantity = built-up area (sq.ft) × rate per sq.ft          (rounded to a whole unit)
+ *   cost     = quantity × your price
+ *   labour   = built-up area × your labour rate per sq.ft
+ *
+ * The rates come from getQualityFactors (published thumb rules) unless `customFactors`
+ * replaces them. Nothing else changes a quantity: the structure type, concrete grade and
+ * steel grade are recorded with the estimate but are not multipliers, because the sources
+ * give rates for RCC-framed houses only.
  */
 export function calculateBuildingEstimate(params: EstimationParams): EstimationCalculationResult {
   const {
     builtUpSqFt,
     quality,
-    structureType,
     includeRiverSand,
     rates,
     supplierInfo = {},
@@ -202,47 +226,12 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     ...customFactors,
   };
 
-  // Adjust for structure type
-  let steelMultiplier = 1.0;
-  let brickMultiplier = 1.0;
-  let cementMultiplier = 1.0;
-  let aggMultiplier = 1.0;
-
-  switch (structureType) {
-    case 'Load Bearing':
-      steelMultiplier = 0.65;
-      brickMultiplier = 1.15;
-      cementMultiplier = 0.92;
-      aggMultiplier = 0.85;
-      break;
-    case 'Steel Frame':
-      steelMultiplier = 1.35;
-      brickMultiplier = 0.90;
-      cementMultiplier = 0.78;
-      aggMultiplier = 0.70;
-      break;
-    case 'Composite':
-      steelMultiplier = 1.10;
-      brickMultiplier = 1.0;
-      cementMultiplier = 1.0;
-      aggMultiplier = 1.0;
-      break;
-    case 'Framed Structure (RCC)':
-    default:
-      steelMultiplier = 1.0;
-      brickMultiplier = 1.0;
-      cementMultiplier = 1.0;
-      aggMultiplier = 1.0;
-      break;
-  }
-
-  // Calculate preliminary quantities
-  const cementQty = Math.round(builtUpSqFt * factors.cementBagsPerSqFt * cementMultiplier);
+  const cementQty = Math.round(builtUpSqFt * factors.cementBagsPerSqFt);
   const sandQty = Math.round(builtUpSqFt * factors.sandCftPerSqFt);
   const msandQty = Math.round(builtUpSqFt * factors.msandCftPerSqFt);
-  const aggQty = Math.round(builtUpSqFt * factors.aggregateCftPerSqFt * aggMultiplier);
-  const bricksQty = Math.round(builtUpSqFt * factors.bricksPiecesPerSqFt * brickMultiplier);
-  const steelKg = Math.round(builtUpSqFt * factors.steelKgPerSqFt * steelMultiplier);
+  const aggQty = Math.round(builtUpSqFt * factors.aggregateCftPerSqFt);
+  const bricksQty = Math.round(builtUpSqFt * factors.bricksPiecesPerSqFt);
+  const steelKg = Math.round(builtUpSqFt * factors.steelKgPerSqFt);
 
   // Materials Array
   const materials: EstimatedMaterialItem[] = [];
@@ -261,8 +250,8 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
     factorUnit: 'bags/sq.ft',
   });
 
-  // 2. Sand (if enabled)
-  if (includeRiverSand && sandQty > 0) {
+  // 2. River sand (only when some is used)
+  if (sandQty > 0) {
     const sandCost = Math.round(sandQty * (rates.sandPerCft || 0));
     materials.push({
       material: 'Sand',
@@ -335,13 +324,14 @@ export function calculateBuildingEstimate(params: EstimationParams): EstimationC
 
   const totalMaterialCost = materials.reduce((acc, m) => acc + m.estimatedCost, 0);
 
-  // Labour estimation
-  const effectiveLabourRate = rates.labourPerSqFt || factors.labourRatePerSqFt;
+  // Labour: the rate given, including 0 when labour is priced elsewhere.
+  const effectiveLabourRate = rates.labourPerSqFt ?? factors.labourRatePerSqFt;
   const estimatedLabourCost = Math.round(builtUpSqFt * effectiveLabourRate);
   const totalEstimatedCost = totalMaterialCost + estimatedLabourCost;
 
-  // Engineer-Approved BOQ Steel Schedule distribution
-  // Standard Indian Residential RCC distribution
+  // A fixed split of the steel total by bar size, kept because estimates saved earlier carry it.
+  // It is not a bar bending schedule and not derived from any design: the calculator screen
+  // no longer shows it, and new estimates do not store it.
   const boqSteelSchedule: BOQSteelItem[] = [
     {
       diameter: '8 mm (Stirrups / Column ties)',

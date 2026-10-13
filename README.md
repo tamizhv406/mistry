@@ -34,7 +34,7 @@ npm run build    # production build in dist/
 npm run lint
 ```
 
-Register an account on the sign-in screen, then use **Try a sample project** on the home screen to explore with demo data. In development builds a one-tap demo login is also shown; production builds do not create the demo accounts.
+Sign in or register using Supabase Auth when Supabase is configured. Local demo authentication and local administrator bootstrap are disabled. The sample project is available for exploring the interface and is not an authenticated account.
 
 ## How the numbers are worked out
 
@@ -72,17 +72,17 @@ Usage can not exceed stock. A wrong entry is cancelled with a reason and stays v
 
 ## Data and privacy
 
-All records are stored **on the device**, in the browser's IndexedDB (via Dexie). Nothing is sent to a server.
+Business records are stored in the browser's IndexedDB (via Dexie) for offline use. When configured, Supabase Auth verifies account identity and the Supabase cloud sync stores records under row-level security. The client-side role cache is only for display; database policies are the authorization boundary.
 
 - **Backup & Data** (More menu) saves everything to a file and restores it. Keep a backup: clearing browser data or uninstalling removes the records.
 - Deleted records go to the **Recycle Bin** and can be restored.
-- Passwords are stored as SHA-256 hashes on the device. This protects against casual access on a shared phone; it is not a substitute for a server-side account system.
+- Passwords are handled by Supabase Auth; the app does not create local-password accounts or local OTP recovery credentials.
 
 ### Cloud backup (Supabase)
 
-Optional. When it is set up, a user can sign in under More → Backup & Data → Cloud backup and their records are copied to their own Supabase account and restored on another phone. Each record is stored as one JSON document protected by row-level security; the newer copy of a record always wins.
+When configured, a signed-in user can enable cloud backup under More → Backup & Data. Each record is stored as one JSON document protected by row-level security; the newer copy of a record always wins. Admin scopes also depend on the reviewed and applied authorization migration.
 
-The code and migration are written and tested against a stand-in, but **have not yet been run against a real Supabase project**. Setup steps, security model and limits: [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
+The repository setup notes report migration 002 was previously applied, but that state has not been independently re-verified in this work. Migration 003 and live RLS behavior must be reviewed and verified before claiming production authorization is enabled. Setup steps and limits: [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
 
 ## Android app
 
@@ -99,16 +99,12 @@ Records are stored per website address. What was entered at `http://localhost:51
 All optional. For development create `.env.local` (never commit it); for the website set them in Vercel under Project → Settings → Environment Variables and redeploy. `.env.example` lists them with notes. Every `VITE_` value is compiled into the app and is public.
 
 ```
-VITE_SUPABASE_URL=            # project URL
-VITE_SUPABASE_ANON_KEY=       # public anon key only. Never put a service-role key in the frontend.
-VITE_AI_DESIGN_FUNCTION=      # name of the deployed AI Edge Function; the AI key stays on the server
-VITE_INITIAL_ADMIN_EMAIL=     # optional
-VITE_INITIAL_ADMIN_USERNAME=  # optional
-VITE_INITIAL_ADMIN_HASH=      # SHA-256 of a first-login admin password; a production build creates no admin account without it
-VITE_ENABLE_DEMO_LOGIN=       # `true` keeps the demo accounts in a production build (public password)
+VITE_SUPABASE_URL=            # Supabase project URL
+VITE_SUPABASE_ANON_KEY=       # public anon / publishable key only; never a service-role key
+VITE_AI_DESIGN_FUNCTION=      # optional Edge Function name; the AI key stays server-side
 ```
 
-Without these the app runs fully offline, which is the tested configuration.
+No client-side environment variable grants an elevated role. Supabase Auth configuration is required for account sign-in; local demo/admin authentication is disabled.
 
 ## Project layout
 

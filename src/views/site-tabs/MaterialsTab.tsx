@@ -58,7 +58,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
   onDeleteRod,
 }) => {
   const [activeCategory, setActiveCategory] = useState<
-    'all' | 'sand' | 'msand' | 'cement' | 'rod' | 'bricks' | 'aggregate' | 'other'
+    'sand' | 'msand' | 'cement' | 'rod' | 'bricks' | 'legacy'
   >('sand');
 
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -91,15 +91,13 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
   const msandItems = materials.filter(m => m.category === 'msand');
   const cementItems = materials.filter(m => m.category === 'cement');
   const brickItems = materials.filter(m => m.category === 'bricks');
-  const aggregateItems = materials.filter(m => m.category === 'aggregate');
-  const otherItems = materials.filter(m => m.category === 'other');
+  const legacyItems = materials.filter(m => m.category === 'aggregate' || m.category === 'other');
 
   const sandTotal = sandItems.reduce((acc, m) => acc + m.totalAmount, 0);
   const msandTotal = msandItems.reduce((acc, m) => acc + m.totalAmount, 0);
   const cementTotal = cementItems.reduce((acc, m) => acc + m.totalAmount, 0);
   const rodTotal = rodEntries.reduce((acc, r) => acc + r.totalAmount, 0);
   const brickTotal = brickItems.reduce((acc, m) => acc + m.totalAmount, 0);
-  const aggregateTotal = aggregateItems.reduce((acc, m) => acc + m.totalAmount, 0);
 
   // Separate rod summary by diameter (Never combine different diameters!)
   const rodSummaryByDiameter = rodEntries.reduce((acc, r) => {
@@ -147,17 +145,15 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
   };
 
   // Convert current filtered materials to InteractiveHoverItems
-  const currentFilteredMaterials =
-    activeCategory === 'all'
-      ? materials
-      : materials.filter(m => m.category === activeCategory);
+  const currentFilteredMaterials = activeCategory === 'legacy'
+    ? legacyItems
+    : materials.filter(m => m.category === activeCategory);
 
   const materialCards: InteractiveHoverItem[] = currentFilteredMaterials.map(mat => {
     const vis = getMaterialVisual(mat.category, mat.brand, mat.imageUrl);
     return {
       id: mat.id,
       title: mat.materialName,
-      tamilTitle: vis.tamilName,
       description: `${mat.quantity} ${mat.unit} • ${mat.supplier || 'Site Store'}`,
       imageUrl: mat.imageUrl || vis.imageUrl,
       imageAlt: mat.materialName,
@@ -197,7 +193,6 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
     return {
       id: rod.id,
       title: `Rod ${rod.diameter}`,
-      tamilTitle: `${rod.diameter} கம்பி`,
       description: `${rod.brand || 'Fe550D TMT'} • ${rod.weightKg.toLocaleString('en-IN')} kg • ${rod.supplier}`,
       imageUrl: rod.imageUrl || vis.imageUrl,
       imageAlt: `TMT Rod ${rod.diameter}`,
@@ -331,7 +326,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           <div className="mat-cat-icon-wrapper">
             <span style={{ fontSize: '1.6rem' }}>⏳</span>
           </div>
-          <span className="mat-cat-title">SAND</span>
+          <span className="mat-cat-title">Sand</span>
           <span className="mat-cat-stat">
             {sandItems.length} Entries • ₹{sandTotal.toLocaleString('en-IN')}
           </span>
@@ -344,7 +339,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           <div className="mat-cat-icon-wrapper">
             <span style={{ fontSize: '1.6rem' }}>🏗️</span>
           </div>
-          <span className="mat-cat-title">M-SAND</span>
+          <span className="mat-cat-title">M-Sand</span>
           <span className="mat-cat-stat">
             {msandItems.length} Entries • ₹{msandTotal.toLocaleString('en-IN')}
           </span>
@@ -357,7 +352,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           <div className="mat-cat-icon-wrapper">
             <span style={{ fontSize: '1.6rem' }}>📦</span>
           </div>
-          <span className="mat-cat-title">CEMENT</span>
+          <span className="mat-cat-title">Cement</span>
           <span className="mat-cat-stat">
             {cementItems.length} Entries • ₹{cementTotal.toLocaleString('en-IN')}
           </span>
@@ -370,7 +365,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           <div className="mat-cat-icon-wrapper">
             <span style={{ fontSize: '1.6rem' }}>📏</span>
           </div>
-          <span className="mat-cat-title">ROD / STEEL</span>
+          <span className="mat-cat-title">Steel Rods</span>
           <span className="mat-cat-stat">
             {rodEntries.length} Entries • {totalSteelWeightKg.toLocaleString('en-IN')} kg
           </span>
@@ -383,39 +378,26 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           <div className="mat-cat-icon-wrapper">
             <span style={{ fontSize: '1.6rem' }}>🧱</span>
           </div>
-          <span className="mat-cat-title">BRICKS</span>
+          <span className="mat-cat-title">Bricks</span>
           <span className="mat-cat-stat">
             {brickItems.length} Entries • ₹{brickTotal.toLocaleString('en-IN')}
           </span>
         </div>
 
-        <div
-          className={`mat-cat-card ${activeCategory === 'aggregate' ? 'active' : ''}`}
-          onClick={() => setActiveCategory('aggregate')}
-        >
-          <div className="mat-cat-icon-wrapper">
-            <span style={{ fontSize: '1.6rem' }}>🪨</span>
-          </div>
-          <span className="mat-cat-title">AGGREGATE</span>
-          <span className="mat-cat-stat">
-            {aggregateItems.length} Entries • ₹{aggregateTotal.toLocaleString('en-IN')}
-          </span>
-        </div>
-
-        <div
-          className={`mat-cat-card ${activeCategory === 'all' ? 'active' : ''}`}
-          onClick={() => setActiveCategory('all')}
-        >
-          <div className="mat-cat-icon-wrapper">
-            <Layers size={24} />
-          </div>
-          <span className="mat-cat-title">ALL MATERIALS</span>
-          <span className="mat-cat-stat">Combined view</span>
-        </div>
       </div>
+      {legacyItems.length > 0 && (
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          aria-pressed={activeCategory === 'legacy'}
+          onClick={() => setActiveCategory(activeCategory === 'legacy' ? 'sand' : 'legacy')}
+        >
+          View legacy materials ({legacyItems.length})
+        </button>
+      )}
 
       {/* ROD INDIVIDUAL DIAMETERS GALLERY (Do NOT combine diameters!) */}
-      {(activeCategory === 'rod' || activeCategory === 'all') && (
+      {activeCategory === 'rod' && (
         <div className="rounded-2xl bg-slate-900/60 p-5 border border-slate-800 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -481,9 +463,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800">
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm text-slate-100 uppercase tracking-wide">
-            {activeCategory === 'all'
-              ? 'All Material Purchases'
-              : `${activeCategory.toUpperCase()} Purchases`}
+            {activeCategory === 'legacy' ? 'Legacy Material Records' : `${activeCategory.toUpperCase()} Purchases`}
           </span>
           <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
             {activeCategory === 'rod'
@@ -526,24 +506,10 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
               <PlusCircle size={15} />
               <span>Add Steel / Rod Entry</span>
             </button>
-          ) : activeCategory === 'all' ? (
-            <div className="flex gap-1.5">
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={() => onOpenMaterialModal('sand')}
-              >
-                + Sand
-              </button>
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={() => onOpenMaterialModal('cement')}
-              >
-                + Cement
-              </button>
-              <button className="btn btn-sm btn-primary" onClick={() => onOpenRodModal()}>
-                + Steel
-              </button>
-            </div>
+          ) : activeCategory === 'legacy' ? (
+            <span className="text-xs text-slate-400">
+              Existing records are preserved. Add new purchases in one of the five categories.
+            </span>
           ) : (
             <button
               className="btn btn-sm btn-primary"
@@ -579,14 +545,10 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
             <p>No {activeCategory} purchases recorded yet.</p>
             <button
               className="btn btn-sm btn-primary"
-              onClick={() =>
-                onOpenMaterialModal(
-                  activeCategory === 'all' ? 'sand' : (activeCategory as MaterialCategory)
-                )
-              }
+              onClick={() => onOpenMaterialModal(activeCategory === 'legacy' ? 'other' : activeCategory as MaterialCategory)}
             >
               <PlusCircle size={15} />
-              <span>Add {activeCategory.toUpperCase()}</span>
+              <span>{activeCategory === 'legacy' ? 'Add material' : `Add ${activeCategory.toUpperCase()}`}</span>
             </button>
           </div>
         ) : (
@@ -732,7 +694,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           )}
 
           {/* Rod Entries Table */}
-          {(activeCategory === 'rod' || activeCategory === 'all') && (
+          {activeCategory === 'rod' && (
             <div className="table-container">
               <div className="table-header-bar">
                 <span
@@ -891,7 +853,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
             isOpen={!!selectedMaterial}
             onClose={() => setSelectedMaterial(null)}
             title={selectedMaterial.materialName}
-            subtitle={`${vis.tamilName} • ${selectedMaterial.category.toUpperCase()}`}
+            subtitle={selectedMaterial.category.toUpperCase()}
             categoryBadge={`${selectedMaterial.quantity} ${selectedMaterial.unit}`}
             badgeVariant={
               selectedMaterial.category === 'cement'
@@ -935,7 +897,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
             isOpen={!!selectedRod}
             onClose={() => setSelectedRod(null)}
             title={`TMT Steel Rebar (${selectedRod.diameter})`}
-            subtitle={`${selectedRod.brand || 'Fe550D TMT'} • ${vis.tamilName}`}
+            subtitle={`${selectedRod.brand || 'Fe550D TMT'} • ${selectedRod.diameter}`}
             categoryBadge={`DIA ${selectedRod.diameter} • ${selectedRod.weightKg.toLocaleString('en-IN')} kg`}
             badgeVariant="info"
             imageUrl={selectedRod.imageUrl || vis.imageUrl}

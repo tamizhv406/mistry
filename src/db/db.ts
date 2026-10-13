@@ -1,6 +1,7 @@
 import { todayKey } from '../utils/datetime';
 import Dexie, { type Table } from 'dexie';
-import { recordTombstone } from '../services/syncTombstones';
+import { recordTombstone, USER_TABLES } from '../services/syncTombstones';
+import { isAdminRole, userCanAccessRecord } from './types';
 import type {
   Site,
   Material,
@@ -224,8 +225,14 @@ export class BuildingMistryDB extends Dexie {
   }
 
   // Soft Delete
-  async softDelete(tableName: EntityTable, id: string): Promise<void> {
+  async softDelete(tableName: EntityTable, id: string, user: User): Promise<void> {
     const table = this.table(tableName);
+    const record: any = await table.get(id);
+    if (!record) return;
+    const ownerId = await this.resolveRecordOwnerId(tableName, record);
+    if (!userCanAccessRecord(user, tableName, 'write', ownerId)) {
+      throw new Error("Access Denied: You cannot delete another contractor's record.");
+    }
     const now = new Date().toISOString();
     await table.update(id, {
       isDeleted: true,
@@ -235,8 +242,14 @@ export class BuildingMistryDB extends Dexie {
   }
 
   // Restore Record
-  async restoreRecord(tableName: EntityTable, id: string): Promise<void> {
+  async restoreRecord(tableName: EntityTable, id: string, user: User): Promise<void> {
     const table = this.table(tableName);
+    const record: any = await table.get(id);
+    if (!record) return;
+    const ownerId = await this.resolveRecordOwnerId(tableName, record);
+    if (!userCanAccessRecord(user, tableName, 'write', ownerId)) {
+      throw new Error("Access Denied: You cannot restore another contractor's record.");
+    }
     const now = new Date().toISOString();
     await table.update(id, {
       isDeleted: false,
@@ -246,10 +259,16 @@ export class BuildingMistryDB extends Dexie {
   }
 
   // Permanent Delete
-  async permanentDelete(tableName: EntityTable, id: string): Promise<void> {
+  async permanentDelete(user: User, tableName: EntityTable, id: string): Promise<void> {
     const table = this.table(tableName);
+    const record: any = await table.get(id);
+    if (!record) return;
+    const ownerId = await this.resolveRecordOwnerId(tableName, record);
+    if (!userCanAccessRecord(user, tableName, 'write', ownerId)) {
+      throw new Error("Access Denied: You cannot permanently delete another contractor's record.");
+    }
     await table.delete(id);
-    recordTombstone(tableName, id); // so the cloud copy drops it too
+    recordTombstone(tableName, id, ownerId); // so the cloud copy drops it too
   }
 
   // Log Activity Helper with full backward compatibility and user audit logging
@@ -354,45 +373,24 @@ export class BuildingMistryDB extends Dexie {
   }
 
   async getAllAdminAuditLogs(user: User): Promise<AdminAuditLog[]> {
-    const isElevated =
-      user.role === 'SUPER_ADMIN' ||
-      user.role === 'SUB_ADMIN' ||
-      user.role === 'ADMIN';
-    if (!isElevated) {
+    if (!isAdminRole(user.role)) {
       throw new Error('Access Denied: Only administrators can view security audit logs.');
     }
     return this.adminAuditLogs.reverse().sortBy('timestamp');
   }
 
-  // User Data Access & Authorization Helpers (Database Row Level Security)
+  // Local cache filters only; Supabase RLS is the authorization boundary for cloud records.
   async getSitesForUser(user: User): Promise<Site[]> {
-    const initialAdminEmail = ((typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) || 'tamilthilagan82@gmail.com').toLowerCase();
-    const isElevated =
-      user.role === 'ADMIN' ||
-      user.role === 'SUPER_ADMIN' ||
-      user.role === 'SUB_ADMIN' ||
-      (user.email || '').toLowerCase() === initialAdminEmail;
-
-    if (isElevated) {
-      return this.sites.filter(s => !s.isDeleted).reverse().sortBy('createdAt');
-    }
-    return this.sites
-      .filter(s => !s.isDeleted && s.userId === user.id)
-      .reverse()
-      .sortBy('createdAt');
+    const sites = await this.sites.filter(s => !s.isDeleted).toArray();
+    return sites
+      .filter(site => userCanAccessRecord(user, 'sites', 'read', site.userId))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getSiteForUser(user: User, siteId: string): Promise<Site | null> {
     const site = await this.sites.get(siteId);
     if (!site || site.isDeleted) return null;
-    const initialAdminEmail = ((typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) || 'tamilthilagan82@gmail.com').toLowerCase();
-    const isElevated =
-      user.role === 'ADMIN' ||
-      user.role === 'SUPER_ADMIN' ||
-      user.role === 'SUB_ADMIN' ||
-      (user.email || '').toLowerCase() === initialAdminEmail;
-
-    if (!isElevated && site.userId && site.userId !== user.id) {
+    if (!userCanAccessRecord(user, 'sites', 'read', site.userId)) {
       throw new Error("Access Denied: You do not have permission to view another contractor's site.");
     }
     return site;
@@ -402,8 +400,8 @@ export class BuildingMistryDB extends Dexie {
     const table = this.table(tableName);
     const record: any = await table.get(id);
     if (!record) return;
-    const isMistry = user.role === 'MISTRY' || user.role === 'MISTRY_USER';
-    if (isMistry && record.userId && record.userId !== user.id) {
+    const ownerId = await this.resolveRecordOwnerId(tableName, record);
+    if (!userCanAccessRecord(user, tableName, 'write', ownerId)) {
       throw new Error("Access Denied: You cannot delete another contractor's record.");
     }
     const now = new Date().toISOString();
@@ -435,8 +433,8 @@ export class BuildingMistryDB extends Dexie {
     const table = this.table(tableName);
     const record: any = await table.get(id);
     if (!record) return;
-    const isMistry = user.role === 'MISTRY' || user.role === 'MISTRY_USER';
-    if (isMistry && record.userId && record.userId !== user.id) {
+    const ownerId = await this.resolveRecordOwnerId(tableName, record);
+    if (!userCanAccessRecord(user, tableName, 'write', ownerId)) {
       throw new Error("Access Denied: You cannot restore another contractor's record.");
     }
     const now = new Date().toISOString();
@@ -468,12 +466,12 @@ export class BuildingMistryDB extends Dexie {
     const table = this.table(tableName);
     const record: any = await table.get(id);
     if (!record) return;
-    const isMistry = user.role === 'MISTRY' || user.role === 'MISTRY_USER';
-    if (isMistry && record.userId && record.userId !== user.id) {
+    const ownerId = await this.resolveRecordOwnerId(tableName, record);
+    if (!userCanAccessRecord(user, tableName, 'write', ownerId)) {
       throw new Error("Access Denied: You cannot permanently delete another contractor's record.");
     }
     await table.delete(id);
-    recordTombstone(tableName, id); // so the cloud copy drops it too
+    recordTombstone(tableName, id, ownerId); // so the cloud copy drops it too
     await this.logActivity(
       user.id,
       user.fullName || user.username,
@@ -493,11 +491,18 @@ export class BuildingMistryDB extends Dexie {
     );
   }
 
+  private async resolveRecordOwnerId(tableName: EntityTable, record: any): Promise<string | undefined> {
+    if ((USER_TABLES as readonly string[]).includes(tableName)) return record.userId;
+    if (!record.siteId) return record.userId;
+    return (await this.sites.get(record.siteId))?.userId;
+  }
+
   // Fetch all trash items with user scoping
-  async getAllTrash(user?: User): Promise<TrashRecord[]> {
+  async getAllTrash(user?: User, access: 'read' | 'write' = 'read'): Promise<TrashRecord[]> {
     const trashItems: TrashRecord[] = [];
     const allSites = await this.sites.toArray();
     const siteMap = new Map(allSites.map(s => [s.id, s.name]));
+    const siteOwnerMap = new Map(allSites.map(s => [s.id, s.userId]));
     const allUsers = await this.users.toArray();
     const userMap = new Map(allUsers.map(u => [u.id, u.fullName || u.username]));
 
@@ -783,19 +788,18 @@ export class BuildingMistryDB extends Dexie {
       });
     });
 
-    // If user is MISTRY, filter by user ownership
-    if (user && user.role === 'MISTRY') {
-      const userSiteIds = new Set(allSites.filter(s => s.userId === user.id).map(s => s.id));
-      const filtered = trashItems.filter(
-        t => t.rawData?.userId === user.id || (t.siteId && userSiteIds.has(t.siteId))
-      );
-      return filtered.sort(
-        (a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
-      );
-    }
-
-    // Sort newest deleted first
-    return trashItems.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
+    const visibleItems = user
+      ? trashItems.filter(item => {
+          const record = item.rawData as { userId?: string; siteId?: string };
+          const ownerId = (USER_TABLES as readonly string[]).includes(item.tableName)
+            ? record.userId
+            : record.siteId
+              ? siteOwnerMap.get(record.siteId)
+              : record.userId;
+          return userCanAccessRecord(user, item.tableName, access, ownerId);
+        })
+      : trashItems;
+    return visibleItems.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
   }
 
   // Seed default market reference supplier prices if empty

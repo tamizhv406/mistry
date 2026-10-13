@@ -9692,13 +9692,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             {/* Natural Language Prompt Assistant */}
             <div className="fp-copilot-prompt-section">
               <label className="fp-copilot-prompt-label">
-                <Sparkles size={14} /> Natural Language AI Assistant (Tamil / Tanglish / English)
+                <Sparkles size={14} /> Natural Language Design Assistant
               </label>
               <form onSubmit={handleCopilotSubmitPrompt} className="fp-copilot-prompt-form">
                 <input
                   type="text"
                   className="fp-copilot-prompt-input"
-                  placeholder="e.g., 'wall zig zag ahh pota correct panna' or 'rotate 45'"
+                  placeholder={'e.g., "Add a 12 by 10 foot room beside the kitchen" or "Rotate 45 degrees"'}
                   value={copilotPrompt}
                   onChange={e => setCopilotPrompt(e.target.value)}
                 />
@@ -10299,4 +10299,3 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     </div>
   );
 };
-

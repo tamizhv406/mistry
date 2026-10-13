@@ -124,7 +124,6 @@ export const CommentModal: React.FC<CommentModalProps> = ({
 
             <VoiceInputField
               label="Site Note / Observation"
-              tamilLabel="தள குறிப்பு"
               type="textarea"
               rows={4}
               placeholder="Describe site progress, client instructions, quality inspections, delays or safety checks..."

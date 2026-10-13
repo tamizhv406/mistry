@@ -1,11 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowDownCircle, ArrowUpCircle, BookOpen, ChevronRight, Package, Plus, RotateCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
+import {
+  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, ChevronRight, MoreHorizontal, Package, Plus, RotateCcw, SlidersHorizontal, Trash2,
+} from 'lucide-react';
 import { db } from '../../db/db';
-import type { CatalogItem, MaterialCategory, StockMovementType, User } from '../../db/types';
+import type { CatalogItem, Material, MaterialCategory, StockMovementType, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
-import { buildStock, STOCK_MOVEMENT_LABEL, type StockItem, type StockLine } from '../../domain/stock';
-import { CEMENT_TYPES, cementItemName, MATERIAL_CATEGORY_LABEL, MATERIAL_UNITS } from '../../domain/catalog';
+import { buildStock, stockItemKey, STOCK_MOVEMENT_LABEL, type StockItem, type StockLine } from '../../domain/stock';
+import {
+  CEMENT_TYPES, cementItemName, MATERIAL_GROUPS, MATERIAL_MAIN_GROUPS,
+  materialGroup, materialGroupId, materialGroupImage, materialUnitsForCategory,
+} from '../../domain/catalog';
+import { MATERIAL_IMAGES } from '../../domain/materialImages';
 import {
   ensureCatalogSeeded, recordPurchase, recordStockMovement, removeCatalogItem, saveCatalogItem, voidStockMovement,
 } from '../../services/records';
@@ -15,10 +21,31 @@ import { Badge, CalcLine, Chips, ConfirmSheet, Empty, Field, Loading, Note, Page
 
 type EntryMode = 'purchase' | 'usage' | 'return' | 'adjust' | 'opening';
 
-const CATEGORY_ORDER: MaterialCategory[] = ['cement', 'sand', 'msand', 'aggregate', 'bricks', 'rod', 'other'];
-const categoryLabel = (c: string) => MATERIAL_CATEGORY_LABEL[c as MaterialCategory] || c;
 /** "Bags" -> "bag", "Nos" -> "piece"; other units are already singular. */
 const perUnit = (unit: string) => ({ Bags: 'bag', Nos: 'piece', Pieces: 'piece', Units: 'unit' } as Record<string, string>)[unit] || unit;
+const isOut = (type: StockLine['type']) => type === 'usage' || type === 'return' || type === 'adjust_out';
+
+/** Shelves where every item is the same kind of material, so the shelf photo fits each of them. */
+const ONE_MATERIAL_SHELVES = new Set(['cement', 'sand', 'msand', 'aggregate', 'rod']);
+
+/** Bundled photos are stored relative to the app base; user photos are data URLs. */
+const photoSrc = (url?: string) => (url ? (url.startsWith('data:') || url.startsWith('http') ? url : `./${url}`) : undefined);
+
+const MaterialPhoto: React.FC<{ url?: string; alt: string; className: string }> = ({ url, alt, className }) => {
+  const [failed, setFailed] = useState(false);
+  const src = photoSrc(url);
+  if (!src || failed) {
+    return <div className={`${className} ${className === 'm-thumb' ? 'm-thumb-empty' : 'm-tool-photo-empty'}`} role="img" aria-label={`${alt} (no photo)`}><Package size={className === 'm-thumb' ? 22 : 34} /></div>;
+  }
+  return <img className={className} src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />;
+};
+
+/** The photo for a stock item: its catalog entry's, or the shelf photo when the shelf holds one kind of material. */
+function stockPhoto(item: Pick<StockItem, 'name' | 'category'>, groupId: string, catalog: CatalogItem[]): string | undefined {
+  const wanted = item.name.trim().toLowerCase();
+  const entry = catalog.find(c => c.kind === 'material' && c.name.trim().toLowerCase() === wanted);
+  return entry?.imageUrl || (ONE_MATERIAL_SHELVES.has(groupId) ? materialGroupImage(groupId) : undefined);
+}
 
 interface StockViewProps {
   user: User;
@@ -33,7 +60,7 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
   const project = useProject(siteId);
   const catalog = useLiveQuery(() => db.catalogItems.filter(c => !c.isDeleted && c.kind !== 'tool').toArray(), []);
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<string>('all');
+  const [shelf, setShelf] = useState<string>('all');
   const [entry, setEntry] = useState<{ mode: EntryMode; itemKey?: string } | null>(null);
   const [chooser, setChooser] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -46,9 +73,23 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
   }, []);
 
   const stock = useMemo(
-    () => (project ? buildStock(project.materials, project.rodEntries, project.stockMovements) : []),
-    [project]
+    () => (project ? buildStock(project.materials, project.rodEntries, project.stockMovements, catalog || []) : []),
+    [project, catalog]
   );
+  const shelfOf = useMemo(() => {
+    return new Map(stock.map(s => [s.key, materialGroupId(s.category)]));
+  }, [stock]);
+  // The latest purchase of each stock item: its price and supplier are offered again, and a
+  // repeat cement purchase keeps the brand, type and grade it was first recorded with.
+  const lastPurchase = useMemo(() => {
+    const latest = new Map<string, Material>();
+    const rows = (project?.materials || []).filter(m => !m.isDeleted)
+      .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
+    for (const m of rows) {
+      latest.set(stockItemKey({ category: m.category, name: (m.materialName || m.category).trim(), unit: (m.unit || 'Unit').trim() }), m);
+    }
+    return latest;
+  }, [project]);
 
   if (project === undefined) return <Page title="Materials" onBack={onBack}><Loading rows={5} /></Page>;
   if (project === null) {
@@ -56,14 +97,27 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
   }
 
   const q = query.trim().toLowerCase();
-  const shown = stock.filter(s => (category === 'all' || s.category === category) && (!q || s.name.toLowerCase().includes(q)));
-  const usedCategories = CATEGORY_ORDER.filter(c => stock.some(s => s.category === c));
+  const matches = (s: StockItem) => {
+    if (!q) return true;
+    const g = materialGroup(shelfOf.get(s.key) || 'other');
+    return s.name.toLowerCase().includes(q) || g.label.toLowerCase().includes(q) || g.keywords.includes(q);
+  };
+  const shown = stock.filter(s => (shelf === 'all' || shelfOf.get(s.key) === shelf) && matches(s));
+  const usedShelves = MATERIAL_GROUPS.filter(g => stock.some(s => shelfOf.get(s.key) === g.id));
   const purchaseValue = roundMoney(stock.reduce((s, i) => s + i.purchaseCost, 0));
   const payable = roundMoney(
     project.materials.reduce((s, m) => s + (Number(m.balance) || 0), 0) + project.rodEntries.reduce((s, r) => s + (Number(r.balance) || 0), 0)
   );
   const openItem = openKey ? stock.find(s => s.key === openKey) : undefined;
   const suppliers = Array.from(new Set(project.materials.map(m => (m.supplier || '').trim()).filter(Boolean))).slice(0, 30);
+  const hasStock = stock.some(s => s.onHand > 0);
+
+  const quick: [EntryMode | 'more', string, React.ReactNode, boolean][] = [
+    ['purchase', 'Purchase', <ArrowDownCircle size={22} key="i" />, false],
+    ['usage', 'Use', <ArrowUpCircle size={22} key="i" />, !hasStock],
+    ['return', 'Return', <RotateCcw size={22} key="i" />, !hasStock],
+    ['more', 'More', <MoreHorizontal size={22} key="i" />, false],
+  ];
 
   return (
     <Page
@@ -76,7 +130,23 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
         </button>
       }
     >
-      <div className="m-stats is-3">
+      <div className="m-action-grid" role="group" aria-label="Add an entry">
+        {quick.map(([mode, label, icon, disabled]) => (
+          <button
+            key={mode}
+            type="button"
+            className="m-action"
+            disabled={disabled}
+            style={disabled ? { opacity: 0.45 } : undefined}
+            onClick={() => (mode === 'more' ? setChooser(true) : setEntry({ mode }))}
+          >
+            <span className="m-action-icon">{icon}</span>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="m-stats is-3" style={{ marginTop: 10 }}>
         <Stat label="In stock" value={stock.filter(s => s.onHand > 0).length} hint="items" />
         <Stat label="Bought" value={formatINR(purchaseValue)} hint="all purchases" />
         <Stat label="To pay" value={formatINR(payable)} tone={payable > 0 ? 'bad' : 'ok'} hint="suppliers" />
@@ -85,6 +155,13 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
       {stock.some(s => s.isNegative) && (
         <div style={{ marginTop: 10 }}>
           <Note tone="warn">Some items show less than zero. A purchase or opening stock entry is probably missing. Open the item to check its history.</Note>
+        </div>
+      )}
+      {stock.some(s => s.isLowStock) && (
+        <div style={{ marginTop: 10 }}>
+          <Note tone="warn">
+            {stock.filter(s => s.isLowStock).length} item{stock.filter(s => s.isLowStock).length === 1 ? '' : 's'} at or below the reorder threshold.
+          </Note>
         </div>
       )}
 
@@ -105,45 +182,49 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
         </div>
       ) : (
         <>
-          <div style={{ marginTop: 12 }}><SearchBox value={query} onChange={setQuery} placeholder="Search materials" /></div>
-          {usedCategories.length > 1 && (
+          <div style={{ marginTop: 12 }}><SearchBox value={query} onChange={setQuery} placeholder="Search materials or categories" /></div>
+          {usedShelves.length > 1 && (
             <div style={{ marginTop: 10 }}>
               <Chips
                 label="Category"
-                value={category}
-                onChange={setCategory}
-                options={[{ value: 'all', label: 'All' }, ...usedCategories.map(c => ({ value: c as string, label: categoryLabel(c) }))]}
+                value={shelf}
+                onChange={setShelf}
+                options={[
+                  { value: 'all', label: `All (${stock.length})` },
+                  ...usedShelves.map(g => ({ value: g.id, label: `${g.label} (${stock.filter(s => shelfOf.get(s.key) === g.id).length})` })),
+                ]}
               />
             </div>
           )}
 
           <div className="m-card m-list" style={{ marginTop: 10 }}>
-            {shown.map(item => (
-              <button key={item.key} type="button" className="m-row" onClick={() => setOpenKey(item.key)}>
-                <span className="m-row-main">
-                  <span className="m-row-title" style={{ display: 'block' }}>{item.name}</span>
-                  <span className="m-row-sub">
-                    {categoryLabel(item.category)} · in {formatQty(item.purchased + item.opening + Math.max(0, item.adjusted))} · out {formatQty(item.used + item.returned + Math.max(0, -item.adjusted))}
+            {shown.map(item => {
+              const groupId = shelfOf.get(item.key) || 'other';
+              return (
+                <button key={item.key} type="button" className="m-row" onClick={() => setOpenKey(item.key)}>
+                  <MaterialPhoto url={stockPhoto(item, groupId, catalog || [])} alt={item.name} className="m-thumb" />
+                  <span className="m-row-main">
+                    <span className="m-row-title" style={{ display: 'block' }}>{item.name}</span>
+                    <span className="m-row-sub">
+                      {materialGroup(groupId).label !== item.name
+                        ? materialGroup(groupId).label
+                        : item.lastActivityDate ? `Last entry ${formatDay(item.lastActivityDate)}` : ''}
+                    </span>
                   </span>
-                </span>
-                <span className="m-row-end">
-                  <span className={`m-qty ${item.onHand < 0 ? 'is-bad' : item.onHand === 0 ? 'is-muted' : ''}`} style={{ display: 'block' }}>
-                    {formatQty(item.onHand)}<small>{item.unit}</small>
+                  <span className="m-row-end">
+                    <span className={`m-qty ${item.onHand < 0 ? 'is-bad' : item.onHand === 0 ? 'is-muted' : ''}`} style={{ display: 'block' }}>
+                      {formatQty(item.onHand)}<small>{item.unit}</small>
+                    </span>
+                    <span className="m-row-sub">in stock</span>
+                    {item.isLowStock && <span className="m-row-sub" style={{ color: 'var(--bad, #dc2626)' }}>Low stock</span>}
                   </span>
-                  <span className="m-row-sub">in stock</span>
-                </span>
-                <ChevronRight size={18} className="is-muted" />
-              </button>
-            ))}
+                </button>
+              );
+            })}
             {shown.length === 0 && <div className="m-row is-muted">No material matches your search.</div>}
           </div>
         </>
       )}
-
-      <button type="button" className="m-fab no-print" onClick={() => setChooser(true)}>
-        <Plus size={22} /> Add entry
-      </button>
-      <div style={{ height: 72 }} aria-hidden="true" />
 
       {/* What kind of entry? */}
       <Sheet open={chooser} title="Add entry" onClose={() => setChooser(false)}>
@@ -175,10 +256,13 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
           user={user}
           siteId={siteId}
           stock={stock}
+          shelfOf={shelfOf}
+          lastPurchase={lastPurchase}
           catalog={catalog || []}
           suppliers={suppliers}
           onClose={() => setEntry(null)}
           onSaved={msg => onNotify(msg, 'success')}
+          onNotify={onNotify}
           onOpenSteelPurchase={() => { setEntry(null); onOpenSteelPurchase(); }}
         />
       )}
@@ -186,10 +270,11 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
       {openItem && !entry && (
         <ItemSheet
           item={openItem}
+          shelfLabel={materialGroup(shelfOf.get(openItem.key) || 'other').label}
           user={user}
           siteId={siteId}
           onClose={() => setOpenKey(null)}
-          onEntry={mode => setEntry({ mode, itemKey: openItem.key })}
+          onEntry={mode => (mode === 'purchase' && openItem.category === 'rod' ? onOpenSteelPurchase() : setEntry({ mode, itemKey: openItem.key }))}
           onOpenLedger={onOpenLedger}
           onNotify={onNotify}
         />
@@ -209,6 +294,8 @@ interface Chosen {
   unit: string;
   catalogItemId?: string;
   isCement?: boolean;
+  /** A material typed in here for the first time: it is added to the catalog once the entry is saved. */
+  newInShelf?: string;
 }
 
 const ENTRY_TITLE: Record<EntryMode, string> = {
@@ -225,21 +312,27 @@ const EntrySheet: React.FC<{
   user: User;
   siteId: string;
   stock: StockItem[];
+  shelfOf: Map<string, string>;
+  lastPurchase: Map<string, Material>;
   catalog: CatalogItem[];
   suppliers: string[];
   onClose: () => void;
   onSaved: (msg: string) => void;
+  onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onOpenSteelPurchase: () => void;
-}> = ({ mode, presetKey, user, siteId, stock, catalog, suppliers, onClose, onSaved, onOpenSteelPurchase }) => {
+}> = ({ mode, presetKey, user, siteId, stock, shelfOf, lastPurchase, catalog, suppliers, onClose, onSaved, onNotify, onOpenSteelPurchase }) => {
   const incoming = mode === 'purchase' || mode === 'opening';
   const preset = presetKey ? stock.find(s => s.key === presetKey) : undefined;
   const [chosen, setChosen] = useState<Chosen | null>(
     preset ? { key: preset.key, name: preset.name, category: preset.category, unit: preset.unit } : null
   );
   const [search, setSearch] = useState('');
-  const [customCategory, setCustomCategory] = useState<MaterialCategory>('other');
+  const [shelf, setShelf] = useState<string | null>(null);
+  const [customShelf, setCustomShelf] = useState('legacy');
   const [brand, setBrand] = useState('');
-  const [cementType, setCementType] = useState('ppc');
+  const [addingBrand, setAddingBrand] = useState(false);
+  const [newBrand, setNewBrand] = useState('');
+  const [cementTypeId, setCementTypeId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState(preset?.unit || 'Nos');
   const [rate, setRate] = useState('');
@@ -254,9 +347,19 @@ const EntrySheet: React.FC<{
   const [direction, setDirection] = useState<'adjust_in' | 'adjust_out'>('adjust_out');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
+  // State updates are not immediate, so a second tap could start a second save before `busy` shows.
+  const saving = useRef(false);
+  const availableEntryUnits = materialUnitsForCategory(chosen?.category || 'other');
 
   const brands = catalog.filter(c => c.kind === 'brand' && c.category === 'cement').sort((a, b) => a.name.localeCompare(b.name));
   const materials = catalog.filter(c => c.kind === 'material');
+  const savedTypes = catalog.filter(c => c.kind === 'cement_type');
+  // The four documented types stand in until the catalog has been seeded.
+  const cementTypes: Pick<CatalogItem, 'id' | 'name' | 'description' | 'standard' | 'materialType' | 'grade'>[] = savedTypes.length
+    ? savedTypes
+    : CEMENT_TYPES.map(c => ({ id: c.id, name: c.label, description: c.note, standard: c.standard, materialType: c.type, grade: c.grade }));
+  const cementType = cementTypes.find(c => c.id === cementTypeId) || cementTypes.find(c => c.materialType === 'PPC') || cementTypes[0];
   const existing = chosen?.key ? stock.find(s => s.key === chosen.key) : undefined;
 
   const qty = parseAmount(quantity);
@@ -264,62 +367,129 @@ const EntrySheet: React.FC<{
   const total = !Number.isNaN(qty) && !Number.isNaN(price) ? roundMoney(qty * price) : 0;
   const paidNow = payment === 'full' ? total : payment === 'part' ? parseAmount(paidPart) : 0;
 
-  const finalName = chosen?.isCement ? cementItemName(brand, cementType) : chosen?.name || '';
-  const cementMeta = CEMENT_TYPES.find(c => c.id === cementType);
+  const finalName = chosen?.isCement ? cementItemName(brand, cementType?.name || '') : chosen?.name || '';
+  const shelfIdOf = (m: CatalogItem) => (m.category === 'other' ? materialGroup(m.group || 'other').id : m.category);
+
+  const choose = (m: CatalogItem) => {
+    // Brand and type are asked for plain "Cement"; a cement product added by name keeps its name.
+    const isCement = m.category === 'cement' && (m.id === 'mat-cement' || m.name.trim().toLowerCase() === 'cement');
+    setChosen({ name: m.name, category: m.category, unit: m.unit || 'Nos', catalogItemId: m.id, isCement });
+    setUnit(m.unit || 'Nos');
+    if (isCement) {
+      // Start from the brand and type bought last on this project, if they are still in the catalog.
+      const lastCement = [...lastPurchase.values()]
+        .filter(p => p.category === 'cement' && p.brand)
+        .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''))
+        .pop();
+      const knownBrand = brands.find(b => b.name === lastCement?.brand);
+      setBrand(b => b || knownBrand?.name || brands[0]?.name || '');
+      const knownType = lastCement && cementTypes.find(t => t.materialType === lastCement.materialType && (t.grade || '') === (lastCement.grade || ''));
+      if (knownType) setCementTypeId(id => id || knownType.id);
+    }
+  };
 
   // ---- Step 1: choose the material -------------------------------------
   if (!chosen) {
     const q = search.trim().toLowerCase();
     if (incoming) {
-      const options = materials.filter(m => !q || m.name.toLowerCase().includes(q) || categoryLabel(m.category).toLowerCase().includes(q));
+      const steelShelf = mode === 'purchase';
+      const shelves = MATERIAL_GROUPS.filter(g => (g.id === 'rod' ? steelShelf : true));
+      const inShelf = (id: string) => materials.filter(m => shelfIdOf(m) === id).sort((a, b) => a.name.localeCompare(b.name));
+      const found = materials
+        .filter(m => {
+          const g = materialGroup(shelfIdOf(m));
+          return m.name.toLowerCase().includes(q) || g.label.toLowerCase().includes(q) || g.keywords.includes(q);
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
       const exact = materials.some(m => m.name.toLowerCase() === q);
+      const list = q ? found : shelf ? inShelf(shelf) : [];
+      const steelMatches = steelShelf && q && 'steel rods tmt rebar kambi'.includes(q);
+
+      const openShelf = (id: string) => {
+        if (id === 'rod') return onOpenSteelPurchase();
+        const items = inShelf(id);
+        if (items.length === 1) return choose(items[0]);
+        setShelf(id);
+        setCustomShelf(id);
+      };
+
       return (
-        <Sheet open title={ENTRY_TITLE[mode]} subtitle="Choose the material" onClose={onClose}>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search or type a new material" />
-          <div className="m-card m-list" style={{ marginTop: 10 }}>
-            {options.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                className="m-row"
-                onClick={() => {
-                  setChosen({ name: m.name, category: m.category, unit: m.unit || 'Nos', catalogItemId: m.id, isCement: m.category === 'cement' });
-                  setUnit(m.unit || 'Nos');
-                  if (m.category === 'cement' && brands[0]) setBrand(brands[0].name);
-                }}
-              >
-                <span className="m-row-main">
-                  <span className="m-row-title" style={{ display: 'block' }}>{m.name}</span>
-                  <span className="m-row-sub">{categoryLabel(m.category)} · {m.unit}</span>
-                </span>
-                <ChevronRight size={18} className="is-muted" />
-              </button>
-            ))}
-            {mode === 'purchase' && (!q || 'steel rods tmt'.includes(q)) && (
-              <button type="button" className="m-row" onClick={onOpenSteelPurchase}>
-                <span className="m-row-main">
-                  <span className="m-row-title" style={{ display: 'block' }}>Steel Rods (TMT)</span>
-                  <span className="m-row-sub">Recorded by diameter and weight</span>
-                </span>
-                <ChevronRight size={18} className="is-muted" />
-              </button>
-            )}
-          </div>
-          {q && !exact && (
+        <Sheet open title={ENTRY_TITLE[mode]} subtitle={shelf && !q ? materialGroup(shelf).label : 'Choose the material'} onClose={onClose}>
+          <SearchBox value={search} onChange={setSearch} placeholder="Search material or category" />
+
+          {!q && !shelf && (
+            <div className="m-tool-grid" style={{ marginTop: 12 }}>
+              {shelves.map(g => {
+                const count = g.id === 'rod' ? 0 : inShelf(g.id).length;
+                return (
+                  <button key={g.id} type="button" className="m-card m-tool-card" onClick={() => openShelf(g.id)}>
+                    <MaterialPhoto url={materialGroupImage(g.id)} alt={g.label} className="m-tool-photo" />
+                    <div className="m-tool-body">
+                      <div className="m-tool-name">{g.label}</div>
+                      <div className="m-row-sub">{g.id === 'rod' ? 'By diameter and weight' : count === 1 ? inShelf(g.id)[0].unit : `${count} items`}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!q && shelf && (
+            <button type="button" className="m-btn is-quiet is-small" style={{ marginTop: 8, paddingLeft: 0 }} onClick={() => setShelf(null)}>
+              <ArrowLeft size={18} /> All categories
+            </button>
+          )}
+
+          {(q || shelf) && (
+            <div className="m-card m-list" style={{ marginTop: 8 }}>
+              {list.map(m => (
+                <button key={m.id} type="button" className="m-row" onClick={() => choose(m)}>
+                  <MaterialPhoto url={m.imageUrl} alt={m.name} className="m-thumb" />
+                  <span className="m-row-main">
+                    <span className="m-row-title" style={{ display: 'block' }}>{m.name}</span>
+                    <span className="m-row-sub">{materialGroup(shelfIdOf(m)).label} · {m.unit}</span>
+                  </span>
+                  <ChevronRight size={18} className="is-muted" />
+                </button>
+              ))}
+              {steelMatches && (
+                <button type="button" className="m-row" onClick={onOpenSteelPurchase}>
+                  <MaterialPhoto url={materialGroupImage('rod')} alt="Steel rods" className="m-thumb" />
+                  <span className="m-row-main">
+                    <span className="m-row-title" style={{ display: 'block' }}>Steel Rods (TMT)</span>
+                    <span className="m-row-sub">Recorded by diameter and weight</span>
+                  </span>
+                  <ChevronRight size={18} className="is-muted" />
+                </button>
+              )}
+              {list.length === 0 && !steelMatches && <div className="m-row is-muted">{q ? 'Nothing in the catalog matches.' : 'Nothing on this shelf yet.'}</div>}
+            </div>
+          )}
+
+          {((q && !exact) || (!q && shelf)) && (
             <div className="m-card m-card-pad" style={{ marginTop: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>Add "{search.trim()}" as a new material</div>
-              <Field label="Category">
-                <select value={customCategory} onChange={e => setCustomCategory(e.target.value as MaterialCategory)}>
-                  {CATEGORY_ORDER.filter(c => c !== 'rod' && c !== 'cement').map(c => <option key={c} value={c}>{categoryLabel(c)}</option>)}
-                </select>
-              </Field>
-              <button
-                type="button"
-                className="m-btn is-primary is-block"
-                onClick={() => setChosen({ name: search.trim(), category: customCategory, unit: 'Nos' })}
-              >
-                Use this name
-              </button>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>{q ? `Add "${search.trim()}" as a new material` : 'Not in the list?'}</div>
+              {q ? (
+                <>
+                  <Field label="Category">
+                    <select value={customShelf} onChange={e => setCustomShelf(e.target.value)}>
+                      {MATERIAL_GROUPS.filter(g => g.id !== 'rod' && g.id !== 'cement').map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                    </select>
+                  </Field>
+                  <button
+                    type="button"
+                    className="m-btn is-primary is-block"
+                    onClick={() => {
+                      const g = materialGroup(customShelf);
+                      setChosen({ name: search.trim(), category: g.category, unit: 'Nos', newInShelf: g.id });
+                    }}
+                  >
+                    Use this name
+                  </button>
+                </>
+              ) : (
+                <p className="m-calc-note" style={{ marginTop: 0 }}>Type its name in the search box above to add it.</p>
+              )}
             </div>
           )}
         </Sheet>
@@ -337,13 +507,15 @@ const EntrySheet: React.FC<{
             <div className="m-card m-list" style={{ marginTop: 10 }}>
               {options.map(s => (
                 <button key={s.key} type="button" className="m-row" onClick={() => { setChosen({ key: s.key, name: s.name, category: s.category, unit: s.unit }); setUnit(s.unit); }}>
+                  <MaterialPhoto url={stockPhoto(s, shelfOf.get(s.key) || 'other', catalog)} alt={s.name} className="m-thumb" />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>{s.name}</span>
-                    <span className="m-row-sub">{categoryLabel(s.category)}</span>
+                    <span className="m-row-sub">{materialGroup(shelfOf.get(s.key) || 'other').label}</span>
                   </span>
-                  <span className="m-row-end"><span className="m-qty">{formatQty(s.onHand)}<small>{s.unit}</small></span></span>
+                  <span className="m-row-end"><span className={`m-qty ${s.onHand <= 0 ? 'is-muted' : ''}`}>{formatQty(s.onHand)}<small>{s.unit}</small></span></span>
                 </button>
               ))}
+              {options.length === 0 && <div className="m-row is-muted">No material matches your search.</div>}
             </div>
           </>
         )}
@@ -352,169 +524,253 @@ const EntrySheet: React.FC<{
   }
 
   // ---- Step 2: details --------------------------------------------------
-  const submit = async () => {
-    if (busy) return;
+  // The item this entry will land on: the one picked, or the one a purchase of this name and unit joins.
+  const current = existing || stock.find(s => s.key === stockItemKey({ category: chosen.category, name: finalName, unit }));
+  const recent = current ? [...current.lines].filter(l => !l.voided).reverse().slice(0, 3) : [];
+  const previous = current ? lastPurchase.get(current.key) : undefined;
+
+  const submit = async (allowDuplicate = false) => {
+    if (saving.current) return;
     setError('');
     if (Number.isNaN(qty) || qty <= 0) return setError('Enter a quantity greater than zero.');
     if (chosen.isCement && !brand.trim()) return setError('Choose the cement brand.');
-
-    setBusy(true);
-    if (mode === 'purchase') {
-      if (Number.isNaN(price)) { setBusy(false); return setError('Enter the unit price. Use 0 only if the material was free.'); }
-      if (payment === 'part' && (Number.isNaN(paidNow) || paidNow <= 0 || paidNow > total)) {
-        setBusy(false);
-        return setError(`Enter the amount paid, between ₹1 and ${formatINR(total)}.`);
-      }
-      const res = await recordPurchase(user, siteId, {
-        category: chosen.category as MaterialCategory,
-        materialName: finalName,
-        brand: chosen.isCement ? brand.trim() : undefined,
-        materialType: chosen.isCement ? cementMeta?.type : undefined,
-        grade: chosen.isCement ? cementMeta?.grade : undefined,
-        catalogItemId: chosen.catalogItemId,
-        supplier, quantity: qty, unit, rate: price, paidAmount: paidNow, paymentMode,
-        purchaseDate: date, invoiceNumber: invoice, notes,
-      });
-      setBusy(false);
-      if (!res.ok) return setError(res.error);
-      onSaved(`Purchase recorded: ${formatQty(qty)} ${unit} ${finalName}`);
-      return onClose();
+    if (mode === 'purchase' && Number.isNaN(price)) return setError('Enter the unit price. Use 0 only if the material was free.');
+    if (mode === 'purchase' && payment === 'part' && (Number.isNaN(paidNow) || paidNow <= 0 || paidNow > total)) {
+      return setError(`Enter the amount paid, between ₹1 and ${formatINR(total)}.`);
     }
+    const type: StockMovementType = mode === 'adjust' ? direction : mode === 'opening' ? 'opening' : mode === 'return' ? 'return' : 'usage';
+    if (mode === 'adjust' && !reason.trim()) return setError('Say why the stock is being adjusted.');
 
-    const type: StockMovementType = mode === 'adjust' ? direction : mode === 'opening' ? 'opening' : mode;
-    if (mode === 'adjust' && !reason.trim()) { setBusy(false); return setError('Say why the stock is being adjusted.'); }
-    const res = await recordStockMovement(user, siteId, {
-      itemKey: chosen.key, itemName: finalName, category: chosen.category, unit: existing?.unit || unit,
-      movementType: type, quantity: qty, eventDate: date, reason, notes,
-    });
-    setBusy(false);
-    if (!res.ok) return setError(res.error);
-    onSaved(`${STOCK_MOVEMENT_LABEL[type]}: ${formatQty(qty)} ${existing?.unit || unit} ${finalName}`);
-    onClose();
+    saving.current = true;
+    setBusy(true);
+    try {
+      const res = mode === 'purchase'
+        ? await recordPurchase(user, siteId, {
+            category: chosen.category as MaterialCategory,
+            materialName: finalName,
+            brand: chosen.isCement ? brand.trim() : previous?.brand,
+            materialType: chosen.isCement ? cementType?.materialType : previous?.materialType,
+            grade: chosen.isCement ? cementType?.grade : previous?.grade,
+            catalogItemId: chosen.catalogItemId || previous?.catalogItemId,
+            supplier, quantity: qty, unit, rate: price, paidAmount: paidNow, paymentMode,
+            purchaseDate: date, invoiceNumber: invoice, notes, allowDuplicate,
+          })
+        : await recordStockMovement(user, siteId, {
+            itemKey: chosen.key, itemName: finalName, category: chosen.category, unit: existing?.unit || unit,
+            movementType: type, quantity: qty, eventDate: date, reason, notes, allowDuplicate,
+          });
+      if (!res.ok) {
+        if (res.duplicateOf) setDuplicate(true);
+        else setError(res.error);
+        return;
+      }
+      if (chosen.newInShelf) {
+        // Keep the new material for next time. A name that is already there is fine.
+        await saveCatalogItem(user, { kind: 'material', name: chosen.name, category: chosen.category, group: chosen.newInShelf, unit });
+      }
+      onSaved(mode === 'purchase'
+        ? `Purchase recorded: ${formatQty(qty)} ${unit} ${finalName}`
+        : `${STOCK_MOVEMENT_LABEL[type]}: ${formatQty(qty)} ${existing?.unit || unit} ${finalName}`);
+      onClose();
+    } catch {
+      setError('Could not save. Nothing was changed. Please try again.');
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  };
+
+  const addBrand = async () => {
+    const res = await saveCatalogItem(user, { kind: 'brand', name: newBrand, category: 'cement' });
+    if (!res.ok) return onNotify(res.error, 'error');
+    setBrand(res.value.name);
+    setNewBrand('');
+    setAddingBrand(false);
   };
 
   return (
-    <Sheet
-      open
-      title={ENTRY_TITLE[mode]}
-      subtitle={chosen.isCement ? 'Cement' : chosen.name}
-      onClose={onClose}
-      footer={
-        <>
-          <button type="button" className="m-btn" onClick={onClose} disabled={busy}>Cancel</button>
-          <button type="button" className="m-btn is-primary" onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
-        </>
-      }
-    >
-      {error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{error}</Note></div>}
+    <>
+      <Sheet
+        open={!duplicate}
+        title={ENTRY_TITLE[mode]}
+        subtitle={chosen.isCement ? 'Cement' : chosen.name}
+        onClose={onClose}
+        footer={
+          <>
+            <button type="button" className="m-btn" onClick={onClose} disabled={busy}>Cancel</button>
+            <button type="button" className="m-btn is-primary" onClick={() => submit()} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+          </>
+        }
+      >
+        {error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{error}</Note></div>}
 
-      {existing && !incoming && (
-        <div style={{ marginBottom: 12 }}>
-          <Note tone={existing.onHand > 0 ? undefined : 'warn'}>
-            In stock now: <strong>{formatQty(existing.onHand)} {existing.unit}</strong>
-          </Note>
-        </div>
-      )}
+        {chosen.isCement && (
+          <>
+            <Field label="Brand" hint="Availability differs by dealer and area.">
+              <select value={brand} onChange={e => setBrand(e.target.value)} aria-label="Cement brand">
+                {!brand && <option value="">Choose a brand</option>}
+                {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+              </select>
+            </Field>
+            {addingBrand ? (
+              <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
+                <Field label="New brand name">
+                  <input type="text" value={newBrand} onChange={e => setNewBrand(e.target.value)} maxLength={60} placeholder="e.g. Penna" />
+                </Field>
+                <div className="m-btn-row">
+                  <button type="button" className="m-btn is-small" onClick={() => { setAddingBrand(false); setNewBrand(''); }}>Cancel</button>
+                  <button type="button" className="m-btn is-primary is-small" onClick={addBrand} disabled={!newBrand.trim()}>Add brand</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="m-btn is-quiet is-small" style={{ margin: '-8px 0 10px', paddingLeft: 0 }} onClick={() => setAddingBrand(true)}>
+                <Plus size={18} /> Add another brand
+              </button>
+            )}
+            <Field label="Cement type" hint={cementType ? [cementType.description, cementType.standard && `(${cementType.standard})`].filter(Boolean).join(' ') : undefined}>
+              <Chips label="Cement type" value={cementType?.id || ''} onChange={setCementTypeId} options={cementTypes.map(c => ({ value: c.id, label: c.name }))} />
+            </Field>
+          </>
+        )}
 
-      {chosen.isCement && (
-        <>
-          <Field label="Brand" hint="Availability differs by dealer and area. Add your own brands from the catalog.">
-            <select value={brand} onChange={e => setBrand(e.target.value)}>
-              {brands.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Cement type" hint={cementMeta ? `${cementMeta.note} (${cementMeta.standard})` : undefined}>
-            <Chips label="Cement type" value={cementType} onChange={setCementType} options={CEMENT_TYPES.map(c => ({ value: c.id, label: c.label }))} />
-          </Field>
-        </>
-      )}
-
-      <div className="m-field-2">
-        <Field label="Quantity">
-          <input type="text" inputMode="decimal" autoComplete="off" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" aria-label="Quantity" />
-        </Field>
-        <Field label="Unit">
-          {existing ? (
-            <input type="text" value={existing.unit} readOnly aria-label="Unit" />
+        <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
+          <div className="m-stat-label">IN STOCK NOW</div>
+          {current ? (
+            <>
+              <div className={`m-qty ${current.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.35rem' }}>
+                {formatQty(current.onHand)}<small>{current.unit}</small>
+              </div>
+              {recent.map(l => (
+                <div key={l.id} className="m-row-sub" style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
+                  <span>{STOCK_MOVEMENT_LABEL[l.type]} · {formatDay(l.date)}</span>
+                  <strong className={isOut(l.type) ? 'is-bad' : 'is-ok'}>{isOut(l.type) ? '−' : '+'}{formatQty(l.quantity)}</strong>
+                </div>
+              ))}
+            </>
           ) : (
-            <select value={unit} onChange={e => setUnit(e.target.value)} aria-label="Unit">
-              {(MATERIAL_UNITS as readonly string[]).includes(unit) ? null : <option value={unit}>{unit}</option>}
-              {MATERIAL_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
+            <div className="m-row-sub" style={{ marginTop: 2 }}>
+              {chosen.isCement && !brand ? 'Choose the brand to see its stock.' : `None yet${finalName ? ` of ${finalName}` : ''}. This will be the first entry.`}
+            </div>
           )}
-        </Field>
-      </div>
+        </div>
 
-      {mode === 'purchase' && (
-        <>
-          <Field label={`Unit price (₹ per ${perUnit(unit)})`}>
-            <input type="text" inputMode="decimal" autoComplete="off" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" aria-label="Unit price in rupees" />
+        <div className="m-field-2">
+          <Field label="Quantity">
+            <input type="text" inputMode="decimal" autoComplete="off" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" aria-label="Quantity" />
           </Field>
-          <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
-            <CalcLine label={`${quantity || 0} × ${formatINR(Number.isNaN(price) ? 0 : price)}`} value={formatINR(total)} />
-          </div>
-          <Field label="Payment">
+          <Field label="Unit">
+            {existing ? (
+              <input type="text" value={existing.unit} readOnly aria-label="Unit" />
+            ) : (
+              <select value={unit} onChange={e => setUnit(e.target.value)} aria-label="Unit">
+                {availableEntryUnits.includes(unit) ? null : <option value={unit}>{unit}</option>}
+                {availableEntryUnits.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            )}
+          </Field>
+        </div>
+
+        {mode === 'purchase' && (
+          <>
+            <Field label={`Unit price (₹ per ${perUnit(unit)})`}>
+              <input type="text" inputMode="decimal" autoComplete="off" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" aria-label="Unit price in rupees" />
+            </Field>
+            {previous && !rate && (
+              <button
+                type="button"
+                className="m-btn is-quiet is-small"
+                style={{ margin: '-8px 0 10px', paddingLeft: 0, whiteSpace: 'normal', textAlign: 'left' }}
+                onClick={() => { setRate(String(previous.rate)); if (!supplier && previous.supplier) setSupplier(previous.supplier); }}
+              >
+                Last time: {formatINR(previous.rate)} per {perUnit(unit)}{previous.supplier ? ` from ${previous.supplier}` : ''} on {formatDay(previous.purchaseDate)}. Use it
+              </button>
+            )}
+            <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
+              <CalcLine label={`${quantity || 0} × ${formatINR(Number.isNaN(price) ? 0 : price)}`} value={formatINR(total)} />
+            </div>
+            <Field label="Supplier (optional)">
+              <input type="text" list="m-suppliers" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Shop or dealer name" maxLength={80} />
+              <datalist id="m-suppliers">{suppliers.map(s => <option key={s} value={s} />)}</datalist>
+            </Field>
+          </>
+        )}
+
+        {mode === 'adjust' && (
+          <Field label="Change">
             <Chips
-              label="Payment"
-              value={payment}
-              onChange={setPayment}
-              options={[{ value: 'none', label: 'Not paid yet' }, { value: 'full', label: 'Paid in full' }, { value: 'part', label: 'Part paid' }]}
+              label="Adjustment direction"
+              value={direction}
+              onChange={setDirection}
+              options={[{ value: 'adjust_out', label: 'Remove (damaged, lost)' }, { value: 'adjust_in', label: 'Add (found extra)' }]}
             />
           </Field>
-          {payment === 'part' && (
-            <Field label="Amount paid now (₹)" hint={total > 0 ? `Balance to supplier: ${formatINR(Math.max(0, total - (Number.isNaN(paidNow) ? 0 : paidNow)))}` : undefined}>
-              <input type="text" inputMode="decimal" autoComplete="off" value={paidPart} onChange={e => setPaidPart(e.target.value)} placeholder="0" />
+        )}
+
+        <Field label={mode === 'purchase' ? 'Purchase / receipt date' : 'Date'} hint={date !== todayKey() ? 'Past date selected. The entry time is still saved as now.' : undefined}>
+          <input type="date" value={date} max={todayKey()} onChange={e => setDate(e.target.value)} />
+        </Field>
+
+        {mode === 'purchase' && (
+          <>
+            <Field label="Payment">
+              <Chips
+                label="Payment"
+                value={payment}
+                onChange={setPayment}
+                options={[{ value: 'none', label: 'Not paid yet' }, { value: 'full', label: 'Paid in full' }, { value: 'part', label: 'Part paid' }]}
+              />
             </Field>
-          )}
-          {payment !== 'none' && (
-            <Field label="Paid by">
-              <Chips label="Payment mode" value={paymentMode} onChange={setPaymentMode} options={['Cash', 'UPI', 'Bank Transfer', 'Cheque'].map(v => ({ value: v, label: v === 'Bank Transfer' ? 'Bank' : v }))} />
-            </Field>
-          )}
-          <Field label="Supplier (optional)">
-            <input type="text" list="m-suppliers" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Shop or dealer name" maxLength={80} />
-            <datalist id="m-suppliers">{suppliers.map(s => <option key={s} value={s} />)}</datalist>
+            {payment === 'part' && (
+              <Field label="Amount paid now (₹)" hint={total > 0 ? `Balance to supplier: ${formatINR(Math.max(0, total - (Number.isNaN(paidNow) ? 0 : paidNow)))}` : undefined}>
+                <input type="text" inputMode="decimal" autoComplete="off" value={paidPart} onChange={e => setPaidPart(e.target.value)} placeholder="0" />
+              </Field>
+            )}
+            {payment !== 'none' && (
+              <Field label="Paid by">
+                <Chips label="Payment mode" value={paymentMode} onChange={setPaymentMode} options={['Cash', 'UPI', 'Bank Transfer', 'Cheque'].map(v => ({ value: v, label: v === 'Bank Transfer' ? 'Bank' : v }))} />
+              </Field>
+            )}
+          </>
+        )}
+
+        {mode !== 'purchase' && (
+          <Field label={mode === 'usage' ? 'Used for (optional)' : mode === 'adjust' ? 'Reason' : 'Reason (optional)'}>
+            <input
+              type="text"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder={mode === 'usage' ? 'e.g. Roof slab, plastering' : mode === 'adjust' ? 'e.g. 3 bags hardened in rain' : ''}
+              maxLength={120}
+            />
           </Field>
-        </>
-      )}
+        )}
 
-      {mode === 'adjust' && (
-        <Field label="Change">
-          <Chips
-            label="Adjustment direction"
-            value={direction}
-            onChange={setDirection}
-            options={[{ value: 'adjust_out', label: 'Remove (damaged, lost)' }, { value: 'adjust_in', label: 'Add (found extra)' }]}
-          />
+        {mode === 'purchase' && (
+          <Field label="Invoice / bill no. (optional)">
+            <input type="text" value={invoice} onChange={e => setInvoice(e.target.value)} maxLength={40} />
+          </Field>
+        )}
+
+        <Field label="Notes (optional)">
+          <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={160} />
         </Field>
-      )}
+      </Sheet>
 
-      <Field label={mode === 'purchase' ? 'Purchase / receipt date' : 'Date'} hint={date !== todayKey() ? 'Past date selected. The entry time is still saved as now.' : undefined}>
-        <input type="date" value={date} max={todayKey()} onChange={e => setDate(e.target.value)} />
-      </Field>
-
-      {mode !== 'purchase' && (
-        <Field label={mode === 'usage' ? 'Used for (optional)' : mode === 'adjust' ? 'Reason' : 'Reason (optional)'}>
-          <input
-            type="text"
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder={mode === 'usage' ? 'e.g. Roof slab, plastering' : mode === 'adjust' ? 'e.g. 3 bags hardened in rain' : ''}
-            maxLength={120}
-          />
-        </Field>
-      )}
-
-      {mode === 'purchase' && (
-        <Field label="Invoice / bill no. (optional)">
-          <input type="text" value={invoice} onChange={e => setInvoice(e.target.value)} maxLength={40} />
-        </Field>
-      )}
-
-      <Field label="Notes (optional)">
-        <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={160} />
-      </Field>
-    </Sheet>
+      <ConfirmSheet
+        open={duplicate}
+        title="Already recorded today?"
+        message={
+          <>
+            An entry with the same material, quantity{mode === 'purchase' ? ', price and supplier' : ''} is already saved for {formatDay(date)}.
+            Save this one as well only if it is a separate {mode === 'purchase' ? 'delivery' : 'entry'}.
+          </>
+        }
+        confirmLabel="Save again"
+        busy={busy}
+        onConfirm={async () => { await submit(true); setDuplicate(false); }}
+        onCancel={() => setDuplicate(false)}
+      />
+    </>
   );
 };
 
@@ -522,13 +778,14 @@ const EntrySheet: React.FC<{
 
 const ItemSheet: React.FC<{
   item: StockItem;
+  shelfLabel: string;
   user: User;
   siteId: string;
   onClose: () => void;
   onEntry: (mode: EntryMode) => void;
   onOpenLedger: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
-}> = ({ item, user, siteId, onClose, onEntry, onOpenLedger, onNotify }) => {
+}> = ({ item, shelfLabel, user, siteId, onClose, onEntry, onOpenLedger, onNotify }) => {
   const [line, setLine] = useState<StockLine | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [confirmVoid, setConfirmVoid] = useState(false);
@@ -552,12 +809,20 @@ const ItemSheet: React.FC<{
 
   return (
     <>
-      <Sheet open={!line} title={item.name} subtitle={categoryLabel(item.category)} onClose={onClose}>
+      <Sheet open={!line} title={item.name} subtitle={shelfLabel} onClose={onClose}>
         <div className="m-stat-label">IN STOCK</div>
         <div className={`m-stat-value ${item.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.9rem' }}>
           {formatQty(item.onHand)} <span style={{ fontSize: '1rem', fontWeight: 600 }} className="is-muted">{item.unit}</span>
         </div>
-        <div className="m-calc" style={{ marginTop: 8 }}>
+
+        <div className="m-btn-row" style={{ marginTop: 12 }}>
+          <button type="button" className="m-btn is-small" onClick={() => onEntry('purchase')}>Buy</button>
+          <button type="button" className="m-btn is-primary is-small" onClick={() => onEntry('usage')} disabled={item.onHand <= 0}>Use</button>
+          <button type="button" className="m-btn is-small" onClick={() => onEntry('return')} disabled={item.onHand <= 0}>Return</button>
+          <button type="button" className="m-btn is-small" onClick={() => onEntry('adjust')}>Adjust</button>
+        </div>
+
+        <div className="m-calc" style={{ marginTop: 12 }}>
           <CalcLine label="Purchased" value={`+ ${formatQty(item.purchased)}`} />
           {item.opening > 0 && <CalcLine label="Already on site" value={`+ ${formatQty(item.opening)}`} />}
           <CalcLine label="Used on site" value={`− ${formatQty(item.used)}`} />
@@ -567,13 +832,7 @@ const ItemSheet: React.FC<{
         </div>
         {item.purchaseCost > 0 && <p className="m-calc-note">Total purchase cost: {formatINR(item.purchaseCost)}.</p>}
 
-        <div className="m-btn-row" style={{ marginTop: 12 }}>
-          <button type="button" className="m-btn is-primary" onClick={() => onEntry('usage')} disabled={item.onHand <= 0}>Use</button>
-          <button type="button" className="m-btn" onClick={() => onEntry('return')} disabled={item.onHand <= 0}>Return</button>
-          <button type="button" className="m-btn" onClick={() => onEntry('adjust')}>Adjust</button>
-        </div>
-
-        <Section title="History">
+        <Section title={`History (${history.length})`}>
           <div className="m-card m-list">
             {history.map(l => (
               <button key={l.id} type="button" className="m-row" onClick={() => setLine(l)}>
@@ -586,7 +845,7 @@ const ItemSheet: React.FC<{
                 </span>
                 <span className="m-row-end">
                   <span className={`m-qty ${l.voided ? 'is-void is-muted' : l.signed < 0 ? 'is-bad' : 'is-ok'}`} style={{ display: 'block' }}>
-                    {l.type === 'usage' || l.type === 'return' || l.type === 'adjust_out' ? '−' : '+'}{formatQty(l.quantity)}
+                    {isOut(l.type) ? '−' : '+'}{formatQty(l.quantity)}
                   </span>
                   {!l.voided && <span className="m-row-sub">bal {formatQty(l.balanceAfter)}</span>}
                 </span>
@@ -659,6 +918,8 @@ const ItemSheet: React.FC<{
 
 /* ------------------------------------------------------------------ Catalog */
 
+type CatalogTab = 'brand' | 'cement_type' | 'material';
+
 const CatalogSheet: React.FC<{
   open: boolean;
   user: User;
@@ -666,29 +927,45 @@ const CatalogSheet: React.FC<{
   onClose: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }> = ({ open, user, catalog, onClose, onNotify }) => {
-  const [tab, setTab] = useState<'brand' | 'material'>('brand');
+  const [tab, setTab] = useState<CatalogTab>('brand');
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<MaterialCategory>('other');
-  const [unit, setUnit] = useState('Nos');
+  const [note, setNote] = useState('');
+  const [shelf, setShelf] = useState('sand');
+  const [unit, setUnit] = useState('CFT');
+  const [lowStockThreshold, setLowStockThreshold] = useState('');
   const [editing, setEditing] = useState<CatalogItem | null>(null);
   const [removing, setRemoving] = useState<CatalogItem | null>(null);
+  const [credits, setCredits] = useState(false);
   const [busy, setBusy] = useState(false);
+  const catalogCategory = editing?.category || materialGroup(shelf).category;
+  const availableUnits = materialUnitsForCategory(catalogCategory);
+  const unitOptions = editing?.unit && !availableUnits.includes(editing.unit)
+    ? [editing.unit, ...availableUnits]
+    : availableUnits;
 
   const rows = catalog
-    .filter(c => (tab === 'brand' ? c.kind === 'brand' && c.category === 'cement' : c.kind === 'material'))
+    .filter(c => (tab === 'material' ? c.kind === 'material' : c.kind === tab && c.category === 'cement'))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const shelfLabel = (c: CatalogItem) => materialGroup(c.category === 'other' ? c.group || 'other' : c.category).label;
 
-  const reset = () => { setName(''); setEditing(null); setUnit('Nos'); setCategory('other'); };
+  const reset = () => { setName(''); setNote(''); setEditing(null); setUnit('CFT'); setShelf('sand'); setLowStockThreshold(''); };
 
   const save = async () => {
     if (busy) return;
     setBusy(true);
+    const group = materialGroup(shelf);
     const res = await saveCatalogItem(user, {
       id: editing?.id,
       kind: tab,
       name,
-      category: tab === 'brand' ? 'cement' : editing ? editing.category : category,
+      category: tab !== 'material' ? 'cement' : editing ? editing.category : group.category,
+      group: tab === 'material' && !editing && group.category === 'other' ? group.id : undefined,
       unit: tab === 'material' ? unit : undefined,
+      lowStockThreshold: tab === 'material'
+        ? (lowStockThreshold.trim() ? Number(lowStockThreshold) : null)
+        : undefined,
+      lowStockThresholdUnit: tab === 'material' ? unit : undefined,
+      description: tab === 'cement_type' && !editing ? note.trim() || undefined : undefined,
     });
     setBusy(false);
     if (res.ok) {
@@ -697,47 +974,74 @@ const CatalogSheet: React.FC<{
     } else onNotify(res.error, 'error');
   };
 
+  const addTitle = editing ? `Rename "${editing.name}"` : tab === 'brand' ? 'Add a cement brand' : tab === 'cement_type' ? 'Add a cement type' : 'Add a material';
+
   return (
     <>
       <Sheet open={open && !removing} title="Material catalog" subtitle="Used when recording purchases" onClose={() => { reset(); onClose(); }}>
-        <Chips label="Catalog section" value={tab} onChange={v => { setTab(v); reset(); }} options={[{ value: 'brand', label: 'Cement brands' }, { value: 'material', label: 'Materials' }]} />
+        <Chips
+          label="Catalog section"
+          value={tab}
+          onChange={v => { setTab(v); reset(); }}
+          options={[{ value: 'brand', label: 'Cement brands' }, { value: 'cement_type', label: 'Cement types' }, { value: 'material', label: 'Materials' }]}
+        />
 
         {tab === 'brand' && (
-          <>
-            <p className="m-calc-note">
-              A starting list for Tamil Nadu and South India. It is not a statement that every brand is sold in your area. Add, rename or remove brands to match your dealers.
-            </p>
-            <div className="m-card m-card-pad" style={{ marginTop: 10 }}>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Cement types</div>
-              {CEMENT_TYPES.map(c => (
-                <div key={c.id} style={{ fontSize: '0.86rem', padding: '5px 0', color: 'var(--m-ink-2)' }}>
-                  <strong style={{ color: 'var(--m-ink)' }}>{c.label}</strong> <Badge>{c.standard}</Badge>
-                  <div>{c.note}</div>
-                </div>
-              ))}
-              <p className="m-calc-note">Type is the composition (OPC, PPC, PSC). Grade (43, 53) is strength and applies to OPC only. Brand is the maker.</p>
-            </div>
-          </>
+          <p className="m-calc-note">
+            A starting list for Tamil Nadu and South India. It is not a statement that every brand is sold in your area. Add, rename or remove brands to match your dealers.
+          </p>
+        )}
+        {tab === 'cement_type' && (
+          <p className="m-calc-note">
+            Type is the composition (OPC, PPC, PSC). Grade (43, 53) is strength and applies to OPC only. Brand is the maker and is chosen separately. Add any other type your dealer sells.
+          </p>
         )}
 
         <div className="m-card m-card-pad" style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>{editing ? `Rename "${editing.name}"` : tab === 'brand' ? 'Add a cement brand' : 'Add a material'}</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>{addTitle}</div>
           <Field label="Name">
-            <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder={tab === 'brand' ? 'e.g. Penna' : 'e.g. Granite slab'} />
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              maxLength={60}
+              placeholder={tab === 'brand' ? 'e.g. Penna' : tab === 'cement_type' ? 'e.g. PCC (Composite)' : 'e.g. Granite slab'}
+            />
           </Field>
+          {tab === 'cement_type' && !editing && (
+            <Field label="Note (optional)">
+              <input type="text" value={note} onChange={e => setNote(e.target.value)} maxLength={120} placeholder="e.g. Used for plastering" />
+            </Field>
+          )}
           {tab === 'material' && (
             <div className="m-field-2">
               {!editing && (
                 <Field label="Category">
-                  <select value={category} onChange={e => setCategory(e.target.value as MaterialCategory)}>
-                    {CATEGORY_ORDER.filter(c => c !== 'rod').map(c => <option key={c} value={c}>{categoryLabel(c)}</option>)}
+                  <select value={shelf} onChange={e => {
+                    const nextShelf = e.target.value;
+                    const nextUnits = materialUnitsForCategory(materialGroup(nextShelf).category);
+                    setShelf(nextShelf);
+                    setUnit(current => nextUnits.includes(current) ? current : nextUnits[0]);
+                  }}>
+                    {MATERIAL_MAIN_GROUPS.filter(g => g.id !== 'rod').map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
                   </select>
                 </Field>
               )}
               <Field label="Usual unit">
                 <select value={unit} onChange={e => setUnit(e.target.value)}>
-                  {MATERIAL_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                  {unitOptions.map(u => <option key={u} value={u}>{u}</option>)}
                 </select>
+              </Field>
+              <Field label={`Low-stock warning (${unit})`}>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  value={lowStockThreshold}
+                  onChange={e => setLowStockThreshold(e.target.value)}
+                  placeholder="Optional"
+                />
               </Field>
             </div>
           )}
@@ -750,16 +1054,57 @@ const CatalogSheet: React.FC<{
         <div className="m-card m-list" style={{ marginTop: 12 }}>
           {rows.map(c => (
             <div key={c.id} className="m-row">
+              {tab === 'material' && <MaterialPhoto url={c.imageUrl} alt={c.name} className="m-thumb" />}
               <span className="m-row-main">
-                <span className="m-row-title" style={{ display: 'block' }}>{c.name}</span>
-                <span className="m-row-sub">{tab === 'brand' ? c.description || 'Cement brand' : `${categoryLabel(c.category)} · ${c.unit || ''}`}{c.isBuiltIn ? '' : ' · added by you'}</span>
+                <span className="m-row-title" style={{ display: 'block' }}>
+                  {c.name} {tab === 'cement_type' && c.standard && <Badge>{c.standard}</Badge>}
+                </span>
+                <span className="m-row-sub" style={{ whiteSpace: 'normal' }}>
+                  {tab === 'material'
+                    ? `${shelfLabel(c)} · ${c.unit || ''}${typeof c.lowStockThreshold === 'number' ? ` · Warn at ${c.lowStockThreshold} ${c.lowStockThresholdUnit || c.unit}` : ''}`
+                    : c.description || (tab === 'brand' ? 'Cement brand' : 'Cement type')}
+                  {c.isBuiltIn ? '' : ' · added by you'}
+                </span>
               </span>
-              <button type="button" className="m-btn is-small" onClick={() => { setEditing(c); setName(c.name); setUnit(c.unit || 'Nos'); }}>Rename</button>
+              <button
+                type="button"
+                className="m-btn is-small"
+                onClick={() => {
+                  setEditing(c);
+                  setName(c.name);
+                  setUnit(c.unit || 'Nos');
+                  setLowStockThreshold(typeof c.lowStockThreshold === 'number' ? String(c.lowStockThreshold) : '');
+                }}
+              >
+                {tab === 'material' ? 'Edit' : 'Rename'}
+              </button>
               <button type="button" className="m-icon-btn" onClick={() => setRemoving(c)} aria-label={`Remove ${c.name}`}><Trash2 size={18} /></button>
             </div>
           ))}
           {rows.length === 0 && <div className="m-row is-muted">Nothing here yet.</div>}
         </div>
+
+        {tab === 'material' && (
+          <div style={{ marginTop: 12 }}>
+            <button type="button" className="m-btn is-quiet is-small" style={{ paddingLeft: 0 }} onClick={() => setCredits(v => !v)} aria-expanded={credits}>
+              {credits ? 'Hide photo credits' : 'Photo credits'}
+            </button>
+            {credits && (
+              <div className="m-calc-note" style={{ marginTop: 0 }}>
+                Photographs are from Wikimedia Commons and show the kind of material, not a brand or product on sale.
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                  {Object.entries(MATERIAL_IMAGES).map(([key, img]) => (
+                    <li key={key}>
+                      <a href={img.source} target="_blank" rel="noopener noreferrer">
+                        {MATERIAL_GROUPS.find(g => g.image === key)?.label || catalog.find(c => c.imageUrl === img.file)?.name || key}
+                      </a>: {img.author}, {img.license}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </Sheet>
 
       <ConfirmSheet
@@ -768,7 +1113,13 @@ const CatalogSheet: React.FC<{
         message="It will no longer be offered when recording purchases. Records already saved keep their name."
         confirmLabel="Remove"
         danger
-        onConfirm={async () => { if (removing) { await removeCatalogItem(removing.id); onNotify(`"${removing.name}" removed from the catalog`, 'info'); } setRemoving(null); }}
+        onConfirm={async () => {
+          if (removing) {
+            const result = await removeCatalogItem(user, removing.id);
+            onNotify(result.ok ? `"${removing.name}" removed from the catalog` : result.error, result.ok ? 'info' : 'error');
+          }
+          setRemoving(null);
+        }}
         onCancel={() => setRemoving(null)}
       />
     </>

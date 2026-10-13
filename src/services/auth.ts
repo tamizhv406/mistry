@@ -1,178 +1,43 @@
 import { db } from '../db/db';
 import type { User, UserRole } from '../db/types';
 import { normalizeIndianPhone, validatePasswordStrength } from './otpService';
-import { remoteAdminResetPassword, isSupabaseConfigured } from './supabase';
+import { isSupabaseConfigured, supabase } from './supabase';
+import { InactiveAccountError, resolveAuthenticatedUser, resolveOfflineWorkspaceUser } from './cloudAuth';
+import { getAuthorizedRecords, getMemberProfiles } from './adminData';
 
 const SESSION_KEY = 'building_mistry_auth_user';
 
-// Configurable initial admin settings (overridable via secure environment variables)
-export const INITIAL_ADMIN_EMAIL = (
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_EMAIL) ||
-  'tamilthilagan82@gmail.com'
-).toLowerCase();
-
-export const INITIAL_ADMIN_USERNAME = (
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_USERNAME) ||
-  'tamilthilagan'
-).toLowerCase();
-
-// True in a production build (the public website and release Android builds). Tests and tools
-// outside Vite have no build environment and count as development.
-const IS_PRODUCTION_BUILD: boolean =
-  typeof import.meta !== 'undefined' && (import.meta as any).env?.PROD === true;
-
-// SHA-256 of the development first-login password. That password is written in this
-// repository's tests, so it is public: a production build neither creates an account with it
-// nor accepts it at login.
-const PUBLIC_DEV_ADMIN_HASH =
-  '36cecdf471b373885a397270477a1fddb78792d58b1c34eecf648524cf44e26d';
-
-const CONFIGURED_ADMIN_HASH: string = String(
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_INITIAL_ADMIN_HASH) || ''
-).trim().toLowerCase();
-
-/**
- * First-login password hash of the initial administrator, or '' when this build must not
- * create that account. Development uses the public default. A production build creates the
- * account only when VITE_INITIAL_ADMIN_HASH (a SHA-256 hex digest) is set for it on purpose,
- * and never with the public default.
- */
-const BOOTSTRAP_ADMIN_HASH: string = !IS_PRODUCTION_BUILD
-  ? CONFIGURED_ADMIN_HASH || PUBLIC_DEV_ADMIN_HASH
-  : /^[0-9a-f]{64}$/.test(CONFIGURED_ADMIN_HASH) && CONFIGURED_ADMIN_HASH !== PUBLIC_DEV_ADMIN_HASH
-    ? CONFIGURED_ADMIN_HASH
-    : '';
-
-const BOOTSTRAP_DEMO_HASH =
-  '93f2452221b58a02a6f126c60c1527de0a956bfa5ea042396372b5c688bc9707';
-
-/**
- * Deterministic SHA-256 password hashing via Web Crypto API
- */
-export async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * The demo accounts (dmin and mistry_velu) use a password that is public. They exist for
- * development and demos only: a production build does not create them or offer demo login,
- * unless VITE_ENABLE_DEMO_LOGIN=true is set on purpose (for a public demo site).
- */
 export function demoAccountsEnabled(): boolean {
-  return !IS_PRODUCTION_BUILD || (import.meta as any).env?.VITE_ENABLE_DEMO_LOGIN === 'true';
+  return false;
 }
 
 export function isSuperAdmin(user?: User | null): boolean {
-  if (!user) return false;
-  return (
-    user.role === 'SUPER_ADMIN' ||
-    (user.email || '').toLowerCase() === INITIAL_ADMIN_EMAIL
-  );
+  return user?.role === 'SUPER_ADMIN';
 }
 
 export function isAdmin(user?: User | null): boolean {
-  if (!user) return false;
-  return (
-    user.role === 'SUPER_ADMIN' ||
-    user.role === 'SUB_ADMIN' ||
-    user.role === 'ADMIN' ||
-    (user.email || '').toLowerCase() === INITIAL_ADMIN_EMAIL
-  );
+  return user?.role === 'SUPER_ADMIN' || user?.role === 'SUB_ADMIN';
 }
 
-/**
- * Initializes default accounts securely into IndexedDB
- * Passwords are NEVER written in plain text in source code.
- */
 export async function initDefaultUser(): Promise<void> {
-  // 1. Provision / Update SUPER ADMIN
-  const existingRealAdmin = await db.users
-    .filter(
-      u =>
-        u.email.toLowerCase() === INITIAL_ADMIN_EMAIL ||
-        u.username.toLowerCase() === INITIAL_ADMIN_USERNAME
-    )
-    .first();
-
-  if (!existingRealAdmin) {
-    // No first-login password for this build means no administrator account is created.
-    if (BOOTSTRAP_ADMIN_HASH) {
-      const realAdmin: User = {
-        id: 'user-super-admin-tamil',
-        username: INITIAL_ADMIN_USERNAME,
-        fullName: 'Tamil Thilagan (Real Admin)',
-        mobile: '98401 99887',
-        phoneNormalized: '9840199887',
-        email: INITIAL_ADMIN_EMAIL,
-        passwordHash: BOOTSTRAP_ADMIN_HASH,
-        role: 'SUPER_ADMIN',
-        isActive: true,
-        mustChangePassword: true,
-        createdAt: '2026-01-01T00:00:00.000Z',
-      };
-      await db.users.put(realAdmin);
-    }
-  } else {
-    // An account left on the public development password by an earlier build, and never
-    // signed in to, moves to the first-login password this build was given.
-    const stillOnPublicDefault =
-      existingRealAdmin.mustChangePassword === true &&
-      existingRealAdmin.passwordHash === PUBLIC_DEV_ADMIN_HASH &&
-      Boolean(BOOTSTRAP_ADMIN_HASH);
-    // Ensure email and role remain locked to SUPER_ADMIN without resetting the user's password
-    await db.users.update(existingRealAdmin.id, {
-      email: INITIAL_ADMIN_EMAIL,
-      role: 'SUPER_ADMIN',
-      isActive: true,
-      phoneNormalized: normalizeIndianPhone(existingRealAdmin.mobile || '9840199887'),
-      ...(stillOnPublicDefault ? { passwordHash: BOOTSTRAP_ADMIN_HASH } : {}),
-      updatedAt: new Date().toISOString(),
-    });
+  if (!supabase) {
+    setCurrentUser(null);
+    return;
   }
-
-  // The same rule as demoAccountsEnabled(), written out in full: the bundler settles these
-  // expressions where they stand, and can then leave the demo accounts out of a production build.
-  if ((import.meta as any).env?.PROD === true && (import.meta as any).env?.VITE_ENABLE_DEMO_LOGIN !== 'true') return;
-
-  // 2. Default Mistry Velu account (Contractor demo profile)
-  const mistryExists = await db.users.get('user-mistry-velu');
-  if (!mistryExists) {
-    const defaultMistry: User = {
-      id: 'user-mistry-velu',
-      username: 'mistry_velu',
-      fullName: 'R. Velu (Head Mistry)',
-      mobile: '98402 11223',
-      phoneNormalized: '9840211223',
-      email: 'velu@buildingmistry.com',
-      passwordHash: BOOTSTRAP_DEMO_HASH,
-      role: 'MISTRY',
-      isActive: true,
-      createdAt: '2026-01-01T00:00:00.000Z',
-    };
-    await db.users.put(defaultMistry);
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw new Error(`Could not read the Supabase session: ${error.message}`);
+  if (!data.session?.user) {
+    setCurrentUser(null);
+    return;
   }
-
-  // 3. Demo Admin Supervisor account (Supervisor testing & backward compatibility)
-  const adminExists = await db.users.get('user-admin-default');
-  if (!adminExists) {
-    const defaultAdmin: User = {
-      id: 'user-admin-default',
-      username: 'admin',
-      fullName: 'Site Supervisor (Demo)',
-      mobile: '98401 00001',
-      phoneNormalized: '9840100001',
-      email: 'admin@buildingmistry.com',
-      passwordHash: BOOTSTRAP_DEMO_HASH,
-      role: 'ADMIN',
-      isActive: true,
-      createdAt: '2026-01-01T00:00:00.000Z',
-    };
-    await db.users.put(defaultAdmin);
+  let user: User;
+  try {
+    user = await resolveAuthenticatedUser(data.session.user);
+  } catch (error) {
+    if (error instanceof InactiveAccountError) throw error;
+    user = await resolveOfflineWorkspaceUser(data.session.user.id);
   }
+  setCurrentUser(user);
 }
 
 export const initAuth = initDefaultUser;
@@ -185,73 +50,38 @@ export async function loginUser(
   password: string,
   remember: boolean = true
 ): Promise<{ success: boolean; user?: User; error?: string }> {
-  await initDefaultUser();
-
+  if (!supabase || !isSupabaseConfigured()) {
+    return { success: false, error: 'Secure sign-in is unavailable until Supabase is configured.' };
+  }
   const trimmedId = identifier.trim().toLowerCase();
-  const normalizedPhone = normalizeIndianPhone(identifier);
-  const users = await db.users.toArray();
-
-  const user = users.find(
-    u =>
-      u.username.toLowerCase() === trimmedId ||
-      u.email.toLowerCase() === trimmedId ||
-      u.mobile.replace(/[\s\-\(\)]/g, '') === trimmedId.replace(/[\s\-\(\)]/g, '') ||
-      (trimmedId === 'tamil406' && u.email.toLowerCase() === INITIAL_ADMIN_EMAIL) ||
-      (normalizedPhone && u.phoneNormalized === normalizedPhone)
-  );
-
-  if (!user) {
-    return { success: false, error: 'User not found. Check username, email, or mobile number.' };
+  const localProfile = await db.users
+    .filter(user =>
+      user.username.toLowerCase() === trimmedId ||
+      user.email.toLowerCase() === trimmedId ||
+      user.mobile.replace(/[\s\-\(\)]/g, '') === trimmedId.replace(/[\s\-\(\)]/g, '') ||
+      user.phoneNormalized === normalizeIndianPhone(identifier)
+    )
+    .first();
+  const email = trimmedId.includes('@') ? trimmedId : localProfile?.email.toLowerCase();
+  if (!email) {
+    return { success: false, error: 'Enter the email address for your secure account.' };
   }
 
-  if (user.isActive === false) {
-    return { success: false, error: 'Your account is deactivated. Please contact administrator.' };
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.user) return { success: false, error: error?.message || 'Sign-in failed.' };
+  try {
+    const user = await resolveAuthenticatedUser(data.user, remember);
+    setCurrentUser(user, remember);
+    return { success: true, user };
+  } catch (profileError) {
+    await supabase.auth.signOut();
+    return { success: false, error: (profileError as Error).message };
   }
-
-  // The development first-login password is public, so a production build never accepts it.
-  if (IS_PRODUCTION_BUILD && user.passwordHash === PUBLIC_DEV_ADMIN_HASH) {
-    return { success: false, error: 'This account has not been set up on this device. Please contact your administrator.' };
-  }
-
-  const inputHash = await hashPassword(password);
-  if (user.passwordHash !== inputHash) {
-    return { success: false, error: 'Incorrect password. Please try again.' };
-  }
-
-  // Update lastLogin timestamp
-  const now = new Date().toISOString();
-  await db.users.update(user.id, {
-    lastLoginAt: now,
-    updatedAt: now,
-  });
-  user.lastLoginAt = now;
-
-  // Save session (stripping passwordHash to guarantee zero storage exposure)
-  setCurrentUser(user, remember);
-
-  // Security audit log (NEVER logs passwords)
-  await db.logSecurityAudit(
-    'USER_LOGIN',
-    user,
-    user.id,
-    'users',
-    'SUCCESS',
-    `${user.fullName} (${user.role}) logged in`
-  );
-
-  return { success: true, user };
 }
 
-/**
- * Signs in as the demo contractor. The demo password is written only here, behind the same
- * rule as the demo accounts (written out in full, as in initDefaultUser), so a production
- * build does not carry it.
- */
+/** Demo accounts are not available in any build. */
 export async function loginDemoContractor(): Promise<{ success: boolean; user?: User; error?: string }> {
-  if ((import.meta as any).env?.PROD === true && (import.meta as any).env?.VITE_ENABLE_DEMO_LOGIN !== 'true') {
-    return { success: false, error: 'Demo login is not available.' };
-  }
-  return loginUser('mistry_velu', 'mistry123', true);
+  return { success: false, error: 'Demo accounts are disabled. Sign in with your secure account.' };
 }
 
 /**
@@ -262,78 +92,43 @@ export async function registerUser(
   fullName: string,
   mobile: string,
   email: string,
-  password: string,
-  role: UserRole = 'MISTRY'
-): Promise<{ success: boolean; user?: User; error?: string }> {
-  await initDefaultUser();
-
+  password: string
+): Promise<{ success: boolean; user?: User; error?: string; needsConfirmation?: boolean }> {
   const trimmedUser = username.trim().toLowerCase();
   const trimmedEmail = email.trim().toLowerCase();
-
-  // Strict Protection: Super Admin email & reserved names cannot be registered
-  if (
-    trimmedEmail === INITIAL_ADMIN_EMAIL ||
-    trimmedUser === INITIAL_ADMIN_USERNAME ||
-    trimmedUser === 'admin'
-  ) {
-    return {
-      success: false,
-      error: 'Access Denied: This Admin ID is reserved exclusively for the Real Admin. Nobody else can use or register this ID.',
-    };
-  }
 
   if (!trimmedUser || trimmedUser.length < 3) {
     return { success: false, error: 'Username must be at least 3 characters.' };
   }
 
-  if (!password || password.length < 6) {
-    return { success: false, error: 'Password must be at least 6 characters.' };
+  const strength = validatePasswordStrength(password);
+  if (!strength.valid) {
+    return { success: false, error: strength.error };
+  }
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    return { success: false, error: 'Enter a valid email address for your secure account.' };
   }
 
-  const existing = await db.users
-    .filter(
-      u =>
-        u.username.toLowerCase() === trimmedUser ||
-        Boolean(trimmedEmail && u.email.toLowerCase() === trimmedEmail)
-    )
-    .first();
-
-  if (existing) {
-    return { success: false, error: 'Username or Email already registered. Please login instead.' };
+  if (!supabase || !isSupabaseConfigured()) {
+    return { success: false, error: 'Secure registration is unavailable until Supabase is configured.' };
   }
-
-  // Public self-registration is strictly MISTRY role.
-  const assignedRole: UserRole = 'MISTRY';
-  const passwordHash = await hashPassword(password);
-  const phoneNormalized = normalizeIndianPhone(mobile);
-
-  const newUser: User = {
-    id: `user-${Date.now()}`,
-    username: trimmedUser,
-    fullName: fullName.trim() || username.trim(),
-    mobile: mobile.trim(),
-    phoneNormalized,
-    email: email.trim(),
-    passwordHash,
-    role: assignedRole,
-    isActive: true,
-    mustChangePassword: false,
-    createdAt: new Date().toISOString(),
-  };
-
-  await db.users.put(newUser);
-  setCurrentUser(newUser, true);
-
-  await db.logSecurityAudit(
-    'USER_REGISTERED',
-    newUser,
-    newUser.id,
-    'users',
-    'SUCCESS',
-    `New contractor ${newUser.fullName} registered with role ${newUser.role}`
-  );
-
-  return { success: true, user: newUser };
+  const { data, error } = await supabase.auth.signUp({
+    email: trimmedEmail,
+    password,
+    options: {
+      data: { username: trimmedUser, full_name: fullName.trim() || username.trim(), mobile: mobile.trim() },
+    },
+  });
+  if (error) return { success: false, error: error.message };
+  if (!data.user) return { success: false, error: 'Registration did not return an account.' };
+  if (!data.session) {
+    return { success: false, error: 'Check your email to confirm the account, then sign in.', needsConfirmation: true } as {
+      success: boolean; user?: User; error?: string; needsConfirmation?: boolean;
+    };
+  }
+  const user = await resolveAuthenticatedUser(data.user);
+  setCurrentUser(user);
+  return { success: true, user };
 }
 
 /**
@@ -354,38 +149,18 @@ export async function changePassword(
     return { success: false, error: strength.error };
   }
 
-  const user = await db.users.get(userId);
-  if (!user) return { success: false, error: 'User not found.' };
-
-  const currentHash = await hashPassword(currentPassword);
-  if (user.passwordHash !== currentHash) {
-    return { success: false, error: 'Current password is incorrect.' };
-  }
-
-  const newHash = await hashPassword(newPassword);
-  await db.users.update(userId, {
-    passwordHash: newHash,
-    mustChangePassword: false,
-    updatedAt: new Date().toISOString(),
+  const user = getCurrentUser();
+  if (!user || user.id !== userId || !supabase) return { success: false, error: 'Sign in to the account before changing its password.' };
+  if (!currentPassword) return { success: false, error: 'Enter your current password.' };
+  const { data: reauthenticated, error: reauthError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
   });
-
-  // Update current session
-  const current = getCurrentUser();
-  if (current && current.id === userId) {
-    current.mustChangePassword = false;
-    setCurrentUser(current);
+  if (reauthError || reauthenticated.user?.id !== userId) {
+    return { success: false, error: reauthError?.message || 'Current password could not be verified.' };
   }
-
-  await db.logSecurityAudit(
-    'PASSWORD_CHANGED',
-    user,
-    userId,
-    'users',
-    'SUCCESS',
-    `User ${user.fullName} changed their password.`
-  );
-
-  return { success: true };
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  return error ? { success: false, error: error.message } : { success: true };
 }
 
 /**
@@ -405,32 +180,10 @@ export async function completeInitialPasswordSetup(
     return { success: false, error: strength.error };
   }
 
-  const user = await db.users.get(userId);
-  if (!user) return { success: false, error: 'User not found.' };
-
-  const newHash = await hashPassword(newPassword);
-  await db.users.update(userId, {
-    passwordHash: newHash,
-    mustChangePassword: false,
-    updatedAt: new Date().toISOString(),
-  });
-
-  const current = getCurrentUser();
-  if (current && current.id === userId) {
-    current.mustChangePassword = false;
-    setCurrentUser(current);
-  }
-
-  await db.logSecurityAudit(
-    'INITIAL_PASSWORD_CONFIGURED',
-    user,
-    userId,
-    'users',
-    'SUCCESS',
-    `User ${user.fullName} configured initial private password.`
-  );
-
-  return { success: true };
+  const user = getCurrentUser();
+  if (!user || user.id !== userId || !supabase) return { success: false, error: 'Sign in to the account before changing its password.' };
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  return error ? { success: false, error: error.message } : { success: true };
 }
 
 /**
@@ -438,50 +191,16 @@ export async function completeInitialPasswordSetup(
  */
 export async function adminResetUserPassword(
   adminUser: User,
-  targetUserId: string,
-  newTemporaryPassword: string
+  targetUserId: string
 ): Promise<{ success: boolean; error?: string }> {
-  if (!isSuperAdmin(adminUser) && adminUser.role !== 'SUB_ADMIN') {
-    return { success: false, error: 'Unauthorized: Only administrators can reset user passwords.' };
+  if (!isSuperAdmin(adminUser) || !supabase) {
+    return { success: false, error: 'Only the Super Admin can send account recovery links.' };
   }
-
-  const target = await db.users.get(targetUserId);
-  if (!target) return { success: false, error: 'Target user not found.' };
-
-  if (target.email.toLowerCase() === INITIAL_ADMIN_EMAIL && adminUser.id !== targetUserId) {
-    return { success: false, error: 'Cannot reset Real Admin password through this function.' };
-  }
-
-  const strength = validatePasswordStrength(newTemporaryPassword);
-  if (!strength.valid) {
-    return { success: false, error: strength.error };
-  }
-
-  const newHash = await hashPassword(newTemporaryPassword);
-  await db.users.update(targetUserId, {
-    passwordHash: newHash,
-    mustChangePassword: true,
-    updatedAt: new Date().toISOString(),
+  const { data, error } = await supabase.functions.invoke('mistry-admin', {
+    body: { action: 'send_password_recovery', targetUserId },
   });
-
-  // If remote Supabase backend is configured and user has an email, trigger remote update
-  if (isSupabaseConfigured() && target.email) {
-    try {
-      await remoteAdminResetPassword(target.email, newTemporaryPassword);
-    } catch (remoteErr) {
-      console.warn('[AdminReset] Remote Supabase password update warning:', remoteErr);
-    }
-  }
-
-  await db.logSecurityAudit(
-    'ADMIN_RESET_USER_PASSWORD',
-    adminUser,
-    targetUserId,
-    'users',
-    'SUCCESS',
-    `Admin ${adminUser.fullName} reset password for ${target.fullName} (mustChangePassword set to true).`
-  );
-
+  if (error) return { success: false, error: error.message };
+  if (data?.error) return { success: false, error: String(data.error) };
   return { success: true };
 }
 
@@ -492,97 +211,56 @@ export async function createSubAdmin(
     fullName: string;
     mobile: string;
     email: string;
-    password: string;
+    permissions?: Record<string, { read: boolean; write: boolean }>;
   }
 ): Promise<{ success: boolean; user?: User; error?: string }> {
-  if (!isSuperAdmin(creatorUser)) {
-    return {
-      success: false,
-      error: `Permission Denied: Only the Real Admin (${INITIAL_ADMIN_EMAIL}) can create Sub-Admins.`,
-    };
-  }
-
-  const trimmedUser = data.username.trim().toLowerCase();
-  if (!trimmedUser || trimmedUser.length < 3) {
-    return { success: false, error: 'Username must be at least 3 characters.' };
-  }
-  if (!data.password || data.password.length < 6) {
-    return { success: false, error: 'Password must be at least 6 characters.' };
-  }
-
-  const existing = await db.users
-    .filter(
-      u =>
-        u.username.toLowerCase() === trimmedUser ||
-        Boolean(data.email && u.email.toLowerCase() === data.email.trim().toLowerCase())
-    )
-    .first();
-  if (existing) {
-    return { success: false, error: 'Username or Email already registered.' };
-  }
-
-  const passwordHash = await hashPassword(data.password);
-  const newSubAdmin: User = {
-    id: `user-subadmin-${Date.now()}`,
-    username: trimmedUser,
-    fullName: data.fullName.trim() || trimmedUser,
-    mobile: data.mobile.trim(),
-    phoneNormalized: normalizeIndianPhone(data.mobile),
-    email: data.email.trim(),
-    passwordHash,
-    role: 'SUB_ADMIN',
-    isActive: true,
-    mustChangePassword: false,
-    createdAt: new Date().toISOString(),
+  void creatorUser;
+  if (!isSuperAdmin(creatorUser) || !supabase) return { success: false, error: 'Only the Super Admin can invite Sub-admins.' };
+  if (!data.email.trim() || !data.email.includes('@')) return { success: false, error: 'Enter a valid email address.' };
+  const { data: invited, error } = await supabase.functions.invoke('mistry-admin', {
+    body: {
+      action: 'invite_sub_admin',
+      email: data.email.trim().toLowerCase(),
+      fullName: data.fullName.trim(),
+      username: data.username.trim().toLowerCase(),
+      mobile: data.mobile.trim(),
+      permissions: data.permissions || {},
+    },
+  });
+  if (error) return { success: false, error: error.message };
+  if (!invited?.userId) return { success: false, error: 'The invite service did not return an account id.' };
+  return {
+    success: true,
+    user: {
+      id: invited.userId, username: data.username.trim(), fullName: data.fullName.trim(),
+      mobile: data.mobile.trim(), email: data.email.trim().toLowerCase(), passwordHash: '',
+      role: 'SUB_ADMIN', isActive: true, createdAt: new Date().toISOString(),
+    },
   };
-
-  await db.users.put(newSubAdmin);
-  await db.logSecurityAudit(
-    'SUB_ADMIN_CREATED',
-    creatorUser,
-    newSubAdmin.id,
-    'users',
-    'SUCCESS',
-    `Real Admin ${creatorUser.fullName} created Sub-Admin ${newSubAdmin.fullName} (@${newSubAdmin.username})`
-  );
-
-  return { success: true, user: newSubAdmin };
 }
 
 export async function changeUserRole(
   actorUser: User,
   targetUserId: string,
-  newRole: UserRole
+  newRole: UserRole,
+  permissions?: Record<string, { read: boolean; write: boolean }>
 ): Promise<{ success: boolean; error?: string }> {
   if (!isSuperAdmin(actorUser)) {
-    return {
-      success: false,
-      error: `Permission Denied: Only the Real Admin (${INITIAL_ADMIN_EMAIL}) can modify user roles.`,
-    };
+    return { success: false, error: 'Only the Super Admin can change account roles.' };
   }
 
-  const target = await db.users.get(targetUserId);
-  if (!target) return { success: false, error: 'Target user not found.' };
-
-  if (target.email.toLowerCase() === INITIAL_ADMIN_EMAIL) {
-    return { success: false, error: 'Cannot modify the role of the Real Admin.' };
-  }
-
-  await db.users.update(targetUserId, {
-    role: newRole,
-    updatedAt: new Date().toISOString(),
+  if (!supabase) return { success: false, error: 'Supabase Auth is not configured.' };
+  const { data: member, error: lookupError } = await supabase
+    .from('mistry_members').select('role,is_active,permissions').eq('user_id', targetUserId).single();
+  if (lookupError || !member) return { success: false, error: lookupError?.message || 'Account not found.' };
+  const role = newRole === 'SUB_ADMIN' ? 'SUB_ADMIN' : 'USER';
+  const { error } = await supabase.rpc('mistry_set_member_access', {
+    target_user_id: targetUserId,
+    target_role: role,
+    target_active: member.is_active,
+    target_permissions: permissions || member.permissions,
   });
-
-  await db.logSecurityAudit(
-    'USER_ROLE_CHANGED',
-    actorUser,
-    targetUserId,
-    'users',
-    'SUCCESS',
-    `Real Admin changed ${target.fullName}'s role from ${target.role} to ${newRole}`
-  );
-
-  return { success: true };
+  return error ? { success: false, error: error.message } : { success: true };
 }
 
 let memorySession: string | null = null;
@@ -631,16 +309,9 @@ export function setCurrentUser(user: User | null, remember: boolean = true): voi
 }
 
 export async function logoutUser(): Promise<void> {
-  const current = getCurrentUser();
-  if (current) {
-    await db.logSecurityAudit(
-      'USER_LOGOUT',
-      current,
-      current.id,
-      'users',
-      'SUCCESS',
-      `${current.fullName} logged out`
-    );
+  if (supabase) {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(`Could not sign out of Supabase Auth: ${error.message}`);
   }
   setCurrentUser(null);
 }
@@ -648,6 +319,7 @@ export async function logoutUser(): Promise<void> {
 export interface AdminUserListItem extends Omit<User, 'passwordHash'> {
   sitesCount: number;
   totalExpenses: number;
+  permissions: Record<string, { read: boolean; write: boolean }>;
 }
 
 /**
@@ -655,44 +327,46 @@ export interface AdminUserListItem extends Omit<User, 'passwordHash'> {
  * (Password hash is strictly omitted)
  */
 export async function getAllUsers(adminUser: User): Promise<AdminUserListItem[]> {
-  if (!isAdmin(adminUser)) {
+  if (!isAdmin(adminUser) || !supabase) {
     throw new Error('Unauthorized: Only administrators can view user records.');
   }
-
-  const [allUsers, allSites, allMaterials, allWorkers, allSalaries, allTools, allExpenses, allBills, allWater, allTea, allPooja] =
-    await Promise.all([
-      db.users.toArray(),
-      db.sites.toArray(),
-      db.materials.toArray(),
-      db.workers.toArray(),
-      db.salaryPayments.toArray(),
-      db.tools.toArray(),
-      db.otherExpenses.toArray(),
-      db.electricityBills.toArray(),
-      db.waterBills.toArray(),
-      db.teaSnacksExpenses.toArray(),
-      db.poojaExpenses.toArray(),
-    ]);
-
-  return allUsers.map(user => {
-    const userSites = allSites.filter(s => !s.isDeleted && s.userId === user.id);
-    const userSiteIds = new Set(userSites.map(s => s.id));
-
-    const totalExpense =
-      allMaterials.filter(m => !m.isDeleted && userSiteIds.has(m.siteId)).reduce((sum, m) => sum + (m.totalAmount || 0), 0) +
-      allSalaries.filter(sp => !sp.isDeleted && userSiteIds.has(sp.siteId)).reduce((sum, sp) => sum + (sp.paidAmount || 0), 0) +
-      allTools.filter(t => !t.isDeleted && userSiteIds.has(t.siteId)).reduce((sum, t) => sum + (t.cost || 0), 0) +
-      allExpenses.filter(e => !e.isDeleted && userSiteIds.has(e.siteId)).reduce((sum, e) => sum + (e.amount || 0), 0) +
-      allBills.filter(b => !b.isDeleted && userSiteIds.has(b.siteId)).reduce((sum, b) => sum + (b.billAmount || 0), 0) +
-      allWater.filter(w => !w.isDeleted && userSiteIds.has(w.siteId)).reduce((sum, w) => sum + (w.billAmount || 0), 0) +
-      allTea.filter(ts => !ts.isDeleted && userSiteIds.has(ts.siteId)).reduce((sum, ts) => sum + (ts.totalAmount || 0), 0) +
-      allPooja.filter(p => !p.isDeleted && userSiteIds.has(p.siteId)).reduce((sum, p) => sum + (p.totalAmount || 0), 0);
-
-    const { passwordHash: _, ...rest } = user;
+  const [members, records] = await Promise.all([getMemberProfiles(), getAuthorizedRecords()]);
+  return members.map(member => {
+    const sites = records.filter(record =>
+      record.owner_id === member.user_id && record.table_name === 'sites' && !record.data.isDeleted
+    );
+    const siteIds = new Set(sites.map(site => site.record_id));
+    const expenseFields: Record<string, string> = {
+      materials: 'totalAmount',
+      salaryPayments: 'paidAmount',
+      tools: 'cost',
+      otherExpenses: 'amount',
+      electricityBills: 'billAmount',
+      waterBills: 'billAmount',
+      teaSnacksExpenses: 'totalAmount',
+      poojaExpenses: 'totalAmount',
+    };
+    const totalExpenses = records.reduce((sum, record) => {
+      const field = expenseFields[record.table_name];
+      if (!field || record.owner_id !== member.user_id || !siteIds.has(record.site_id || '') || record.data.isDeleted) {
+        return sum;
+      }
+      const amount = Number(record.data[field]);
+      return sum + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
     return {
-      ...rest,
-      sitesCount: userSites.length,
-      totalExpenses: totalExpense,
+      id: member.user_id,
+      username: member.username || member.email.split('@')[0],
+      fullName: member.full_name || member.email,
+      mobile: member.mobile || '',
+      email: member.email,
+      role: member.role === 'SUPER_ADMIN' || member.role === 'SUB_ADMIN' ? member.role : 'MISTRY',
+      isActive: member.is_active,
+      createdAt: member.created_at,
+      updatedAt: member.created_at,
+      sitesCount: sites.length,
+      totalExpenses,
+      permissions: member.permissions || {},
     };
   });
 }
@@ -702,44 +376,17 @@ export async function toggleUserActive(
   targetUserId: string,
   isActive: boolean
 ): Promise<{ success: boolean; error?: string }> {
-  if (!isAdmin(adminUser)) {
-    return { success: false, error: 'Unauthorized: Only administrators can modify user status.' };
+  if (!isSuperAdmin(adminUser) || !supabase) {
+    return { success: false, error: 'Only the Super Admin can change account status.' };
   }
-
-  const target = await db.users.get(targetUserId);
-  if (!target) {
-    return { success: false, error: 'Target user not found.' };
-  }
-
-  // Security Rule: Super Admin account can NEVER be deactivated
-  if (target.role === 'SUPER_ADMIN' || target.email.toLowerCase() === INITIAL_ADMIN_EMAIL) {
-    return { success: false, error: 'Real Admin account cannot be deactivated.' };
-  }
-
-  if (adminUser.id === targetUserId && !isActive) {
-    return { success: false, error: 'You cannot deactivate your own account.' };
-  }
-
-  if (!isSuperAdmin(adminUser) && target.role === 'SUB_ADMIN') {
-    return {
-      success: false,
-      error: 'Permission Denied: Sub-admins cannot deactivate other administrators.',
-    };
-  }
-
-  await db.users.update(targetUserId, {
-    isActive,
-    updatedAt: new Date().toISOString(),
+  const { data: member, error: lookupError } = await supabase
+    .from('mistry_members').select('role,permissions').eq('user_id', targetUserId).single();
+  if (lookupError || !member) return { success: false, error: lookupError?.message || 'Account not found.' };
+  const { error } = await supabase.rpc('mistry_set_member_access', {
+    target_user_id: targetUserId,
+    target_role: member.role,
+    target_active: isActive,
+    target_permissions: member.permissions,
   });
-
-  await db.logSecurityAudit(
-    isActive ? 'USER_ACTIVATED' : 'USER_DEACTIVATED',
-    adminUser,
-    targetUserId,
-    'users',
-    'SUCCESS',
-    `User ${target.fullName} (${target.username}) was ${isActive ? 'activated' : 'deactivated'} by Admin ${adminUser.fullName}`
-  );
-
-  return { success: true };
+  return error ? { success: false, error: error.message } : { success: true };
 }

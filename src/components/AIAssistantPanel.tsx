@@ -455,7 +455,7 @@ export const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                   ? 'bg-rose-500 text-white border-rose-600 animate-pulse'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'
               }`}
-              title={isListening ? 'Listening... click to stop' : 'Voice command (English / Tamil)'}
+              title={isListening ? 'Listening... click to stop' : 'Voice command'}
             >
               {isListening ? <Mic className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
