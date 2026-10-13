@@ -74,7 +74,7 @@ Usage can not exceed stock. A wrong entry is cancelled with a reason and stays v
 
 Business records are stored in the browser's IndexedDB (via Dexie) for offline use. When configured, Supabase Auth verifies account identity and the Supabase cloud sync stores records under row-level security. The client-side role cache is only for display; database policies are the authorization boundary.
 
-- **Backup & Data** (More menu) saves everything to a file and restores it. Keep a backup: clearing browser data or uninstalling removes the records.
+- **Backup & Data** (More menu) downloads and restores records available to your account. Sub-admin exports follow the read scopes assigned to that account. Keep a backup: clearing browser data or uninstalling removes the records.
 - Deleted records go to the **Recycle Bin** and can be restored.
 - Passwords are handled by Supabase Auth; the app does not create local-password accounts or local OTP recovery credentials.
 

@@ -55,8 +55,8 @@ deletes, failed sync, clock set back, and owner-preserving scoped administrative
 4. **Auth settings**: Authentication → Providers → Email enabled. Decide whether "Confirm email" is on
    (the app tells the user to check their inbox when it is). Add your site URL and
    `https://localhost` (the Android app's origin) to the allowed redirect URLs.
-5. **Configure the app's public keys**: `.env.local` is already set for development. For release
-   builds, set the same values in `.env.production.local`:
+5. **Configure the app's public keys**: copy the variable names from `.env.example` into
+   `.env.local` for development. For release builds, set the same values in `.env.production.local`:
    ```
    VITE_SUPABASE_URL=https://<project-ref>.supabase.co
    VITE_SUPABASE_ANON_KEY=<anon or publishable key>
