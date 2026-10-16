@@ -7,6 +7,7 @@ import type {
   FloorPlanUnit,
   RoomType,
 } from '../db/types';
+import { wallCrossings } from '../domain/planSketch';
 
 // ============================================================
 // Unit Conversions & Standard Wall Presets
@@ -88,13 +89,14 @@ export function getWallAngleDeg(w: FloorPlanWall): number {
 export interface SnapPoint {
   x: number;
   y: number;
-  type: 'endpoint' | 'midpoint' | 'grid' | 'wall' | 'wall-axis' | 'none';
+  type: 'endpoint' | 'midpoint' | 'intersection' | 'grid' | 'wall' | 'wall-axis' | 'none';
   wallId?: string;
   dist?: number;
 }
 
 /**
- * Finds nearest wall endpoint, midpoint, or wall centerline, falling back to grid snap
+ * Finds nearest wall endpoint, midpoint, wall crossing or wall centerline, falling back to
+ * grid snap. `snapThreshold` is the reach in plan units.
  */
 export function findSnapPoint(
   x: number,
@@ -135,6 +137,15 @@ export function findSnapPoint(
       if (dMid < minDist && dMid < snapThreshold * 0.75) {
         minDist = dMid;
         best = { x: midX, y: midY, type: 'midpoint', wallId: w.id, dist: dMid };
+      }
+    }
+
+    // Where two walls cross there is no endpoint, but a new wall should still join there.
+    for (const c of wallCrossings(excludeWallId ? walls.filter(w => w.id !== excludeWallId) : walls)) {
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < minDist) {
+        minDist = d;
+        best = { x: c.x, y: c.y, type: 'intersection', dist: d };
       }
     }
   }

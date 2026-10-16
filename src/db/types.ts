@@ -427,7 +427,7 @@ export interface PaymentTransaction {
   updatedAt: string;
 }
 
-export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN';
+export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN' | 'HOUSE_OWNER';
 
 export function isAdminRole(role?: string): boolean {
   return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN';
@@ -488,8 +488,14 @@ export function userCanAccessRecord(
   access: 'read' | 'write',
   ownerId: string | undefined
 ): boolean {
-  if (user.role === 'SUPER_ADMIN') return true;
+  if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') return true;
   if (ownerId === user.id) return true;
+  if (user.role === 'HOUSE_OWNER') {
+    if (access === 'read') {
+      return ['sites', 'siteComments', 'floorPlans', 'estimates', 'materials', 'teaSnacksExpenses', 'poojaExpenses', 'electricityBills', 'waterBills', 'otherExpenses'].includes(table);
+    }
+    return ['floorPlans', 'estimates', 'siteComments'].includes(table) && ownerId === user.id;
+  }
   if (user.role === 'SUB_ADMIN') {
     const scope = RECORD_PERMISSION_SCOPE[table];
     const permission = scope ? user.permissions?.[scope] : undefined;

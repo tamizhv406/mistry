@@ -282,7 +282,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
               label="Site / Project Name"
               value={name}
               onChange={setName}
-              placeholder="e.g. Sri Murugan Illam (G+1)"
+              placeholder="Enter site / project name"
               required
             />
 
@@ -291,7 +291,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                 label="Owner Name"
                 value={ownerName}
                 onChange={setOwnerName}
-                placeholder="e.g. R. Sundaram"
+                placeholder="Enter owner name"
                 required
               />
 
@@ -300,7 +300,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                 type="text"
                 value={ownerPhone}
                 onChange={setOwnerPhone}
-                placeholder="e.g. 98401 23456"
+                placeholder="Enter owner phone number"
               />
             </div>
 
@@ -309,7 +309,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                 label="Area / Location"
                 value={area}
                 onChange={setArea}
-                placeholder="e.g. Tambaram East, Chennai"
+                placeholder="Enter area / location"
               />
 
               <div className="form-group space-y-1.5">

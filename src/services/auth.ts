@@ -19,6 +19,14 @@ export function isAdmin(user?: User | null): boolean {
   return user?.role === 'SUPER_ADMIN' || user?.role === 'SUB_ADMIN';
 }
 
+export function isHouseOwner(user?: User | null): boolean {
+  return user?.role === 'HOUSE_OWNER';
+}
+
+export function isMistry(user?: User | null): boolean {
+  return user?.role === 'MISTRY' || user?.role === 'MISTRY_USER';
+}
+
 export async function initDefaultUser(): Promise<void> {
   if (!supabase) {
     setCurrentUser(null);

@@ -278,7 +278,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                     <label>Enter Brand Name</label>
                     <input
                       type="text"
-                      placeholder="e.g. Nagarjuna Cement"
+                      placeholder="Brand name"
                       value={customBrand}
                       onChange={e => setCustomBrand(e.target.value)}
                     />
@@ -290,14 +290,14 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
             <div className="form-grid-2">
               <VoiceInputField
                 label="Material Description / Type"
-                placeholder="e.g. Plastering Sand / Wirecut Bricks"
+                placeholder="Plastering Sand / Wirecut Bricks"
                 value={materialName}
                 onChange={setMaterialName}
               />
 
               <VoiceInputField
                 label="Supplier / Hardware Shop"
-                placeholder="e.g. Cauvery Traders / Sri Ram Hardware"
+                placeholder="Supplier / Hardware Shop"
                 value={supplier}
                 onChange={setSupplier}
                 required
@@ -471,7 +471,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                 <label>Invoice / Bill Number</label>
                 <input
                   type="text"
-                  placeholder="e.g. INV-2026-90"
+                  placeholder="Invoice number"
                   value={invoiceNumber}
                   onChange={e => setInvoiceNumber(e.target.value)}
                 />
@@ -479,7 +479,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
 
               <VoiceInputField
                 label="Material Notes / Vehicle No"
-                placeholder="e.g. Lorry TN-22-AX-4433, unloaded at backyard"
+                placeholder="Vehicle number, unloaded location / notes"
                 value={notes}
                 onChange={setNotes}
               />

@@ -331,7 +331,7 @@ export const TeaSnacksModal: React.FC<TeaSnacksModalProps> = ({
                   label="Notes / Tea Stall Name"
                   value={notes}
                   onChange={setNotes}
-                  placeholder="e.g. Balaji Tea Stall, afternoon lemon juice"
+                  placeholder="Tea stall name, item details"
                 />
               </div>
             </div>

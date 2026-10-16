@@ -615,7 +615,7 @@ const EntrySheet: React.FC<{
             {addingBrand ? (
               <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
                 <Field label="New brand name">
-                  <input type="text" value={newBrand} onChange={e => setNewBrand(e.target.value)} maxLength={60} placeholder="e.g. Penna" />
+                  <input type="text" value={newBrand} onChange={e => setNewBrand(e.target.value)} maxLength={60} placeholder="Brand name" />
                 </Field>
                 <div className="m-btn-row">
                   <button type="button" className="m-btn is-small" onClick={() => { setAddingBrand(false); setNewBrand(''); }}>Cancel</button>
@@ -739,7 +739,7 @@ const EntrySheet: React.FC<{
               type="text"
               value={reason}
               onChange={e => setReason(e.target.value)}
-              placeholder={mode === 'usage' ? 'e.g. Roof slab, plastering' : mode === 'adjust' ? 'e.g. 3 bags hardened in rain' : ''}
+              placeholder={mode === 'usage' ? 'Roof slab, plastering' : mode === 'adjust' ? 'Bags damaged / rain' : ''}
               maxLength={120}
             />
           </Field>
@@ -909,7 +909,7 @@ const ItemSheet: React.FC<{
           The entry will stay in the history marked as cancelled and will no longer change the stock balance.
         </p>
         <Field label="Why is it being cancelled?">
-          <input type="text" value={voidReason} onChange={e => setVoidReason(e.target.value)} placeholder="e.g. Entered twice by mistake" maxLength={120} />
+          <input type="text" value={voidReason} onChange={e => setVoidReason(e.target.value)} placeholder="Reason for cancellation" maxLength={120} />
         </Field>
       </Sheet>
     </>
@@ -1005,12 +1005,12 @@ const CatalogSheet: React.FC<{
               value={name}
               onChange={e => setName(e.target.value)}
               maxLength={60}
-              placeholder={tab === 'brand' ? 'e.g. Penna' : tab === 'cement_type' ? 'e.g. PCC (Composite)' : 'e.g. Granite slab'}
+              placeholder={tab === 'brand' ? 'Brand name' : tab === 'cement_type' ? 'PCC (Composite)' : 'Material name'}
             />
           </Field>
           {tab === 'cement_type' && !editing && (
             <Field label="Note (optional)">
-              <input type="text" value={note} onChange={e => setNote(e.target.value)} maxLength={120} placeholder="e.g. Used for plastering" />
+              <input type="text" value={note} onChange={e => setNote(e.target.value)} maxLength={120} placeholder="Usage note" />
             </Field>
           )}
           {tab === 'material' && (

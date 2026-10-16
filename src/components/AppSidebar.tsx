@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import { isAdmin, isSuperAdmin } from '../services/auth';
+import { isAdmin, isSuperAdmin, isHouseOwner } from '../services/auth';
 import type { User } from '../db/types';
 
 interface SidebarItem {
@@ -59,89 +59,132 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       return trash.length;
     }, [user]) || 0;
 
-  const navItems: SidebarItem[] = [
-    {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: <Home size={20} />,
-      view: 'dashboard',
-    },
-    {
-      id: 'my-sites',
-      label: 'Projects',
-      icon: <Building2 size={20} />,
-      view: 'my-sites',
-    },
-    {
-      id: 'floor-plans',
-      label: 'Floor Planner',
-      icon: <PenTool size={20} />,
-      view: 'floor-plans',
-    },
-    {
-      id: 'labour',
-      label: 'Attendance & Salary',
-      icon: <Users size={20} />,
-      view: 'labour',
-    },
-    {
-      id: 'stock',
-      label: 'Materials',
-      icon: <Layers size={20} />,
-      view: 'stock',
-    },
-    {
-      id: 'toolroom',
-      label: 'Tools',
-      icon: <Wrench size={20} />,
-      view: 'toolroom',
-    },
-    {
-      id: 'expenses',
-      label: 'Expenses',
-      icon: <Wallet size={20} />,
-      view: 'expenses',
-    },
-    {
-      id: 'reports',
-      label: 'Reports',
-      icon: <BarChart3 size={20} />,
-      view: 'reports',
-    },
-    {
-      id: 'estimator',
-      label: 'Building Calculator',
-      icon: <Calculator size={20} />,
-      view: 'estimator',
-    },
-  ];
+  const isOwner = isHouseOwner(user);
 
-  const bottomItems: SidebarItem[] = [
-    ...(isAdmin(user)
-      ? [
-          {
-            id: 'admin',
-            label: isSuperAdmin(user) ? 'Super Admin' : 'Admin Portal',
-            icon: <ShieldCheck size={20} />,
-            view: 'admin',
-            adminOnly: true,
-          },
-        ]
-      : []),
-    {
-      id: 'trash',
-      label: 'Recycle Bin',
-      icon: <Trash2 size={20} />,
-      view: 'trash',
-      badge: trashCount > 0 ? trashCount : undefined,
-    },
-    {
-      id: 'backup',
-      label: 'Backup & Data',
-      icon: <Database size={20} />,
-      view: 'backup',
-    },
-  ];
+  const navItems: SidebarItem[] = isOwner
+    ? [
+        {
+          id: 'dashboard',
+          label: 'Home Dashboard',
+          icon: <Home size={20} />,
+          view: 'dashboard',
+        },
+        {
+          id: 'my-sites',
+          label: 'My Construction',
+          icon: <Building2 size={20} />,
+          view: 'my-sites',
+        },
+        {
+          id: 'floor-plans',
+          label: 'Floor Planner',
+          icon: <PenTool size={20} />,
+          view: 'floor-plans',
+        },
+        {
+          id: 'estimator',
+          label: 'Cost Calculator',
+          icon: <Calculator size={20} />,
+          view: 'estimator',
+        },
+        {
+          id: 'expenses',
+          label: 'Site Expenses',
+          icon: <Wallet size={20} />,
+          view: 'expenses',
+        },
+        {
+          id: 'reports',
+          label: 'Progress Reports',
+          icon: <BarChart3 size={20} />,
+          view: 'reports',
+        },
+      ]
+    : [
+        {
+          id: 'dashboard',
+          label: 'Dashboard',
+          icon: <Home size={20} />,
+          view: 'dashboard',
+        },
+        {
+          id: 'my-sites',
+          label: 'Projects',
+          icon: <Building2 size={20} />,
+          view: 'my-sites',
+        },
+        {
+          id: 'floor-plans',
+          label: 'Floor Planner',
+          icon: <PenTool size={20} />,
+          view: 'floor-plans',
+        },
+        {
+          id: 'labour',
+          label: 'Attendance & Salary',
+          icon: <Users size={20} />,
+          view: 'labour',
+        },
+        {
+          id: 'stock',
+          label: 'Materials',
+          icon: <Layers size={20} />,
+          view: 'stock',
+        },
+        {
+          id: 'toolroom',
+          label: 'Tools',
+          icon: <Wrench size={20} />,
+          view: 'toolroom',
+        },
+        {
+          id: 'expenses',
+          label: 'Expenses',
+          icon: <Wallet size={20} />,
+          view: 'expenses',
+        },
+        {
+          id: 'reports',
+          label: 'Reports',
+          icon: <BarChart3 size={20} />,
+          view: 'reports',
+        },
+        {
+          id: 'estimator',
+          label: 'Building Calculator',
+          icon: <Calculator size={20} />,
+          view: 'estimator',
+        },
+      ];
+
+  const bottomItems: SidebarItem[] = isOwner
+    ? []
+    : [
+        ...(isAdmin(user)
+          ? [
+              {
+                id: 'admin',
+                label: isSuperAdmin(user) ? 'Super Admin' : 'Admin Portal',
+                icon: <ShieldCheck size={20} />,
+                view: 'admin',
+                adminOnly: true,
+              },
+            ]
+          : []),
+        {
+          id: 'trash',
+          label: 'Recycle Bin',
+          icon: <Trash2 size={20} />,
+          view: 'trash',
+          badge: trashCount > 0 ? trashCount : undefined,
+        },
+        {
+          id: 'backup',
+          label: 'Backup & Data',
+          icon: <Database size={20} />,
+          view: 'backup',
+        },
+      ];
 
   const isItemActive = (item: SidebarItem): boolean => {
     if (item.view === currentView) return true;

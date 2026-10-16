@@ -4526,6 +4526,89 @@ input:focus, select:focus, textarea:focus {
   z-index: 45;
 }
 
+/* Canva-style Floating Quick Length Adjuster */
+.fp-canva-length-adjuster {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid #ea580c;
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16), 0 1px 3px rgba(0, 0, 0, 0.08);
+  padding: 3px 5px;
+  gap: 3px;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: fp-pop-in 0.15s ease-out;
+}
+
+@keyframes fp-pop-in {
+  from { opacity: 0; transform: translate(-50%, -40%) scale(0.92); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+.fp-canva-len-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #fff7ed;
+  color: #c2410c;
+  cursor: pointer;
+  font-weight: 700;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.fp-canva-len-btn:hover:not(:disabled) {
+  background: #ea580c;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.fp-canva-len-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.fp-canva-len-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.fp-canva-len-display {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  background: transparent;
+  border: none;
+  color: #1c1917;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  cursor: pointer;
+  border-radius: 9999px;
+  transition: background 0.12s ease;
+}
+
+.fp-canva-len-display:hover {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+@media (max-width: 768px) {
+  .fp-canva-len-btn {
+    width: 32px;
+    height: 32px;
+  }
+  .fp-canva-len-display {
+    font-size: 0.88rem;
+    padding: 4px 10px;
+  }
+}
+
 /* Layers Drawer */
 .fp-layers-drawer {
   position: absolute;
@@ -6876,4 +6959,678 @@ input:focus, select:focus, textarea:focus {
 
 
 
+
+
+/* ================================================================
+   FLOOR PLANNER: sketch mode, wall dimensions and exact sizes
+   ================================================================ */
+
+/* Wall tool: the two drawing modes sit side by side, so the one in use is always obvious. */
+.fp-wall-mode {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  background: #f5f5f4;
+  border: 1px solid #e7e5e4;
+  border-radius: 999px;
+}
+
+.fp-wall-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #57534e;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fp-wall-mode-btn.active {
+  background: #ea580c;
+  color: #ffffff;
+  box-shadow: 0 1px 4px rgba(234, 88, 12, 0.35);
+}
+
+/* What a sketch stroke just added (with Undo), and the first-use tip for the tool in hand.
+   Both let a stroke start straight through them: only their button takes a touch. */
+.fp-sketch-chip,
+.fp-hint-card {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 36;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: min(460px, calc(100% - 24px));
+  padding: 6px 6px 6px 12px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid #e7e5e4;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(28, 25, 23, 0.12);
+  color: #1c1917;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+/* Centred without a transform, so the card can be as wide as its text needs. */
+.fp-sketch-chip,
+.fp-hint-card {
+  left: 12px;
+  right: 12px;
+  width: fit-content;
+  margin: 0 auto;
+  transform: none;
+}
+
+.fp-sketch-chip { border-color: #bbf7d0; }
+.fp-sketch-chip svg { flex-shrink: 0; color: #15803d; }
+.fp-hint-card { border-color: #fdba74; }
+.fp-hint-card svg { flex-shrink: 0; color: #c2410c; }
+
+.fp-sketch-chip button,
+.fp-hint-card button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #e7e5e4;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #c2410c;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.fp-editor-root .fp-ai-stroke-card { transition: opacity 0.18s ease; }
+
+.fp-editor-root[data-gesture] .fp-sketch-chip,
+.fp-editor-root[data-gesture] .fp-hint-card,
+.fp-editor-root[data-gesture] .fp-ai-stroke-card {
+  opacity: 0.14;
+  transition-delay: 0.12s;
+}
+
+.fp-editor-root[data-gesture] .fp-sketch-chip button,
+.fp-editor-root[data-gesture] .fp-hint-card button,
+.fp-editor-root[data-gesture] .fp-ai-stroke-card {
+  pointer-events: none;
+}
+
+/* A measurement that can be tapped shows it on hover. */
+.fp-wall-dim-label:hover rect:nth-of-type(2) { stroke: #dc2626; stroke-width: 1.6; }
+
+/* The zoom figure doubles as "reset the view". */
+button.fp-mobile-zoom-text {
+  height: 100%;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.fp-prop-pill-btn {
+  font-family: inherit;
+  color: #1c1917;
+  cursor: pointer;
+}
+
+.fp-prop-pill-btn strong { font-size: 0.82rem; color: #c2410c; }
+
+.fp-bottom-disclaimer {
+  font-size: 0.7rem;
+  color: #78716c;
+  white-space: nowrap;
+}
+
+/* Wall size box */
+.fp-wall-edit-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -6px 0 14px;
+}
+
+.fp-wall-edit-more {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e7e5e4;
+  border-radius: 12px;
+}
+
+.fp-wall-edit-more summary {
+  min-height: 28px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #44403c;
+  cursor: pointer;
+}
+
+.fp-wall-edit-xy {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.fp-wall-edit-xy .m-field { margin-bottom: 0; }
+
+.fp-wall-edit-note {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #78716c;
+}
+
+/* Drawing tips */
+.fp-help h3 {
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
+  color: #1c1917;
+}
+
+.fp-help h3:first-child { margin-top: 0; }
+
+.fp-help ul {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding-left: 18px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: #44403c;
+}
+
+.fp-help .m-note { margin-top: 14px; }
+
+.fp-help-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 3px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.fp-help-swatch.is-red { background: #dc2626; }
+.fp-help-swatch.is-green { background: #059669; }
+
+@media (max-width: 768px) {
+  /* Under the corner pills, and clear of the round assistant button on the right. */
+  .fp-editor-root .fp-sketch-chip,
+  .fp-editor-root .fp-hint-card {
+    top: 58px;
+    right: 66px;
+    margin: 0;
+  }
+
+  .fp-editor-root .fp-wall-mode-btn { height: 34px; }
+
+  /* The review card's buttons are thumb-sized on a phone. */
+  .fp-editor-root .fp-ai-btn-convert,
+  .fp-editor-root .fp-ai-btn-dismiss {
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fp-sketch-chip,
+  .fp-hint-card,
+  .fp-editor-root .fp-ai-stroke-card {
+    transition: none;
+  }
+}
+
+/* ================================================================
+   FLOOR PLANNER USABILITY ENHANCEMENTS
+   ================================================================ */
+
+/* Categorized Toolbar Groups */
+.fp-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.fp-blueprint-mode .fp-toolbar-group {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(147, 197, 253, 0.18);
+}
+
+.fp-toolbar-group-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 0 4px;
+  user-select: none;
+  border-right: 1px solid var(--border-light);
+  margin-right: 2px;
+}
+
+.fp-blueprint-mode .fp-toolbar-group-label {
+  color: #93c5fd;
+  border-right-color: rgba(147, 197, 253, 0.18);
+}
+
+/* Live Tool Hint Bar */
+.fp-live-hint-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fef3c7;
+  color: #92400e;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  z-index: 20;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.fp-blueprint-mode .fp-live-hint-bar {
+  background: #1e3a6a;
+  border-bottom-color: #2b4c85;
+  color: #bfdbfe;
+}
+
+.fp-live-hint-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #f59e0b;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.fp-blueprint-mode .fp-live-hint-tag {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.fp-live-hint-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+/* First-Time Guided Flow Overlay Card */
+.fp-start-flow-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  border: 1.5px solid #fed7aa;
+  border-radius: 18px;
+  padding: 24px;
+  max-width: 540px;
+  width: 92%;
+  box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(234, 88, 12, 0.08);
+  z-index: 55;
+  animation: fp-pop-in 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fp-blueprint-mode .fp-start-flow-card {
+  background: #1e293b;
+  border-color: #3b82f6;
+  color: #f8fafc;
+}
+
+.fp-start-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.fp-start-card-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1c1917;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px 0;
+}
+
+.fp-blueprint-mode .fp-start-card-title {
+  color: #ffffff;
+}
+
+.fp-start-card-subtitle {
+  font-size: 0.82rem;
+  color: #78716c;
+  margin: 0;
+}
+
+.fp-blueprint-mode .fp-start-card-subtitle {
+  color: #94a3b8;
+}
+
+.fp-start-card-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 600px) {
+  .fp-start-card-options {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+.fp-start-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--border-medium);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  gap: 8px;
+}
+
+.fp-start-option-btn:hover {
+  border-color: #ea580c;
+  background: #fff7ed;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.12);
+}
+
+.fp-blueprint-mode .fp-start-option-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: #60a5fa;
+}
+
+.fp-start-option-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffedd5;
+  color: #ea580c;
+  flex-shrink: 0;
+}
+
+.fp-blueprint-mode .fp-start-option-icon {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.fp-start-option-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1c1917;
+}
+
+.fp-blueprint-mode .fp-start-option-name {
+  color: #f1f5f9;
+}
+
+.fp-start-option-desc {
+  font-size: 0.72rem;
+  color: #78716c;
+  line-height: 1.3;
+}
+
+.fp-blueprint-mode .fp-start-option-desc {
+  color: #94a3b8;
+}
+
+/* Guided Steps Checklist Widget */
+.fp-guided-steps-widget {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1.5px solid #fed7aa;
+  border-radius: 14px;
+  padding: 12px 14px;
+  width: 250px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  z-index: 45;
+  transition: all 0.2s ease;
+}
+
+.fp-blueprint-mode .fp-guided-steps-widget {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #f1f5f9;
+}
+
+.fp-guided-steps-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.fp-blueprint-mode .fp-guided-steps-header {
+  color: #93c5fd;
+}
+
+.fp-guided-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 0.75rem;
+  color: #292524;
+}
+
+.fp-blueprint-mode .fp-guided-step-item {
+  color: #e2e8f0;
+}
+
+.fp-guided-step-item:hover {
+  background: #fff7ed;
+}
+
+.fp-blueprint-mode .fp-guided-step-item:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.fp-guided-step-item.is-done {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.fp-blueprint-mode .fp-guided-step-item.is-done {
+  color: #4ade80;
+}
+
+.fp-guided-step-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f5f5f4;
+  color: #78716c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.fp-guided-step-item.is-done .fp-guided-step-num {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Diagnostic Canvas Beacon */
+.fp-diagnostic-beacon {
+  pointer-events: none;
+}
+
+.fp-beacon-ring {
+  transform-origin: center;
+  animation: fp-beacon-ring 1.8s ease-out infinite;
+}
+
+.fp-beacon-core {
+  animation: fp-beacon-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes fp-beacon-ring {
+  0% { r: 12px; opacity: 0.9; stroke-width: 3.5; }
+  100% { r: 52px; opacity: 0; stroke-width: 1; }
+}
+
+@keyframes fp-beacon-pulse {
+  0% { transform: scale(0.92); opacity: 0.85; }
+  100% { transform: scale(1.12); opacity: 1; }
+}
+
+/* Floating Room Center Quick Badge */
+.fp-room-center-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1.5px solid #0284c7;
+  border-radius: 9999px;
+  padding: 3px 8px;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.2);
+  z-index: 48;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #0369a1;
+  user-select: none;
+  animation: fp-pop-in 0.15s ease-out;
+}
+
+.fp-room-badge-edit-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: #e0f2fe;
+  color: #0284c7;
+  border: none;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.fp-room-badge-edit-btn:hover {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+/* Mobile Searchable Tool Picker */
+.fp-mobile-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f5f5f4;
+  border-radius: 10px;
+  margin: 0 16px 12px 16px;
+  border: 1px solid #e7e5e4;
+}
+
+.fp-mobile-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.85rem;
+  color: #1c1917;
+  padding: 0;
+}
+
+.fp-mobile-search-input::placeholder {
+  color: #a8a29e;
+}
+
+/* Floating Selection Quick Actions Bar */
+.fp-selection-quick-actions {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid #d97706;
+  border-radius: 9999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  padding: 2px 4px;
+  gap: 2px;
+  z-index: 55;
+  animation: fp-pop-in 0.15s ease-out;
+}
+
+.fp-quick-act-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #44403c;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.fp-quick-act-btn:hover:not(:disabled) {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.fp-quick-act-btn.danger:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
 

@@ -209,7 +209,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
               <input
                 type="text"
                 className="form-input"
-                placeholder={material === 'Cement' ? 'e.g. UltraTech, Ramco' : material === 'Steel' ? 'e.g. Tata Tiscon, JSW' : 'e.g. Crusher / River'}
+                placeholder={material === 'Cement' ? 'UltraTech, Ramco' : material === 'Steel' ? 'Tata Tiscon, JSW' : 'Crusher / River'}
                 value={brand}
                 onChange={e => setBrand(e.target.value)}
               />
@@ -221,7 +221,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
               <input
                 type="text"
                 className="form-input"
-                placeholder={material === 'Cement' ? 'e.g. PPC 50kg, 53 Grade' : material === 'Aggregate' ? 'e.g. 20mm Blue Metal' : 'e.g. Fe550D'}
+                placeholder={material === 'Cement' ? 'PPC 50kg, 53 Grade' : material === 'Aggregate' ? '20mm Blue Metal' : 'Fe550D'}
                 value={product}
                 onChange={e => setProduct(e.target.value)}
               />
@@ -258,7 +258,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
                 <option value="Ton">Ton (1000 kg)</option>
                 <option value="Piece">Piece / Block</option>
                 <option value="Unit">Unit (100 CFT)</option>
-                <option value="Load">Lorry / Tractor Load</option>
+                <option value="Load">Load</option>
               </select>
             </div>
           </div>
@@ -272,7 +272,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
                 type="text"
                 className="form-input"
                 style={{ paddingLeft: '32px' }}
-                placeholder="e.g. Sri Murugan Blue Metal & Cements"
+                placeholder="Supplier / Agency Name"
                 value={supplier}
                 onChange={e => setSupplier(e.target.value)}
                 required
@@ -290,7 +290,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
                   type="text"
                   className="form-input"
                   style={{ paddingLeft: '32px' }}
-                  placeholder="e.g. Coimbatore, Trichy"
+                  placeholder="City / Region"
                   value={district}
                   onChange={e => setDistrict(e.target.value)}
                 />
@@ -303,7 +303,7 @@ export const SupplierPriceModal: React.FC<SupplierPriceModalProps> = ({
               <input
                 type="text"
                 className="form-input"
-                placeholder="e.g. Gandhipuram, Saravanampatti"
+                placeholder="Area / Location"
                 value={area}
                 onChange={e => setArea(e.target.value)}
               />

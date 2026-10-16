@@ -152,7 +152,7 @@ export const MoneySheet: React.FC<{
         </Field>
 
         <Field label={isSalary ? 'Note (optional)' : 'Reason (optional)'}>
-          <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder={isSalary ? 'e.g. Week 2 settlement' : 'e.g. Festival advance'} maxLength={120} />
+          <input type="text" value={notes} onChange={e => setNotes(e.target.value)} placeholder={isSalary ? 'Week 2 settlement' : 'Festival advance'} maxLength={120} />
         </Field>
       </Sheet>
 

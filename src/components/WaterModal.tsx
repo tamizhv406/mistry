@@ -155,7 +155,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
                 <label>Water Supplier / Tanker Agency <span className="required">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g. Ganga Water Supply / Borewell tanker"
+                  placeholder="Water supplier / tanker agency"
                   value={supplier}
                   onChange={e => setSupplier(e.target.value)}
                   autoFocus
@@ -166,7 +166,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
                 <label>Quantity / Loads (Litres / Tankers)</label>
                 <input
                   type="text"
-                  placeholder="e.g. 2 Tankers (12,000 Litres)"
+                  placeholder="2 Tankers (12,000 Litres)"
                   value={quantityLoads}
                   onChange={e => setQuantityLoads(e.target.value)}
                 />
@@ -286,7 +286,7 @@ export const WaterModal: React.FC<WaterModalProps> = ({
               <label>Notes / Driver Details</label>
               <input
                 type="text"
-                placeholder="e.g. Tanker lorry TN-20-CZ-1992, unloaded for column curing"
+                placeholder="Driver details / vehicle number, purpose"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
               />

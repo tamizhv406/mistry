@@ -2017,7 +2017,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. S. Kumar (Site Supervisor)"
+                    placeholder="Full Name (Designation)"
                     value={subAdminFullName}
                     onChange={e => setSubAdminFullName(e.target.value)}
                     className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -2033,7 +2033,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. kumar_subadmin"
+                    placeholder="Username"
                     value={subAdminUsername}
                     onChange={e => setSubAdminUsername(e.target.value)}
                     className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -2048,7 +2048,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </label>
                     <input
                       type="tel"
-                      placeholder="e.g. 98401 55667"
+                      placeholder="Mobile number"
                       value={subAdminMobile}
                       onChange={e => setSubAdminMobile(e.target.value)}
                       className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -2063,7 +2063,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <input
                       type="email"
                       required
-                      placeholder="e.g. kumar@mistry.com"
+                      placeholder="Email address"
                       value={subAdminEmail}
                       onChange={e => setSubAdminEmail(e.target.value)}
                       className="w-full bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500"

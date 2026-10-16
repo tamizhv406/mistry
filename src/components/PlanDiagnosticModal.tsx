@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wrench, CheckCircle2, AlertTriangle, Info, X, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Wrench, CheckCircle2, AlertTriangle, Info, X, ArrowRight, ShieldCheck, LocateFixed } from 'lucide-react';
 import type { PlanDiagnosticIssue, ValidatedPlanAction } from '../services/aiFloorPlanEngine';
 import type { FloorPlanUnit } from '../db/types';
 
@@ -10,6 +10,7 @@ export interface PlanDiagnosticModalProps {
   unit: FloorPlanUnit;
   onApplyFix: (action: ValidatedPlanAction) => void;
   onApplyAllFixes: (actions: ValidatedPlanAction[]) => void;
+  onLocateIssue?: (issue: PlanDiagnosticIssue) => void;
 }
 
 export const PlanDiagnosticModal: React.FC<PlanDiagnosticModalProps> = ({
@@ -19,6 +20,7 @@ export const PlanDiagnosticModal: React.FC<PlanDiagnosticModalProps> = ({
   unit,
   onApplyFix,
   onApplyAllFixes,
+  onLocateIssue,
 }) => {
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set());
 
@@ -115,6 +117,19 @@ export const PlanDiagnosticModal: React.FC<PlanDiagnosticModalProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {onLocateIssue && (
+                    <button
+                      onClick={() => {
+                        onLocateIssue(issue);
+                        onClose();
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 transition-colors flex items-center gap-1"
+                      title="Show location on canvas with beacon"
+                    >
+                      <LocateFixed className="w-3.5 h-3.5" />
+                      Locate
+                    </button>
+                  )}
                   {issue.fixAction && (
                     <button
                       onClick={() => handleFixOne(issue)}

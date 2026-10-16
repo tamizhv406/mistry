@@ -411,7 +411,7 @@ const IssueSheet: React.FC<{
         <input type="date" value={due} min={todayKey()} onChange={e => setDue(e.target.value)} />
       </Field>
       <Field label="Notes (optional)">
-        <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={120} placeholder="e.g. For first floor centering" />
+        <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={120} placeholder="Purpose / floor centering" />
       </Field>
       <p className="m-calc-note">The issue date and time are saved automatically as now.</p>
     </Sheet>
@@ -470,7 +470,7 @@ const ReturnSheet: React.FC<{
         <Chips label="Condition" value={condition} onChange={setCondition} options={TOOL_CONDITIONS.map(c => ({ value: c, label: c }))} />
       </Field>
       <Field label="Notes (optional)">
-        <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={120} placeholder="e.g. Blade worn out" />
+        <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={120} placeholder="Condition details / notes" />
       </Field>
       <p className="m-calc-note">The return date and time are saved automatically as now.</p>
     </Sheet>
@@ -546,7 +546,7 @@ const ToolEditSheet: React.FC<{
         <Camera size={16} /> {photo ? 'Use my own photo' : 'Add a photo'}
       </button>
       <Field label="Tool name">
-        <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="e.g. Bar bending key" />
+        <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="Tool / Equipment name" />
       </Field>
       <Field label="Category">
         <select value={category} onChange={e => setCategory(e.target.value)}>

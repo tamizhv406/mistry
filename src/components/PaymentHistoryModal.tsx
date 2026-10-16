@@ -422,7 +422,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
                 <div className="form-group" style={{ flex: 1, margin: 0 }}>
                   <input
                     type="text"
-                    placeholder="Payment notes (e.g. UTR number, bearer name, 2nd installment)"
+                    placeholder="Payment notes (UTR number, bearer name...)"
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
                     style={{ fontSize: '0.85rem' }}

@@ -336,7 +336,7 @@ export const AiDesignSheet: React.FC<AiDesignSheetProps> = ({ open, onClose, con
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder={draft ? 'Change the draft, e.g. "add a pooja room"' : 'e.g. 30 × 40 ft, 2 BHK with two bathrooms'}
+          placeholder={draft ? 'Change the draft (add a pooja room)' : '30 × 40 ft, 2 BHK with two bathrooms'}
           aria-label="Describe the plan"
           id="fp-aid-text"
           enterKeyHint="send"

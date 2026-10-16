@@ -206,7 +206,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
                 <label>Custom Ceremony Name <span className="required">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g. Sump pit opening pooja"
+                  placeholder="Ceremony / pooja name"
                   value={customPoojaName}
                   onChange={e => setCustomPoojaName(e.target.value)}
                   autoFocus
@@ -341,7 +341,7 @@ export const PoojaModal: React.FC<PoojaModalProps> = ({
                 <label>Notes / Details</label>
                 <input
                   type="text"
-                  placeholder="e.g. Conducted auspiciously at 9:15 AM with family"
+                  placeholder="Ceremony details / notes"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                 />

@@ -12,6 +12,7 @@ import {
   ChevronUp, GripHorizontal, SlidersHorizontal, Grid as GridIcon,
   MoreVertical, Shapes, Minus, Type, Image as ImageIcon,
   Maximize, Minimize, FilePlus, Edit, Bed, Sofa, Utensils, Bath, Zap,
+  Eraser, Search, LocateFixed, LayoutGrid,
 } from 'lucide-react';
 import type {
   FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanDoor, FloorPlanWindow,
@@ -22,7 +23,9 @@ import type {
 import {
   getFloorPlanById, updateFloorPlan, saveFloorPlanVersion, restoreFloorPlanVersion,
   exportFloorPlanAsDxf, exportFloorPlanAsProjectJson, createStarterFloorPlan,
+  STARTER_TEMPLATES,
 } from '../services/floorPlanService';
+import type { FloorPlanStarterTemplate } from '../services/floorPlanService';
 import {
   findSnapPoint, snapAngleOrtho, getWallLength, getWallAngleDeg,
   formatLength, formatArea, projectPointOntoWall, snapWallMountedItem,
@@ -78,20 +81,31 @@ import type { PlanContext } from '../services/aiProvider';
 
 
 import {
-  PlanHistory, PLAN_DISCLAIMER, addFloor, buildSavePayload, deleteFloor, duplicateFloor, exportPlan, levelToState, loadFloors,
-  normaliseFloor, renameFloor, suggestFloorName, switchFloor, validateFloorName, type FloorsView,
+  PlanHistory, PLAN_DISCLAIMER, PLAN_REVIEW_NOTE, addFloor, buildSavePayload, deleteFloor, duplicateFloor, exportPlan, levelToState, loadFloors,
+  normaliseFloor, prepareForWallEdit, renameFloor, suggestFloorName, switchFloor, validateFloorName, type FloorsView,
 } from '../domain/planDocument';
 import {
-  areaToSqFt, baseUnitOf, fitOpeningOnWall, formatPlanArea, joinTolerance, moveJoint, openingOverlaps, roomArea, roomPerimeter,
-  translateWall,
+  areaToSqFt, baseUnitOf, fitOpeningOnWall, formatPlanArea, joinTolerance, moveJoint, openingOverlaps, planToMm, pointInPolygon, roomArea, roomPerimeter,
+  splitWallAtPoint, translateWall,
 } from '../domain/planGeometry';
-import { ConfirmSheet, Field, Note, Sheet } from '../components/mobile/kit';
+import {
+  DEFAULT_SNAP_ANGLES, ORTHO_SNAP_ANGLES, describeSketch, directionDeg, interpretStroke, pointSegmentDistance, snapDirection, trimNewWall,
+  type SketchOptions, type SketchResult,
+} from '../domain/planSketch';
+import {
+  PX_PER_UNIT, defaultGridStep, defaultWallThickness, endToKeep, formatAreaShort, formatDimension, formatLengthForInput, formatThickness,
+  gridStepOptions, layoutDimension, outsideNormal, parseLengthInput, parseThicknessInput, pixelsToPlan, resizeWall, roomInterior,
+  roomOutline, wallThicknessPresets, type RoomInterior,
+} from '../domain/planMeasure';
+import { ConfirmSheet, Field, Note, Segmented, Sheet } from '../components/mobile/kit';
 
 // ─────────────────────────────────────────────────────────
 // Constants & Catalogs
 // ─────────────────────────────────────────────────────────
 
-const GRID_SIZE_PX = 20;
+// Screen pixels per plan unit at 100% zoom. Zoom and pan only change the view: stored
+// coordinates stay in feet or metres (see src/domain/planGeometry.ts).
+const GRID_SIZE_PX = PX_PER_UNIT;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
 const SNAP_THRESHOLD = 0.5;
@@ -199,7 +213,8 @@ type Tool =
   | 'annotation'
   | 'pan'
   | 'measure'
-  | 'ai_draw';
+  | 'ai_draw'
+  | 'eraser';
 
 type ViewMode = 'design' | 'blueprint' | 'presentation';
 
@@ -323,13 +338,71 @@ const WALL_ACTIONS = new Set<EditorAction['type']>(['ADD_WALL', 'UPDATE_WALL', '
  * rooms enclosed by walls are recalculated and doors/windows stay on (or go with) their wall.
  */
 function reducePlan(state: EditorState, action: EditorAction, unit: FloorPlanUnit): EditorState {
-  const next = editorReducer(state, action);
-  if (!WALL_ACTIONS.has(action.type)) return next;
+  if (!WALL_ACTIONS.has(action.type)) return editorReducer(state, action);
+  // Rooms that already match their walls (older plans) are tied to them first, so they
+  // follow this edit instead of being left behind at their old size.
+  const next = editorReducer(prepareForWallEdit(state, unit), action);
   return normaliseFloor(next, unit, () => uid('room')).state;
 }
 
-function snapToGrid(val: number, gridSize: number = SNAP_THRESHOLD): number {
-  return Math.round(val / gridSize) * gridSize;
+function roundToStep(val: number, step: number): number {
+  return step > 0 ? Math.round(val / step) * step : val;
+}
+
+/** Removes floating-point fuzz (11.999999999998 -> 12) without rounding any real measurement. */
+const tidy = (v: number) => Math.round(v * 1e9) / 1e9;
+
+// First-use tips, one per tool. Each is shown once per browser and never again after "Got it".
+const TOOL_HINTS: Record<string, string> = {
+  start: 'Pick Wall to begin. Sketch draws a whole room in one stroke; Straight draws one exact wall at a time.',
+  select: 'Tap a wall to select it. Drag a round handle to resize it, or tap a red measurement to type an exact length.',
+  wall: 'Drag to draw a straight wall, or tap its two ends. Switch to Sketch to draw a whole room in one go. Two fingers move and zoom.',
+  ai_draw: 'Draw the room outline in one stroke. It is straightened and joined as you draw. Two fingers move and zoom.',
+  door: 'Tap on a wall to place a door there.',
+  window: 'Tap on a wall to place a window there.',
+  room: 'Tap where the room should go. Closing a loop of walls also makes a room.',
+  measure: 'Tap two points to measure the distance between them.',
+};
+
+function getLiveToolHint(tool: Tool): string {
+  switch (tool) {
+    case 'select':
+      return 'Select Tool: Tap any wall, room, door, or item to move, resize, rotate, or delete.';
+    case 'pan':
+      return 'Pan Tool: Drag anywhere to move canvas. Hold Space or right-click drag anytime.';
+    case 'wall':
+      return 'Wall Tool: Click & drag to draw straight walls. Snaps at 90° and 45° automatically.';
+    case 'ai_draw':
+      return 'Sketch Tool: Draw a rough continuous outline. Auto-straightens and welds closed loops.';
+    case 'eraser':
+      return 'Eraser Tool: Tap any wall, room, door, column, or furniture to delete it immediately.';
+    case 'door':
+      return 'Door Tool: Tap on any wall segment to place an architectural door.';
+    case 'window':
+      return 'Window Tool: Tap on any wall segment to place an architectural window.';
+    case 'room':
+      return 'Room Tool: Tap to place a room or close 4 walls to auto-generate an enclosed room.';
+    case 'furniture':
+      return 'Furniture Tool: Select items from library catalog and tap on canvas to place.';
+    case 'column':
+      return 'Column Tool: Tap anywhere on canvas to position a structural column/pillar.';
+    case 'stairs':
+      return 'Stairs Tool: Tap anywhere on canvas to place a staircase.';
+    case 'measure':
+      return 'Measure Tool: Tap two points on canvas to measure exact distance and angle.';
+    case 'annotation':
+      return 'Note Tool: Tap anywhere on canvas to place a custom text label or callout note.';
+    default:
+      return 'Click on canvas to draw or place elements.';
+  }
+}
+const HINTS_KEY = 'bm_fp_hints_seen';
+
+function readSetting(key: string, fallback: string): string {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function writeSetting(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* private mode: the setting lasts for this visit only */ }
 }
 
 function formatDim(val: number, unit: FloorPlanUnit): string {
@@ -456,11 +529,99 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     return analyzePlanGeometry(editorState.walls, editorState.rooms, unit);
   }, [editorState.walls, editorState.rooms, unit]);
 
+  // Which side of each wall its dimension line is drawn on: outside the room it encloses.
+  const wallOutside = useMemo(() => {
+    const sides = new Map<string, { x: number; y: number }>();
+    const walls = editorState.walls;
+    if (walls.length === 0) return sides;
+    const xs = walls.flatMap(w => [w.x1, w.x2]);
+    const ys = walls.flatMap(w => [w.y1, w.y2]);
+    const centre = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+    const probe = baseUnitOf(unit) === 'feet' ? 0.5 : 0.15;
+    for (const w of walls) sides.set(w.id, outsideNormal(w, editorState.rooms, centre, probe));
+    return sides;
+  }, [editorState.walls, editorState.rooms, unit]);
+
+  // Clear size of each wall-enclosed room, between the inner wall faces. Derived from the
+  // walls on every change; never stored.
+  const roomInteriors = useMemo(() => {
+    const inside = new Map<string, RoomInterior>();
+    for (const r of editorState.rooms) {
+      if (!r.fromWalls) continue;
+      const inner = roomInterior(r, editorState.walls, joinTolerance(unit));
+      if (inner) inside.set(r.id, inner);
+    }
+    return inside;
+  }, [editorState.walls, editorState.rooms, unit]);
+
   // AI Real-Time Sketch & Live Assist State ("user summa line draw panna athe understand panna purinjiganu")
   const [isAiLiveAssistActive, setIsAiLiveAssistActive] = useState(true);
   const [aiLiveFeedback, setAiLiveFeedback] = useState<{ message: string; timestamp: number } | null>(null);
   const [freehandPoints, setFreehandPoints] = useState<Point2D[]>([]);
   const [isFreehandDrawing, setIsFreehandDrawing] = useState(false);
+
+  // Sketch mode of the Wall tool: one rough stroke becomes straight, joined walls.
+  //   sketchPreview  - what the stroke would become, redrawn while the finger moves
+  //   sketchProposal - a result with a large correction, waiting for the user to accept it
+  //   sketchNotice   - what was just added, with an Undo button
+  const freehandRef = useRef<Point2D[]>([]);
+  const [sketchPreview, setSketchPreview] = useState<SketchResult | null>(null);
+  const [sketchProposal, setSketchProposal] = useState<{ result: SketchResult; points: Point2D[] } | null>(null);
+  const [sketchNotice, setSketchNotice] = useState<string | null>(null);
+  const [sketchAngles, setSketchAngles] = useState<'45' | '90' | 'free'>(() => {
+    const saved = readSetting('bm_fp_sketch_angles', '45');
+    return saved === '90' || saved === 'free' ? saved : '45';
+  });
+  // The wall mode last used, so the Wall button returns to it.
+  const [wallMode, setWallMode] = useState<'wall' | 'ai_draw'>(() => (readSetting('bm_fp_wall_mode', 'wall') === 'ai_draw' ? 'ai_draw' : 'wall'));
+
+  useEffect(() => {
+    if (!sketchNotice) return;
+    const timer = setTimeout(() => setSketchNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [sketchNotice]);
+
+  // Typing an exact size for a wall (opened by tapping its measurement).
+  const [wallEdit, setWallEdit] = useState<{
+    wallId: string; length: string; length0: string; thickness: string; thickness0: string;
+    x: string; x0: string; y: string; y0: string; keep: 'start' | 'end'; error: string;
+  } | null>(null);
+  const dimHitRef = useRef<string | null>(null);
+  const openWallEditRef = useRef<(wallId: string) => void>(() => {});
+
+  // Size of the measurement text on the plan. A view setting: it never changes a length.
+  const [dimTextScale, setDimTextScale] = useState<number>(() => {
+    const saved = Number(readSetting('bm_fp_dim_text', '1'));
+    return [0.85, 1, 1.25, 1.5].includes(saved) ? saved : 1;
+  });
+
+  const [showHelpSheet, setShowHelpSheet] = useState(false);
+  const [seenHints, setSeenHints] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(readSetting(HINTS_KEY, '[]'));
+      return Array.isArray(saved) ? saved.filter(x => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+  const dismissHint = useCallback((key: string) => {
+    setSeenHints(prev => {
+      if (prev.includes(key)) return prev;
+      const next = [...prev, key];
+      writeSetting(HINTS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+  // A tip has done its job once its tool has been used: the first change made with a tool
+  // retires that tool's tip, and picking any tool retires the "where to start" tip.
+  const hintWatchRef = useRef({ tool: activeTool, state: editorState, loading });
+  useEffect(() => {
+    const prev = hintWatchRef.current;
+    hintWatchRef.current = { tool: activeTool, state: editorState, loading };
+    if (loading || prev.loading) return;
+    if (prev.tool !== activeTool) dismissHint('start');
+    else if (prev.state !== editorState && TOOL_HINTS[activeTool]) dismissHint(activeTool);
+  }, [activeTool, editorState, loading, dismissHint]);
 
   const triggerAiFeedback = useCallback((msg: string) => {
     setAiLiveFeedback({ message: msg, timestamp: Date.now() });
@@ -499,7 +660,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [showMobileMoreTools, setShowMobileMoreTools] = useState(false);
   const [showMobileDetails, setShowMobileDetails] = useState(false);
   const [showMobileProperties, setShowMobileProperties] = useState(false);
-  const [aiStrokeSuggestion, setAiStrokeSuggestion] = useState<{ message: string; action: ValidatedPlanAction } | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -523,6 +683,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [bgImageScaleW, setBgImageScaleW] = useState<number>(30);
   const [bgImageScaleH, setBgImageScaleH] = useState<number>(40);
   const [bgImageOpacity, setBgImageOpacity] = useState<number>(0.5);
+
+  // Usability Enhancement States (Priorities 1 - 5)
+  const [dismissedStartCard, setDismissedStartCard] = useState(false);
+  const [showStarterTemplatesModal, setShowStarterTemplatesModal] = useState(false);
+  const [showGuidedChecklist, setShowGuidedChecklist] = useState(true);
+  const [mobileToolSearch, setMobileToolSearch] = useState('');
+  const [diagnosticBeacon, setDiagnosticBeacon] = useState<{ x: number; y: number; title: string; id: string } | null>(null);
+  const [editingRoomInlineId, setEditingRoomInlineId] = useState<string | null>(null);
 
   useEffect(() => {
     const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -622,7 +790,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (!entity) return '';
     if (type === 'wall') {
       const w = entity as FloorPlanWall;
-      return `${wallLength(w).toFixed(1)} ${unit === 'feet' ? 'ft' : 'm'} • ${Math.round(getWallAngleDeg(w))}° (${w.wallType})`;
+      return `${formatDimension(wallLength(w), unit)} long • ${formatThickness(w.thickness, unit)} thick`;
     }
     if (type === 'room') {
       const r = entity as FloorPlanRoom;
@@ -671,7 +839,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [snapToEndpointsEnabled, setSnapToEndpointsEnabled] = useState(true);
   const [snapToWallEnabled, setSnapToWallEnabled] = useState(true);
   const [isOrthoActive, setIsOrthoActive] = useState(false);
-  const [gridSpacingMm, setGridSpacingMm] = useState(100);
+  // Step that positions snap to, in plan units (6 in or 10 cm by default; set when the plan loads).
+  const [gridStep, setGridStep] = useState(SNAP_THRESHOLD);
+  // How far a finger or pointer reaches for a corner or wall: a multiple of the normal reach.
+  const [snapReach, setSnapReach] = useState<number>(() => {
+    const saved = Number(readSetting('bm_fp_snap_reach', '1'));
+    return [0.6, 1, 1.5].includes(saved) ? saved : 1;
+  });
+  // Grid snapping for everything that is placed or dragged. Read through a ref so handlers
+  // created in an earlier render still follow the current Snap setting.
+  const gridRef = useRef({ step: gridStep, on: snapToGridEnabled });
+  gridRef.current = { step: gridStep, on: snapToGridEnabled };
+  const snapToGrid = useCallback((val: number) => (gridRef.current.on ? roundToStep(val, gridRef.current.step) : val), []);
   const [snapIndicator, setSnapIndicator] = useState<(SnapPoint & { screenX: number; screenY: number }) | null>(null);
   const [liveLengthBadge, setLiveLengthBadge] = useState<{ lengthStr: string; angleDeg: number; screenX: number; screenY: number } | null>(null);
 
@@ -731,7 +910,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     return () => window.removeEventListener('click', swallowGhostClick, true);
   }, []);
   const dragStartStateRef = useRef<EditorState | null>(null);
-  const jointDragRef = useRef<{ walls: FloorPlanWall[]; origin: { x: number; y: number } } | null>(null);
+  // `others` are the walls that do not end at the dragged corner: the corner can snap onto them.
+  const jointDragRef = useRef<{ walls: FloorPlanWall[]; others: FloorPlanWall[]; origin: { x: number; y: number } } | null>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const pendingSelectRef = useRef<SelectedElement>(null);
   const pendingViewRef = useRef<{ panX: number; panY: number; zoom: number } | null>(null);
@@ -752,6 +932,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     kind: 'none' | 'single' | 'pinch';
     onElement: boolean;
     pendingSelect: SelectedElement;
+    /** Wall whose measurement label the finger landed on; a tap there opens the length box. */
+    dimHit: string | null;
     downAt: { x: number; y: number };
     moved: boolean;
     dragDrawing: boolean;
@@ -762,7 +944,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     startDist: number;
     startZoom: number;
     anchor: { x: number; y: number };
-  }>({ kind: 'none', onElement: false, pendingSelect: null, downAt: { x: 0, y: 0 }, moved: false, dragDrawing: false, wallStart: null, panning: false, waitForAllUp: false, startDist: 1, startZoom: 1, anchor: { x: 0, y: 0 } });
+  }>({ kind: 'none', onElement: false, pendingSelect: null, dimHit: null, downAt: { x: 0, y: 0 }, moved: false, dragDrawing: false, wallStart: null, panning: false, waitForAllUp: false, startDist: 1, startZoom: 1, anchor: { x: 0, y: 0 } });
 
   // Layer Helpers
   const isLayerVisible = useCallback((layerId?: string) => {
@@ -800,6 +982,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
         setFloorLevels(initialFloors);
         setActiveFloorIndex(0);
+
+        // New walls and the snap step follow the plan's unit system (9 in / 6 in, or 230 mm / 10 cm).
+        setGridStep(defaultGridStep(loaded.unit));
+        setWallThickness(defaultWallThickness(loaded.unit));
 
         const state: EditorState = levelToState(initialFloors[0]);
         dispatch({ type: 'SET_STATE', payload: state });
@@ -873,11 +1059,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     const insetTop = isMobileView ? 56 : 0;
     const insetBottom = isMobileView ? 88 : 0;
     const clearH = Math.max(120, vh - insetTop - insetBottom);
-    const fitZoom = Math.min(4.0, Math.max(MIN_ZOOM, Math.min((vw * paddingFactor) / geomW, (clearH * paddingFactor) / geomH)));
+    // Dimension lines sit outside the walls: leave room for them, so a fitted plan shows its
+    // measurements too.
+    const dimPad = showDimensions && editorState.walls.length > 0 ? (isMobileView ? 44 : 60) : 0;
+    const fitW = Math.max(120, vw * paddingFactor - dimPad * 2);
+    const fitH = Math.max(120, clearH * paddingFactor - dimPad * 2);
+    const fitZoom = Math.min(4.0, Math.max(MIN_ZOOM, Math.min(fitW / geomW, fitH / geomH)));
     setZoom(+fitZoom.toFixed(2));
     setPanX(Math.round(vw / 2 - bbox.centerX * GRID_SIZE_PX * fitZoom));
     setPanY(Math.round(insetTop + clearH / 2 - bbox.centerY * GRID_SIZE_PX * fitZoom));
-  }, [editorState, plan]);
+  }, [editorState, plan, showDimensions]);
 
   // Auto-fit plot to available viewport on initial load
   const didInitialFitRef = useRef(false);
@@ -891,11 +1082,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
   }, [loading, plan, handleFitToScreen]);
 
+  // Set by an edit that must become its own undo step. The step is recorded from the drawing
+  // as it actually is once the edit has been applied (see the recording effect below), so the
+  // history holds exactly what is on screen, including the ids of rooms the edit created.
+  const captureNowRef = useRef(false);
+
   const dispatchWithHistory = useCallback((action: EditorAction) => {
+    captureNowRef.current = true;
     dispatch(action);
-    // Same reducer as the live state, so the history holds exactly what is on screen.
+    // Worked out here only to tell the user what the edit did.
     const next = reducePlan(editorState, action, unit);
-    pushHistory(next);
     markUnsaved();
     if (WALL_ACTIONS.has(action.type)) {
       const before = new Set(editorState.rooms.map(r => r.id));
@@ -905,13 +1101,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const lostOpenings = editorState.doors.length + editorState.windows.length - next.doors.length - next.windows.length;
       if (lostOpenings > 0) onNotify(`${lostOpenings} door/window removed with its wall.`, 'info');
     }
-  }, [editorState, pushHistory, markUnsaved, unit, onNotify]);
+  }, [editorState, markUnsaved, unit, onNotify]);
 
   const handleUndo = useCallback(() => {
+    // Record what is on screen first (a no-op when it already is), so undo steps back from
+    // exactly this drawing and redo can return to it.
+    if (latestRef.current.plan) historyRef.current.push(activeFloorIdRef.current, latestRef.current.state);
     const prev = historyRef.current.undo(activeFloorIdRef.current);
     if (!prev) return;
     dispatch({ type: 'SET_STATE', payload: prev });
     setSelectedElement(null);
+    setSketchNotice(null);
+    setSketchProposal(null);
     setHistoryTick(t => t + 1);
     markUnsaved();
   }, [markUnsaved]);
@@ -924,6 +1125,40 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setHistoryTick(t => t + 1);
     markUnsaved();
   }, [markUnsaved]);
+
+  // Recording undo steps. An edit made through dispatchWithHistory is recorded at once. Other
+  // edits (typing in a property box, a rotation select) change the drawing directly; those
+  // are recorded once they settle, so undo covers them as well. A drag is recorded once, when
+  // it ends. Recording a drawing that is already the latest step does nothing.
+  const dragActive = isDragging || !!resizingWall;
+  useEffect(() => {
+    if (loading || dragActive) return;
+    const record = () => {
+      historyRef.current.push(activeFloorIdRef.current, editorState);
+      setHistoryTick(t => t + 1);
+    };
+    if (captureNowRef.current) {
+      captureNowRef.current = false;
+      record();
+      return;
+    }
+    const timer = setTimeout(record, 400);
+    return () => clearTimeout(timer);
+  }, [editorState, loading, dragActive]);
+
+  /** 100% zoom with the drawing centred: the view to return to after getting lost. */
+  const handleResetView = useCallback(() => {
+    const bbox = calculatePlanBoundingBox(
+      editorState.walls, editorState.rooms, editorState.doors, editorState.windows,
+      editorState.furniture, editorState.columns, editorState.stairs,
+      plan?.plotLength || 40, plan?.plotWidth || 30
+    );
+    const vw = containerRef.current?.clientWidth || window.innerWidth;
+    const vh = containerRef.current?.clientHeight || window.innerHeight;
+    setZoom(1);
+    setPanX(Math.round(vw / 2 - bbox.centerX * GRID_SIZE_PX));
+    setPanY(Math.round(vh / 2 - bbox.centerY * GRID_SIZE_PX));
+  }, [editorState, plan]);
 
   useLayoutEffect(() => {
     if (!pendingViewRef.current && svgRef.current) svgRef.current.style.transform = '';
@@ -1356,14 +1591,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const dy = wall.y2 - wall.y1;
       const newDx = -dy;
       const newDy = dx;
+      // A quarter turn about the wall's middle. Not snapped to the grid: turning a wall must
+      // never change its length.
       dispatchWithHistory({
         type: 'UPDATE_WALL',
         id,
         changes: {
-          x1: snapToGrid(mx - newDx / 2),
-          y1: snapToGrid(my - newDy / 2),
-          x2: snapToGrid(mx + newDx / 2),
-          y2: snapToGrid(my + newDy / 2),
+          x1: tidy(mx - newDx / 2),
+          y1: tidy(my - newDy / 2),
+          x2: tidy(mx + newDx / 2),
+          y2: tidy(my + newDy / 2),
         },
       });
     }
@@ -1575,7 +1812,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         console.error('Error handling canvas drop:', err);
       }
     },
-    [svgToWorld, unit, user, dispatchWithHistory, onNotify]
+    [svgToWorld, unit, user, dispatchWithHistory, onNotify, snapToGrid]
   );
 
   // ── Click To Add from Shape Library ───────────────────
@@ -1618,7 +1855,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setActiveTool('select');
       onNotify(`Added ${item.name} to plan. You can drag, rotate, or resize it.`, 'info');
     },
-    [plan, unit, user, dispatchWithHistory, onNotify]
+    [plan, unit, user, dispatchWithHistory, onNotify, snapToGrid]
   );
 
   // ── Delete Selected ───────────────────────────────────
@@ -1646,10 +1883,83 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const rotateWallToAngle = useCallback((wall: FloorPlanWall, targetDeg: number) => {
     const len = wallLength(wall);
     const rad = (targetDeg * Math.PI) / 180;
-    const x2 = +(wall.x1 + len * Math.cos(rad)).toFixed(3);
-    const y2 = +(wall.y1 + len * Math.sin(rad)).toFixed(3);
+    // Length is kept exactly; only floating-point fuzz is removed.
+    const x2 = tidy(wall.x1 + len * Math.cos(rad));
+    const y2 = tidy(wall.y1 + len * Math.sin(rad));
     dispatchWithHistory({ type: 'UPDATE_WALL', id: wall.id, changes: { x2, y2 } });
   }, [dispatchWithHistory]);
+
+  // ── Exact wall size (opened by tapping a wall's measurement) ──────────
+  const openWallEdit = (wallId: string) => {
+    const w = editorState.walls.find(x => x.id === wallId);
+    if (!w) return;
+    const keep = endToKeep(editorState.walls, wallId, joinTolerance(unit));
+    const anchor = keep === 'start' ? { x: w.x1, y: w.y1 } : { x: w.x2, y: w.y2 };
+    const length = formatLengthForInput(wallLength(w), unit);
+    const thickness = formatThickness(w.thickness || defaultWallThickness(unit), unit);
+    const x = String(Number(anchor.x.toFixed(4)));
+    const y = String(Number(anchor.y.toFixed(4)));
+    setSelectedElement({ type: 'wall', id: wallId });
+    setWallEdit({ wallId, length, length0: length, thickness, thickness0: thickness, x, x0: x, y, y0: y, keep, error: '' });
+  };
+  openWallEditRef.current = openWallEdit;
+
+  /**
+   * Applies the wall box as one undo step. Only a field the user actually changed is applied,
+   * so opening the box and pressing Apply can never nudge the drawing. Every value is checked
+   * before anything is touched; a refused value leaves the plan exactly as it was.
+   */
+  const submitWallEdit = () => {
+    if (!wallEdit) return;
+    const w = editorState.walls.find(x => x.id === wallEdit.wallId);
+    if (!w) { setWallEdit(null); return; }
+    const fail = (error: string) => setWallEdit({ ...wallEdit, error });
+    const lengthChanged = wallEdit.length.trim() !== wallEdit.length0;
+    const thicknessChanged = wallEdit.thickness.trim() !== wallEdit.thickness0;
+    const moved = wallEdit.x.trim() !== wallEdit.x0 || wallEdit.y.trim() !== wallEdit.y0;
+    if (!lengthChanged && !thicknessChanged && !moved) { setWallEdit(null); return; }
+    if (w.locked) return fail('This wall is locked. Unlock it to change it.');
+
+    const length = parseLengthInput(wallEdit.length, unit);
+    if (lengthChanged && !length.ok) return fail(length.error);
+    const thickness = parseThicknessInput(wallEdit.thickness, unit);
+    if (thicknessChanged && !thickness.ok) return fail(thickness.error);
+    const px = Number(wallEdit.x), py = Number(wallEdit.y);
+    if (moved && (wallEdit.x.trim() === '' || wallEdit.y.trim() === '' || !Number.isFinite(px) || !Number.isFinite(py) || Math.abs(px) > 5000 || Math.abs(py) > 5000)) {
+      return fail('Enter the position as two numbers.');
+    }
+
+    const tol = joinTolerance(unit);
+    let walls = editorState.walls;
+    if (moved) {
+      const anchor = wallEdit.keep === 'start' ? { x: w.x1, y: w.y1 } : { x: w.x2, y: w.y2 };
+      walls = translateWall(walls, w.id, px - anchor.x, py - anchor.y, tol);
+    }
+    if (lengthChanged && length.ok) walls = resizeWall(walls, w.id, length.value, wallEdit.keep, tol);
+    if (thicknessChanged && thickness.ok) {
+      walls = walls.map(x => (x.id === w.id ? { ...x, thickness: thickness.value, thicknessMm: Math.round(planToMm(thickness.value, unit)) } : x));
+    }
+    if (walls !== editorState.walls) dispatchWithHistory({ type: 'SET_WALLS', walls });
+    setWallEdit(null);
+  };
+
+  /**
+   * Canva-style Quick Length Adjuster: +/- step adjustment directly from canvas widget.
+   */
+  const handleQuickAdjustWallLength = useCallback((wallId: string, delta: number) => {
+    const wall = editorState.walls.find(w => w.id === wallId);
+    if (!wall || wall.locked) return;
+    const curLen = wallLength(wall);
+    const newLen = Math.max(0.5, curLen + delta);
+    const tol = joinTolerance(unit);
+    const keep = endToKeep(editorState.walls, wallId, tol);
+    const updatedWalls = resizeWall(editorState.walls, wallId, newLen, keep, tol);
+    if (updatedWalls !== editorState.walls) {
+      dispatchWithHistory({ type: 'SET_WALLS', walls: updatedWalls });
+      markUnsaved();
+      onNotify(`Wall length: ${formatDimension(newLen, unit)}`, 'info');
+    }
+  }, [editorState.walls, unit, dispatchWithHistory, markUnsaved, onNotify]);
 
   // ── AI Floor Plan Copilot Handlers ────────────────────
   const handleCopilotStraighten = useCallback(() => {
@@ -1782,6 +2092,120 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     selectedElement: selectedElement as any,
     unit,
   }), [editorState.walls, editorState.rooms, editorState.doors, editorState.windows, editorState.columns, editorState.stairs, selectedElement, unit]);
+
+  // Locate diagnostic issue on canvas with animated beacon
+  const handleLocateDiagnosticIssue = useCallback((issue: any) => {
+    let targetX = 0;
+    let targetY = 0;
+    let found = false;
+
+    if (issue.elementIds && issue.elementIds.length > 0) {
+      for (const id of issue.elementIds) {
+        const wall = editorState.walls.find(w => w.id === id);
+        if (wall) {
+          targetX = (wall.x1 + wall.x2) / 2;
+          targetY = (wall.y1 + wall.y2) / 2;
+          found = true;
+          break;
+        }
+        const room = editorState.rooms.find(r => r.id === id);
+        if (room) {
+          targetX = room.x + room.width / 2;
+          targetY = room.y + room.height / 2;
+          found = true;
+          break;
+        }
+        const door = editorState.doors.find(d => d.id === id);
+        if (door) {
+          targetX = door.x;
+          targetY = door.y;
+          found = true;
+          break;
+        }
+        const win = editorState.windows.find(w => w.id === id);
+        if (win) {
+          targetX = win.x;
+          targetY = win.y;
+          found = true;
+          break;
+        }
+      }
+    }
+
+    if (!found && issue.location) {
+      const match = String(issue.location).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+      if (match) {
+        targetX = parseFloat(match[1]);
+        targetY = parseFloat(match[2]);
+        found = true;
+      }
+    }
+
+    if (found) {
+      const containerW = containerRef.current?.clientWidth || window.innerWidth;
+      const containerH = containerRef.current?.clientHeight || window.innerHeight;
+      const newZoom = 1.35;
+      const targetScreenX = containerW / 2;
+      const targetScreenY = containerH / 2;
+      setPanX(targetScreenX - targetX * GRID_SIZE_PX * newZoom);
+      setPanY(targetScreenY - targetY * GRID_SIZE_PX * newZoom);
+      setZoom(newZoom);
+
+      setDiagnosticBeacon({
+        x: targetX,
+        y: targetY,
+        title: issue.title || 'Diagnostic Issue',
+        id: issue.id,
+      });
+
+      setTimeout(() => {
+        setDiagnosticBeacon(b => (b?.id === issue.id ? null : b));
+      }, 6000);
+      onNotify(`Focused on: ${issue.title} (${issue.location})`, 'info');
+    } else {
+      onNotify(`Issue located at ${issue.location}`, 'info');
+    }
+  }, [editorState, onNotify]);
+
+  // Apply chosen starter template into current floor
+  const handleApplyStarterTemplate = useCallback((tpl: FloorPlanStarterTemplate) => {
+    const wallIdMap = new Map<string, string>();
+    const walls = tpl.walls.map(w => {
+      const newId = uid('wall');
+      wallIdMap.set(w.id, newId);
+      return { ...w, id: newId };
+    });
+
+    const rooms = (tpl.rooms || []).map(r => ({ ...r, id: uid('room') }));
+    const doors = (tpl.doors || []).map(d => ({
+      ...d,
+      id: uid('door'),
+      wallId: d.wallId ? wallIdMap.get(d.wallId) : undefined,
+    }));
+    const windows = (tpl.windows || []).map(w => ({
+      ...w,
+      id: uid('win'),
+      wallId: w.wallId ? wallIdMap.get(w.wallId) : undefined,
+    }));
+    const furniture = (tpl.furniture || []).map(f => ({ ...f, id: uid('furn') }));
+
+    const nextState: EditorState = {
+      walls,
+      rooms,
+      doors,
+      windows,
+      furniture,
+      stairs: [],
+      columns: [],
+      annotations: [],
+    };
+    dispatchWithHistory({ type: 'SET_STATE', payload: nextState });
+    markUnsaved();
+    setShowStarterTemplatesModal(false);
+    setDismissedStartCard(true);
+    setTimeout(() => handleFitToScreen(), 150);
+    onNotify(`Loaded ${tpl.name} layout successfully!`, 'success');
+  }, [dispatchWithHistory, markUnsaved, handleFitToScreen, onNotify]);
 
   // Execute validated actions produced by AI or user confirmations
   const executeValidatedAction = useCallback((action: ValidatedPlanAction) => {
@@ -1963,6 +2387,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      // While a sheet is open the keys belong to it, not to the drawing behind it.
+      if (document.querySelector('.m-sheet-backdrop')) return;
 
       // Ctrl + K / Cmd + K: AI Floor Plan Assistant Panel Shortcut
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
@@ -1975,7 +2401,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         e.preventDefault();
         setIsSpacePressed(true);
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); handleUndo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo(); else handleUndo();
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); handleRedo(); }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); handleSave(); }
       if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) { e.preventDefault(); handleCopySelected(); }
@@ -1992,10 +2422,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setSelectedElement(null);
         setSelectedFurnitureToPlace(null);
         setIsAiAssistantOpen(false);
+        setSketchProposal(null);
       }
+      // The single-letter shortcuts below never fire together with Ctrl / Cmd / Alt, so
+      // Ctrl+D (duplicate) does not also pick the Door tool.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'v' || e.key === 'V') setActiveTool('select');
       if (e.key === 'w' || e.key === 'W') setActiveTool('wall');
-      if (e.key === 'a' || e.key === 'A') setActiveTool('ai_draw');
+      if (e.key === 'e' || e.key === 'E') setActiveTool('eraser');
+      if (e.key === 'a' || e.key === 'A' || e.key === 's' || e.key === 'S') setActiveTool('ai_draw');
 
       if (e.key === 'r' || e.key === 'R') {
         if (selectedElement && activeTool === 'select') {
@@ -2007,6 +2442,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (e.key === 'd' || e.key === 'D') setActiveTool('door');
       if (e.key === 'm' || e.key === 'M') setShowDimensions(d => !d);
       if (e.key === 'h' || e.key === 'H') setActiveTool('pan');
+      if (e.key === 'g' || e.key === 'G') setShowGrid(g => !g);
+      if (e.key === 'f' || e.key === 'F') handleFitToScreen();
+      if (e.key === '0') handleResetView();
+      if (e.key === '+' || e.key === '=') setZoom(z => Math.min(MAX_ZOOM, +(z * 1.25).toFixed(2)));
+      if (e.key === '-' || e.key === '_') setZoom(z => Math.max(MIN_ZOOM, +(z * 0.8).toFixed(2)));
+      if (e.key === 'Enter' && selectedElement?.type === 'wall') openWallEditRef.current(selectedElement.id);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -2024,8 +2465,51 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   }, [
     selectedElement, activeTool, handleUndo, handleRedo, handleSave,
     handleDeleteSelected, handleCopySelected, handlePaste, handleDuplicateSelected,
-    handleToggleLockSelected, handleRotateSelected
+    handleToggleLockSelected, handleRotateSelected, handleFitToScreen, handleResetView
   ]);
+
+  // ── Snapping ──────────────────────────────────────────
+  // How far the pointer reaches for a corner, crossing or wall. It is a finger-sized distance
+  // on screen, converted to plan units for the current zoom, so snapping feels the same zoomed
+  // in or out. The Snap reach setting scales it.
+  const snapReachPlan = () => {
+    const feet = baseUnitOf(unit) === 'feet';
+    const reach = pixelsToPlan((touchInputRef.current ? 22 : 14) * snapReach, zoom);
+    return Math.min(feet ? 3 : 0.9, Math.max(feet ? 0.25 : 0.08, reach));
+  };
+
+  const snapAt = (x: number, y: number, walls: FloorPlanWall[] = editorState.walls, toWalls = snapToWallEnabled) =>
+    findSnapPoint(x, y, walls, snapToGridEnabled ? gridStep : 0, snapReachPlan(), snapToEndpointsEnabled, toWalls);
+
+  /** Settings for reading a freehand stroke, for the current zoom, unit and Snap choices. */
+  const sketchOptions = (extra: Partial<SketchOptions> = {}): SketchOptions => {
+    const feet = baseUnitOf(unit) === 'feet';
+    const joins = snapToEndpointsEnabled || snapToWallEnabled;
+    return {
+      unit,
+      thickness: wallThickness,
+      newId: () => uid('wall'),
+      snapAngles: sketchAngles === '45' ? DEFAULT_SNAP_ANGLES : sketchAngles === '90' ? ORTHO_SNAP_ANGLES : [],
+      // Wobble up to about a fingertip wide is ignored.
+      simplifyTolerance: Math.max(joinTolerance(unit) * 2, pixelsToPlan(touchInputRef.current ? 12 : 8, zoom)),
+      endpointTolerance: joins ? Math.max(snapReachPlan() * 1.25, joinTolerance(unit) * 2) : joinTolerance(unit),
+      minSegment: Math.min(feet ? 2 : 0.6, Math.max(feet ? 1 : 0.3, pixelsToPlan(12, zoom))),
+      grid: snapToGridEnabled ? gridStep : 0,
+      ...extra,
+    };
+  };
+
+  /** Adds the walls a stroke became, as one undo step, and says what was done. */
+  const commitSketch = (result: SketchResult) => {
+    setSketchProposal(null);
+    if (result.walls.length === 0) return;
+    dispatchWithHistory({ type: 'SET_WALLS', walls: [...editorState.walls, ...result.walls] });
+    setSketchNotice(describeSketch(result, v => formatDimension(v, unit)));
+  };
+
+  // Handlers created in an earlier render reach the current versions through this ref.
+  const liveRef = useRef({ snapAt, sketchOptions, commitSketch });
+  liveRef.current = { snapAt, sketchOptions, commitSketch };
 
   // ── Mouse Handlers ────────────────────────────────────
 
@@ -2037,37 +2521,36 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const finishWallAt = (start: { x: number; y: number }, e: React.MouseEvent<SVGSVGElement>) => {
     const svgPos = getSvgPos(e);
     const world = svgToWorld(svgPos.x, svgPos.y);
-    let snapPt = findSnapPoint(
-      world.x, world.y, editorState.walls,
-      snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
-      snapToEndpointsEnabled, snapToWallEnabled
-    );
+    let snapPt = snapAt(world.x, world.y);
     if (e.shiftKey || isOrthoActive) {
       const ortho = snapAngleOrtho(start.x, start.y, snapPt.x, snapPt.y);
       snapPt = { ...snapPt, x: ortho.x, y: ortho.y };
     }
 
-    let targetX1 = start.x;
-    let targetY1 = start.y;
+    const targetX1 = start.x;
+    const targetY1 = start.y;
     let targetX2 = snapPt.x;
     let targetY2 = snapPt.y;
 
-    // Real-time AI Rough Line Regularization ("user summa line draw panna athe understand panna purinjiganu")
-    // Straightening is a snapping aid: with Snap switched off the wall stays exactly
-    // where the user drew it, at any angle.
-    if (isAiLiveAssistActive && (snapToGridEnabled || snapToEndpointsEnabled || snapToWallEnabled)) {
-      const reg = regularizeRoughWall(
-        { x: targetX1, y: targetY1 },
-        { x: targetX2, y: targetY2 },
-        editorState.walls,
-        { unit, angleToleranceDeg: 14 }
-      );
-      targetX1 = reg.x1;
-      targetY1 = reg.y1;
-      targetX2 = reg.x2;
-      targetY2 = reg.y2;
-      // No message here: the straightened wall is its own feedback, and a banner after every
-      // wall gets in the way of drawing the next one.
+    // Canva-style Auto-Correct: A wall drawn nearly level (0°/180°), upright (90°/270°) or at 45°
+    // is automatically straightened ("user thapa draw pannu auto currect aganu canva erukka mari").
+    const joinedSomething = snapPt.type === 'endpoint' || snapPt.type === 'midpoint' || snapPt.type === 'intersection' || snapPt.type === 'wall';
+    if (!joinedSomething) {
+      const dx = targetX2 - targetX1;
+      const dy = targetY2 - targetY1;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.35) {
+        const snapped = snapDirection(directionDeg({ x: targetX1, y: targetY1 }, { x: targetX2, y: targetY2 }), DEFAULT_SNAP_ANGLES, 16, 12);
+        if (snapped === 0) {
+          targetY2 = targetY1;
+        } else if (snapped === 90) {
+          targetX2 = targetX1;
+        } else if (snapped === 45 || snapped === 135) {
+          const run = snapToGridEnabled ? snapToGrid((Math.abs(dx) + Math.abs(dy)) / 2) : (Math.abs(dx) + Math.abs(dy)) / 2;
+          targetX2 = targetX1 + Math.sign(dx) * run;
+          targetY2 = targetY1 + Math.sign(dy) * run;
+        }
+      }
     }
 
     if (Math.abs(targetX2 - targetX1) > 0.05 || Math.abs(targetY2 - targetY1) > 0.05) {
@@ -2081,12 +2564,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         wallType: 'exterior',
         layer: 'walls',
       };
-      // Adding the wall also recalculates the rooms it encloses (see reducePlan), for
-      // rooms of any shape. The room is named "Room N"; its use is never guessed.
-      dispatchWithHistory({
-        type: 'ADD_WALL',
-        payload: newWall,
-      });
+      // A wall is never laid on top of one that is already there: only the part that is
+      // new is added, and an exact repeat adds nothing.
+      const pieces = trimNewWall(newWall, editorState.walls, unit, () => uid('wall'));
+      if (pieces.length === 0) {
+        onNotify('There is already a wall there.', 'info');
+      } else if (pieces.length === 1) {
+        // Adding the wall also recalculates the rooms it encloses (see reducePlan), for
+        // rooms of any shape. The room is named "Room N"; its use is never guessed.
+        dispatchWithHistory({ type: 'ADD_WALL', payload: pieces[0] });
+      } else {
+        dispatchWithHistory({ type: 'SET_WALLS', walls: [...editorState.walls, ...pieces] });
+      }
     }
     return { x: targetX2, y: targetY2 };
   };
@@ -2120,13 +2609,51 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const world = svgToWorld(svgPos.x, svgPos.y);
       const snapped = { x: snapToGrid(world.x), y: snapToGrid(world.y) };
 
+      if (activeTool === 'eraser') {
+        const reach = Math.max(1.5, pixelsToPlan(32, zoom));
+        const doorHit = editorState.doors.find(d => Math.hypot(d.x - world.x, d.y - world.y) <= reach);
+        if (doorHit) { handleEraseElement('door', doorHit.id); return; }
+        const winHit = editorState.windows.find(w => Math.hypot(w.x - world.x, w.y - world.y) <= reach);
+        if (winHit) { handleEraseElement('window', winHit.id); return; }
+        const furnHit = editorState.furniture.find(f => Math.hypot(f.x - world.x, f.y - world.y) <= Math.max(reach, f.width / 2));
+        if (furnHit) { handleEraseElement('furniture', furnHit.id); return; }
+        const colHit = editorState.columns.find(c => Math.hypot(c.x - world.x, c.y - world.y) <= reach);
+        if (colHit) { handleEraseElement('column', colHit.id); return; }
+        const stairHit = editorState.stairs.find(s => Math.hypot(s.x - world.x, s.y - world.y) <= reach);
+        if (stairHit) { handleEraseElement('stairs', stairHit.id); return; }
+        let closestWall: FloorPlanWall | null = null;
+        let closestDist = reach;
+        for (const w of editorState.walls) {
+          const d = pointSegmentDistance(world, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
+          if (d < closestDist) {
+            closestDist = d;
+            closestWall = w;
+          }
+        }
+        if (closestWall) {
+          // If clicked in the middle (partial wall eraser), split wall into two connected segments.
+          // If clicked near either end, erase the whole wall.
+          const split = splitWallAtPoint(closestWall, world.x, world.y, () => uid('wall'), 1.0);
+          if (split) {
+            const [w1, w2] = split;
+            dispatchWithHistory({
+              type: 'SET_WALLS',
+              walls: editorState.walls.map(w => w.id === closestWall!.id ? w1 : w).concat(w2),
+            });
+            onNotify('Wall split at erase point (partial eraser)', 'info');
+          } else {
+            handleEraseElement('wall', closestWall.id);
+          }
+          return;
+        }
+        const roomHit = editorState.rooms.find(r => pointInPolygon(world, roomOutline(r)));
+        if (roomHit) { handleEraseElement('room', roomHit.id); return; }
+        return;
+      }
+
       if (activeTool === 'wall') {
         if (!isDrawingWall) {
-          const snapPt = findSnapPoint(
-            world.x, world.y, editorState.walls,
-            snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
-            snapToEndpointsEnabled, snapToWallEnabled
-          );
+          const snapPt = liveRef.current.snapAt(world.x, world.y);
           setWallStart({ x: snapPt.x, y: snapPt.y });
           setIsDrawingWall(true);
         } else if (wallStart) {
@@ -2136,9 +2663,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           setSnapIndicator(null);
         }
       } else if (activeTool === 'ai_draw') {
-        // Start continuous freehand sketch stroke
+        // Sketch mode: a new stroke starts. A result still waiting to be accepted is dropped,
+        // the same as pressing Redraw.
+        freehandRef.current = [{ x: world.x, y: world.y }];
+        setSketchProposal(null);
+        setSketchNotice(null);
+        setSketchPreview(null);
         setIsFreehandDrawing(true);
-        setFreehandPoints([{ x: world.x, y: world.y }]);
+        setFreehandPoints(freehandRef.current);
       } else if (activeTool === 'room') {
         const w = draftRoomWidth || (unit === 'feet' ? 14 : 4.5);
         const h = draftRoomHeight || (unit === 'feet' ? 12 : 3.5);
@@ -2327,11 +2859,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         }
         setActiveTool('select');
       } else if (activeTool === 'measure') {
-        const snapPt = findSnapPoint(
-          world.x, world.y, editorState.walls,
-          snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
-          snapToEndpointsEnabled, snapToWallEnabled
-        );
+        const snapPt = liveRef.current.snapAt(world.x, world.y);
         const pt = { x: snapPt.x, y: snapPt.y };
         if (!isMeasuring || !measureStart) {
           setMeasureStart(pt);
@@ -2353,7 +2881,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       activeTool, isDrawingWall, wallStart, wallThickness, resizingWall,
       selectedRoomType, selectedDoorType, selectedWindowType, columnShape,
       stairType, selectedFurnitureToPlace, svgToWorld, getSvgPos, panX, panY,
-      snapToGridEnabled, snapToEndpointsEnabled, snapToWallEnabled, isOrthoActive,
+      isOrthoActive,
       editorState.walls, editorState.rooms.length, unit, dispatchWithHistory, onNotify,
       isSpacePressed, isMeasuring, measureStart
     ]
@@ -2365,14 +2893,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const world = svgToWorld(svgPos.x, svgPos.y);
 
       if (resizingWall) {
-        const sx = snapToGrid(world.x);
-        const sy = snapToGrid(world.y);
         if (jointDragRef.current) {
           // Move the corner: every wall end that met here moves together, so joined walls
           // stay joined. Rooms and hosted doors/windows follow through the reducer.
-          dispatch({ type: 'SET_WALLS', walls: moveJoint(jointDragRef.current.walls, jointDragRef.current.origin, { x: sx, y: sy }, joinTolerance(unit)) });
+          // The corner snaps onto another corner or crossing within reach (so it can be
+          // joined to a different wall), otherwise to the grid, and follows Snap on/off.
+          const to = liveRef.current.snapAt(world.x, world.y, jointDragRef.current.others, false);
+          dispatch({ type: 'SET_WALLS', walls: moveJoint(jointDragRef.current.walls, jointDragRef.current.origin, { x: to.x, y: to.y }, joinTolerance(unit)) });
+          if (to.type === 'endpoint' || to.type === 'intersection' || to.type === 'midpoint') {
+            setSnapIndicator({ ...to, screenX: to.x * GRID_SIZE_PX * zoom + panX, screenY: to.y * GRID_SIZE_PX * zoom + panY });
+          } else {
+            setSnapIndicator(null);
+          }
           return;
         }
+        const sx = snapToGridEnabled ? snapToGrid(world.x) : world.x;
+        const sy = snapToGridEnabled ? snapToGrid(world.y) : world.y;
         if (resizingWall.endpoint === 1) {
           dispatch({ type: 'UPDATE_WALL', id: resizingWall.id, changes: { x1: sx, y1: sy } });
         } else {
@@ -2392,22 +2928,40 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         return;
       }
 
-      // Continuous AI Smart Freehand Sketch Tracking
+      // Sketch mode: follow the finger and show, live, the straight walls the stroke would
+      // become. Nothing is added to the plan until the finger lifts.
       if (activeTool === 'ai_draw' && isFreehandDrawing) {
-        setFreehandPoints(pts => [...pts, { x: world.x, y: world.y }]);
+        const pts = [...freehandRef.current, { x: world.x, y: world.y }];
+        freehandRef.current = pts;
+        setFreehandPoints(pts);
+        setSketchPreview(interpretStroke(pts, editorState.walls, liveRef.current.sketchOptions()));
         return;
       }
 
       // Drawing wall live length and snap calculation
       if (isDrawingWall && wallStart) {
-        let snapPt = findSnapPoint(
-          world.x, world.y, editorState.walls,
-          snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
-          snapToEndpointsEnabled, snapToWallEnabled
-        );
+        let snapPt = liveRef.current.snapAt(world.x, world.y);
         if (e.shiftKey || isOrthoActive) {
           const ortho = snapAngleOrtho(wallStart.x, wallStart.y, snapPt.x, snapPt.y);
           snapPt = { ...snapPt, x: ortho.x, y: ortho.y };
+        } else if (snapPt.type === 'none' || snapPt.type === 'grid') {
+          // Canva-style Smart Angle Auto-Correction:
+          const dx = snapPt.x - wallStart.x;
+          const dy = snapPt.y - wallStart.y;
+          const rawDist = Math.hypot(dx, dy);
+          if (rawDist > 0.35) {
+            const snappedAngle = snapDirection(directionDeg(wallStart, snapPt), DEFAULT_SNAP_ANGLES, 16, 12);
+            if (snappedAngle === 0) {
+              snapPt = { ...snapPt, y: wallStart.y };
+            } else if (snappedAngle === 90) {
+              snapPt = { ...snapPt, x: wallStart.x };
+            } else if (snappedAngle === 45 || snappedAngle === 135) {
+              const signX = Math.sign(dx) || 1;
+              const signY = Math.sign(dy) || 1;
+              const run = (Math.abs(dx) + Math.abs(dy)) / 2;
+              snapPt = { ...snapPt, x: wallStart.x + signX * run, y: wallStart.y + signY * run };
+            }
+          }
         }
         const len = Math.hypot(snapPt.x - wallStart.x, snapPt.y - wallStart.y);
         let angle = (Math.atan2(snapPt.y - wallStart.y, snapPt.x - wallStart.x) * 180) / Math.PI;
@@ -2418,7 +2972,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         const startSx = wallStart.x * GRID_SIZE_PX * zoom + panX;
         const startSy = wallStart.y * GRID_SIZE_PX * zoom + panY;
         setLiveLengthBadge({
-          lengthStr: formatLength(len, unit),
+          lengthStr: formatDimension(len, unit),
           angleDeg: Math.round(angle),
           screenX: touchInputRef.current ? Math.max(8, (startSx + svgPos.x) / 2 - 40) : svgPos.x + 18,
           screenY: touchInputRef.current ? Math.max(8, (startSy + svgPos.y) / 2 - 44) : svgPos.y - 18,
@@ -2440,8 +2994,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (isDragging && dragStartPos && dragElementSnapshot && selectedElement) {
         const dx = world.x - svgToWorld(dragStartPos.x, dragStartPos.y).x;
         const dy = world.y - svgToWorld(dragStartPos.y, dragStartPos.y).y;
-        const snappedDx = snapToGrid(dx);
-        const snappedDy = snapToGrid(dy);
+        const snappedDx = snapToGridEnabled ? snapToGrid(dx) : dx;
+        const snappedDy = snapToGridEnabled ? snapToGrid(dy) : dy;
 
         const { type, id } = selectedElement;
         if (type === 'wall' && dragStartStateRef.current) {
@@ -2453,10 +3007,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           dispatch({
             type: 'UPDATE_WALL', id,
             changes: {
-              x1: snapToGrid(snap.x1 + snappedDx),
-              y1: snapToGrid(snap.y1 + snappedDy),
-              x2: snapToGrid(snap.x2 + snappedDx),
-              y2: snapToGrid(snap.y2 + snappedDy),
+              x1: snapToGridEnabled ? snapToGrid(snap.x1 + snappedDx) : snap.x1 + snappedDx,
+              y1: snapToGridEnabled ? snapToGrid(snap.y1 + snappedDy) : snap.y1 + snappedDy,
+              x2: snapToGridEnabled ? snapToGrid(snap.x2 + snappedDx) : snap.x2 + snappedDx,
+              y2: snapToGridEnabled ? snapToGrid(snap.y2 + snappedDy) : snap.y2 + snappedDy,
             },
           });
           // Synchronize hosted doors & windows so they stay attached to the moving wall
@@ -2466,8 +3020,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 type: 'UPDATE_DOOR',
                 id: d.id,
                 changes: {
-                  x: snapToGrid(d.x + snappedDx),
-                  y: snapToGrid(d.y + snappedDy),
+                  x: snapToGridEnabled ? snapToGrid(d.x + snappedDx) : d.x + snappedDx,
+                  y: snapToGridEnabled ? snapToGrid(d.y + snappedDy) : d.y + snappedDy,
                 },
               });
             });
@@ -2476,8 +3030,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 type: 'UPDATE_WINDOW',
                 id: w.id,
                 changes: {
-                  x: snapToGrid(w.x + snappedDx),
-                  y: snapToGrid(w.y + snappedDy),
+                  x: snapToGridEnabled ? snapToGrid(w.x + snappedDx) : w.x + snappedDx,
+                  y: snapToGridEnabled ? snapToGrid(w.y + snappedDy) : w.y + snappedDy,
                 },
               });
             });
@@ -2487,7 +3041,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           if (snap.fromWalls) return; // move its walls instead; the room follows them
           dispatch({
             type: 'UPDATE_ROOM', id,
-            changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) },
+            changes: {
+              x: snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx,
+              y: snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy,
+            },
           });
         } else if (type === 'door' || type === 'window') {
           // Snap hosted door/window along nearest wall
@@ -2508,13 +3065,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           const snap = dragElementSnapshot as FloorPlanColumn;
           dispatch({
             type: 'UPDATE_COLUMN', id,
-            changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) },
+            changes: {
+              x: snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx,
+              y: snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy,
+            },
           });
         } else if (type === 'stairs') {
           const snap = dragElementSnapshot as FloorPlanStaircase;
           dispatch({
             type: 'UPDATE_STAIRS', id,
-            changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) },
+            changes: {
+              x: snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx,
+              y: snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy,
+            },
           });
         } else if (type === 'furniture') {
           const snap = dragElementSnapshot as FloorPlanFurniture;
@@ -2531,24 +3094,26 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           }
           dispatch({
             type: 'UPDATE_FURNITURE', id,
-            changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) },
+            changes: {
+              x: snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx,
+              y: snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy,
+            },
           });
         } else if (type === 'annotation') {
           const snap = dragElementSnapshot as FloorPlanAnnotation;
           dispatch({
             type: 'UPDATE_ANNOTATION', id,
-            changes: { x: snapToGrid(snap.x + snappedDx), y: snapToGrid(snap.y + snappedDy) },
+            changes: {
+              x: snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx,
+              y: snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy,
+            },
           });
         }
         return;
       }
 
       if (activeTool === 'measure' && isMeasuring && measureStart) {
-        const snapPt = findSnapPoint(
-          world.x, world.y, editorState.walls,
-          snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
-          snapToEndpointsEnabled, snapToWallEnabled
-        );
+        const snapPt = liveRef.current.snapAt(world.x, world.y);
         setMeasureCurrent({ x: snapPt.x, y: snapPt.y });
         return;
       }
@@ -2557,9 +3122,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     },
     [
       resizingWall, isPanning, panStart, isDrawingWall, wallStart, isDragging, dragStartPos,
-      dragElementSnapshot, selectedElement, svgToWorld, getSvgPos, snapToGridEnabled,
-      snapToEndpointsEnabled, snapToWallEnabled, isOrthoActive, editorState.walls, unit, zoom, panX, panY,
-      activeTool, isMeasuring, measureStart
+      dragElementSnapshot, selectedElement, svgToWorld, getSvgPos,
+      isOrthoActive, editorState.walls, unit, zoom, panX, panY,
+      activeTool, isMeasuring, measureStart, isFreehandDrawing, snapToGrid
     ]
   );
 
@@ -2567,42 +3132,25 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setLiveLengthBadge(null);
     setSnapIndicator(null);
 
-    // AI Intelligent Sketch Interpretation & Classification Engine
+    // Sketch mode: the stroke is read as straight, joined walls (src/domain/planSketch.ts).
+    // Small corrections (wobble, a few degrees of tilt, a corner within snap reach) are
+    // applied at once as one undo step and reported with an Undo button. A large correction
+    // is only shown: it is added when the user accepts it, never silently.
     if (activeTool === 'ai_draw' && isFreehandDrawing) {
+      const pts = freehandRef.current;
+      freehandRef.current = [];
       setIsFreehandDrawing(false);
-      if (freehandPoints.length >= 2) {
-        // Run intelligent multi-layer geometry classifier (classifyDrawingStroke & classifySketchStroke)
-        const strokeResult = classifyDrawingStroke(freehandPoints, editorState.walls, editorState.rooms, unit);
-
-        // Confidence Rules:
-        // 90-100%: Safe automatic interpretation when geometry rules also agree
-        // 70-89%: Ask user for confirmation
-        // Below 70%: Ask user, do NOT automatically modify the drawing
-        if (strokeResult.confidence >= 0.90 && !strokeResult.requiresConfirmation) {
-          executeValidatedAction(strokeResult.suggestedAction);
-          triggerAiFeedback(`${strokeResult.label} detected — converted`);
-          onNotify(`${strokeResult.label} detected — converted`, 'success');
-
-          // A wall that closes a loop creates its room through the shared reducer.
-        } else if (strokeResult.confidence >= 0.70) {
-          // 70–89%: Ask user for confirmation via on-canvas card without covering canvas
-          setPendingClassification(strokeResult);
-          setAiStrokeSuggestion({
-            message: `I detected a possible ${strokeResult.label}. Convert it to a verified ${strokeResult.label}?`,
-            action: strokeResult.suggestedAction,
-          });
-          triggerAiFeedback(`Looks like a ${strokeResult.label}. Confirm on canvas.`);
-        } else {
-          // Below 70%: Do NOT guess blindly. Ask user!
-          setPendingClassification(strokeResult);
-          setAiStrokeSuggestion({
-            message: `I detected an ambiguous drawing. Convert it to ${strokeResult.label || 'wall'}?`,
-            action: strokeResult.suggestedAction,
-          });
-          triggerAiFeedback("Shape detected. Confirm conversion or keep drawing.");
-        }
-      }
       setFreehandPoints([]);
+      setSketchPreview(null);
+      const result = interpretStroke(pts, editorState.walls, liveRef.current.sketchOptions());
+      if (result.walls.length === 0) {
+        // A plain tap says nothing; a real stroke that came to nothing is explained.
+        if (pts.length > 4) onNotify(describeSketch(result, v => formatDimension(v, unit)), 'info');
+      } else if (result.needsReview) {
+        setSketchProposal({ result, points: pts });
+      } else {
+        liveRef.current.commitSketch(result);
+      }
       return;
     }
 
@@ -2637,8 +3185,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
   }, [
     resizingWall, isPanning, isDragging, selectedElement, editorState, pushHistory, markUnsaved,
-    activeTool, isFreehandDrawing, freehandPoints, unit, dispatchWithHistory, onNotify, triggerAiFeedback,
-    executeValidatedAction, setPendingClassification, setIsAiAssistantOpen
+    activeTool, isFreehandDrawing, unit, onNotify
   ]);
 
   // ── Wheel Pan & Zoom ──────────────────────────────────
@@ -2840,6 +3387,35 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     [activeTool, getSvgPos, editorState, selectedElement]
   );
 
+  const handleEraseElement = useCallback((type: string, id: string) => {
+    if (type === 'wall') {
+      dispatchWithHistory({ type: 'DELETE_WALL', id });
+      onNotify('Wall erased', 'info');
+    } else if (type === 'room') {
+      dispatchWithHistory({ type: 'DELETE_ROOM', id });
+      onNotify('Room erased', 'info');
+    } else if (type === 'door') {
+      dispatchWithHistory({ type: 'DELETE_DOOR', id });
+      onNotify('Door erased', 'info');
+    } else if (type === 'window') {
+      dispatchWithHistory({ type: 'DELETE_WINDOW', id });
+      onNotify('Window erased', 'info');
+    } else if (type === 'furniture') {
+      dispatchWithHistory({ type: 'DELETE_FURNITURE', id });
+      onNotify('Furniture erased', 'info');
+    } else if (type === 'column') {
+      dispatchWithHistory({ type: 'DELETE_COLUMN', id });
+      onNotify('Column erased', 'info');
+    } else if (type === 'stairs') {
+      dispatchWithHistory({ type: 'DELETE_STAIRS', id });
+      onNotify('Stairs erased', 'info');
+    } else if (type === 'annotation') {
+      dispatchWithHistory({ type: 'DELETE_ANNOTATION', id });
+      onNotify('Annotation erased', 'info');
+    }
+    setSelectedElement(null);
+  }, [dispatchWithHistory, onNotify]);
+
   // ── Pointer input: mouse, touch and pen through one path ──────────────
   //
   // Touch rules (they exist to prevent accidental drawing on a phone):
@@ -2851,9 +3427,40 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const elementDownProps = (
     type: 'wall' | 'room' | 'door' | 'window' | 'column' | 'stairs' | 'furniture' | 'annotation',
     id: string
-  ) => (supportsPointer
-    ? { onPointerDown: (e: React.PointerEvent) => handleElementMouseDown(e, type, id) }
-    : { onMouseDown: (e: React.MouseEvent) => handleElementMouseDown(e, type, id) });
+  ) => {
+    if (activeTool === 'eraser') {
+      const onErase = (e: React.SyntheticEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (type === 'wall') {
+          const w = editorState.walls.find(item => item.id === id);
+          if (w) {
+            const pos = getSvgPos(e as any);
+            const world = svgToWorld(pos.x, pos.y);
+            const split = splitWallAtPoint(w, world.x, world.y, () => uid('wall'), 1.0);
+            if (split) {
+              const [w1, w2] = split;
+              dispatchWithHistory({
+                type: 'SET_WALLS',
+                walls: editorState.walls.map(wall => wall.id === id ? w1 : wall).concat(w2),
+              });
+              onNotify('Wall split at erase point (partial eraser)', 'info');
+              setSelectedElement(null);
+              return;
+            }
+          }
+        }
+        handleEraseElement(type, id);
+      };
+      return supportsPointer
+        ? { onPointerDown: onErase, onClick: onErase, style: { cursor: 'pointer', filter: 'drop-shadow(0 0 6px #ef4444)' } }
+        : { onMouseDown: onErase, onClick: onErase, style: { cursor: 'pointer', filter: 'drop-shadow(0 0 6px #ef4444)' } };
+    }
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    return supportsPointer
+      ? { onPointerDown: (e: React.PointerEvent) => handleElementMouseDown(e, type, id) }
+      : { onMouseDown: (e: React.MouseEvent) => handleElementMouseDown(e, type, id) };
+  };
 
   const beginJointDrag = (e: React.SyntheticEvent, wall: FloorPlanWall, endpoint: 1 | 2) => {
     // Corners are only dragged with the Select tool, and never by the second finger of a pinch.
@@ -2862,17 +3469,46 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
     if (!supportsPointer) e.stopPropagation();
+    if (wall.locked) {
+      onNotify('This wall is locked. Unlock it to resize it.', 'info');
+      return;
+    }
     dragStartStateRef.current = editorState;
+    const origin = endpoint === 1 ? { x: wall.x1, y: wall.y1 } : { x: wall.x2, y: wall.y2 };
+    const tol = joinTolerance(unit);
+    const meets = (x: number, y: number) => Math.hypot(x - origin.x, y - origin.y) <= tol;
     jointDragRef.current = {
       walls: editorState.walls,
-      origin: endpoint === 1 ? { x: wall.x1, y: wall.y1 } : { x: wall.x2, y: wall.y2 },
+      others: editorState.walls.filter(w => !meets(w.x1, w.y1) && !meets(w.x2, w.y2)),
+      origin,
     };
     setResizingWall({ id: wall.id, endpoint });
   };
 
-  const jointDownProps = (wall: FloorPlanWall, endpoint: 1 | 2) => (supportsPointer
-    ? { onPointerDown: (e: React.PointerEvent) => beginJointDrag(e, wall, endpoint) }
-    : { onMouseDown: (e: React.MouseEvent) => beginJointDrag(e, wall, endpoint) });
+  /** Pressing a wall's measurement label. The length box opens when the press turns out to be a tap. */
+  const dimDownProps = (wallId: string) => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      const pe = e as unknown as React.PointerEvent;
+      if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
+      // Stops the browser's follow-up mouse events, which would land on the sheet that opens.
+      e.preventDefault();
+      dimHitRef.current = wallId;
+      if (!supportsPointer) {
+        e.stopPropagation();
+        dimHitRef.current = null;
+        openWallEditRef.current(wallId);
+      }
+    };
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
+  const jointDownProps = (wall: FloorPlanWall, endpoint: 1 | 2) => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    return supportsPointer
+      ? { onPointerDown: (e: React.PointerEvent) => beginJointDrag(e, wall, endpoint) }
+      : { onMouseDown: (e: React.MouseEvent) => beginJointDrag(e, wall, endpoint) };
+  };
 
   const fakeMouse = (x: number, y: number, shiftKey = false, altKey = false) => ({
     clientX: x, clientY: y, button: 0, buttons: 1, shiftKey, altKey,
@@ -2962,17 +3598,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setResizingWall(null);
     setIsPanning(false);
     setPanStart(null);
-    if (g.dragDrawing) {
-      setIsDrawingWall(false);
-      setWallStart(null);
-    }
+    setIsDrawingWall(false);
+    setWallStart(null);
+    setCurrentMousePos(null);
+    freehandRef.current = [];
     setIsFreehandDrawing(false);
     setFreehandPoints([]);
+    setSketchPreview(null);
     setLiveLengthBadge(null);
     setSnapIndicator(null);
     g.dragDrawing = false;
     g.wallStart = null;
     g.panning = false;
+    g.dimHit = null;
   };
 
   // Leaving the Wall tool drops any wall that was started but not finished, whichever
@@ -2984,6 +3622,28 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setLiveLengthBadge(null);
     setSnapIndicator(null);
   }, [activeTool]);
+
+  // The Wall button returns to whichever wall mode (Straight or Sketch) was used last.
+  // Leaving Sketch drops a stroke that was still waiting for a decision.
+  useEffect(() => {
+    if (activeTool === 'wall' || activeTool === 'ai_draw') {
+      setWallMode(activeTool);
+      writeSetting('bm_fp_wall_mode', activeTool);
+    }
+    if (activeTool !== 'ai_draw') {
+      freehandRef.current = [];
+      setIsFreehandDrawing(false);
+      setFreehandPoints([]);
+      setSketchPreview(null);
+      setSketchProposal(null);
+    }
+  }, [activeTool]);
+
+  const cycleSketchAngles = () => {
+    const next = sketchAngles === '45' ? '90' : sketchAngles === '90' ? 'free' : '45';
+    setSketchAngles(next);
+    writeSetting('bm_fp_sketch_angles', next);
+  };
 
   // The newest reset, for the window listeners below.
   useEffect(() => {
@@ -3029,10 +3689,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     elementHitRef.current = false;
     const pendingSelect = pendingSelectRef.current;
     pendingSelectRef.current = null;
+    const dimHit = dimHitRef.current;
+    dimHitRef.current = null;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture is a nicety */ }
     touchInputRef.current = e.pointerType !== 'mouse';
 
     if (e.pointerType === 'mouse') {
+      // A click on a measurement opens its length box and does nothing else: no pan, no deselect.
+      if (dimHit && e.button === 0) {
+        openWallEditRef.current(dimHit);
+        return;
+      }
       if (!onElement) handleMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
       return;
     }
@@ -3050,7 +3717,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointersRef.current.size === 1) {
       Object.assign(g, {
-        kind: 'single', onElement, pendingSelect, downAt: { x: e.clientX, y: e.clientY },
+        kind: 'single', onElement, pendingSelect, dimHit, downAt: { x: e.clientX, y: e.clientY },
         moved: false, dragDrawing: false, wallStart: null, panning: false,
       });
       // Freehand sketching starts at once; everything else waits to see tap or drag.
@@ -3111,11 +3778,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         if (!onAnchor) {
           g.dragDrawing = true;
           const world = svgToWorld(down.x, down.y);
-          const start = findSnapPoint(
-            world.x, world.y, editorState.walls,
-            snapToGridEnabled ? SNAP_THRESHOLD : 0, 0.75,
-            snapToEndpointsEnabled, snapToWallEnabled
-          );
+          const start = snapAt(world.x, world.y);
           g.wallStart = { x: start.x, y: start.y };
           setWallStart(g.wallStart);
           setIsDrawingWall(true);
@@ -3191,6 +3854,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       return;
     }
     if (g.moved) return;
+    if (g.dimHit) {
+      // A tap on a measurement opens its length box. (A drag from it only moved the view.)
+      const wallId = g.dimHit;
+      g.dimHit = null;
+      openWallEditRef.current(wallId);
+      return;
+    }
     if (activeTool === 'select' || activeTool === 'pan') {
       // A tap selects what was tapped, or clears the selection on empty space.
       setSelectedElement(g.pendingSelect);
@@ -3419,7 +4089,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         ` : ''}
 
         <div class="footer-note">
-          <span>${PLAN_DISCLAIMER}</span>
+          <span>${PLAN_DISCLAIMER} ${PLAN_REVIEW_NOTE}</span>
           <span>Drawing Ref: ${plan.id.slice(0, 8)} | Page 1 of 1</span>
         </div>
 
@@ -3678,7 +4348,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_ROOM', payload: newRoom });
     setSelectedElement({ type: 'room', id: newId });
     onNotify('Added L-shaped room (exact Shoelace area)', 'success');
-  }, [editorState.rooms, unit, dispatchWithHistory, onNotify]);
+  }, [editorState.rooms, unit, dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddUShapedRoom = useCallback(() => {
     const roomCount = editorState.rooms.length;
@@ -3711,7 +4381,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_ROOM', payload: newRoom });
     setSelectedElement({ type: 'room', id: newId });
     onNotify('Added U-shaped room (exact Shoelace area)', 'success');
-  }, [editorState.rooms, unit, dispatchWithHistory, onNotify]);
+  }, [editorState.rooms, unit, dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddTShapedRoom = useCallback(() => {
     const roomCount = editorState.rooms.length;
@@ -3744,7 +4414,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_ROOM', payload: newRoom });
     setSelectedElement({ type: 'room', id: newId });
     onNotify('Added T-shaped room (exact Shoelace area)', 'success');
-  }, [editorState.rooms, unit, dispatchWithHistory, onNotify]);
+  }, [editorState.rooms, unit, dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddWallPreset = useCallback((preset: 'exterior' | 'interior' | 'partition') => {
     const thick = preset === 'exterior' ? (unit === 'feet' ? 0.75 : 0.23) : preset === 'interior' ? (unit === 'feet' ? 0.375 : 0.115) : (unit === 'feet' ? 0.25 : 0.075);
@@ -3784,7 +4454,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_STAIRS', payload: newStair });
     setSelectedElement({ type: 'stairs', id: newStair.id });
     onNotify(`Added ${type} Staircase`, 'success');
-  }, [unit, dispatchWithHistory, onNotify]);
+  }, [unit, dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddLanding = useCallback(() => {
     const newLanding: FloorPlanRoom = {
@@ -3803,7 +4473,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_ROOM', payload: newLanding });
     setSelectedElement({ type: 'room', id: newLanding.id });
     onNotify('Added Landing Platform', 'success');
-  }, [unit, dispatchWithHistory, onNotify]);
+  }, [unit, dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddVoid = useCallback(() => {
     const newVoid: FloorPlanRoom = {
@@ -3822,7 +4492,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_ROOM', payload: newVoid });
     setSelectedElement({ type: 'room', id: newVoid.id });
     onNotify('Added Void Cutout Area', 'success');
-  }, [unit, dispatchWithHistory, onNotify]);
+  }, [unit, dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddFurnitureItem = useCallback((item: FurnitureCatalogItem) => {
     const newId = uid('furn');
@@ -3841,7 +4511,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_FURNITURE', payload: newFurn });
     setSelectedElement({ type: 'furniture', id: newId });
     onNotify(`Added ${item.itemType} to plan`, 'success');
-  }, [dispatchWithHistory, onNotify]);
+  }, [dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddElectricalItem = useCallback((name: string) => {
     const newId = uid('furn');
@@ -3860,7 +4530,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     dispatchWithHistory({ type: 'ADD_FURNITURE', payload: newElec });
     setSelectedElement({ type: 'furniture', id: newId });
     onNotify(`Added ${name} to plan`, 'success');
-  }, [dispatchWithHistory, onNotify]);
+  }, [dispatchWithHistory, onNotify, snapToGrid]);
 
   const handleAddAnnotationPreset = useCallback((type: 'dimension' | 'note' | 'label') => {
     if (type === 'dimension') {
@@ -3882,7 +4552,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setSelectedElement({ type: 'annotation', id: newId });
       onNotify('Added Text Annotation', 'success');
     }
-  }, [dispatchWithHistory, onNotify]);
+  }, [dispatchWithHistory, onNotify, snapToGrid]);
 
   if (loading) {
     return (
@@ -3907,6 +4577,68 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const plotW = plan.plotLength * GRID_SIZE_PX * zoom;
   const plotH = plan.plotWidth * GRID_SIZE_PX * zoom;
   const currentFloor = floorLevels[activeFloorIndex] || { name: plan.floorName };
+
+  const hintKey = activeTool === 'select' && editorState.walls.length === 0 && editorState.rooms.length === 0 ? 'start' : activeTool;
+  const activeHint = TOOL_HINTS[hintKey] && !seenHints.includes(hintKey) ? hintKey : null;
+
+  // Measurement text: a fixed, readable size on screen at any zoom, scaled by the user's
+  // text-size setting. It is drawn from the wall's real length on every render.
+  const dimFontPx = (isMobile ? 12 : 11.5) * dimTextScale;
+  const dimColor = viewMode === 'blueprint' ? '#fca5a5' : '#dc2626';
+  const dimLabelsTappable = activeTool === 'select' || activeTool === 'pan';
+  const toScreen = (x: number, y: number) => ({ x: x * GRID_SIZE_PX * zoom + panX, y: y * GRID_SIZE_PX * zoom + panY });
+
+  /** The walls a sketch stroke would become, drawn over the plan (dashed while awaiting a decision). */
+  const renderSketchWalls = (result: SketchResult, raw: Point2D[], pending: boolean) => (
+    <g className="fp-sketch-preview" style={{ pointerEvents: 'none' }}>
+      {raw.length > 1 && (
+        <polyline
+          points={raw.map(p => { const s = toScreen(p.x, p.y); return `${s.x},${s.y}`; }).join(' ')}
+          fill="none"
+          stroke="#a8a29e"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="2,5"
+        />
+      )}
+      {result.walls.map(w => {
+        const a = toScreen(w.x1, w.y1), b = toScreen(w.x2, w.y2);
+        const len = wallLength(w);
+        const longEnough = Math.hypot(b.x - a.x, b.y - a.y) > 64;
+        return (
+          <g key={w.id}>
+            <line
+              x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              stroke="#ea580c"
+              strokeOpacity={pending ? 0.75 : 0.6}
+              strokeWidth={Math.max(4, w.thickness * GRID_SIZE_PX * zoom)}
+              strokeLinecap="square"
+              strokeDasharray={pending ? '10,7' : undefined}
+            />
+            <circle cx={a.x} cy={a.y} r={4} fill="#ffffff" stroke="#c2410c" strokeWidth={2} />
+            <circle cx={b.x} cy={b.y} r={4} fill="#ffffff" stroke="#c2410c" strokeWidth={2} />
+            {longEnough && (
+              <text
+                x={(a.x + b.x) / 2}
+                y={(a.y + b.y) / 2 - Math.max(4, w.thickness * GRID_SIZE_PX * zoom) / 2 - 6}
+                textAnchor="middle"
+                fontSize={dimFontPx}
+                fontWeight="700"
+                fontFamily="'Outfit', sans-serif"
+                fill="#9a3412"
+                stroke="#ffffff"
+                strokeWidth={3}
+                paintOrder="stroke"
+              >
+                {formatDimension(len, unit)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
 
   return (
     <div className={`fp-editor-root ${viewMode === 'blueprint' ? 'fp-blueprint-mode' : viewMode === 'presentation' ? 'fp-presentation-mode' : ''}`}>
@@ -4462,281 +5194,294 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         </div>
       </div>
 
-      {/* ── Tool Palette ──────────────────────────────── */}
+      {/* ── Categorized Tool Palette (Priority 2) ──────────────────────────────── */}
       <div className="fp-toolbar no-print">
-        {/* Select / Move */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${activeTool === 'select' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('select'); setIsDrawingWall(false); setWallStart(null); }}
-          title="Select / Move (V)"
-          id="fp-tool-select"
-        >
-          <MousePointer2 size={20} />
-          <span>Select</span>
-        </button>
-
-        {/* Pan / Hand */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${activeTool === 'pan' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTool('pan');
-            setIsDrawingWall(false);
-            setWallStart(null);
-            setSelectedElement(null);
-          }}
-          title="Pan Blueprint Canvas (H / Hold Space + Drag / Right-Click Drag)"
-          id="fp-tool-pan"
-        >
-          <Hand size={20} />
-          <span>Pan</span>
-        </button>
-
-        {/* Wall */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${activeTool === 'wall' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('wall'); setSelectedElement(null); }}
-          title="Draw Wall (W)"
-          id="fp-tool-wall"
-        >
-          <Pencil size={20} />
-          <span>Wall</span>
-        </button>
-
-        {/* Door */}
-        <div className="fp-tool-palette-group">
+        {/* GROUP 1: DRAW */}
+        <div className="fp-toolbar-group" aria-label="Drawing Tools">
+          <span className="fp-toolbar-group-label">Draw</span>
           <button
             type="button"
-            className={`fp-tool-palette-btn ${activeTool === 'door' ? 'active' : ''}`}
-            onClick={() => { setActiveTool('door'); setSelectedElement(null); }}
-            title="Place Door (D)"
-            id="fp-tool-door"
+            className={`fp-tool-palette-btn ${activeTool === 'select' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('select'); setIsDrawingWall(false); setWallStart(null); }}
+            title="Select / Move (V)"
+            id="fp-tool-select"
           >
-            <DoorOpen size={20} />
-            <span>Door</span>
+            <MousePointer2 size={18} />
+            <span>Select</span>
           </button>
-          {activeTool === 'door' && (
-            <select
-              value={selectedDoorType}
-              onChange={e => setSelectedDoorType(e.target.value as DoorType)}
-              className="fp-tool-select"
-              id="fp-door-type-select"
-            >
-              {DOOR_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
-            </select>
-          )}
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${activeTool === 'pan' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('pan'); setIsDrawingWall(false); setWallStart(null); setSelectedElement(null); }}
+            title="Pan Blueprint Canvas (H / Hold Space + Drag)"
+            id="fp-tool-pan"
+          >
+            <Hand size={18} />
+            <span>Pan</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${activeTool === 'wall' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('wall'); setSelectedElement(null); }}
+            title="Draw Wall (W)"
+            id="fp-tool-wall"
+          >
+            <Pencil size={18} />
+            <span>Wall</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn fp-tool-smart-pen ${activeTool === 'ai_draw' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('ai_draw'); setSelectedElement(null); }}
+            title="Sketch walls (S): draw rough outline to auto-straighten"
+            id="fp-tool-smart-draw"
+            data-testid="fp-tool-ai-draw"
+          >
+            <PenTool size={18} className="text-amber-500" />
+            <span style={{ fontWeight: 800 }}>Sketch</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('eraser'); setSelectedElement(null); setIsDrawingWall(false); setWallStart(null); }}
+            title="Eraser (E / Tap to delete any element)"
+            id="fp-tool-eraser"
+          >
+            <Eraser size={18} />
+            <span>Eraser</span>
+          </button>
         </div>
 
-        {/* Window */}
-        <div className="fp-tool-palette-group">
-          <button
-            type="button"
-            className={`fp-tool-palette-btn ${activeTool === 'window' ? 'active' : ''}`}
-            onClick={() => { setActiveTool('window'); setSelectedElement(null); }}
-            title="Place Window"
-            id="fp-tool-window"
-          >
-            <AppWindow size={20} />
-            <span>Window</span>
-          </button>
-          {activeTool === 'window' && (
-            <select
-              value={selectedWindowType}
-              onChange={e => setSelectedWindowType(e.target.value as WindowType)}
-              className="fp-tool-select"
-              id="fp-window-type-select"
+        {/* GROUP 2: OPENINGS */}
+        <div className="fp-toolbar-group" aria-label="Openings Tools">
+          <span className="fp-toolbar-group-label">Openings</span>
+          <div className="fp-tool-palette-group">
+            <button
+              type="button"
+              className={`fp-tool-palette-btn ${activeTool === 'door' ? 'active' : ''}`}
+              onClick={() => { setActiveTool('door'); setSelectedElement(null); }}
+              title="Place Door (D)"
+              id="fp-tool-door"
             >
-              {WINDOW_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
-            </select>
-          )}
-        </div>
-
-        {/* Room */}
-        <div className="fp-tool-palette-group">
-          <button
-            type="button"
-            className={`fp-tool-palette-btn ${activeTool === 'room' ? 'active' : ''}`}
-            onClick={() => { setActiveTool('room'); setSelectedElement(null); }}
-            title="Place Room (R)"
-            id="fp-tool-room"
-          >
-            <Square size={20} />
-            <span>Room</span>
-          </button>
-          {activeTool === 'room' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <DoorOpen size={18} />
+              <span>Door</span>
+            </button>
+            {activeTool === 'door' && (
               <select
-                value={selectedRoomType}
-                onChange={e => setSelectedRoomType(e.target.value as RoomType)}
+                value={selectedDoorType}
+                onChange={e => setSelectedDoorType(e.target.value as DoorType)}
                 className="fp-tool-select"
-                id="fp-room-type-select"
+                id="fp-door-type-select"
               >
-                {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
+                {DOOR_TYPES.map(dt => <option key={dt} value={dt}>{dt}</option>)}
               </select>
-              <button
-                type="button"
-                className="fp-stepper-btn"
-                style={{ width: 'auto', padding: '0 6px', height: 28, fontSize: '0.72rem' }}
-                onClick={() => setShowAddRoomModal(true)}
-                title="Add room by typing Height & Width"
+            )}
+          </div>
+          <div className="fp-tool-palette-group">
+            <button
+              type="button"
+              className={`fp-tool-palette-btn ${activeTool === 'window' ? 'active' : ''}`}
+              onClick={() => { setActiveTool('window'); setSelectedElement(null); }}
+              title="Place Window"
+              id="fp-tool-window"
+            >
+              <AppWindow size={18} />
+              <span>Window</span>
+            </button>
+            {activeTool === 'window' && (
+              <select
+                value={selectedWindowType}
+                onChange={e => setSelectedWindowType(e.target.value as WindowType)}
+                className="fp-tool-select"
+                id="fp-window-type-select"
               >
-                + Size
-              </button>
-            </div>
-          )}
+                {WINDOW_TYPES.map(wt => <option key={wt} value={wt}>{wt}</option>)}
+              </select>
+            )}
+          </div>
         </div>
 
-        {/* Column / Pillar */}
-        <div className="fp-tool-palette-group">
-          <button
-            type="button"
-            className={`fp-tool-palette-btn ${activeTool === 'column' ? 'active' : ''}`}
-            onClick={() => { setActiveTool('column'); setSelectedElement(null); }}
-            title="Place Structural Column"
-            id="fp-tool-column"
-          >
-            <Columns size={20} />
-            <span>Column</span>
-          </button>
-          {activeTool === 'column' && (
-            <select
-              value={columnShape}
-              onChange={e => setColumnShape(e.target.value as any)}
-              className="fp-tool-select"
+        {/* GROUP 3: FURNISH */}
+        <div className="fp-toolbar-group" aria-label="Furnishing Tools">
+          <span className="fp-toolbar-group-label">Furnish</span>
+          <div className="fp-tool-palette-group">
+            <button
+              type="button"
+              className={`fp-tool-palette-btn ${activeTool === 'room' ? 'active' : ''}`}
+              onClick={() => { setActiveTool('room'); setSelectedElement(null); }}
+              title="Place Room (R)"
+              id="fp-tool-room"
             >
-              <option value="square">Square (9"×9")</option>
-              <option value="rectangular">Rectangular (9"×15")</option>
-              <option value="round">Round Pillar</option>
-            </select>
-          )}
-        </div>
-
-        {/* Stairs */}
-        <div className="fp-tool-palette-group">
+              <Square size={18} />
+              <span>Room</span>
+            </button>
+            {activeTool === 'room' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <select
+                  value={selectedRoomType}
+                  onChange={e => setSelectedRoomType(e.target.value as RoomType)}
+                  className="fp-tool-select"
+                  id="fp-room-type-select"
+                >
+                  {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
+                </select>
+                <button
+                  type="button"
+                  className="fp-stepper-btn"
+                  style={{ width: 'auto', padding: '0 6px', height: 28, fontSize: '0.72rem' }}
+                  onClick={() => setShowAddRoomModal(true)}
+                  title="Add room by typing Height & Width"
+                >
+                  + Size
+                </button>
+              </div>
+            )}
+          </div>
           <button
             type="button"
-            className={`fp-tool-palette-btn ${activeTool === 'stairs' ? 'active' : ''}`}
-            onClick={() => { setActiveTool('stairs'); setSelectedElement(null); }}
-            title="Place Staircase"
-            id="fp-tool-stairs"
+            className={`fp-tool-palette-btn ${activeTool === 'furniture' ? 'active' : ''}`}
+            onClick={() => setShowFurnitureModal(true)}
+            title="Open Furniture & Symbols Library"
+            id="fp-tool-furniture"
           >
-            <Split size={20} />
-            <span>Stairs</span>
+            <Armchair size={18} />
+            <span>Furniture</span>
           </button>
-          {activeTool === 'stairs' && (
-            <select
-              value={stairType}
-              onChange={e => setStairType(e.target.value as any)}
-              className="fp-tool-select"
+          <div className="fp-tool-palette-group">
+            <button
+              type="button"
+              className={`fp-tool-palette-btn ${activeTool === 'column' ? 'active' : ''}`}
+              onClick={() => { setActiveTool('column'); setSelectedElement(null); }}
+              title="Place Structural Column"
+              id="fp-tool-column"
             >
-              <option value="straight">Straight Flight</option>
-              <option value="l-shape">L-Shape / Quarter Turn</option>
-              <option value="u-shape">U-Shape / Dog Legged</option>
-              <option value="spiral">Spiral</option>
-            </select>
-          )}
+              <Columns size={18} />
+              <span>Column</span>
+            </button>
+            {activeTool === 'column' && (
+              <select
+                value={columnShape}
+                onChange={e => setColumnShape(e.target.value as any)}
+                className="fp-tool-select"
+              >
+                <option value="square">Square (9"×9")</option>
+                <option value="rectangular">Rectangular (9"×15")</option>
+                <option value="round">Round Pillar</option>
+              </select>
+            )}
+          </div>
+          <div className="fp-tool-palette-group">
+            <button
+              type="button"
+              className={`fp-tool-palette-btn ${activeTool === 'stairs' ? 'active' : ''}`}
+              onClick={() => { setActiveTool('stairs'); setSelectedElement(null); }}
+              title="Place Staircase"
+              id="fp-tool-stairs"
+            >
+              <Split size={18} />
+              <span>Stairs</span>
+            </button>
+            {activeTool === 'stairs' && (
+              <select
+                value={stairType}
+                onChange={e => setStairType(e.target.value as any)}
+                className="fp-tool-select"
+              >
+                <option value="straight">Straight Flight</option>
+                <option value="l-shape">L-Shape</option>
+                <option value="u-shape">U-Shape</option>
+                <option value="spiral">Spiral</option>
+              </select>
+            )}
+          </div>
         </div>
 
-        {/* Furniture Library */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${activeTool === 'furniture' ? 'active' : ''}`}
-          onClick={() => setShowFurnitureModal(true)}
-          title="Open Furniture & Symbols Library"
-          id="fp-tool-furniture"
-        >
-          <Armchair size={20} />
-          <span>Furniture</span>
-        </button>
-
-        {/* Dimensions */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${showDimensions ? 'active' : ''}`}
-          onClick={() => setShowDimensions(d => !d)}
-          title="Toggle CAD Dimensions (M)"
-          id="fp-tool-dimension"
-        >
-          <Ruler size={20} />
-          <span>Dimension</span>
-        </button>
-
-        {/* Text Annotation */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${activeTool === 'annotation' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('annotation'); setSelectedElement(null); }}
-          title="Place Text Note / Callout"
-        >
-          <PenTool size={20} />
-          <span>Note</span>
-        </button>
-
-        {/* Delete button */}
-        {selectedElement && (
+        {/* GROUP 4: MEASURE */}
+        <div className="fp-toolbar-group" aria-label="Measure Tools">
+          <span className="fp-toolbar-group-label">Measure</span>
           <button
             type="button"
-            className="fp-tool-palette-btn fp-tool-danger"
-            onClick={handleDeleteSelected}
-            title="Delete selected element (Del)"
-            id="fp-delete-selected-btn"
+            className={`fp-tool-palette-btn ${showDimensions ? 'active' : ''}`}
+            onClick={() => setShowDimensions(d => !d)}
+            title="Toggle CAD Dimensions (M)"
+            id="fp-tool-dimension"
           >
-            <Trash2 size={20} />
-            <span>Delete</span>
+            <Ruler size={18} />
+            <span>Dimension</span>
           </button>
-        )}
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${activeTool === 'measure' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTool(t => t === 'measure' ? 'select' : 'measure');
+              setMeasureStart(null);
+              setMeasureCurrent(null);
+              setIsMeasuring(false);
+            }}
+            title="Measure Tape Distance & Angle"
+            id="fp-tool-measure-tape"
+          >
+            <ScanLine size={18} />
+            <span>Tape</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${activeTool === 'annotation' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('annotation'); setSelectedElement(null); }}
+            title="Place Text Note / Callout"
+          >
+            <PenTool size={18} />
+            <span>Note</span>
+          </button>
+        </div>
 
-        {/* Shape Library Toggle */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${isShapeLibraryOpen ? 'active' : ''}`}
-          onClick={() => setIsShapeLibraryOpen(o => !o)}
-          title="Toggle Shape Library Panel"
-          id="fp-tool-shape-library"
-        >
-          <Layers size={20} />
-          <span>Library</span>
-        </button>
+        {/* GROUP 5: VIEW & ASSIST */}
+        <div className="fp-toolbar-group" aria-label="View & Workspace">
+          <span className="fp-toolbar-group-label">View</span>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${showGrid ? 'active' : ''}`}
+            onClick={() => setShowGrid(g => !g)}
+            title="Toggle Grid"
+          >
+            <Layers size={18} />
+            <span>Grid</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${viewMode === 'blueprint' ? 'active' : ''}`}
+            onClick={() => setViewMode(v => v === 'blueprint' ? 'design' : 'blueprint')}
+            title="Toggle Blueprint Blue CAD Theme"
+          >
+            <FileCode size={18} />
+            <span>Blueprint</span>
+          </button>
+          <button
+            type="button"
+            className="fp-tool-palette-btn"
+            onClick={() => setShow3D(true)}
+            title="Open 3D Architectural Preview"
+          >
+            <Box size={18} />
+            <span>3D</span>
+          </button>
+          <button
+            type="button"
+            className="fp-tool-palette-btn fp-tool-copilot"
+            onClick={() => setIsAiAssistantOpen(prev => !prev)}
+            title="✨ AI Floor Plan Assistant Panel (Ctrl + K)"
+            id="fp-tool-copilot-palette"
+            style={{
+              background: '#fff7ed',
+              border: '1.5px solid #fdba74',
+            }}
+          >
+            <Sparkles size={18} color="#b45309" className="animate-pulse" />
+            <span style={{ color: '#b45309', fontWeight: 800 }}>AI Assist</span>
+          </button>
+        </div>
 
-        {/* AI Natural Draw Mode ("user summa line draw panna athe understand panna purinjiganu") */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn fp-tool-smart-pen ${activeTool === 'ai_draw' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTool('ai_draw');
-            setSelectedElement(null);
-            triggerAiFeedback('✨ AI Draw Mode Active: Draw roughly — AI detects walls, rooms, doors & windows!');
-          }}
-          title="✨ AI Draw Mode: Draw freely without picking Wall/Door first. AI interprets with confidence scoring."
-          id="fp-tool-smart-draw"
-          data-testid="fp-tool-ai-draw"
-        >
-          <PenTool size={20} className="text-amber-400" />
-          <span style={{ fontWeight: 800 }}>✨ AI Draw</span>
-        </button>
-
-        {/* AI Assistant in Left Tool Palette */}
-        <button
-          type="button"
-          className="fp-tool-palette-btn fp-tool-copilot"
-          onClick={() => setIsAiAssistantOpen(prev => !prev)}
-          title="✨ AI Floor Plan Assistant Panel (Ctrl + K)"
-          id="fp-tool-copilot-palette"
-          style={{
-            background: '#fff7ed',
-            border: '1.5px solid #fdba74',
-          }}
-        >
-          <Sparkles size={20} color="#b45309" className="animate-pulse" />
-          <span style={{ color: '#b45309', fontWeight: 800 }}>✨ AI Assist</span>
-        </button>
-
-
-        <div className="fp-toolbar-divider" />
-
-        {/* Wall Thickness Input */}
+        {/* Wall Thickness Input & Delete Action */}
         <div className="fp-toolbar-control">
           <label htmlFor="fp-wall-thickness">Wall</label>
           <input
@@ -4752,16 +5497,24 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <span className="fp-unit-label">{unit === 'feet' ? 'ft' : 'm'}</span>
         </div>
 
-        {/* Toggle Grid */}
-        <button
-          type="button"
-          className={`fp-tool-palette-btn ${showGrid ? 'active' : ''}`}
-          onClick={() => setShowGrid(g => !g)}
-          title="Toggle Grid"
-        >
-          <Layers size={20} />
-          <span>Grid</span>
-        </button>
+        {selectedElement && (
+          <button
+            type="button"
+            className="fp-tool-palette-btn fp-tool-danger"
+            onClick={handleDeleteSelected}
+            title="Delete selected element (Del)"
+            id="fp-delete-selected-btn"
+          >
+            <Trash2 size={18} />
+            <span>Delete</span>
+          </button>
+        )}
+      </div>
+
+      {/* ── Dynamic Live One-Line Hint Bar (Priority 2) ── */}
+      <div className="fp-live-hint-bar no-print" role="status" aria-live="polite">
+        <span className="fp-live-hint-tag">{activeTool.replace('_', ' ')}</span>
+        <span className="fp-live-hint-text">{getLiveToolHint(activeTool)}</span>
       </div>
 
       {/* ── Desktop Professional CAD Workspace ────────── */}
@@ -4905,6 +5658,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               ? 'default'
               : 'crosshair',
             touchAction: 'none',
+            overscrollBehavior: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
           }}
         >
           {/* Mobile view switch (< 768px): a small pill in the top-left corner of the canvas */}
@@ -4949,7 +5705,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             >
               <Minus size={16} />
             </button>
-            <span className="fp-mobile-zoom-text">{Math.round(zoom * 100)}%</span>
+            <button
+              type="button"
+              className="fp-mobile-zoom-text"
+              onClick={handleResetView}
+              title="Reset the view to 100%"
+              aria-label={`Zoom ${Math.round(zoom * 100)} percent. Reset the view to 100 percent`}
+              id="fp-mobile-zoom-reset"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
             <button
               type="button"
               className="fp-mobile-zoom-btn"
@@ -4982,33 +5747,67 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <Sparkles size={18} />
           </button>
 
-          {/* On-Canvas AI Drawing Recognition Confirmation Card */}
-          {aiStrokeSuggestion && (
-            <div className="fp-ai-stroke-card no-print" role="dialog" aria-label="AI Drawing Recognition">
+          {/* Sketch result that needs a decision: a large correction is shown on the canvas
+              (dashed) and is only added when the user accepts it. */}
+          {sketchProposal && (
+            <div className="fp-ai-stroke-card no-print" role="dialog" aria-label="Check these walls" id="fp-sketch-review">
               <div className="fp-ai-stroke-content">
-                <Sparkles size={16} color="#b45309" style={{ flexShrink: 0 }} />
-                <span className="fp-ai-stroke-text">{aiStrokeSuggestion.message}</span>
+                <PenTool size={16} color="#c2410c" style={{ flexShrink: 0 }} />
+                <span className="fp-ai-stroke-text">
+                  {describeSketch(sketchProposal.result, v => formatDimension(v, unit))}. Use these walls?
+                </span>
               </div>
               <div className="fp-ai-stroke-actions">
                 <button
                   type="button"
                   className="fp-ai-btn-convert"
-                  onClick={() => {
-                    executeValidatedAction(aiStrokeSuggestion.action);
-                    setAiStrokeSuggestion(null);
-                    onNotify(`${aiStrokeSuggestion.action.description} applied`, 'success');
-                  }}
+                  id="fp-sketch-accept"
+                  onClick={() => commitSketch(sketchProposal.result)}
                 >
-                  Convert
+                  Use
                 </button>
+                {sketchProposal.result.closed && (
+                  <button
+                    type="button"
+                    className="fp-ai-btn-dismiss"
+                    id="fp-sketch-open"
+                    title="Add the walls as drawn, without closing the gap"
+                    onClick={() => {
+                      const open = interpretStroke(sketchProposal.points, editorState.walls, sketchOptions({ closeTolerance: 0 }));
+                      if (open.walls.length > 0) commitSketch(open);
+                      else setSketchProposal(null);
+                    }}
+                  >
+                    Leave open
+                  </button>
+                )}
                 <button
                   type="button"
                   className="fp-ai-btn-dismiss"
-                  onClick={() => setAiStrokeSuggestion(null)}
+                  id="fp-sketch-discard"
+                  onClick={() => setSketchProposal(null)}
                 >
-                  Keep Drawing
+                  Redraw
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* What a sketch stroke just added, with a one-tap Undo. It clears itself. */}
+          {sketchNotice && !sketchProposal && (
+            <div className="fp-sketch-chip no-print" role="status" aria-live="polite" id="fp-sketch-notice">
+              <CheckCircle2 size={15} aria-hidden="true" />
+              <span>{sketchNotice}</span>
+              <button type="button" onClick={handleUndo} id="fp-sketch-undo">Undo</button>
+            </div>
+          )}
+
+          {/* First-use tip for the tool in hand. Shown once; "Got it" hides it for good. */}
+          {activeHint && !sketchProposal && !sketchNotice && (
+            <div className="fp-hint-card no-print" role="note" id="fp-tool-hint">
+              <Info size={16} aria-hidden="true" />
+              <span>{TOOL_HINTS[activeHint]}</span>
+              <button type="button" onClick={() => dismissHint(activeHint)} id="fp-tool-hint-ok">Got it</button>
             </div>
           )}
 
@@ -5064,7 +5863,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               e.dataTransfer.dropEffect = 'copy';
             }}
             onDrop={handleCanvasDrop}
-            style={{ display: 'block', touchAction: 'none' }}
+            style={{ display: 'block', touchAction: 'none', overscrollBehavior: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
             aria-label="Floor plan drawing canvas"
             role="img"
           >
@@ -5152,6 +5951,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             >
               <path d="M 1 2 L 9 5 L 1 8 z" fill="#059669" />
             </marker>
+
+            {/* Wall dimension arrowheads. Red = wall length; green (above) = clear inside size. */}
+            <marker id="fp-dim-arrow-red-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M 10 1.5 L 1 5 L 10 8.5 z" fill={dimColor} />
+            </marker>
+            <marker id="fp-dim-arrow-red-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill={dimColor} />
+            </marker>
           </defs>
 
           {showGrid && (
@@ -5233,8 +6040,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={room.id}
-                {...elementDownProps('room', room.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('room', room.id)}
               >
                 {hasPoly ? (
                   <>
@@ -5398,8 +6205,68 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </text>
                 </g>
 
-                {/* 4. Planner 5D Exterior Dimension Lines & Arrows */}
-                {(showDimensions || isSelected) && (
+                {/* Clear size inside a wall-enclosed room (green): the space between the inner
+                    wall faces. Wall lengths are the red lines outside the walls. */}
+                {(() => {
+                  const inner = roomInteriors.get(room.id);
+                  if (!inner || !(showDimensions || isSelected)) return null;
+                  const a = toScreen(inner.x, inner.y);
+                  const iw = inner.width * GRID_SIZE_PX * zoom;
+                  const ih = inner.height * GRID_SIZE_PX * zoom;
+                  const isBox = inner.polygon.length === 4 && Math.abs(inner.area - inner.width * inner.height) < 1e-6;
+                  // Width x height for a rectangular room, with the clear area when there is
+                  // room for it (always when selected); the clear area alone for other shapes.
+                  const size = isBox ? `Inside ${formatDimension(inner.width, unit)} × ${formatDimension(inner.height, unit)}` : `Inside ${formatAreaShort(inner.area, unit)}`;
+                  const full = isBox ? `${size} · ${formatAreaShort(inner.area, unit)}` : size;
+                  const roomFor = (text: string) => iw > text.length * dimFontPx * 0.56 + 12 && ih > 74;
+                  const label = isSelected || roomFor(full) ? full : size;
+                  if (!isSelected && !roomFor(label)) return null;
+                  return (
+                    <g style={{ pointerEvents: 'none' }} className="fp-room-inside">
+                      {isSelected && (
+                        <polygon
+                          points={inner.polygon.map(p => { const s = toScreen(p.x, p.y); return `${s.x},${s.y}`; }).join(' ')}
+                          fill="none"
+                          stroke="#059669"
+                          strokeWidth={1.2}
+                          strokeDasharray="5,4"
+                        />
+                      )}
+                      {isSelected && isBox && iw > 90 && ih > 90 && (
+                        <>
+                          <line
+                            x1={a.x + 2} y1={a.y + 14} x2={a.x + iw - 2} y2={a.y + 14}
+                            stroke="#059669" strokeWidth={1.2}
+                            markerStart="url(#fp-dim-arrow-green-start)" markerEnd="url(#fp-dim-arrow-green-end)"
+                          />
+                          <line
+                            x1={a.x + 14} y1={a.y + 2} x2={a.x + 14} y2={a.y + ih - 2}
+                            stroke="#059669" strokeWidth={1.2}
+                            markerStart="url(#fp-dim-arrow-green-start)" markerEnd="url(#fp-dim-arrow-green-end)"
+                          />
+                        </>
+                      )}
+                      <text
+                        x={rx + rw / 2}
+                        y={ry + rh / 2 + 11 * zoom + dimFontPx + 5}
+                        textAnchor="middle"
+                        fontSize={dimFontPx}
+                        fontWeight="700"
+                        fontFamily="'Outfit', sans-serif"
+                        fill="#047857"
+                        stroke="#ffffff"
+                        strokeWidth={3}
+                        paintOrder="stroke"
+                      >
+                        {label}
+                      </text>
+                    </g>
+                  );
+                })()}
+
+                {/* 4. Planner 5D Exterior Dimension Lines & Arrows. A room placed by hand
+                    carries its own size here; a wall-enclosed room is dimensioned by its walls. */}
+                {(showDimensions || isSelected) && !room.fromWalls && (
                   <>
                     {/* Top Width Dimension line with witness extensions */}
                     <g style={{ pointerEvents: 'none' }}>
@@ -5491,8 +6358,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={stair.id}
                 transform={`rotate(${stair.rotation || 0}, ${sx + sw / 2}, ${sy + sl / 2})`}
-                {...elementDownProps('stairs', stair.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('stairs', stair.id)}
               >
                 <rect
                   x={sx} y={sy} width={sw} height={sl}
@@ -5544,8 +6411,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={furn.id}
                 transform={`rotate(${furn.rotation || 0}, ${fx + fw / 2}, ${fy + fh / 2})`}
-                {...elementDownProps('furniture', furn.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('furniture', furn.id)}
               >
                 {isSelected && (
                   <rect
@@ -5586,8 +6453,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={col.id}
-                {...elementDownProps('column', col.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('column', col.id)}
               >
                 {col.shape === 'round' ? (
                   <circle
@@ -5622,10 +6489,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             if (!isLayerVisible('walls')) return null;
             const strokeW = Math.max(3, (wall.thickness || 0.75) * GRID_SIZE_PX * zoom);
             const isSelected = selectedElement?.id === wall.id;
-            const len = wallLength(wall);
-            const mx = (wall.x1 + wall.x2) / 2;
-            const my = (wall.y1 + wall.y2) / 2;
-            const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1) * 180 / Math.PI;
 
             // Compute solid wall segments and door openings along this wall
             const { solidSegments, openings } = computeWallSegmentsWithOpenings(
@@ -5649,8 +6512,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={wall.id}
-                {...elementDownProps('wall', wall.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('wall', wall.id)}
                 className="fp-wall-group"
               >
                 {/* Full-length transparent click target for easy selection */}
@@ -5735,48 +6598,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   );
                 })}
 
-                {/* Dimension label */}
-                {showDimensions && isLayerVisible('dimensions') && len > 0.5 && (
-                  <text
-                    x={mx * GRID_SIZE_PX * zoom + panX}
-                    y={my * GRID_SIZE_PX * zoom + panY - strokeW / 2 - 5 * zoom}
-                    textAnchor="middle"
-                    fontSize={Math.max(8, 10 * zoom)}
-                    fill={viewMode === 'blueprint' ? '#93c5fd' : '#334155'}
-                    fontFamily="'Outfit', sans-serif"
-                    fontWeight="700"
-                    transform={`rotate(${angle > 90 || angle < -90 ? angle + 180 : angle}, ${mx * GRID_SIZE_PX * zoom + panX}, ${my * GRID_SIZE_PX * zoom + panY})`}
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    {formatDim(len, unit)}
-                  </text>
-                )}
+                {/* The wall's length is drawn in the dimension layer further down, above
+                    everything else, so its label can be tapped. */}
 
-                {/* Wall Endpoints / Resize Handles */}
-                {isSelected ? (
-                  <>
-                    <circle
-                      cx={wall.x1 * GRID_SIZE_PX * zoom + panX}
-                      cy={wall.y1 * GRID_SIZE_PX * zoom + panY}
-                      r={Math.max(isMobile ? 13 : 7, 7 * zoom)}
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                      style={{ cursor: 'crosshair' }}
-                      {...jointDownProps(wall, 1)}
-                    />
-                    <circle
-                      cx={wall.x2 * GRID_SIZE_PX * zoom + panX}
-                      cy={wall.y2 * GRID_SIZE_PX * zoom + panY}
-                      r={Math.max(isMobile ? 13 : 7, 7 * zoom)}
-                      fill="#f59e0b"
-                      stroke="#ffffff"
-                      strokeWidth={2}
-                      style={{ cursor: 'crosshair' }}
-                      {...jointDownProps(wall, 2)}
-                    />
-                  </>
-                ) : (
+                {/* Wall end points. The selected wall's resize handles are drawn in their own
+                    layer above every wall (see "Resize handles" below): inside this group a
+                    neighbouring wall drawn later would lie over them and take the touch. */}
+                {isSelected ? null : (
                   <>
                     <circle
                       cx={wall.x1 * GRID_SIZE_PX * zoom + panX}
@@ -5819,8 +6647,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={door.id}
                 transform={`rotate(${door.rotation}, ${dx}, ${dy})`}
-                {...elementDownProps('door', door.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('door', door.id)}
                 className="fp-door-group"
               >
                 {/* Click target */}
@@ -5945,8 +6773,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <g
                 key={win.id}
                 transform={`rotate(${win.rotation}, ${wx}, ${wy})`}
-                {...elementDownProps('window', win.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('window', win.id)}
                 className="fp-window-group"
               >
                 {/* Outer Frame embedded matching exact host wall thickness */}
@@ -6064,8 +6892,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             return (
               <g
                 key={annot.id}
-                {...elementDownProps('annotation', annot.id)}
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
+                {...elementDownProps('annotation', annot.id)}
               >
                 <text
                   x={ax} y={ay}
@@ -6124,22 +6952,141 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </>
           )}
 
-          {/* Live Freehand Sketch Stroke in AI Smart Draw Mode ("user summa line draw panna athe understand panna purinjiganu") */}
-          {isFreehandDrawing && freehandPoints.length > 1 && (
-            <polyline
-              points={freehandPoints.map(p => `${p.x * GRID_SIZE_PX * zoom + panX},${p.y * GRID_SIZE_PX * zoom + panY}`).join(' ')}
-              fill="none"
-              stroke="#c084fc"
-              strokeWidth={3.5 * zoom}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeDasharray={`${5 * zoom},${3 * zoom}`}
-              style={{
-                pointerEvents: 'none',
-                filter: 'drop-shadow(0 0 8px rgba(192, 132, 252, 0.85))',
-              }}
-            />
+          {/* ── Wall dimensions ──────────────────────────────────────────────
+              One dimension line per wall, outside the room: extension lines, arrowheads and
+              the length, all worked out from the wall's real end points on every render, so
+              they follow a drag as it happens. Red by default. With the Select tool, tapping
+              a label opens a box to type the exact length. */}
+          {showDimensions && isLayerVisible('dimensions') && isLayerVisible('walls') && (
+            <g className="fp-wall-dims">
+              {editorState.walls.map(wall => {
+                const len = wallLength(wall);
+                const side = wallOutside.get(wall.id);
+                if (!side || len <= 0) return null;
+                const isSelected = selectedElement?.id === wall.id;
+                const p1 = toScreen(wall.x1, wall.y1);
+                const p2 = toScreen(wall.x2, wall.y2);
+                const onScreen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                // Too small on screen to dimension legibly: zoom in, or select the wall.
+                if (onScreen < 30 && !isSelected) return null;
+                const halfThick = Math.max(3, (wall.thickness || 0.75) * GRID_SIZE_PX * zoom) / 2;
+                const text = formatDimension(len, unit);
+                const labelLength = text.length * dimFontPx * 0.6 + 12;
+                const labelHeight = dimFontPx + 8;
+                const d = layoutDimension(p1, p2, side, {
+                  // Clear of the wall face and of the round resize handles at its ends.
+                  offset: halfThick + (isMobile ? 26 : 20) + labelHeight / 2,
+                  gap: halfThick + 3,
+                  overshoot: 5,
+                  labelLength,
+                  labelHeight,
+                  arrow: 7,
+                });
+                const hitW = Math.max(labelLength, isMobile ? 56 : 44);
+                const hitH = Math.max(labelHeight, isMobile ? 40 : 28);
+                return (
+                  <g key={wall.id} className="fp-wall-dim" data-wall-id={wall.id}>
+                    <g style={{ pointerEvents: 'none' }}>
+                      {d.extensions.map(([a, b], i) => (
+                        <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={dimColor} strokeWidth={0.9} strokeOpacity={0.85} />
+                      ))}
+                      <line
+                        x1={d.line[0].x} y1={d.line[0].y} x2={d.line[1].x} y2={d.line[1].y}
+                        stroke={dimColor}
+                        strokeWidth={isSelected ? 1.8 : 1.2}
+                        markerStart={onScreen > 26 ? 'url(#fp-dim-arrow-red-start)' : undefined}
+                        markerEnd={onScreen > 26 ? 'url(#fp-dim-arrow-red-end)' : undefined}
+                      />
+                    </g>
+                    <g
+                      transform={`rotate(${d.rotation}, ${d.label.x}, ${d.label.y})`}
+                      className="fp-wall-dim-label"
+                      style={{ pointerEvents: dimLabelsTappable ? 'auto' : 'none', cursor: dimLabelsTappable ? 'text' : undefined }}
+                      {...dimDownProps(wall.id)}
+                    >
+                      <title>{`Wall length ${text} (centre to centre). Tap to type an exact length.`}</title>
+                      <rect x={d.label.x - hitW / 2} y={d.label.y - hitH / 2} width={hitW} height={hitH} fill="transparent" />
+                      <rect
+                        x={d.label.x - labelLength / 2}
+                        y={d.label.y - labelHeight / 2}
+                        width={labelLength}
+                        height={labelHeight}
+                        rx={4}
+                        fill="#ffffff"
+                        stroke={isSelected ? '#dc2626' : 'rgba(220, 38, 38, 0.45)'}
+                        strokeWidth={isSelected ? 1.6 : 1}
+                      />
+                      <text
+                        x={d.label.x}
+                        y={d.label.y + dimFontPx * 0.36}
+                        textAnchor="middle"
+                        fontSize={dimFontPx}
+                        fill="#b91c1c"
+                        fontFamily="'Outfit', sans-serif"
+                        fontWeight="700"
+                        style={{ userSelect: 'none' }}
+                      >
+                        {text}
+                      </text>
+                    </g>
+                  </g>
+                );
+              })}
+            </g>
           )}
+
+          {/* ── Resize handles of the selected wall ──────────────────────────
+              Above every wall and label, so they can always be grabbed. Each handle sits in a
+              larger invisible circle (44 px across on a phone) so a finger need not be exact.
+              Dragging one moves the corner; every wall that meets there follows. */}
+          {selectedElement?.type === 'wall' && activeTool === 'select' && isLayerVisible('walls') && (() => {
+            const wall = editorState.walls.find(w => w.id === selectedElement.id);
+            if (!wall) return null;
+            const r = Math.min(16, Math.max(isMobile ? 12 : 7, 5 * zoom));
+            return (
+              <g className="fp-wall-handles">
+                {([1, 2] as const).map(end => {
+                  const h = toScreen(end === 1 ? wall.x1 : wall.x2, end === 1 ? wall.y1 : wall.y2);
+                  return (
+                    <g
+                      key={end}
+                      className="fp-wall-handle"
+                      data-end={end}
+                      style={{ cursor: wall.locked ? 'not-allowed' : 'grab' }}
+                      {...jointDownProps(wall, end)}
+                    >
+                      <circle cx={h.x} cy={h.y} r={isMobile ? 22 : 13} fill="transparent" />
+                      <circle
+                        cx={h.x} cy={h.y} r={r}
+                        fill={wall.locked ? '#a8a29e' : '#ffffff'}
+                        stroke={wall.locked ? '#78716c' : '#ea580c'}
+                        strokeWidth={3}
+                      />
+                      <circle cx={h.x} cy={h.y} r={r * 0.34} fill={wall.locked ? '#78716c' : '#ea580c'} />
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
+
+          {/* Sketch mode: the finger's stroke (faint) and, over it, the straight walls it
+              would become. Nothing here is part of the plan until the finger lifts. */}
+          {isFreehandDrawing && freehandPoints.length > 1 && (
+            sketchPreview
+              ? renderSketchWalls(sketchPreview, freehandPoints, false)
+              : (
+                <polyline
+                  points={freehandPoints.map(p => `${p.x * GRID_SIZE_PX * zoom + panX},${p.y * GRID_SIZE_PX * zoom + panY}`).join(' ')}
+                  fill="none"
+                  stroke="#a8a29e"
+                  strokeWidth={1.5}
+                  strokeDasharray="2,5"
+                  style={{ pointerEvents: 'none' }}
+                />
+              )
+          )}
+          {sketchProposal && renderSketchWalls(sketchProposal.result, sketchProposal.points, true)}
 
           {/* ── Interactive 2-Point Measure Tape (FloorPlanCreator standard) ── */}
           {measureStart && measureCurrent && (
@@ -6202,6 +7149,52 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </g>
                 );
               })()}
+
+              {/* Actionable Plan Quality Diagnostic Canvas Beacon (Priority 4) */}
+              {diagnosticBeacon && (
+                <g
+                  className="fp-diagnostic-beacon"
+                  transform={`translate(${diagnosticBeacon.x * GRID_SIZE_PX}, ${diagnosticBeacon.y * GRID_SIZE_PX})`}
+                >
+                  <circle
+                    r={28}
+                    fill="rgba(239, 68, 68, 0.16)"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    className="fp-beacon-ring"
+                  />
+                  <circle
+                    r={7}
+                    fill="#dc2626"
+                    className="fp-beacon-core"
+                  />
+                  <line x1={-16} y1={0} x2={16} y2={0} stroke="#dc2626" strokeWidth={1.5} />
+                  <line x1={0} y1={-16} x2={0} y2={16} stroke="#dc2626" strokeWidth={1.5} />
+                  <g transform="translate(0, -22)">
+                    <rect
+                      x={-Math.min(90, Math.max(50, diagnosticBeacon.title.length * 4))}
+                      y={-18}
+                      width={Math.min(180, Math.max(100, diagnosticBeacon.title.length * 8))}
+                      height={20}
+                      rx={6}
+                      fill="#dc2626"
+                      stroke="#ffffff"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={0}
+                      y={-4}
+                      fill="#ffffff"
+                      fontSize={10}
+                      fontWeight="bold"
+                      textAnchor="middle"
+                      fontFamily="sans-serif"
+                    >
+                      {diagnosticBeacon.title.length > 25 ? `${diagnosticBeacon.title.slice(0, 25)}...` : diagnosticBeacon.title}
+                    </text>
+                  </g>
+                </g>
+              )}
             </g>
           )}
         </svg>
@@ -6224,6 +7217,389 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             {liveLengthBadge.lengthStr} • {liveLengthBadge.angleDeg}°
           </div>
         )}
+
+        {/* Priority 1: First-Time Guided Flow Welcome Card */}
+        {editorState.walls.length === 0 && editorState.rooms.length === 0 && !dismissedStartCard && !loading && (
+          <div className="fp-start-flow-card no-print">
+            <div className="fp-start-card-header">
+              <div>
+                <h3 className="fp-start-card-title">
+                  <Sparkles size={20} className="text-amber-500" />
+                  Start Your Floor Plan
+                </h3>
+                <p className="fp-start-card-subtitle">
+                  Select how you would like to begin your drawing:
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setDismissedStartCard(true)}
+                title="Close and use blank canvas"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="fp-start-card-options">
+              <button
+                type="button"
+                className="fp-start-option-btn"
+                onClick={() => {
+                  setDismissedStartCard(true);
+                  setActiveTool('wall');
+                  onNotify('Blank plan ready. Click and drag on canvas to draw outer walls.', 'info');
+                }}
+              >
+                <div className="fp-start-option-icon">
+                  <Pencil size={22} />
+                </div>
+                <span className="fp-start-option-name">Blank Plan</span>
+                <span className="fp-start-option-desc">Start drawing straight outer walls freely</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-start-option-btn"
+                onClick={() => setShowStarterTemplatesModal(true)}
+              >
+                <div className="fp-start-option-icon">
+                  <LayoutGrid size={22} />
+                </div>
+                <span className="fp-start-option-name">Starter Template</span>
+                <span className="fp-start-option-desc">Pick 1 BHK, 2 BHK, 3 BHK, or Duplex layout</span>
+              </button>
+
+              <button
+                type="button"
+                className="fp-start-option-btn"
+                onClick={() => {
+                  setDismissedStartCard(true);
+                  setShowBgImageModal(true);
+                }}
+              >
+                <div className="fp-start-option-icon">
+                  <ImageIcon size={22} />
+                </div>
+                <span className="fp-start-option-name">Import Image</span>
+                <span className="fp-start-option-desc">Upload a blueprint/photo to trace over</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Priority 1: Guided Steps Checklist Widget */}
+        {showGuidedChecklist && (editorState.walls.length < 8 || editorState.rooms.length === 0) && (
+          <div className="fp-guided-steps-widget no-print" role="region" aria-label="Guided Steps">
+            <div className="fp-guided-steps-header">
+              <span className="flex items-center gap-1.5 font-bold">
+                <CheckCircle2 size={14} /> Guided Steps
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowGuidedChecklist(false)}
+                className="btn btn-ghost btn-xs"
+                title="Hide guided checklist"
+              >
+                <X size={13} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-1">
+              <div
+                className={`fp-guided-step-item ${editorState.walls.length >= 4 ? 'is-done' : ''}`}
+                onClick={() => setActiveTool('wall')}
+                title="Click to activate Wall tool"
+              >
+                <span className="fp-guided-step-num">{editorState.walls.length >= 4 ? '✓' : '1'}</span>
+                <span>Draw outer walls ({editorState.walls.length}/4)</span>
+              </div>
+              <div
+                className={`fp-guided-step-item ${editorState.rooms.length >= 1 ? 'is-done' : ''}`}
+                onClick={() => setActiveTool('room')}
+                title="Click to activate Room tool"
+              >
+                <span className="fp-guided-step-num">{editorState.rooms.length >= 1 ? '✓' : '2'}</span>
+                <span>Add rooms ({editorState.rooms.length})</span>
+              </div>
+              <div
+                className={`fp-guided-step-item ${(editorState.doors.length + editorState.windows.length) >= 1 ? 'is-done' : ''}`}
+                onClick={() => setActiveTool('door')}
+                title="Click to activate Door tool"
+              >
+                <span className="fp-guided-step-num">{(editorState.doors.length + editorState.windows.length) >= 1 ? '✓' : '3'}</span>
+                <span>Place doors & windows ({editorState.doors.length + editorState.windows.length})</span>
+              </div>
+              <div
+                className={`fp-guided-step-item ${showDimensions ? 'is-done' : ''}`}
+                onClick={() => setShowDimensions(d => !d)}
+                title="Click to toggle dimensions"
+              >
+                <span className="fp-guided-step-num">{showDimensions ? '✓' : '4'}</span>
+                <span>Check dimensions</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Priority 5: Floating Room Center Badge & Inline Details Editor */}
+        {selectedElement?.type === 'room' && !isDrawingWall && !isPanning && (() => {
+          const room = editorState.rooms.find(r => r.id === selectedElement.id);
+          if (!room) return null;
+          const rx = room.x + room.width / 2;
+          const ry = room.y + room.height / 2;
+          const screenPos = toScreen(rx, ry);
+
+          return (
+            <React.Fragment key={room.id}>
+              <div
+                className="fp-room-center-badge no-print"
+                style={{
+                  left: `${screenPos.x}px`,
+                  top: `${screenPos.y - (editingRoomInlineId === room.id ? 90 : 36)}px`,
+                }}
+              >
+                <span>🏠 {room.label || room.roomType}</span>
+                <span>•</span>
+                <span>{computeRoomArea(room, unit)}</span>
+                <span>•</span>
+                <span style={{ color: '#0369a1', fontSize: '0.68rem' }}>{room.floorFinish || 'Vitrified Tiles'}</span>
+                <button
+                  type="button"
+                  className="fp-room-badge-edit-btn"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setEditingRoomInlineId(id => id === room.id ? null : room.id);
+                  }}
+                  title="Direct Room Details Edit"
+                >
+                  <Edit size={11} />
+                  <span>{editingRoomInlineId === room.id ? 'Done' : 'Edit'}</span>
+                </button>
+              </div>
+
+              {editingRoomInlineId === room.id && (
+                <div
+                  className="fp-room-quick-edit-popover no-print"
+                  style={{
+                    position: 'absolute',
+                    left: `${screenPos.x}px`,
+                    top: `${screenPos.y - 10}px`,
+                    transform: 'translate(-50%, 0)',
+                    background: '#ffffff',
+                    border: '1.5px solid #0284c7',
+                    borderRadius: '12px',
+                    padding: '10px 14px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                    zIndex: 65,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    minWidth: '220px',
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#0369a1' }}>Edit Room Details</span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      onClick={() => setEditingRoomInlineId(null)}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>Room Name</label>
+                    <input
+                      type="text"
+                      value={room.label}
+                      onChange={e => {
+                        dispatchWithHistory({ type: 'UPDATE_ROOM', id: room.id, changes: { label: e.target.value } });
+                        markUnsaved();
+                      }}
+                      className="fp-inspector-input"
+                      style={{ width: '100%', fontSize: '0.8rem', padding: '4px 8px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={room.width}
+                        onChange={e => {
+                          const nw = parseFloat(e.target.value) || 1;
+                          dispatchWithHistory({ type: 'UPDATE_ROOM', id: room.id, changes: { width: nw } });
+                          markUnsaved();
+                        }}
+                        className="fp-inspector-input"
+                        style={{ width: '100%', fontSize: '0.8rem', padding: '4px 8px' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>Length ({unit === 'feet' ? 'ft' : 'm'})</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={room.height}
+                        onChange={e => {
+                          const nh = parseFloat(e.target.value) || 1;
+                          dispatchWithHistory({ type: 'UPDATE_ROOM', id: room.id, changes: { height: nh } });
+                          markUnsaved();
+                        }}
+                        className="fp-inspector-input"
+                        style={{ width: '100%', fontSize: '0.8rem', padding: '4px 8px' }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.68rem', color: '#64748b', fontWeight: 600 }}>Floor Finish</label>
+                    <select
+                      value={room.floorFinish || 'Vitrified Tiles'}
+                      onChange={e => {
+                        dispatchWithHistory({ type: 'UPDATE_ROOM', id: room.id, changes: { floorFinish: e.target.value } });
+                        markUnsaved();
+                      }}
+                      className="fp-inspector-input"
+                      style={{ width: '100%', fontSize: '0.8rem', padding: '4px 8px' }}
+                    >
+                      {['Vitrified Tiles', 'Marble', 'Granite', 'Wood Parquet', 'Ceramic Tiles', 'Concrete', 'Color Tint'].map(f => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })()}
+
+        {/* Priority 3: On-Canvas Floating Quick Action Bar for non-walls (doors, windows, furniture, columns, stairs) */}
+        {selectedElement && selectedElement.type !== 'wall' && selectedElement.type !== 'room' && !isDrawingWall && !isFreehandDrawing && !isPanning && activeTool === 'select' && (() => {
+          const entity = getSelectedEntity();
+          if (!entity) return null;
+          const isLocked = !!entity.locked;
+          const ex = 'x' in entity ? (entity as any).x : 0;
+          const ey = 'y' in entity ? (entity as any).y : 0;
+          const screenPos = toScreen(ex, ey);
+
+          return (
+            <div
+              className="fp-selection-quick-actions no-print"
+              style={{
+                position: 'absolute',
+                left: `${screenPos.x}px`,
+                top: `${screenPos.y - (isMobile ? 44 : 36)}px`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 60,
+              }}
+            >
+              <button
+                type="button"
+                className="fp-quick-act-btn"
+                onClick={e => { e.stopPropagation(); handleRotateSelected(); }}
+                disabled={isLocked}
+                title="Rotate 90° (R)"
+                aria-label="Rotate"
+              >
+                <RotateCw size={14} />
+              </button>
+              <button
+                type="button"
+                className="fp-quick-act-btn"
+                onClick={e => { e.stopPropagation(); handleDuplicateSelected(); }}
+                title="Duplicate (Ctrl+D)"
+                aria-label="Duplicate"
+              >
+                <Copy size={14} />
+              </button>
+              <button
+                type="button"
+                className="fp-quick-act-btn"
+                onClick={e => { e.stopPropagation(); handleToggleLockSelected(); }}
+                title={isLocked ? "Unlock (Ctrl+L)" : "Lock (Ctrl+L)"}
+                aria-label="Lock"
+              >
+                {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
+              </button>
+              <button
+                type="button"
+                className="fp-quick-act-btn danger"
+                onClick={e => { e.stopPropagation(); handleDeleteSelected(); }}
+                disabled={isLocked}
+                title="Delete (Del)"
+                aria-label="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          );
+        })()}
+
+        {/* Canva-style On-Canvas Floating Quick Length Adjuster */}
+        {selectedElement?.type === 'wall' && !isDrawingWall && !isFreehandDrawing && !isPanning && !resizingWall && activeTool === 'select' && (() => {
+          const wall = editorState.walls.find(w => w.id === selectedElement.id);
+          if (!wall) return null;
+          const midX = (wall.x1 + wall.x2) / 2;
+          const midY = (wall.y1 + wall.y2) / 2;
+          const screenPos = toScreen(midX, midY);
+          const len = wallLength(wall);
+          const step = baseUnitOf(unit) === 'feet' ? 1 : 0.25;
+          const stepLabel = baseUnitOf(unit) === 'feet' ? '1 ft' : '0.25 m';
+
+          return (
+            <div
+              className="fp-canva-length-adjuster"
+              style={{
+                position: 'absolute',
+                left: `${screenPos.x}px`,
+                top: `${screenPos.y - (isMobile ? 44 : 36)}px`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 60,
+              }}
+            >
+              <button
+                type="button"
+                className="fp-canva-len-btn"
+                disabled={wall.locked || len <= step}
+                onClick={e => {
+                  e.stopPropagation();
+                  handleQuickAdjustWallLength(wall.id, -step);
+                }}
+                title={`Shorten by ${stepLabel}`}
+                aria-label="Decrease wall length"
+              >
+                <Minus size={13} />
+              </button>
+              <button
+                type="button"
+                className="fp-canva-len-display"
+                onClick={e => {
+                  e.stopPropagation();
+                  openWallEdit(wall.id);
+                }}
+                title="Tap to type exact length (Enter)"
+              >
+                <Ruler size={12} style={{ color: '#ea580c' }} />
+                <span>{formatDimension(len, unit)}</span>
+              </button>
+              <button
+                type="button"
+                className="fp-canva-len-btn"
+                disabled={wall.locked}
+                onClick={e => {
+                  e.stopPropagation();
+                  handleQuickAdjustWallLength(wall.id, step);
+                }}
+                title={`Lengthen by ${stepLabel}`}
+                aria-label="Increase wall length"
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+          );
+        })()}
 
         {/* ── Planner5D Bottom Property Dock ─────────── */}
         {(showBottomDock || isMobile) && selectedElement && (() => {
@@ -6258,6 +7634,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <span className="fp-dock-mini-summary">{getDockEntitySummary(entity, selectedElement.type)}</span>
                 </div>
                 <div className="fp-dock-mini-actions">
+                  {selectedElement.type === 'wall' && (
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={() => openWallEdit(selectedElement.id)}
+                      title="Type an exact length, thickness or position (Enter)"
+                      id="fp-dock-size-btn"
+                    >
+                      <Ruler size={13} />
+                      <span>Size</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="fp-dock-mini-btn"
@@ -6271,19 +7659,56 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <button
                     type="button"
                     className="fp-dock-mini-btn"
-                    onClick={() => toggleShowBottomDock(false)}
-                    title="Hide Floating Dock (Use Right Sidebar Inspector)"
-                    id="fp-dock-sidebar-btn"
+                    onClick={handleRotateSelected}
+                    disabled={isLocked}
+                    title="Rotate 90° (R)"
+                    aria-label="Rotate 90 degrees"
+                    id="fp-dock-rotate-btn"
                   >
-                    <SlidersHorizontal size={12} />
-                    <span>Sidebar Only</span>
+                    <RotateCw size={13} />
+                    <span>Rotate</span>
                   </button>
+                  <button
+                    type="button"
+                    className="fp-dock-mini-btn"
+                    onClick={handleDuplicateSelected}
+                    title="Duplicate (Ctrl + D)"
+                    aria-label="Duplicate"
+                    id="fp-dock-duplicate-btn"
+                  >
+                    <Copy size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-dock-mini-btn"
+                    onClick={handleToggleLockSelected}
+                    title={isLocked ? 'Unlock (Ctrl + L)' : 'Lock so it can not be moved or deleted (Ctrl + L)'}
+                    aria-label={isLocked ? 'Unlock' : 'Lock'}
+                    aria-pressed={isLocked}
+                    id="fp-dock-lock-btn"
+                  >
+                    {isLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                  </button>
+                  {!isMobile && (
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={() => toggleShowBottomDock(false)}
+                      title="Hide Floating Dock (Use Right Sidebar Inspector)"
+                      id="fp-dock-sidebar-btn"
+                    >
+                      <SlidersHorizontal size={12} />
+                      <span>Sidebar Only</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="fp-dock-mini-btn danger"
                     onClick={handleDeleteSelected}
                     disabled={isLocked}
                     title="Delete Element (Del)"
+                    aria-label="Delete"
+                    id="fp-dock-delete-btn"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -6327,48 +7752,28 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   const w = entity as FloorPlanWall;
                   return (
                     <>
-                      <div className="fp-prop-pill">
+                      {/* Length and thickness are typed in the wall-size box: it reads feet and
+                          inches, keeps joined walls joined and is one undo step. */}
+                      <button
+                        type="button"
+                        className="fp-prop-pill fp-prop-pill-btn"
+                        onClick={() => openWallEdit(w.id)}
+                        title="Type an exact length"
+                        id="fp-dock-length"
+                      >
                         <span className="fp-prop-pill-label">Length</span>
-                        <input
-                          type="number"
-                          step="0.25"
-                          className="fp-prop-pill-input"
-                          value={wallLength(w).toFixed(2)}
-                          disabled={isLocked}
-                          onChange={e => {
-                            const newLen = parseFloat(e.target.value);
-                            if (newLen > 0.5) {
-                              const curLen = wallLength(w);
-                              const ratio = newLen / curLen;
-                              dispatch({
-                                type: 'UPDATE_WALL',
-                                id: w.id,
-                                changes: {
-                                  x2: w.x1 + (w.x2 - w.x1) * ratio,
-                                  y2: w.y1 + (w.y2 - w.y1) * ratio,
-                                },
-                              });
-                              markUnsaved();
-                            }
-                          }}
-                        />
-                        <span className="fp-prop-pill-unit">{unit === 'feet' ? 'ft' : 'm'}</span>
-                      </div>
-                      <div className="fp-prop-pill">
+                        <strong>{formatDimension(wallLength(w), unit)}</strong>
+                      </button>
+                      <button
+                        type="button"
+                        className="fp-prop-pill fp-prop-pill-btn"
+                        onClick={() => openWallEdit(w.id)}
+                        title="Change the wall thickness"
+                        id="fp-dock-thickness"
+                      >
                         <span className="fp-prop-pill-label">Thick</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          className="fp-prop-pill-input"
-                          value={w.thickness}
-                          disabled={isLocked}
-                          onChange={e => {
-                            dispatch({ type: 'UPDATE_WALL', id: w.id, changes: { thickness: parseFloat(e.target.value) || 0.75 } });
-                            markUnsaved();
-                          }}
-                        />
-                        <span className="fp-prop-pill-unit">{unit === 'feet' ? 'ft' : 'm'}</span>
-                      </div>
+                        <strong>{formatThickness(w.thickness, unit)}</strong>
+                      </button>
                       <div className="fp-prop-pill">
                         <span className="fp-prop-pill-label">Angle</span>
                         <button
@@ -7131,11 +8536,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <button
             type="button"
             className="fp-cad-btn"
-            onClick={() => setZoom(1.0)}
-            title="Reset Zoom to 100%"
+            onClick={handleResetView}
+            title="Reset the view: 100% zoom, plan centred (0)"
             id="fp-cad-100-btn"
           >
             <span>100%</span>
+          </button>
+
+          <button
+            type="button"
+            className="fp-cad-btn"
+            onClick={() => setShowHelpSheet(true)}
+            title="Drawing tips and what the measurements mean"
+            aria-label="Drawing tips"
+            id="fp-cad-help-btn"
+          >
+            <Info size={15} />
           </button>
 
           <div className="fp-cad-divider" />
@@ -7281,22 +8697,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         <span style={{ fontWeight: 600, color: '#c2410c' }}>{w.wallType}</span>
                       </div>
                       <div className="fp-inspector-row">
-                        <label>Length ({unit === 'feet' ? 'ft' : 'm'})</label>
-                        <input
-                          type="number"
-                          step="0.25"
+                        <label>Length</label>
+                        <button
+                          type="button"
                           className="fp-inspector-input"
-                          value={+len.toFixed(2)}
-                          onChange={e => {
-                            const newLen = parseFloat(e.target.value);
-                            if (!newLen || newLen <= 0.1) return;
-                            const rad = (ang * Math.PI) / 180;
-                            const newX2 = w.x1 + newLen * Math.cos(rad);
-                            const newY2 = w.y1 + newLen * Math.sin(rad);
-                            dispatchWithHistory({ type: 'UPDATE_WALL', id: w.id, changes: { x2: newX2, y2: newY2 } });
-                            markUnsaved();
-                          }}
-                        />
+                          style={{ textAlign: 'left', cursor: 'pointer', fontWeight: 700 }}
+                          onClick={() => openWallEdit(w.id)}
+                          title="Type an exact length (Enter)"
+                          id="fp-inspector-length"
+                        >
+                          {formatDimension(len, unit)}
+                        </button>
                       </div>
                       <div className="fp-inspector-row">
                         <label>Thickness</label>
@@ -8161,8 +9572,31 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       )}
 
       {/* ── Mobile Contextual Subtoolbar (< 768px) ────── */}
-      {activeTool === 'wall' && (
+      {(activeTool === 'wall' || activeTool === 'ai_draw') && (
         <div className="fp-mobile-subtoolbar no-print">
+          {/* The two ways to draw a wall, side by side, so it is always clear which is on. */}
+          <div className="fp-wall-mode" role="group" aria-label="How to draw walls">
+            <button
+              type="button"
+              className={`fp-wall-mode-btn ${activeTool === 'wall' ? 'active' : ''}`}
+              aria-pressed={activeTool === 'wall'}
+              title="Straight: drag out one exact wall, or tap its two ends"
+              id="fp-wall-mode-straight"
+              onClick={() => setActiveTool('wall')}
+            >
+              <Minus size={14} /> Straight
+            </button>
+            <button
+              type="button"
+              className={`fp-wall-mode-btn ${activeTool === 'ai_draw' ? 'active' : ''}`}
+              aria-pressed={activeTool === 'ai_draw'}
+              title="Sketch: draw a rough outline and it becomes straight, joined walls"
+              id="fp-wall-mode-sketch"
+              onClick={() => setActiveTool('ai_draw')}
+            >
+              <PenTool size={14} /> Sketch
+            </button>
+          </div>
           {(() => {
             const snapOn = snapToGridEnabled || snapToEndpointsEnabled || snapToWallEnabled;
             return (
@@ -8182,27 +9616,36 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </button>
             );
           })()}
-          <button
-            type="button"
-            className={`fp-mobile-sub-btn ${isOrthoActive ? 'active' : ''}`}
-            aria-pressed={isOrthoActive}
-            title="Pull walls to 0°, 45° and 90° when they are close to it"
-            id="fp-mobile-angle-toggle"
-            onClick={() => setIsOrthoActive(v => !v)}
-          >
-            Angle {isOrthoActive ? 'On' : 'Off'}
-          </button>
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Wall:</span>
-          {[
-            { label: '9" Ext', val: 0.75 },
-            { label: '4.5" Int', val: 0.375 },
-            { label: '3" Part', val: 0.25 },
-          ].map(p => (
+          {activeTool === 'wall' ? (
+            <button
+              type="button"
+              className={`fp-mobile-sub-btn ${isOrthoActive ? 'active' : ''}`}
+              aria-pressed={isOrthoActive}
+              title="Pull walls to 0°, 45° and 90° when they are close to it"
+              id="fp-mobile-angle-toggle"
+              onClick={() => setIsOrthoActive(v => !v)}
+            >
+              Angle {isOrthoActive ? 'On' : 'Off'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`fp-mobile-sub-btn ${sketchAngles !== 'free' ? 'active' : ''}`}
+              title="Which angles a sketched wall is straightened to. Tap to change."
+              id="fp-sketch-angles"
+              onClick={cycleSketchAngles}
+            >
+              {sketchAngles === '45' ? 'Straighten: 45° + 90°' : sketchAngles === '90' ? 'Straighten: 90° only' : 'Straighten: off'}
+            </button>
+          )}
+          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Thick:</span>
+          {wallThicknessPresets(unit).map(p => (
             <button
               key={p.label}
               type="button"
-              className={`fp-mobile-sub-btn ${wallThickness === p.val ? 'active' : ''}`}
-              onClick={() => setWallThickness(p.val)}
+              className={`fp-mobile-sub-btn ${Math.abs(wallThickness - p.value) < 1e-6 ? 'active' : ''}`}
+              aria-pressed={Math.abs(wallThickness - p.value) < 1e-6}
+              onClick={() => setWallThickness(p.value)}
             >
               {p.label}
             </button>
@@ -8354,13 +9797,25 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
         <button
           type="button"
-          className={`fp-mobile-tool-btn ${activeTool === 'wall' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('wall'); setSelectedElement(null); }}
-          title="Draw Wall"
+          className={`fp-mobile-tool-btn ${activeTool === 'wall' || activeTool === 'ai_draw' ? 'active' : ''}`}
+          aria-pressed={activeTool === 'wall' || activeTool === 'ai_draw'}
+          onClick={() => { setActiveTool(wallMode); setSelectedElement(null); }}
+          title="Draw walls (Straight or Sketch)"
           id="fp-mobile-tool-wall"
         >
           <Pencil size={20} />
           <span className="fp-mobile-tool-label">Wall</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
+          onClick={() => { setActiveTool('eraser'); setSelectedElement(null); setIsDrawingWall(false); setWallStart(null); }}
+          title="Eraser (Tap any wall, door, window or furniture to delete)"
+          id="fp-mobile-tool-eraser"
+        >
+          <Eraser size={20} />
+          <span className="fp-mobile-tool-label">Eraser</span>
         </button>
 
         <button
@@ -8435,7 +9890,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           {isDrawingWall
             ? 'Click end point to finish wall (Esc to cancel)'
             : activeTool === 'wall'
-            ? 'Click to start drawing wall'
+            ? 'Straight wall: click to start, click again to finish'
+            : activeTool === 'ai_draw'
+            ? 'Sketch: press and draw a rough outline. It becomes straight, joined walls when you let go'
             : activeTool === 'furniture' && selectedFurnitureToPlace
             ? `Click on canvas to place ${selectedFurnitureToPlace.itemType}`
             : activeTool === 'column'
@@ -8443,10 +9900,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             : activeTool === 'stairs'
             ? 'Click to place staircase flight'
             : selectedElement
-            ? `Selected: ${selectedElement.type.toUpperCase()} (drag to move, orange handles to resize, Del to delete)`
+            ? `Selected: ${selectedElement.type.toUpperCase()} (drag to move, round handles to resize, click a red measurement to type a length, Del to delete)`
             : 'Select an element or choose a tool from the left toolbar'}
         </div>
         <div className="fp-bottom-right">
+          <span className="fp-bottom-disclaimer" title={`${PLAN_DISCLAIMER} ${PLAN_REVIEW_NOTE}`}>Planning sketch, not a certified drawing</span>
           <span className={`fp-status-tag ${saveStatus}`}>
             {saveStatus === 'saving' ? '● Saving...' : saveStatus === 'unsaved' ? '● Unsaved' : '● Saved'}
           </span>
@@ -9048,7 +10506,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   type="text"
-                  placeholder="Snapshot label (e.g., Prior to adding master bedroom)"
+                  placeholder="Snapshot label (Prior to adding master bedroom)"
                   value={versionNote}
                   onChange={e => setVersionNote(e.target.value)}
                   style={{ flex: 1, padding: '8px 12px', borderRadius: 8, background: '#ffffff', border: '1px solid #e7e5e4', color: '#1c1917', fontSize: '0.85rem' }}
@@ -9135,13 +10593,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <table className="fp-calc-table">
                 <tbody>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>V</kbd></td><td>Select / Move Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>W</kbd></td><td>Draw Wall Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>R</kbd></td><td>Place Room Tool</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>W</kbd></td><td>Wall Tool: one straight wall at a time</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>S</kbd></td><td>Sketch Walls: a rough outline becomes straight walls</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>R</kbd></td><td>Place Room Tool (rotates the selection when something is selected)</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>D</kbd></td><td>Place Door Tool</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Enter</kbd></td><td>Type an exact size for the selected wall</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>M</kbd></td><td>Toggle Dimensions & Measurements</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>G</kbd></td><td>Toggle Grid</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>H</kbd></td><td>Pan / Hand Tool</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>F</kbd></td><td>Fit the Plan to the Screen</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>0</kbd></td><td>Reset the View to 100%</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>+ / -</kbd></td><td>Zoom In / Out</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Z</kbd></td><td>Undo</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Y</kbd></td><td>Redo</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Y / Ctrl + Shift + Z</kbd></td><td>Redo</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + D</kbd></td><td>Duplicate Selected Element</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + L</kbd></td><td>Lock / Unlock Selected Element</td></tr>
+                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + C / Ctrl + V</kbd></td><td>Copy / Paste</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + S</kbd></td><td>Save Floor Plan</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Del / Backspace</kbd></td><td>Delete Selected Element</td></tr>
                   <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd></td><td>Cancel Drawing / Deselect</td></tr>
@@ -9372,20 +10839,68 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               {/* Grid Spacing Presets */}
               <div style={{ marginBottom: 16 }}>
                 <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
-                  Grid Spacing
+                  Snap Step
                 </label>
+                <p style={{ fontSize: '0.8rem', color: '#57534e', margin: '4px 0 0 0' }}>
+                  With Snap to Grid on, wall ends and anything you place or drag land on multiples of this.
+                </p>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {[50, 100, 200, 500, 1000].map(spacing => (
+                  {gridStepOptions(unit).map(option => (
                     <button
-                      key={spacing}
+                      key={option.label}
                       type="button"
-                      className={`fp-cat-chip ${gridSpacingMm === spacing ? 'active' : ''}`}
-                      onClick={() => {
-                        setGridSpacingMm(spacing);
-                        onNotify(`Grid spacing set to ${spacing}mm`, 'info');
-                      }}
+                      className={`fp-cat-chip ${Math.abs(gridStep - option.value) < 1e-9 ? 'active' : ''}`}
+                      aria-pressed={Math.abs(gridStep - option.value) < 1e-9}
+                      onClick={() => setGridStep(option.value)}
                     >
-                      {spacing} mm
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* How far a finger reaches for a corner or wall */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                  Snap Reach
+                </label>
+                <p style={{ fontSize: '0.8rem', color: '#57534e', margin: '4px 0 0 0' }}>
+                  How close a wall end must be to a corner, crossing or wall before it joins it.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {[{ label: 'Short', value: 0.6 }, { label: 'Normal', value: 1 }, { label: 'Long', value: 1.5 }].map(option => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className={`fp-cat-chip ${snapReach === option.value ? 'active' : ''}`}
+                      aria-pressed={snapReach === option.value}
+                      onClick={() => { setSnapReach(option.value); writeSetting('bm_fp_snap_reach', String(option.value)); }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Measurement text size: a view setting only */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                  Measurement Text Size
+                </label>
+                <p style={{ fontSize: '0.8rem', color: '#57534e', margin: '4px 0 0 0' }}>
+                  Changes how large measurements are written on the plan. It never changes a wall's length.
+                </p>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {[{ label: 'Small', value: 0.85 }, { label: 'Normal', value: 1 }, { label: 'Large', value: 1.25 }, { label: 'Extra large', value: 1.5 }].map(option => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      className={`fp-cat-chip ${dimTextScale === option.value ? 'active' : ''}`}
+                      aria-pressed={dimTextScale === option.value}
+                      id={`fp-dim-text-${option.value}`}
+                      onClick={() => { setDimTextScale(option.value); writeSetting('bm_fp_dim_text', String(option.value)); }}
+                    >
+                      {option.label}
                     </button>
                   ))}
                 </div>
@@ -9476,9 +10991,151 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             maxLength={40}
             onChange={e => floorDialog && setFloorDialog({ ...floorDialog, value: e.target.value, error: '' })}
             onKeyDown={e => { if (e.key === 'Enter') submitFloorDialog(); }}
-            placeholder="e.g. First Floor"
+            placeholder="First Floor"
           />
         </Field>
+      </Sheet>
+
+      {/* ── Exact wall size: length, thickness and position, typed in ───────── */}
+      <Sheet
+        open={!!wallEdit}
+        title="Wall size"
+        subtitle={(() => {
+          const w = wallEdit && editorState.walls.find(x => x.id === wallEdit.wallId);
+          return w ? `Now ${formatDimension(wallLength(w), unit)} long and ${formatThickness(w.thickness, unit)} thick` : undefined;
+        })()}
+        onClose={() => setWallEdit(null)}
+        footer={
+          <>
+            <button type="button" className="m-btn" onClick={() => setWallEdit(null)}>Cancel</button>
+            <button type="button" className="m-btn is-primary" onClick={submitWallEdit} id="fp-wall-edit-apply">Apply</button>
+          </>
+        }
+      >
+        {wallEdit && (() => {
+          const w = editorState.walls.find(x => x.id === wallEdit.wallId);
+          if (!w) return null;
+          const feet = baseUnitOf(unit) === 'feet';
+          const level = Math.abs(w.x2 - w.x1) >= Math.abs(w.y2 - w.y1);
+          const startFirst = level ? w.x1 <= w.x2 : w.y1 <= w.y2;
+          const [first, second] = level ? ['Left end', 'Right end'] : ['Top end', 'Bottom end'];
+          const setKeep = (keep: 'start' | 'end') => {
+            const anchor = keep === 'start' ? { x: w.x1, y: w.y1 } : { x: w.x2, y: w.y2 };
+            const x = String(Number(anchor.x.toFixed(4))), y = String(Number(anchor.y.toFixed(4)));
+            setWallEdit({ ...wallEdit, keep, x, x0: x, y, y0: y, error: '' });
+          };
+          const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); submitWallEdit(); } };
+          return (
+            <div className="fp-wall-edit">
+              {wallEdit.error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{wallEdit.error}</Note></div>}
+              {w.locked && <div style={{ marginBottom: 12 }}><Note tone="warn">This wall is locked. Unlock it to change its size.</Note></div>}
+              <Field
+                label="Length"
+                hint={feet
+                  ? <>Type <strong>12 6</strong> or <strong>12' 6"</strong> for 12 ft 6 in. Metres work too: <strong>3.8m</strong>.</>
+                  : <>Type <strong>3.5</strong> or <strong>350 cm</strong>. Feet work too: <strong>12' 6"</strong>.</>}
+              >
+                <input
+                  id="fp-wall-edit-length"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  enterKeyHint="done"
+                  value={wallEdit.length}
+                  aria-invalid={!!wallEdit.error}
+                  onChange={e => setWallEdit({ ...wallEdit, length: e.target.value, error: '' })}
+                  onFocus={e => e.currentTarget.select()}
+                  onKeyDown={onEnter}
+                />
+              </Field>
+              <div className="m-field">
+                <span className="m-field-label">End that stays in place</span>
+                <Segmented
+                  label="End that stays in place"
+                  value={wallEdit.keep}
+                  onChange={setKeep}
+                  options={[
+                    { value: startFirst ? 'start' : 'end', label: first },
+                    { value: startFirst ? 'end' : 'start', label: second },
+                  ]}
+                />
+                <span className="m-field-hint" style={{ display: 'block' }}>The other end moves. Walls joined to it move with it, so corners stay joined.</span>
+              </div>
+              <Field label={feet ? 'Thickness (inches)' : 'Thickness (mm)'} hint="Measured across the wall. It does not change the wall's length.">
+                <input
+                  id="fp-wall-edit-thickness"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={wallEdit.thickness}
+                  onChange={e => setWallEdit({ ...wallEdit, thickness: e.target.value, error: '' })}
+                  onKeyDown={onEnter}
+                />
+              </Field>
+              <div className="fp-wall-edit-presets" role="group" aria-label="Common wall thicknesses">
+                {wallThicknessPresets(unit).map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    className="m-chip"
+                    aria-pressed={wallEdit.thickness.trim() === formatThickness(p.value, unit)}
+                    onClick={() => setWallEdit({ ...wallEdit, thickness: formatThickness(p.value, unit), error: '' })}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <details className="fp-wall-edit-more">
+                <summary>Position</summary>
+                <p className="m-field-hint" style={{ display: 'block', margin: '8px 0' }}>
+                  Where the end that stays is, measured from the plot's top-left corner, in {feet ? 'feet' : 'metres'}.
+                </p>
+                <div className="fp-wall-edit-xy">
+                  <Field label="From the left">
+                    <input id="fp-wall-edit-x" type="number" inputMode="decimal" step="any" value={wallEdit.x} onChange={e => setWallEdit({ ...wallEdit, x: e.target.value, error: '' })} onKeyDown={onEnter} />
+                  </Field>
+                  <Field label="From the top">
+                    <input id="fp-wall-edit-y" type="number" inputMode="decimal" step="any" value={wallEdit.y} onChange={e => setWallEdit({ ...wallEdit, y: e.target.value, error: '' })} onKeyDown={onEnter} />
+                  </Field>
+                </div>
+              </details>
+              <p className="fp-wall-edit-note">Length is measured along the wall's centre line, corner to corner.</p>
+            </div>
+          );
+        })()}
+      </Sheet>
+
+      {/* ── Drawing tips, what the measurements mean, and the limits of this tool ── */}
+      <Sheet open={showHelpSheet} title="Drawing tips" onClose={() => setShowHelpSheet(false)}>
+        <div className="fp-help">
+          <h3>Drawing walls</h3>
+          <ul>
+            <li><strong>Sketch:</strong> draw a room outline in one stroke. It is straightened, joined to nearby corners and closed into a room as you draw. A large correction is shown first and added only if you choose Use.</li>
+            <li><strong>Straight:</strong> drag out one wall, or tap its two ends, for exact placement.</li>
+            <li><strong>Two fingers</strong> always move and zoom the plan and never draw. On a computer, scroll to zoom and drag empty space to move.</li>
+            <li><strong>Undo</strong> takes back the last change, including a whole sketched room.</li>
+          </ul>
+          <h3>Editing</h3>
+          <ul>
+            <li>With Select, tap a wall. Drag a round handle to resize it; the walls joined at that corner follow.</li>
+            <li>Tap a red measurement to type an exact length, thickness or position.</li>
+            <li>Snap pulls ends to the grid and to nearby corners. Turn it off to place things freely.</li>
+          </ul>
+          <h3>What the measurements mean</h3>
+          <ul>
+            <li><span className="fp-help-swatch is-red" /> <strong>Red, outside a wall:</strong> the wall's length, corner to corner along its centre line.</li>
+            <li><span className="fp-help-swatch is-green" /> <strong>Green, inside a room:</strong> the clear size between the inner wall faces.</li>
+            <li><strong>Thickness</strong> is measured across a wall and never changes its length.</li>
+            <li>Room area on the plan and in totals is measured to the wall centre lines. The green "Inside" figure is the clear floor area.</li>
+            <li>Lengths are stored exactly, in {baseUnitOf(unit) === 'feet' ? 'feet' : 'metres'}; only the text on screen is rounded{unit === 'feet' ? ' (to a quarter inch)' : ''}.</li>
+          </ul>
+          <Note tone="warn">
+            {PLAN_DISCLAIMER} {PLAN_REVIEW_NOTE}
+          </Note>
+        </div>
       </Sheet>
 
       <Sheet
@@ -9698,7 +11355,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <input
                   type="text"
                   className="fp-copilot-prompt-input"
-                  placeholder={'e.g., "Add a 12 by 10 foot room beside the kitchen" or "Rotate 45 degrees"'}
+                  placeholder={'Describe: "Add a 12 by 10 foot room beside kitchen" or "Rotate 45 degrees"'}
                   value={copilotPrompt}
                   onChange={e => setCopilotPrompt(e.target.value)}
                 />
@@ -9760,12 +11417,84 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         onClose={() => setIsFixPlanModalOpen(false)}
         issues={diagnosticIssues}
         unit={unit}
+        onLocateIssue={handleLocateDiagnosticIssue}
         onApplyFix={executeValidatedAction}
         onApplyAllFixes={actions => {
           actions.forEach(a => executeValidatedAction(a));
           onNotify(`Applied ${actions.length} safe architectural fixes.`, 'success');
         }}
       />
+
+      {/* ── Starter Templates Chooser Modal (Priority 1) ── */}
+      {showStarterTemplatesModal && (
+        <div className="fp-ai-dialog fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <LayoutGrid className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    Choose a Starter Floor Plan Template
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Instantly load a professionally proportioned architectural layout.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStarterTemplatesModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {STARTER_TEMPLATES.map(tpl => (
+                <div
+                  key={tpl.id}
+                  onClick={() => handleApplyStarterTemplate(tpl)}
+                  className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-amber-500 dark:hover:border-amber-500 hover:bg-amber-50/30 dark:hover:bg-amber-950/20 cursor-pointer transition-all flex flex-col justify-between group shadow-sm hover:shadow"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
+                        {tpl.bhk}
+                      </span>
+                      <span className="text-xs text-slate-500 font-mono">
+                        {tpl.plotLength} × {tpl.plotWidth} {tpl.unit === 'feet' ? 'ft' : 'm'}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                      {tpl.name}
+                    </h3>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      {tpl.description}
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
+                    <span>{tpl.rooms.length} Rooms • {tpl.walls.length} Walls • {tpl.doors.length} Doors</span>
+                    <span className="font-semibold text-amber-600 group-hover:translate-x-0.5 transition-transform">Use &rarr;</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowStarterTemplatesModal(false)}
+                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── "Analyze Plan" Geometric Metrics Modal ── */}
       <PlanAnalysisModal
@@ -10067,140 +11796,211 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </button>
             </div>
 
+            {/* Searchable Tool Picker (Priority 3) */}
+            <div className="fp-mobile-search-bar">
+              <Search size={16} color="#78716c" />
+              <input
+                type="text"
+                value={mobileToolSearch}
+                onChange={e => setMobileToolSearch(e.target.value)}
+                placeholder="Search tools (e.g. wall, shapes, column, stair)..."
+                className="fp-mobile-search-input"
+              />
+              {mobileToolSearch && (
+                <button
+                  type="button"
+                  onClick={() => setMobileToolSearch('')}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  aria-label="Clear search"
+                >
+                  <X size={14} color="#78716c" />
+                </button>
+              )}
+            </div>
+
             <div className="fp-mobile-sheet-grid">
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                id="fp-mobile-tool-shapes"
-                onClick={() => {
-                  setShowMobileMoreTools(false);
-                  setShowMobileShapes(true);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Shapes size={18} /></div>
-                <span>Room Shapes</span>
-              </button>
+              {(!mobileToolSearch || 'room shapes library'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  id="fp-mobile-tool-shapes"
+                  onClick={() => {
+                    setShowMobileMoreTools(false);
+                    setShowMobileShapes(true);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Shapes size={18} /></div>
+                  <span>Room Shapes</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setActiveTool('column');
-                  setSelectedElement(null);
-                  setShowMobileMoreTools(false);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Columns size={18} /></div>
-                <span>Structural Column</span>
-              </button>
+              {(!mobileToolSearch || 'structural column pillar'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setActiveTool('column');
+                    setSelectedElement(null);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Columns size={18} /></div>
+                  <span>Structural Column</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setActiveTool('stairs');
-                  setSelectedElement(null);
-                  setShowMobileMoreTools(false);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Split size={18} /></div>
-                <span>Staircase</span>
-              </button>
+              {(!mobileToolSearch || 'staircase stairs flight'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setActiveTool('stairs');
+                    setSelectedElement(null);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Split size={18} /></div>
+                  <span>Staircase</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setShowFurnitureModal(true);
-                  setShowMobileMoreTools(false);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Armchair size={18} /></div>
-                <span>Furniture & Symbols</span>
-              </button>
+              {(!mobileToolSearch || 'furniture symbols bed sofa table'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setShowFurnitureModal(true);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Armchair size={18} /></div>
+                  <span>Furniture & Symbols</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setShowDimensions(d => !d);
-                  setShowMobileMoreTools(false);
-                  onNotify(`Dimensions ${!showDimensions ? 'Shown' : 'Hidden'}`, 'info');
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Ruler size={18} /></div>
-                <span>{showDimensions ? 'Hide Dimensions' : 'Show Dimensions'}</span>
-              </button>
+              {(!mobileToolSearch || 'dimensions measure ruler'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setShowDimensions(d => !d);
+                    setShowMobileMoreTools(false);
+                    onNotify(`Dimensions ${!showDimensions ? 'Shown' : 'Hidden'}`, 'info');
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Ruler size={18} /></div>
+                  <span>{showDimensions ? 'Hide Dimensions' : 'Show Dimensions'}</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setActiveTool('annotation');
-                  setSelectedElement(null);
-                  setShowMobileMoreTools(false);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Type size={18} /></div>
-                <span>Text Note</span>
-              </button>
+              {(!mobileToolSearch || 'text note annotation callout'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setActiveTool('annotation');
+                    setSelectedElement(null);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Type size={18} /></div>
+                  <span>Text Note</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setActiveTool('ai_draw');
-                  setSelectedElement(null);
-                  setShowMobileMoreTools(false);
-                  triggerAiFeedback('✨ AI Draw Mode Active: Draw roughly — AI detects walls, rooms & doors!');
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon" style={{ color: '#b45309' }}><Sparkles size={18} /></div>
-                <span>AI Freehand Draw</span>
-              </button>
+              {(!mobileToolSearch || 'sketch walls ai draw'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setActiveTool('ai_draw');
+                    setSelectedElement(null);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon" style={{ color: '#c2410c' }}><PenTool size={18} /></div>
+                  <span>Sketch Walls</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setActiveTool('pan');
-                  setIsDrawingWall(false);
-                  setWallStart(null);
-                  setSelectedElement(null);
-                  setShowMobileMoreTools(false);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Hand size={18} /></div>
-                <span>Pan Canvas</span>
-              </button>
+              {(!mobileToolSearch || 'drawing tips help'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  id="fp-mobile-help"
+                  onClick={() => {
+                    setShowMobileMoreTools(false);
+                    setShowHelpSheet(true);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Info size={18} /></div>
+                  <span>Drawing Tips</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  setShowGrid(g => !g);
-                  setShowMobileMoreTools(false);
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><GridIcon size={18} /></div>
-                <span>{showGrid ? 'Hide Grid' : 'Show Grid'}</span>
-              </button>
+              {(!mobileToolSearch || 'pan canvas hand move'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setActiveTool('pan');
+                    setIsDrawingWall(false);
+                    setWallStart(null);
+                    setSelectedElement(null);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Hand size={18} /></div>
+                  <span>Pan Canvas</span>
+                </button>
+              )}
 
-              <button
-                type="button"
-                className="fp-mobile-grid-btn"
-                onClick={() => {
-                  const next = !(snapToGridEnabled && snapToEndpointsEnabled);
-                  setSnapToGridEnabled(next);
-                  setSnapToEndpointsEnabled(next);
-                  setSnapToWallEnabled(next);
-                  setShowMobileMoreTools(false);
-                  onNotify(`Snapping ${next ? 'Enabled' : 'Disabled'}`, 'info');
-                }}
-              >
-                <div className="fp-mobile-grid-btn-icon"><Magnet size={18} /></div>
-                <span>{snapToGridEnabled ? 'Disable Snap' : 'Enable Snap'}</span>
-              </button>
+              {(!mobileToolSearch || 'reset view 100% zoom'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  id="fp-mobile-reset-view"
+                  onClick={() => {
+                    handleResetView();
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Maximize size={18} /></div>
+                  <span>Reset View (100%)</span>
+                </button>
+              )}
+
+              {(!mobileToolSearch || 'grid lines'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    setShowGrid(g => !g);
+                    setShowMobileMoreTools(false);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><GridIcon size={18} /></div>
+                  <span>{showGrid ? 'Hide Grid' : 'Show Grid'}</span>
+                </button>
+              )}
+
+              {(!mobileToolSearch || 'magnet snap snapping'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    const next = !(snapToGridEnabled && snapToEndpointsEnabled);
+                    setSnapToGridEnabled(next);
+                    setSnapToEndpointsEnabled(next);
+                    setSnapToWallEnabled(next);
+                    setShowMobileMoreTools(false);
+                    onNotify(`Snapping ${next ? 'Enabled' : 'Disabled'}`, 'info');
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Magnet size={18} /></div>
+                  <span>{snapToGridEnabled ? 'Disable Snap' : 'Enable Snap'}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -10285,6 +12085,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             >
               View Full Room Schedule Table
             </button>
+
+            <p className="fp-wall-edit-note" style={{ marginTop: 12 }}>
+              Areas are measured to the wall centre lines. {PLAN_DISCLAIMER} {PLAN_REVIEW_NOTE}
+            </p>
           </div>
         </div>
       )}

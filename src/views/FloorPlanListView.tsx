@@ -1174,7 +1174,7 @@ const NewFloorPlanModal: React.FC<NewFloorPlanModalProps> = ({
               <input
                 id="new-fp-building"
                 type="text"
-                placeholder="e.g. Raman Villa, Block A"
+                placeholder="Building / House Name"
                 value={buildingName}
                 onChange={e => {
                   setBuildingName(e.target.value);
@@ -1198,7 +1198,7 @@ const NewFloorPlanModal: React.FC<NewFloorPlanModalProps> = ({
               <input
                 id="new-fp-floor"
                 type="text"
-                placeholder="e.g. Ground Floor, First Floor"
+                placeholder="Ground Floor, First Floor"
                 value={floorName}
                 onChange={e => setFloorName(e.target.value)}
                 onBlur={() => setTouched(t => ({ ...t, floorName: true }))}
@@ -1229,7 +1229,7 @@ const NewFloorPlanModal: React.FC<NewFloorPlanModalProps> = ({
                   type="number"
                   min="0.01"
                   step="any"
-                  placeholder="e.g. 40"
+                  placeholder="40"
                   value={plotLength}
                   onChange={e => setPlotLength(e.target.value)}
                   onBlur={() => setTouched(t => ({ ...t, plotLength: true }))}
@@ -1256,7 +1256,7 @@ const NewFloorPlanModal: React.FC<NewFloorPlanModalProps> = ({
                   type="number"
                   min="0.01"
                   step="any"
-                  placeholder="e.g. 30"
+                  placeholder="30"
                   value={plotWidth}
                   onChange={e => setPlotWidth(e.target.value)}
                   onBlur={() => setTouched(t => ({ ...t, plotWidth: true }))}

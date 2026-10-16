@@ -383,14 +383,21 @@ export class BuildingMistryDB extends Dexie {
   async getSitesForUser(user: User): Promise<Site[]> {
     const sites = await this.sites.filter(s => !s.isDeleted).toArray();
     return sites
-      .filter(site => userCanAccessRecord(user, 'sites', 'read', site.userId))
+      .filter(site => {
+        if (user.role === 'HOUSE_OWNER') {
+          const phoneMatches = user.mobile && site.ownerPhone && site.ownerPhone.replace(/\D/g, '') === user.mobile.replace(/\D/g, '');
+          return site.userId === user.id || phoneMatches;
+        }
+        return userCanAccessRecord(user, 'sites', 'read', site.userId);
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async getSiteForUser(user: User, siteId: string): Promise<Site | null> {
     const site = await this.sites.get(siteId);
     if (!site || site.isDeleted) return null;
-    if (!userCanAccessRecord(user, 'sites', 'read', site.userId)) {
+    const isOwnerPhoneMatch = user.role === 'HOUSE_OWNER' && user.mobile && site.ownerPhone && site.ownerPhone.replace(/\D/g, '') === user.mobile.replace(/\D/g, '');
+    if (site.userId !== user.id && !isOwnerPhoneMatch && !userCanAccessRecord(user, 'sites', 'read', site.userId)) {
       throw new Error("Access Denied: You do not have permission to view another contractor's site.");
     }
     return site;

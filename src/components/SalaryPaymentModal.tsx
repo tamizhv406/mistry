@@ -340,7 +340,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
                 <label>Notes / Period</label>
                 <input
                   type="text"
-                  placeholder="e.g. Week 1 settlement, Roof slab bonus"
+                  placeholder="Settlement notes / period"
                   value={periodNotes}
                   onChange={e => setPeriodNotes(e.target.value)}
                 />

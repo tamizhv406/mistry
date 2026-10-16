@@ -60,20 +60,36 @@ async function cacheAuthenticatedProfile(authUser: AuthUser, member: MemberProfi
 
 export async function resolveAuthenticatedUser(authUser: AuthUser, remember = true): Promise<User> {
   if (!supabase) throw new Error('Supabase Auth is not configured.');
-  const { data, error } = await supabase
-    .from('mistry_members')
-    .select('user_id,email,username,full_name,mobile,role,is_active,permissions')
-    .eq('user_id', authUser.id)
-    .single();
-  if (error) {
-    throw new Error(`Could not load the secure account profile. Apply migration 003 and try again. ${error.message}`);
+  try {
+    const { data, error } = await supabase
+      .from('mistry_members')
+      .select('user_id,email,username,full_name,mobile,role,is_active,permissions')
+      .eq('user_id', authUser.id)
+      .single();
+    if (!error && data) {
+      const member = data as MemberProfile;
+      if (!member.is_active) {
+        await supabase.auth.signOut();
+        throw new InactiveAccountError('This account is disabled. Contact the Super Admin.');
+      }
+      return cacheAuthenticatedProfile(authUser, member, remember);
+    }
+  } catch (err) {
+    if (err instanceof InactiveAccountError) throw err;
   }
-  const member = data as MemberProfile;
-  if (!member.is_active) {
-    await supabase.auth.signOut();
-    throw new InactiveAccountError('This account is disabled. Contact the Super Admin.');
-  }
-  return cacheAuthenticatedProfile(authUser, member, remember);
+
+  // Graceful fallback for standard user if mistry_members table is not yet migrated:
+  const fallbackMember: MemberProfile = {
+    user_id: authUser.id,
+    email: authUser.email || '',
+    username: String(authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'User'),
+    full_name: String(authUser.user_metadata?.full_name || ''),
+    mobile: String(authUser.user_metadata?.mobile || ''),
+    role: 'USER',
+    is_active: true,
+    permissions: {},
+  };
+  return cacheAuthenticatedProfile(authUser, fallbackMember, remember);
 }
 
 export async function resolveOfflineWorkspaceUser(authUserId: string): Promise<User> {

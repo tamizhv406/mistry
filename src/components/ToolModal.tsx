@@ -212,7 +212,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
                 <label>Custom Tool / Machine Name <span className="required">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g. Earth Rammer / Plate Compactor"
+                  placeholder="Tool / Machine Name"
                   value={customName}
                   onChange={e => setCustomName(e.target.value)}
                   autoFocus
@@ -415,17 +415,17 @@ export const ToolModal: React.FC<ToolModalProps> = ({
                 <label>Supplier / Workshop / Rental Shop</label>
                 <input
                   type="text"
-                  placeholder="e.g. Sri Balaji Machinery, Annai Rentals"
+                  placeholder="Rental Agency / Vendor"
                   value={supplier}
                   onChange={e => setSupplier(e.target.value)}
                 />
               </div>
 
               <div className="form-group">
-                <label>Notes (e.g. Return date, Repair parts)</label>
+                <label>Notes (Return date, Repair parts)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Bearing replacement & oil servicing"
+                  placeholder="Repair notes / service details"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                 />

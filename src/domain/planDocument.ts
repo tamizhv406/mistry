@@ -10,7 +10,7 @@ import type {
   FloorPlan, FloorPlanAnnotation, FloorPlanColumn, FloorPlanDoor, FloorPlanFurniture, FloorPlanLevel, FloorPlanRoom,
   FloorPlanStaircase, FloorPlanUnit, FloorPlanWall, FloorPlanWindow,
 } from '../db/types';
-import { reanchorOpenings, syncRoomsWithWalls } from './planGeometry';
+import { adoptRoomsMatchingWalls, reanchorOpenings, syncRoomsWithWalls } from './planGeometry';
 
 export interface FloorState {
   walls: FloorPlanWall[];
@@ -232,6 +232,16 @@ export interface NormaliseResult {
  * Brings a floor back to a consistent state after its walls changed: doors and windows stay
  * on their walls (or go with a deleted wall) and wall-enclosed rooms are recalculated.
  */
+/**
+ * Call on a floor as it is just before its walls are edited. Rooms that already fill the space
+ * their walls enclose (as in plans saved by older versions) are tied to those walls, so they
+ * follow the edit. Returns the same state when there is nothing to tie.
+ */
+export function prepareForWallEdit(state: FloorState, unit: FloorPlanUnit): FloorState {
+  const rooms = adoptRoomsMatchingWalls(state.rooms, state.walls, unit);
+  return rooms === state.rooms ? state : { ...state, rooms };
+}
+
 export function normaliseFloor(state: FloorState, unit: FloorPlanUnit, newId: () => string): NormaliseResult {
   const doors = reanchorOpenings(state.doors, state.walls);
   const windows = reanchorOpenings(state.windows, state.walls);
@@ -302,6 +312,9 @@ export function buildSavePayload(plan: Pick<FloorPlan, 'plotLength' | 'plotWidth
 export const PLAN_EXPORT_SCHEMA = '2.1.0';
 export const PLAN_DISCLAIMER =
   'Conceptual layout for planning and discussion. Not a certified structural or architectural drawing. Verify all dimensions on site.';
+/** Shown with the disclaimer inside the editor: what a drawing made here can not replace. */
+export const PLAN_REVIEW_NOTE =
+  'Structural design, and compliance with building rules and approvals, must be checked by a qualified engineer or architect.';
 
 export interface PlanExport {
   application: string;

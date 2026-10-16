@@ -128,6 +128,7 @@ export interface PlanDiagnosticIssue {
     | 'misaligned_corner'
     | 'floating_door'
     | 'floating_window'
+    | 'dimension_discrepancy'
     | 'invalid_dimension';
   severity: 'critical' | 'warning' | 'info';
   title: string;
@@ -1281,6 +1282,41 @@ export function diagnosePlanIssues(
         suggestedFix: 'Snap to nearest wall or remove.',
         elementIds: [win.id],
       });
+    }
+  }
+
+  // 4. Wall Dimension Discrepancy (e.g., 10mm-50mm or small fraction mismatch between opposite parallel walls)
+  for (let i = 0; i < walls.length; i++) {
+    const w1 = walls[i];
+    const len1 = getWallLength(w1);
+    const ang1 = getWallAngleDeg(w1) % 180;
+
+    for (let j = i + 1; j < walls.length; j++) {
+      const w2 = walls[j];
+      const len2 = getWallLength(w2);
+      const ang2 = getWallAngleDeg(w2) % 180;
+
+      // Check if walls are substantially parallel
+      if (Math.abs(ang1 - ang2) < 2) {
+        const diff = Math.abs(len1 - len2);
+        // Tolerances: 0.03ft to 0.5ft (~10mm to 150mm)
+        const minThresh = unit === 'feet' ? 0.03 : 0.01;
+        const maxThresh = unit === 'feet' ? 0.5 : 0.15;
+        if (diff >= minThresh && diff <= maxThresh) {
+          const midX = (w1.x1 + w1.x2) / 2;
+          const midY = (w1.y1 + w1.y2) / 2;
+          issues.push({
+            id: `dim-discrepancy-${w1.id}-${w2.id}`,
+            type: 'dimension_discrepancy',
+            severity: 'info',
+            title: `Wall Length Mismatch (${formatLength(diff, unit)})`,
+            location: `(${midX.toFixed(1)}, ${midY.toFixed(1)})`,
+            description: `Parallel walls have a small difference: ${formatLength(len1, unit)} vs ${formatLength(len2, unit)} (${formatLength(diff, unit)} gap).`,
+            suggestedFix: `Align wall lengths to avoid construction measurement errors.`,
+            elementIds: [w1.id, w2.id],
+          });
+        }
+      }
     }
   }
 

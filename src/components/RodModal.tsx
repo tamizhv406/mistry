@@ -108,7 +108,7 @@ export const RodModal: React.FC<RodModalProps> = ({
     const selectedDiameter = diameter === 'Custom' ? customDiameter.trim() : diameter;
 
     if (!selectedDiameter) {
-      setError('Please specify the rod diameter (e.g. 12 mm).');
+      setError('Please specify the rod diameter (12 mm).');
       return;
     }
     if (!supplier.trim()) {
@@ -228,7 +228,7 @@ export const RodModal: React.FC<RodModalProps> = ({
                   <label>Custom Diameter</label>
                   <input
                     type="text"
-                    placeholder="e.g. 28 mm"
+                    placeholder="28 mm"
                     value={customDiameter}
                     onChange={e => setCustomDiameter(e.target.value)}
                   />
@@ -238,7 +238,7 @@ export const RodModal: React.FC<RodModalProps> = ({
                   <label>Brand / Grade</label>
                   <input
                     type="text"
-                    placeholder="e.g. Tata Tiscon / JSW Neosteel Fe550D"
+                    placeholder="Tata Tiscon / JSW Neosteel Fe550D"
                     value={brand}
                     onChange={e => setBrand(e.target.value)}
                   />
@@ -249,7 +249,7 @@ export const RodModal: React.FC<RodModalProps> = ({
             <div className="form-grid-2">
               <VoiceInputField
                 label="Supplier / Steel Yard"
-                placeholder="e.g. Sri Ram Steel Traders, Annai Steels"
+                placeholder="Supplier / Steel Yard Name"
                 value={supplier}
                 onChange={setSupplier}
                 required
@@ -259,7 +259,7 @@ export const RodModal: React.FC<RodModalProps> = ({
                 <label>Number of Rod Pieces / Bundles (Optional)</label>
                 <input
                   type="number"
-                  placeholder="e.g. 50 rods or 5 bundles"
+                  placeholder="50"
                   value={quantityPieces}
                   onChange={e => setQuantityPieces(e.target.value)}
                 />
@@ -410,7 +410,7 @@ export const RodModal: React.FC<RodModalProps> = ({
                 <label>Invoice / Weighbridge Slip No</label>
                 <input
                   type="text"
-                  placeholder="e.g. WB-8902 / INV-44"
+                  placeholder="WB-8902 / INV-44"
                   value={invoiceNumber}
                   onChange={e => setInvoiceNumber(e.target.value)}
                 />
@@ -418,7 +418,7 @@ export const RodModal: React.FC<RodModalProps> = ({
 
               <VoiceInputField
                 label="Notes / Structural Usage"
-                placeholder="e.g. Stirrups for 1st floor beams"
+                placeholder="Structural usage notes"
                 value={notes}
                 onChange={setNotes}
               />

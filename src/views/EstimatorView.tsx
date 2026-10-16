@@ -350,7 +350,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
           {!['50', '60', '70', '80'].includes(value.percent) && (
             <div style={{ marginTop: 10 }}>
               <Field label="Percent of the plot">
-                <input type="text" inputMode="decimal" autoComplete="off" value={value.percent} onChange={e => set({ ...value, percent: e.target.value })} placeholder="e.g. 65" aria-label="Percent of the plot" />
+                <input type="text" inputMode="decimal" autoComplete="off" value={value.percent} onChange={e => set({ ...value, percent: e.target.value })} placeholder="65" aria-label="Percent of the plot" />
               </Field>
             </div>
           )}
@@ -749,7 +749,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
           </select>
         </Field>
         <Field label="Notes (optional)">
-          <input type="text" value={saveNotes} onChange={e => setSaveNotes(e.target.value)} maxLength={200} placeholder="e.g. Client wants river sand plastering" />
+          <input type="text" value={saveNotes} onChange={e => setSaveNotes(e.target.value)} maxLength={200} placeholder="Notes / comments" />
         </Field>
       </Sheet>
 

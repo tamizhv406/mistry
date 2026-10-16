@@ -216,7 +216,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
           <input
             type="text"
             className="fp-shape-search-input"
-            placeholder="Search shapes... (e.g. bed, door)"
+            placeholder="Search shapes (bed, door...)"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             id="fp-shape-search-input"
@@ -542,7 +542,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
               <input
                 id="custom-shape-name-input"
                 type="text"
-                placeholder="e.g. Master Walk-in Closet, Custom Island"
+                placeholder="Custom shape name"
                 value={customShapeName}
                 onChange={e => setCustomShapeName(e.target.value)}
                 autoFocus

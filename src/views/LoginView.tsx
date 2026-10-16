@@ -323,7 +323,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 id="reg-fullname"
                 name="name"
                 type="text"
-                placeholder="e.g. R. Velu Mistry"
+                placeholder="Enter your full name"
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
                 autoComplete="name"
@@ -337,7 +337,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 id="reg-username"
                 name="username"
                 type="text"
-                placeholder="e.g. velumistry"
+                placeholder="Choose a username"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 autoComplete="username"
@@ -352,7 +352,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   name="email"
                   type="email"
                   required
-                  placeholder="you@example.com"
+                  placeholder="Enter your email address"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   autoComplete="email"
@@ -364,7 +364,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   id="reg-mobile"
                   name="tel"
                   type="tel"
-                  placeholder="e.g. 98401 23456"
+                  placeholder="Mobile number (optional)"
                   value={mobile}
                   onChange={e => setMobile(e.target.value)}
                   autoComplete="tel"

@@ -215,7 +215,7 @@ const AddExpenseSheet: React.FC<{
           <input type="text" value={payee} onChange={e => setPayee(e.target.value)} maxLength={80} placeholder="Shop, driver or person" />
         </Field>
         <Field label="What for (optional)">
-          <input type="text" value={description} onChange={e => setDescription(e.target.value)} maxLength={120} placeholder="e.g. Diesel for mixer" />
+          <input type="text" value={description} onChange={e => setDescription(e.target.value)} maxLength={120} placeholder="Diesel for mixer" />
         </Field>
         <Field label="Payment">
           <Chips label="Payment status" value={paid} onChange={setPaid} options={[{ value: 'paid', label: 'Paid now' }, { value: 'unpaid', label: 'Not paid yet' }]} />

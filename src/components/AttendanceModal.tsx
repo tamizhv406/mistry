@@ -288,7 +288,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
 
                     <input
                       type="text"
-                      placeholder="Note (e.g. plastering, left 3pm)"
+                      placeholder="Note (work / timing)"
                       value={current.notes}
                       onChange={e => handleNotesChange(w.id, e.target.value)}
                       style={{ fontSize: '0.82rem', padding: '6px 10px', maxWidth: '180px' }}

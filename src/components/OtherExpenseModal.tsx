@@ -185,7 +185,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
               <label>Description / Vendor / Item <span className="required">*</span></label>
               <input
                 type="text"
-                placeholder="e.g. Scaffolding transport lorry, diesel for mixer"
+                placeholder="Description / vendor / item details"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 autoFocus
@@ -199,7 +199,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
                 type="number"
                 step="any"
                 min="1"
-                placeholder="e.g. 1500"
+                placeholder="0"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 required
@@ -296,7 +296,7 @@ export const OtherExpenseModal: React.FC<OtherExpenseModalProps> = ({
               <label>Notes / Bill Reference</label>
               <input
                 type="text"
-                placeholder="e.g. Petrol bunk receipt #9910, handed cash to driver"
+                placeholder="Bill reference / receipt notes"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
               />

@@ -260,6 +260,9 @@
     inset: 0;
     height: 100dvh;
     z-index: 500;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
   }
 }
 

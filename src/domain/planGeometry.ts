@@ -432,6 +432,40 @@ export function syncRoomsWithWalls(
   return { rooms: changed ? next : rooms, added, removed, changed };
 }
 
+/**
+ * Ties hand-placed rooms to the walls around them when they already fill the enclosed space
+ * exactly (same place, area within 3%). Plans saved before rooms followed their walls contain
+ * such rooms; once tied, a room follows later wall edits instead of being left behind at its
+ * old size. Run this on the drawing as it is BEFORE a wall edit. Nothing is added or removed,
+ * and a room that does not match its walls is left exactly as it is.
+ */
+export function adoptRoomsMatchingWalls(rooms: FloorPlanRoom[], walls: FloorPlanWall[], unit: FloorPlanUnit): FloorPlanRoom[] {
+  if (!rooms.some(r => !r.fromWalls)) return rooms;
+  const tolerance = joinTolerance(unit);
+  const faces = findWallFaces(walls, tolerance, minimumRoomArea(unit));
+  if (faces.length === 0) return rooms;
+  const taken = new Set<number>();
+  const faceAt = (c: Pt) => faces.findIndex((f, i) => !taken.has(i) && pointInPolygon(c, f.points));
+  for (const room of rooms) {
+    if (!room.fromWalls) continue;
+    const idx = faceAt(centreOf(room));
+    if (idx >= 0) taken.add(idx);
+  }
+  let changed = false;
+  const next = rooms.map(room => {
+    if (room.fromWalls) return room;
+    const c = centreOf(room);
+    const idx = faceAt(c);
+    if (idx < 0) return room;
+    const samePlace = Math.hypot(faces[idx].centroid.x - c.x, faces[idx].centroid.y - c.y) <= tolerance * 2;
+    if (!samePlace || Math.abs(roomArea(room) / faces[idx].area - 1) >= 0.03) return room;
+    taken.add(idx);
+    changed = true;
+    return { ...room, ...faceToRoomGeometry(faces[idx]), fromWalls: true };
+  });
+  return changed ? next : rooms;
+}
+
 // ---------------------------------------------------------------------------
 // Editing joined walls
 // ---------------------------------------------------------------------------
@@ -441,12 +475,59 @@ export function syncRoomsWithWalls(
  * joined stay joined. `walls` must be the walls as they were when the drag started.
  */
 export function moveJoint(walls: FloorPlanWall[], from: Pt, to: Pt, tolerance: number): FloorPlanWall[] {
-  return walls.map(w => {
+  const moved = walls.map(w => {
     const at1 = Math.hypot(w.x1 - from.x, w.y1 - from.y) <= tolerance;
     const at2 = Math.hypot(w.x2 - from.x, w.y2 - from.y) <= tolerance;
     if (!at1 && !at2) return w;
     return { ...w, x1: at1 ? to.x : w.x1, y1: at1 ? to.y : w.y1, x2: at2 ? to.x : w.x2, y2: at2 ? to.y : w.y2 };
   });
+  return reattachTees(walls, moved, tolerance);
+}
+
+/**
+ * Keeps T-junctions together. A wall end that rested on the side of another wall (away from
+ * that wall's own ends) before an edit is put back on it afterwards, at the same fraction
+ * along it, when the edit moved that wall out from under it. An end the edit already moved,
+ * or one that still lies on its wall, is left alone.
+ *
+ * `before` and `after` must hold the same walls in the same order, and a wall the edit did not
+ * touch must be the same object in both.
+ */
+export function reattachTees(before: FloorPlanWall[], after: FloorPlanWall[], tolerance: number): FloorPlanWall[] {
+  if (before.length !== after.length) return after;
+  let changed = false;
+  const out = after.map((wall, i) => {
+    const old = before[i];
+    if (!old || old.id !== wall.id) return wall;
+    let next = wall;
+    for (const end of [1, 2] as const) {
+      const ox = end === 1 ? old.x1 : old.x2, oy = end === 1 ? old.y1 : old.y2;
+      if ((end === 1 ? wall.x1 : wall.x2) !== ox || (end === 1 ? wall.y1 : wall.y2) !== oy) continue;
+      for (let h = 0; h < before.length; h++) {
+        const host = before[h], moved = after[h];
+        if (h === i || host === moved) continue;
+        const len = wallLengthOf(host);
+        if (len <= tolerance * 2) continue;
+        const ux = (host.x2 - host.x1) / len, uy = (host.y2 - host.y1) / len;
+        const t = (ox - host.x1) * ux + (oy - host.y1) * uy;
+        const off = Math.abs((ox - host.x1) * uy - (oy - host.y1) * ux);
+        if (off > tolerance || t <= tolerance || t >= len - tolerance) continue;
+        const movedLen = wallLengthOf(moved);
+        if (movedLen <= 0) continue;
+        const mx = (moved.x2 - moved.x1) / movedLen, my = (moved.y2 - moved.y1) / movedLen;
+        const stillAt = (ox - moved.x1) * mx + (oy - moved.y1) * my;
+        const stillOff = Math.abs((ox - moved.x1) * my - (oy - moved.y1) * mx);
+        if (stillOff <= tolerance * 1e-3 && stillAt >= 0 && stillAt <= movedLen) continue;
+        const f = t / len;
+        const px = moved.x1 + (moved.x2 - moved.x1) * f, py = moved.y1 + (moved.y2 - moved.y1) * f;
+        next = end === 1 ? { ...next, x1: px, y1: py } : { ...next, x2: px, y2: py };
+        changed = true;
+        break;
+      }
+    }
+    return next;
+  });
+  return changed ? out : after;
 }
 
 /**
@@ -457,13 +538,14 @@ export function translateWall(walls: FloorPlanWall[], wallId: string, dx: number
   const target = walls.find(w => w.id === wallId);
   if (!target || (dx === 0 && dy === 0)) return walls;
   const ends: Pt[] = [{ x: target.x1, y: target.y1 }, { x: target.x2, y: target.y2 }];
-  return walls.map(w => {
+  const moved = walls.map(w => {
     if (w.id === wallId) return { ...w, x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy };
     const at1 = ends.some(e => Math.hypot(w.x1 - e.x, w.y1 - e.y) <= tolerance);
     const at2 = ends.some(e => Math.hypot(w.x2 - e.x, w.y2 - e.y) <= tolerance);
     if (!at1 && !at2) return w;
     return { ...w, x1: at1 ? w.x1 + dx : w.x1, y1: at1 ? w.y1 + dy : w.y1, x2: at2 ? w.x2 + dx : w.x2, y2: at2 ? w.y2 + dy : w.y2 };
   });
+  return reattachTees(walls, moved, tolerance);
 }
 
 export interface OpeningFit {
@@ -529,4 +611,48 @@ export function reanchorOpenings<T extends FloorPlanDoor | FloorPlanWindow>(
     }
   }
   return { openings: changed ? kept : openings, removed, changed };
+}
+
+/**
+ * Partial Eraser helper: Splits a wall into two connected wall segments at point (px, py).
+ * If the click is within endMargin of either end, the wall is not split.
+ * Returns the two new wall segments [w1, w2] or null if the split point is too close to endpoints.
+ */
+export function splitWallAtPoint(
+  wall: FloorPlanWall,
+  px: number,
+  py: number,
+  newIdFn: () => string,
+  endMargin: number = 0.5
+): [FloorPlanWall, FloorPlanWall] | null {
+  const len = wallLengthOf(wall);
+  if (len <= endMargin * 2) return null;
+
+  const ux = (wall.x2 - wall.x1) / len;
+  const uy = (wall.y2 - wall.y1) / len;
+
+  // Project point onto the wall line
+  const t = (px - wall.x1) * ux + (py - wall.y1) * uy;
+  if (t <= endMargin || t >= len - endMargin) {
+    return null;
+  }
+
+  const splitX = round4(wall.x1 + ux * t);
+  const splitY = round4(wall.y1 + uy * t);
+
+  const w1: FloorPlanWall = {
+    ...wall,
+    id: wall.id, // keep original id for first segment
+    x2: splitX,
+    y2: splitY,
+  };
+
+  const w2: FloorPlanWall = {
+    ...wall,
+    id: newIdFn(),
+    x1: splitX,
+    y1: splitY,
+  };
+
+  return [w1, w2];
 }

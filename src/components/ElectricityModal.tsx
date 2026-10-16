@@ -156,7 +156,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
                 <label>Billing Month <span className="required">*</span></label>
                 <input
                   type="text"
-                  placeholder="e.g. February 2026"
+                  placeholder="Billing month and year"
                   value={month}
                   onChange={e => setMonth(e.target.value)}
                   autoFocus
@@ -167,7 +167,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
                 <label>Meter / Connection Consumer No</label>
                 <input
                   type="text"
-                  placeholder="e.g. TNEB-04-129-84"
+                  placeholder="Meter or consumer number"
                   value={meterNumber}
                   onChange={e => setMeterNumber(e.target.value)}
                 />
@@ -287,7 +287,7 @@ export const ElectricityModal: React.FC<ElectricityModalProps> = ({
               <label>Notes / EB Receipt Reference</label>
               <input
                 type="text"
-                placeholder="e.g. Paid online through TANGEDCO quick pay receipt #88192"
+                placeholder="Receipt reference or notes"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
               />

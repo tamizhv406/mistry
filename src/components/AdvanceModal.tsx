@@ -239,7 +239,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
                   type="number"
                   step="any"
                   min="1"
-                  placeholder="e.g. 1000"
+                  placeholder="Enter amount"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   autoFocus
@@ -271,7 +271,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
                 <label>Reason / Purpose</label>
                 <input
                   type="text"
-                  placeholder="e.g. Festival advance, Emergency, Travel"
+                  placeholder="Reason or purpose"
                   value={reason}
                   onChange={e => setReason(e.target.value)}
                 />
@@ -282,7 +282,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
               <label>Notes (Optional)</label>
               <input
                 type="text"
-                placeholder="e.g. Handed cash on site after shift"
+                placeholder="Additional notes"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
               />

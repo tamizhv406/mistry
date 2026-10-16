@@ -155,7 +155,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
             <div className="form-grid-2">
               <VoiceInputField
                 label="Worker Full Name"
-                placeholder="e.g. M. Senthil Kumar"
+                placeholder="Enter worker full name"
                 value={name}
                 onChange={setName}
                 required
@@ -165,7 +165,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
                 <label>Phone Number</label>
                 <input
                   type="tel"
-                  placeholder="e.g. 94432 12345"
+                  placeholder="Enter phone number"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                 />
@@ -188,7 +188,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
                   <label>Custom Category Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. Bar Bender / Carpenter / Plumber"
+                    placeholder="Enter custom category name"
                     value={customCategory}
                     onChange={e => setCustomCategory(e.target.value)}
                   />
@@ -219,7 +219,7 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
 
               <VoiceInputField
                 label="Notes / Skills / Native Place"
-                placeholder="e.g. Plastering expert, from Villupuram"
+                placeholder="Notes or skills description"
                 value={notes}
                 onChange={setNotes}
               />
