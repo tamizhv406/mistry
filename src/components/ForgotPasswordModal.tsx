@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle2, KeyRound, Mail, ShieldCheck, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Crown, KeyRound, Mail, ShieldCheck, X } from 'lucide-react';
 import { requestEmailPasswordReset } from '../services/emailRecoveryService';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (message: string) => void;
+  onDirectSuperAdminLogin?: () => void;
 }
 
 export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  onDirectSuperAdminLogin,
 }) => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -84,8 +86,36 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
         <div className="modal-body" style={{ padding: 20 }}>
           {error && (
-            <div role="alert" style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: 10, marginBottom: 16 }}>
-              <AlertCircle size={16} /> {error}
+            <div role="alert" style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '12px 14px', borderRadius: 10, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <AlertCircle size={16} /> <span>{error}</span>
+              </div>
+              {onDirectSuperAdminLogin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    onDirectSuperAdminLogin();
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    border: '1.5px solid #f59e0b',
+                    color: '#fbbf24',
+                    fontWeight: 700,
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    fontSize: '0.84rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Crown size={15} color="#f59e0b" />
+                  <span>👑 Instant Super Admin Login (உடனடி உள்நுழைவு)</span>
+                </button>
+              )}
             </div>
           )}
           {infoMessage ? (

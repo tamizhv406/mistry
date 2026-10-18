@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { HardHat, Eye, EyeOff, Lock, User, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { loginUser, registerUser, resendConfirmationEmail } from '../services/auth';
+import { HardHat, Eye, EyeOff, Lock, User, ArrowRight, ShieldCheck, CheckCircle2, Crown } from 'lucide-react';
+import { loginUser, registerUser, resendConfirmationEmail, setCurrentUser } from '../services/auth';
+import { db } from '../db/db';
 import type { User as UserType } from '../db/types';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { ChangeInitialPasswordModal } from '../components/ChangeInitialPasswordModal';
@@ -29,6 +30,42 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleSuperAdminDirectLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const superUser: UserType = {
+        id: 'super-admin-tamizh',
+        username: 'tamizh',
+        fullName: 'Tamizh (Super Admin)',
+        email: 'tamilthilagan82@gmail.com',
+        mobile: '9876543210',
+        passwordHash: '',
+        role: 'SUPER_ADMIN',
+        permissions: {
+          projects: { read: true, write: true },
+          labour: { read: true, write: true },
+          payroll: { read: true, write: true },
+          materials: { read: true, write: true },
+          expenses: { read: true, write: true },
+          floor_plans: { read: true, write: true },
+          estimates: { read: true, write: true },
+          admin: { read: true, write: true },
+        },
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      await db.users.put(superUser);
+      setCurrentUser(superUser, true);
+      onLoginSuccess(superUser);
+    } catch (err: any) {
+      setError('Super Admin login error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleResendConfirmation = async () => {
     const targetEmail = identifier.trim() || email.trim();
@@ -353,12 +390,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </span>
             </div>
 
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748b' }}>
                 <ShieldCheck size={14} color="#6366f1" />
-                <span>Super Admin Portal: Sign in with registered administrator credentials above</span>
+                <span>Super Admin Portal</span>
               </div>
 
+              <button
+                type="button"
+                onClick={handleSuperAdminDirectLogin}
+                disabled={loading}
+                style={{
+                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                  border: '1.5px solid #f59e0b',
+                  color: '#fbbf24',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.22)',
+                  width: '100%',
+                }}
+              >
+                <Crown size={18} color="#f59e0b" />
+                <span>👑 Super Admin Instant Login (tamizh)</span>
+              </button>
             </div>
           </form>
         ) : (
@@ -463,6 +524,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           setError('');
           setSuccessMessage(msg);
         }}
+        onDirectSuperAdminLogin={handleSuperAdminDirectLogin}
       />
 
       {/* Mandatory Initial Password Setup Modal */}
