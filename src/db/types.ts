@@ -658,6 +658,10 @@ export interface FloorPlanWall {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  // Where the length label is drawn, moved by dragging it: extra distance out from the wall
+  // and a slide along it, in plan units. Display only: they never change the wall's length.
+  dimensionOffset?: number;
+  dimensionShift?: number;
 }
 
 export type RoomType =

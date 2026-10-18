@@ -44,7 +44,7 @@ assert.ok(editorContent.includes('showMobileMenu'), 'Mobile more menu sheet stat
 assert.ok(editorContent.includes('showMobileShapes'), 'Mobile shapes sheet state must exist');
 assert.ok(editorContent.includes('showMobileMoreTools'), 'Mobile more tools sheet state must exist');
 assert.ok(editorContent.includes('showMobileDetails'), 'Mobile details sheet state must exist');
-assert.ok(editorContent.includes('CAD Shapes & Geometry'), 'Shapes sheet must display CAD Shapes & Geometry');
+assert.ok(editorContent.includes('<span className="fp-mobile-sheet-title">Room shapes</span>'), 'Shapes sheet has a plain-English title (Room shapes)');
 assert.ok(editorContent.includes('Rectangle Room'), 'Shapes sheet must support Rectangle Room');
 assert.ok(editorContent.includes('Circle / Round'), 'Shapes sheet must support Circle / Round shape');
 assert.ok(editorContent.includes('Polygon / L-Shape'), 'Shapes sheet must support Polygon / L-Shape');

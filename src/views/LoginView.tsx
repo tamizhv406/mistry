@@ -112,7 +112,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         right: '-10%',
         width: '450px',
         height: '450px',
-        background: 'radial-gradient(circle, rgba(234, 88, 12, 0.14) 0%, rgba(234, 88, 12, 0) 70%)',
+        background: 'radial-gradient(circle, rgba(15, 23, 42, 0.14) 0%, rgba(15, 23, 42, 0) 70%)',
         borderRadius: '50%',
         pointerEvents: 'none',
       }} />
@@ -123,7 +123,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         left: '-10%',
         width: '400px',
         height: '400px',
-        background: 'radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(245, 158, 11, 0) 70%)',
+        background: 'radial-gradient(circle, rgba(100, 116, 139, 0.10) 0%, rgba(100, 116, 139, 0) 70%)',
         borderRadius: '50%',
         pointerEvents: 'none',
       }} />
@@ -136,7 +136,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         borderRadius: '24px',
         padding: '36px 30px',
         border: '1px solid var(--border-light)',
-        boxShadow: '0 18px 40px -16px rgba(28, 25, 23, 0.22)',
+        boxShadow: '0 18px 40px -16px rgba(15, 23, 42, 0.22)',
         position: 'relative',
         zIndex: 10,
       }}>
@@ -151,7 +151,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             alignItems: 'center',
             justifyContent: 'center',
             color: '#ffffff',
-            boxShadow: '0 8px 16px rgba(234, 88, 12, 0.28)',
+            boxShadow: '0 8px 16px rgba(15, 23, 42, 0.28)',
             marginBottom: '12px',
           }}>
             <HardHat size={36} strokeWidth={2.4} />

@@ -21,16 +21,16 @@ const cssSrc = readFileSync(resolve('src/index.css'), 'utf8');
 console.log('[Test 1] Verifying Data Model for FloorPlanRoom...');
 assert(typesSrc.includes('wallThickness?: number'), 'FloorPlanRoom interface includes wallThickness property');
 
-// Test 2: Planner 5D Wood Floor Texture & Green CAD Markers in SVG Defs
-console.log('\n[Test 2] Verifying Planner 5D SVG Definitions...');
-assert(editorSrc.includes('id="fp-wood-parquet"'), 'SVG defs includes realistic wood parquet pattern (fp-wood-parquet)');
+// Test 2: Plain room fill (no decorative floor texture) and the CAD markers in SVG defs
+console.log('\n[Test 2] Verifying SVG Definitions...');
+assert(!editorSrc.includes('id="fp-wood-parquet"'), 'No decorative wood/brick floor pattern is defined');
 assert(editorSrc.includes('id="fp-dim-arrow-green-start"'), 'SVG defs includes green dimension start arrow marker');
 assert(editorSrc.includes('id="fp-dim-arrow-green-end"'), 'SVG defs includes green dimension end arrow marker');
 
 // Test 3: Planner 5D Canvas Room Rendering
 console.log('\n[Test 3] Verifying Planner 5D Room Canvas Rendering...');
-assert(editorSrc.includes('url(#fp-wood-parquet)'), 'Room fill supports wood parquet texture');
-assert(editorSrc.includes('#10b981') && editorSrc.includes('wallThickPx'), 'Room perimeter walls rendered with solid architectural green border');
+assert(editorSrc.includes("const ROOM_FILL = 'rgba(248, 250, 252, 0.85)'") && !editorSrc.includes('url(#fp-wood-parquet)'), 'Rooms use one plain light fill, rgba(248, 250, 252, 0.85)');
+assert(editorSrc.includes("(wall.wallType === 'partition' ? '#475569' : '#1e293b')") && editorSrc.includes('wallThickPx'), 'Walls are drawn in #1E293B (partitions lighter)');
 assert(editorSrc.includes('fp-dim-arrow-green-start') && editorSrc.includes('stroke="#059669"'), 'Room renders exterior CAD dimension lines with witness arrows');
 assert(editorSrc.includes('computeRoomArea(room, unit)'), 'Center room pill renders label and area in Planner 5D format');
 
@@ -40,7 +40,7 @@ assert(editorSrc.includes('fp-bottom-property-dock'), 'Floating bottom property 
 assert(editorSrc.includes('fp-room-area-badge'), 'Area badge (# Area) is rendered in dock');
 assert(editorSrc.includes('fp-stepper-btn'), 'Stepper buttons (< and >) are rendered for width, height, and thickness');
 assert(editorSrc.includes('Type of Room') || editorSrc.includes('Type'), 'Room type selector dropdown is present in dock');
-assert(editorSrc.includes('fp-prop-toggle-btn'), 'Wood floor vs plain tint toggle button is present');
+assert(editorSrc.includes('openRoomSheet') && editorSrc.includes('id="fp-room-sheet-width"'), 'Room size is changed in one room sheet');
 
 // Test 5: Room Count & Room Schedule ("namba room ethana irukku")
 console.log('\n[Test 5] Verifying Room Counter & Room Schedule...');

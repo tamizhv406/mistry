@@ -86,7 +86,7 @@ import {
 } from '../domain/planDocument';
 import {
   areaToSqFt, baseUnitOf, fitOpeningOnWall, formatPlanArea, joinTolerance, moveJoint, openingOverlaps, planToMm, pointInPolygon, roomArea, roomPerimeter,
-  splitWallAtPoint, translateWall,
+  translateWall,
 } from '../domain/planGeometry';
 import {
   DEFAULT_SNAP_ANGLES, ORTHO_SNAP_ANGLES, describeSketch, directionDeg, interpretStroke, pointSegmentDistance, snapDirection, trimNewWall,
@@ -95,8 +95,13 @@ import {
 import {
   PX_PER_UNIT, defaultGridStep, defaultWallThickness, endToKeep, formatAreaShort, formatDimension, formatLengthForInput, formatThickness,
   gridStepOptions, layoutDimension, outsideNormal, parseLengthInput, parseThicknessInput, pixelsToPlan, resizeWall, roomInterior,
-  roomOutline, wallThicknessPresets, type RoomInterior,
+  roomOutline, wallThicknessPresets, formatOtherUnits, type RoomInterior,
 } from '../domain/planMeasure';
+import {
+  applyAlignmentFix, deleteRoom, eraseWallSegment, findAlignmentIssues, formatMm, resizeRoom, roomBox, splitWall, splitWallAtJunctions, wallJunctions,
+  wallSegmentAt, type AlignmentIssue, type EditResult, type NewId,
+} from '../domain/planEdit';
+import { MistryAiSheet } from '../components/MistryAiSheet';
 import { ConfirmSheet, Field, Note, Segmented, Sheet } from '../components/mobile/kit';
 
 // ─────────────────────────────────────────────────────────
@@ -113,6 +118,9 @@ const WALL_THICKNESS_DEFAULT = 0.75; // ft or m
 const WALL_HEIGHT_DEFAULT = 10;
 const UNDO_HISTORY_LIMIT = 50;
 
+/** Every room is drawn with this one light fill (design system: rgba(248, 250, 252, 0.85)). */
+const ROOM_FILL = 'rgba(248, 250, 252, 0.85)';
+
 const ROOM_COLORS: Record<RoomType, string> = {
   'Living Room': 'rgba(251,191,36,0.18)',
   'Master Bedroom': 'rgba(147,197,253,0.22)',
@@ -120,7 +128,7 @@ const ROOM_COLORS: Record<RoomType, string> = {
   'Guest Room': 'rgba(165,180,252,0.18)',
   'Kids Room': 'rgba(244,114,182,0.18)',
   'Kitchen': 'rgba(52,211,153,0.18)',
-  'Dining': 'rgba(251,146,60,0.18)',
+  'Dining': 'rgba(100, 116, 139,0.18)',
   'Bathroom': 'rgba(129,140,248,0.18)',
   'Toilet': 'rgba(167,139,250,0.18)',
   'Utility': 'rgba(156,163,175,0.18)',
@@ -214,7 +222,8 @@ type Tool =
   | 'pan'
   | 'measure'
   | 'ai_draw'
-  | 'eraser';
+  | 'eraser'
+  | 'split';
 
 type ViewMode = 'design' | 'blueprint' | 'presentation';
 
@@ -362,6 +371,8 @@ const TOOL_HINTS: Record<string, string> = {
   window: 'Tap on a wall to place a window there.',
   room: 'Tap where the room should go. Closing a loop of walls also makes a room.',
   measure: 'Tap two points to measure the distance between them.',
+  eraser: 'Tap a wall to erase only the part under your finger, up to the next joint.',
+  split: 'Tap a wall where it should be cut. Each part can then be moved, sized or erased on its own.',
 };
 
 function getLiveToolHint(tool: Tool): string {
@@ -375,7 +386,9 @@ function getLiveToolHint(tool: Tool): string {
     case 'ai_draw':
       return 'Sketch Tool: Draw a rough continuous outline. Auto-straightens and welds closed loops.';
     case 'eraser':
-      return 'Eraser Tool: Tap any wall, room, door, column, or furniture to delete it immediately.';
+      return 'Eraser: tap a wall to erase only that part, up to the next joint. Tap a door, window or item to remove it.';
+    case 'split':
+      return 'Split: tap a wall where it should be cut into two walls.';
     case 'door':
       return 'Door Tool: Tap on any wall segment to place an architectural door.';
     case 'window':
@@ -542,6 +555,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     return sides;
   }, [editorState.walls, editorState.rooms, unit]);
 
+  // Walls with a room on both sides. Their length label would sit in the middle of a room,
+  // over the room's name, so by default it is drawn a little towards one end instead.
+  const wallsBetweenRooms = useMemo(() => {
+    const between = new Set<string>();
+    const probe = baseUnitOf(unit) === 'feet' ? 0.5 : 0.15;
+    for (const w of editorState.walls) {
+      const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+      if (!(len > 0)) continue;
+      const n = { x: -(w.y2 - w.y1) / len, y: (w.x2 - w.x1) / len };
+      const mid = { x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2 };
+      const reach = (w.thickness || 0) / 2 + probe;
+      const inRoom = (s: number) => editorState.rooms.some(r => pointInPolygon({ x: mid.x + n.x * reach * s, y: mid.y + n.y * reach * s }, roomOutline(r)));
+      if (inRoom(1) && inRoom(-1)) between.add(w.id);
+    }
+    return between;
+  }, [editorState.walls, editorState.rooms, unit]);
+
   // Clear size of each wall-enclosed room, between the inner wall faces. Derived from the
   // walls on every change; never stored.
   const roomInteriors = useMemo(() => {
@@ -555,7 +585,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   }, [editorState.walls, editorState.rooms, unit]);
 
   // AI Real-Time Sketch & Live Assist State ("user summa line draw panna athe understand panna purinjiganu")
-  const [isAiLiveAssistActive, setIsAiLiveAssistActive] = useState(true);
+  const [isAiLiveAssistActive, setIsAiLiveAssistActive] = useState(false);
   const [aiLiveFeedback, setAiLiveFeedback] = useState<{ message: string; timestamp: number } | null>(null);
   const [freehandPoints, setFreehandPoints] = useState<Point2D[]>([]);
   const [isFreehandDrawing, setIsFreehandDrawing] = useState(false);
@@ -588,6 +618,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   } | null>(null);
   const dimHitRef = useRef<string | null>(null);
   const openWallEditRef = useRef<(wallId: string) => void>(() => {});
+
+  // Where the selected wall was last tapped: Split and "Erase part" act there.
+  const [wallTap, setWallTap] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
+  // A measurement label being dragged to a clearer spot (display only, see FloorPlanWall).
+  const [dimDrag, setDimDrag] = useState<{ wallId: string; offset: number; shift: number } | null>(null);
+  const dimDragRef = useRef<{ wallId: string; startX: number; startY: number; offset0: number; shift0: number; normal: { x: number; y: number }; dir: { x: number; y: number } } | null>(null);
+  // Measurement check: small differences between measurements that should match.
+  const [showChecks, setShowChecks] = useState(false);
+  const [ignoredChecks, setIgnoredChecks] = useState<string[]>([]);
+  // Tutorials and first-use tips stay hidden unless the user turns them on (Settings).
+  const [showTips, setShowTips] = useState<boolean>(() => readSetting('bm_fp_show_tips', '0') === '1');
+  const [isMistryAiOpen, setIsMistryAiOpen] = useState(false);
+  const [aiPreview, setAiPreview] = useState<EditorState | null>(null);
+  const alignmentIssues = useMemo(
+    () => findAlignmentIssues(editorState.walls, unit).filter(i => !ignoredChecks.includes(i.id)),
+    [editorState.walls, unit, ignoredChecks]
+  );
 
   // Size of the measurement text on the plan. A view setting: it never changes a length.
   const [dimTextScale, setDimTextScale] = useState<number>(() => {
@@ -687,7 +734,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   // Usability Enhancement States (Priorities 1 - 5)
   const [dismissedStartCard, setDismissedStartCard] = useState(false);
   const [showStarterTemplatesModal, setShowStarterTemplatesModal] = useState(false);
-  const [showGuidedChecklist, setShowGuidedChecklist] = useState(true);
+  const [showGuidedChecklist, setShowGuidedChecklist] = useState(false);
   const [mobileToolSearch, setMobileToolSearch] = useState('');
   const [diagnosticBeacon, setDiagnosticBeacon] = useState<{ x: number; y: number; title: string; id: string } | null>(null);
   const [editingRoomInlineId, setEditingRoomInlineId] = useState<string | null>(null);
@@ -823,7 +870,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     { id: 'rooms', name: 'Rooms', visible: true, locked: false, color: '#fbbf24' },
     { id: 'doors', name: 'Doors', visible: true, locked: false, color: '#60a5fa' },
     { id: 'windows', name: 'Windows', visible: true, locked: false, color: '#38bdf8' },
-    { id: 'furniture', name: 'Furniture', visible: true, locked: false, color: '#8b5a2b' },
+    { id: 'furniture', name: 'Furniture', visible: true, locked: false, color: '#475569' },
     { id: 'kitchen', name: 'Kitchen', visible: true, locked: false, color: '#10b981' },
     { id: 'bathroom', name: 'Bathroom', visible: true, locked: false, color: '#a855f7' },
     { id: 'structure', name: 'Structure / Columns', visible: true, locked: false, color: '#64748b' },
@@ -852,7 +899,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   gridRef.current = { step: gridStep, on: snapToGridEnabled };
   const snapToGrid = useCallback((val: number) => (gridRef.current.on ? roundToStep(val, gridRef.current.step) : val), []);
   const [snapIndicator, setSnapIndicator] = useState<(SnapPoint & { screenX: number; screenY: number }) | null>(null);
-  const [liveLengthBadge, setLiveLengthBadge] = useState<{ lengthStr: string; angleDeg: number; screenX: number; screenY: number } | null>(null);
+  const [liveLengthBadge, setLiveLengthBadge] = useState<{
+    lengthStr: string; angleDeg: number; screenX: number; screenY: number;
+    /** The same length in the other units (m / mm, or mm / ft-in). */
+    alt?: string;
+    /** What the end point snapped to, when it snapped to something other than the grid. */
+    snapped?: string;
+  } | null>(null);
 
   // Tool specific configurations
   const [wallThickness, setWallThickness] = useState(WALL_THICKNESS_DEFAULT);
@@ -1125,6 +1178,29 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setHistoryTick(t => t + 1);
     markUnsaved();
   }, [markUnsaved]);
+
+  const newPlanId: NewId = useCallback(prefix => uid(prefix), []);
+
+  /**
+   * Applies an edit worked out by src/domain/planEdit (a whole, consistent floor) as one undo
+   * step, and says what it did with an Undo button. A refused edit only explains why; an edit
+   * that would leave the drawing exactly as it is reports that nothing changed.
+   */
+  const applyEdit = useCallback((r: EditResult, select: SelectedElement = null): boolean => {
+    if (!r.ok) {
+      onNotify(r.reason, 'info');
+      return false;
+    }
+    if (JSON.stringify(r.state) === JSON.stringify(editorState)) {
+      onNotify('Nothing changed on the plan.', 'info');
+      return false;
+    }
+    dispatchWithHistory({ type: 'SET_STATE', payload: r.state });
+    setSelectedElement(select);
+    setSketchProposal(null);
+    setSketchNotice(r.warnings.length ? `${r.summary}. ${r.warnings.join(' ')}` : r.summary);
+    return true;
+  }, [editorState, dispatchWithHistory, onNotify]);
 
   // Recording undo steps. An edit made through dispatchWithHistory is recorded at once. Other
   // edits (typing in a property box, a rotation select) change the drawing directly; those
@@ -1868,6 +1944,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       return;
     }
     const { type, id } = selectedElement;
+    if (type === 'room' && editorState.rooms.find(r => r.id === id)?.fromWalls) {
+      // A room made by walls is the space inside them: deleting it removes its own walls,
+      // so it asks first (see deleteRoom in planEdit.ts).
+      setConfirmRoomDelete(id);
+      return;
+    }
     if (type === 'wall') dispatchWithHistory({ type: 'DELETE_WALL', id });
     else if (type === 'room') dispatchWithHistory({ type: 'DELETE_ROOM', id });
     else if (type === 'door') dispatchWithHistory({ type: 'DELETE_DOOR', id });
@@ -1877,7 +1959,65 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     else if (type === 'furniture') dispatchWithHistory({ type: 'DELETE_FURNITURE', id });
     else if (type === 'annotation') dispatchWithHistory({ type: 'DELETE_ANNOTATION', id });
     setSelectedElement(null);
-  }, [selectedElement, getSelectedEntity, dispatchWithHistory, onNotify]);
+  }, [selectedElement, getSelectedEntity, dispatchWithHistory, onNotify, editorState.rooms]);
+
+  // ── One wall, piece by piece ──────────────────────────
+  // Split and "Erase part" act where the selected wall was tapped (its middle if unknown).
+  const selectedWall = selectedElement?.type === 'wall' ? editorState.walls.find(w => w.id === selectedElement.id) || null : null;
+  const selectedWallPoint = selectedWall
+    ? (wallTap && wallTap.id === selectedWall.id ? wallTap.point : { x: (selectedWall.x1 + selectedWall.x2) / 2, y: (selectedWall.y1 + selectedWall.y2) / 2 })
+    : null;
+  const selectedWallJoints = selectedWall ? wallJunctions(editorState.walls, selectedWall.id, joinTolerance(unit)).length : 0;
+
+  const handleSplitSelectedWall = () => {
+    if (!selectedWall || !selectedWallPoint) return;
+    const r = splitWall(editorState, selectedWall.id, { x: snapToGrid(selectedWallPoint.x), y: snapToGrid(selectedWallPoint.y) }, unit, newPlanId);
+    if (applyEdit(r, r.ok && r.ids ? { type: 'wall', id: r.ids[0] } : selectedElement)) setWallTap(null);
+  };
+  const handleSplitSelectedAtJoints = () => {
+    if (!selectedWall) return;
+    const r = splitWallAtJunctions(editorState, selectedWall.id, unit, newPlanId);
+    if (applyEdit(r, selectedElement)) setWallTap(null);
+  };
+  const handleEraseSelectedPart = () => {
+    if (!selectedWall || !selectedWallPoint) return;
+    if (applyEdit(eraseWallSegment(editorState, selectedWall.id, selectedWallPoint, unit, newPlanId))) setWallTap(null);
+  };
+  const [confirmRoomDelete, setConfirmRoomDelete] = useState<string | null>(null);
+
+  // ── Room sheet: one place to name, type, size and delete a room ──
+  const [roomSheet, setRoomSheet] = useState<{
+    id: string; width: string; length: string; width0: string; length0: string; widthSide: 'right' | 'left'; lengthSide: 'bottom' | 'top'; error: string;
+  } | null>(null);
+  const openRoomSheet = (id: string) => {
+    const r = editorState.rooms.find(x => x.id === id);
+    if (!r) return;
+    const box = roomBox(r);
+    const width = formatLengthForInput(box ? box.maxX - box.minX : r.width, unit);
+    const length = formatLengthForInput(box ? box.maxY - box.minY : r.height, unit);
+    setRoomSheet({ id, width, length, width0: width, length0: length, widthSide: 'right', lengthSide: 'bottom', error: '' });
+  };
+  const applyRoomSize = () => {
+    if (!roomSheet) return;
+    // Only a size the user changed is applied: an untouched box keeps the exact size, never
+    // the rounded number shown in it.
+    const size: { width?: number; length?: number } = {};
+    if (roomSheet.width.trim() !== roomSheet.width0) {
+      const w = parseLengthInput(roomSheet.width, unit);
+      if (!w.ok) return setRoomSheet({ ...roomSheet, error: `Width: ${w.error}` });
+      size.width = w.value;
+    }
+    if (roomSheet.length.trim() !== roomSheet.length0) {
+      const l = parseLengthInput(roomSheet.length, unit);
+      if (!l.ok) return setRoomSheet({ ...roomSheet, error: `Length: ${l.error}` });
+      size.length = l.value;
+    }
+    if (size.width === undefined && size.length === undefined) return setRoomSheet(null);
+    const r = resizeRoom(editorState, roomSheet.id, size, unit, newPlanId,
+      { width: roomSheet.widthSide, length: roomSheet.lengthSide }, plan ? { length: plan.plotLength, width: plan.plotWidth } : undefined);
+    if (!r.ok) return setRoomSheet({ ...roomSheet, error: r.reason });
+    if (applyEdit(r, { type: 'room', id: roomSheet.id })) setRoomSheet(null);
+  };
 
   // ── Wall Angle Rotation Helper ────────────────────────
   const rotateWallToAngle = useCallback((wall: FloorPlanWall, targetDeg: number) => {
@@ -2390,10 +2530,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       // While a sheet is open the keys belong to it, not to the drawing behind it.
       if (document.querySelector('.m-sheet-backdrop')) return;
 
-      // Ctrl + K / Cmd + K: AI Floor Plan Assistant Panel Shortcut
+      // Ctrl + K / Cmd + K: Building Mistry AI
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
-        setIsAiAssistantOpen(prev => !prev);
+        setIsMistryAiOpen(prev => !prev);
         return;
       }
 
@@ -2422,6 +2562,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setSelectedElement(null);
         setSelectedFurnitureToPlace(null);
         setIsAiAssistantOpen(false);
+        setIsMistryAiOpen(false);
         setSketchProposal(null);
       }
       // The single-letter shortcuts below never fire together with Ctrl / Cmd / Alt, so
@@ -2609,45 +2750,58 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const world = svgToWorld(svgPos.x, svgPos.y);
       const snapped = { x: snapToGrid(world.x), y: snapToGrid(world.y) };
 
+      // The wall under the pointer: within a finger's reach on screen, whatever the zoom.
+      const wallUnder = (): FloorPlanWall | null => {
+        const reach = pixelsToPlan(isMobile ? 24 : 14, zoom);
+        let best: FloorPlanWall | null = null;
+        let bestDist = Infinity;
+        for (const w of editorState.walls) {
+          const d = pointSegmentDistance(world, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
+          if (d <= reach + (w.thickness || 0) / 2 && d < bestDist) { bestDist = d; best = w; }
+        }
+        return best;
+      };
+
       if (activeTool === 'eraser') {
-        const reach = Math.max(1.5, pixelsToPlan(32, zoom));
-        const doorHit = editorState.doors.find(d => Math.hypot(d.x - world.x, d.y - world.y) <= reach);
+        const reach = pixelsToPlan(isMobile ? 26 : 16, zoom);
+        const doorHit = editorState.doors.find(d => Math.hypot(d.x - world.x, d.y - world.y) <= Math.max(reach, d.width / 2));
         if (doorHit) { handleEraseElement('door', doorHit.id); return; }
-        const winHit = editorState.windows.find(w => Math.hypot(w.x - world.x, w.y - world.y) <= reach);
+        const winHit = editorState.windows.find(w => Math.hypot(w.x - world.x, w.y - world.y) <= Math.max(reach, w.width / 2));
         if (winHit) { handleEraseElement('window', winHit.id); return; }
         const furnHit = editorState.furniture.find(f => Math.hypot(f.x - world.x, f.y - world.y) <= Math.max(reach, f.width / 2));
         if (furnHit) { handleEraseElement('furniture', furnHit.id); return; }
-        const colHit = editorState.columns.find(c => Math.hypot(c.x - world.x, c.y - world.y) <= reach);
+        const colHit = editorState.columns.find(c => Math.hypot(c.x - world.x, c.y - world.y) <= Math.max(reach, (c.width || 0) / 2));
         if (colHit) { handleEraseElement('column', colHit.id); return; }
         const stairHit = editorState.stairs.find(s => Math.hypot(s.x - world.x, s.y - world.y) <= reach);
         if (stairHit) { handleEraseElement('stairs', stairHit.id); return; }
-        let closestWall: FloorPlanWall | null = null;
-        let closestDist = reach;
-        for (const w of editorState.walls) {
-          const d = pointSegmentDistance(world, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
-          if (d < closestDist) {
-            closestDist = d;
-            closestWall = w;
-          }
-        }
-        if (closestWall) {
-          // If clicked in the middle (partial wall eraser), split wall into two connected segments.
-          // If clicked near either end, erase the whole wall.
-          const split = splitWallAtPoint(closestWall, world.x, world.y, () => uid('wall'), 1.0);
-          if (split) {
-            const [w1, w2] = split;
-            dispatchWithHistory({
-              type: 'SET_WALLS',
-              walls: editorState.walls.map(w => w.id === closestWall!.id ? w1 : w).concat(w2),
-            });
-            onNotify('Wall split at erase point (partial eraser)', 'info');
-          } else {
-            handleEraseElement('wall', closestWall.id);
-          }
+        // A wall: only the part between the two nearest joints is erased, never the walls it
+        // is connected to (src/domain/planEdit.ts, eraseWallSegment).
+        const hitWall = wallUnder();
+        if (hitWall) {
+          applyEdit(eraseWallSegment(editorState, hitWall.id, world, unit, newPlanId));
           return;
         }
         const roomHit = editorState.rooms.find(r => pointInPolygon(world, roomOutline(r)));
-        if (roomHit) { handleEraseElement('room', roomHit.id); return; }
+        if (roomHit) {
+          if (roomHit.fromWalls) {
+            onNotify('This room is the space inside its walls. Erase a wall to open it up.', 'info');
+            return;
+          }
+          handleEraseElement('room', roomHit.id);
+          return;
+        }
+        return;
+      }
+
+      if (activeTool === 'split') {
+        const hitWall = wallUnder();
+        if (!hitWall) {
+          onNotify(editorState.walls.length ? 'Tap on a wall to split it there.' : 'Draw a wall first.', 'info');
+          return;
+        }
+        // The cut follows the grid when Snap is on, so the two parts get round lengths.
+        const at = { x: snapToGrid(world.x), y: snapToGrid(world.y) };
+        applyEdit(splitWall(editorState, hitWall.id, at, unit, newPlanId));
         return;
       }
 
@@ -2882,8 +3036,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       selectedRoomType, selectedDoorType, selectedWindowType, columnShape,
       stairType, selectedFurnitureToPlace, svgToWorld, getSvgPos, panX, panY,
       isOrthoActive,
-      editorState.walls, editorState.rooms.length, unit, dispatchWithHistory, onNotify,
-      isSpacePressed, isMeasuring, measureStart
+      editorState, unit, dispatchWithHistory, onNotify,
+      isSpacePressed, isMeasuring, measureStart,
+      zoom, isMobile, snapToGrid, applyEdit, newPlanId,
+      draftRoomWidth, draftRoomHeight, draftRoomThickness, draftRoomFloorFinish,
     ]
   );
 
@@ -2973,6 +3129,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         const startSy = wallStart.y * GRID_SIZE_PX * zoom + panY;
         setLiveLengthBadge({
           lengthStr: formatDimension(len, unit),
+          alt: formatOtherUnits(len, unit),
+          snapped: snapPt.type === 'endpoint' ? 'joins a corner' : snapPt.type === 'midpoint' ? 'at a wall middle'
+            : snapPt.type === 'wall' || snapPt.type === 'intersection' ? 'joins a wall'
+            : snapPt.type === 'wall-axis' ? 'lines up with a wall' : undefined,
           angleDeg: Math.round(angle),
           screenX: touchInputRef.current ? Math.max(8, (startSx + svgPos.x) / 2 - 40) : svgPos.x + 18,
           screenY: touchInputRef.current ? Math.max(8, (startSy + svgPos.y) / 2 - 44) : svgPos.y - 18,
@@ -3337,6 +3497,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (activeTool !== 'select') return;
       // A second finger starts a pinch; it never grabs the element under it.
       if ((e as React.PointerEvent).pointerType === 'touch' && (e as React.PointerEvent).isPrimary === false) return;
+      if (type === 'wall') {
+        const at = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+        setWallTap({ id, point: svgToWorld(at.x, at.y) });
+      }
       // On a touch screen a drag that happens to start on a wall or room must not move it.
       // The first tap selects; only an element that is already selected can be dragged.
       if ((e as React.PointerEvent).pointerType === 'touch' && selectedElement?.id !== id) {
@@ -3384,7 +3548,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setDragHostedOpeningsSnapshot(null);
       }
     },
-    [activeTool, getSvgPos, editorState, selectedElement]
+    [activeTool, getSvgPos, svgToWorld, editorState, selectedElement]
   );
 
   const handleEraseElement = useCallback((type: string, id: string) => {
@@ -3428,34 +3592,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     type: 'wall' | 'room' | 'door' | 'window' | 'column' | 'stairs' | 'furniture' | 'annotation',
     id: string
   ) => {
-    if (activeTool === 'eraser') {
-      const onErase = (e: React.SyntheticEvent) => {
-        e.stopPropagation();
-        e.preventDefault();
-        if (type === 'wall') {
-          const w = editorState.walls.find(item => item.id === id);
-          if (w) {
-            const pos = getSvgPos(e as any);
-            const world = svgToWorld(pos.x, pos.y);
-            const split = splitWallAtPoint(w, world.x, world.y, () => uid('wall'), 1.0);
-            if (split) {
-              const [w1, w2] = split;
-              dispatchWithHistory({
-                type: 'SET_WALLS',
-                walls: editorState.walls.map(wall => wall.id === id ? w1 : wall).concat(w2),
-              });
-              onNotify('Wall split at erase point (partial eraser)', 'info');
-              setSelectedElement(null);
-              return;
-            }
-          }
-        }
-        handleEraseElement(type, id);
-      };
-      return supportsPointer
-        ? { onPointerDown: onErase, onClick: onErase, style: { cursor: 'pointer', filter: 'drop-shadow(0 0 6px #ef4444)' } }
-        : { onMouseDown: onErase, onClick: onErase, style: { cursor: 'pointer', filter: 'drop-shadow(0 0 6px #ef4444)' } };
-    }
+    // Eraser and Split act on a tap, worked out by the canvas from where the finger landed
+    // (handleMouseDown). Elements do not take the press themselves, so a pinch or a pan that
+    // happens to start on a wall never erases or cuts it.
     if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
     return supportsPointer
       ? { onPointerDown: (e: React.PointerEvent) => handleElementMouseDown(e, type, id) }
@@ -3611,6 +3750,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     g.wallStart = null;
     g.panning = false;
     g.dimHit = null;
+    dimDragRef.current = null;
+    setDimDrag(null);
   };
 
   // Leaving the Wall tool drops any wall that was started but not finished, whichever
@@ -3684,6 +3825,58 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     };
   };
 
+  // ── Moving a measurement label ─────────────────────────
+  // A tap on a label opens the exact-length box; a drag moves the label (out from the wall,
+  // or along it) so it can be read clearly. Only where the label is drawn changes: the wall
+  // and its length are never touched.
+  /** Where a label sits along its wall when the user has not moved it, in plan units. */
+  const autoDimSlide = (wall: FloorPlanWall) => {
+    if (!wallsBetweenRooms.has(wall.id)) return 0;
+    const k = GRID_SIZE_PX * zoom;
+    const onScreen = wallLength(wall) * k;
+    const labelLength = formatDimension(wallLength(wall), unit).length * dimFontPx * 0.6 + 12;
+    // Far enough along to clear the room's name in the middle, and only when the wall is long
+    // enough on screen that the label stays well clear of its corners (where taps select the
+    // walls that meet there). Otherwise it stays centred; it can always be dragged.
+    const need = labelLength / 2 + 24;
+    return need <= onScreen / 2 - labelLength / 2 - 40 ? -need / k : 0;
+  };
+  const beginDimDrag = (wallId: string, clientX: number, clientY: number) => {
+    const wall = editorState.walls.find(w => w.id === wallId);
+    const side = wallOutside.get(wallId);
+    if (!wall || !side) return;
+    const len = wallLength(wall) || 1;
+    dimDragRef.current = {
+      wallId, startX: clientX, startY: clientY,
+      offset0: wall.dimensionOffset || 0, shift0: wall.dimensionShift ?? autoDimSlide(wall),
+      normal: side, dir: { x: (wall.x2 - wall.x1) / len, y: (wall.y2 - wall.y1) / len },
+    };
+  };
+  const moveDimDrag = (clientX: number, clientY: number) => {
+    const d = dimDragRef.current;
+    if (!d) return;
+    const dx = clientX - d.startX, dy = clientY - d.startY;
+    const scale = GRID_SIZE_PX * zoom;
+    // Not closer to the wall than where it starts, and not more than 20 ft / 6 m out.
+    const maxOut = baseUnitOf(unit) === 'feet' ? 20 : 6;
+    const offset = Math.min(maxOut, Math.max(0, d.offset0 + (dx * d.normal.x + dy * d.normal.y) / scale));
+    const shift = Math.min(maxOut, Math.max(-maxOut, d.shift0 + (dx * d.dir.x + dy * d.dir.y) / scale));
+    dimDragLatestRef.current = { wallId: d.wallId, offset, shift };
+    setDimDrag({ wallId: d.wallId, offset, shift });
+  };
+  const endDimDrag = () => {
+    const d = dimDragRef.current;
+    const last = dimDragLatestRef.current;
+    dimDragRef.current = null;
+    dimDragLatestRef.current = null;
+    setDimDrag(null);
+    if (d && last && last.wallId === d.wallId) {
+      dispatchWithHistory({ type: 'UPDATE_WALL', id: d.wallId, changes: { dimensionOffset: tidy(last.offset), dimensionShift: tidy(last.shift) } });
+    }
+  };
+  const dimDragLatestRef = useRef<{ wallId: string; offset: number; shift: number } | null>(null);
+  const mouseDimRef = useRef<{ wallId: string; x: number; y: number; moved: boolean } | null>(null);
+
   const onCanvasPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const onElement = elementHitRef.current;
     elementHitRef.current = false;
@@ -3695,9 +3888,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     touchInputRef.current = e.pointerType !== 'mouse';
 
     if (e.pointerType === 'mouse') {
-      // A click on a measurement opens its length box and does nothing else: no pan, no deselect.
+      // A click on a measurement opens its length box and does nothing else: no pan, no
+      // deselect. A drag from it moves the label instead (decided when the button comes up).
       if (dimHit && e.button === 0) {
-        openWallEditRef.current(dimHit);
+        mouseDimRef.current = { wallId: dimHit, x: e.clientX, y: e.clientY, moved: false };
         return;
       }
       if (!onElement) handleMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
@@ -3736,6 +3930,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const onCanvasPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (e.pointerType === 'mouse') {
+      const md = mouseDimRef.current;
+      if (md) {
+        if (!md.moved && Math.hypot(e.clientX - md.x, e.clientY - md.y) > 4) {
+          md.moved = true;
+          beginDimDrag(md.wallId, md.x, md.y);
+        }
+        if (md.moved) moveDimDrag(e.clientX, e.clientY);
+        return;
+      }
       queueMove(e.clientX, e.clientY, e.shiftKey, e.altKey);
       return;
     }
@@ -3757,8 +3960,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
     if (g.kind !== 'single') return;
 
-    if (!g.moved && Math.hypot(e.clientX - g.downAt.x, e.clientY - g.downAt.y) > 8) g.moved = true;
+    if (!g.moved && Math.hypot(e.clientX - g.downAt.x, e.clientY - g.downAt.y) > 8) {
+      g.moved = true;
+      if (g.dimHit && (activeTool === 'select' || activeTool === 'pan')) beginDimDrag(g.dimHit, g.downAt.x, g.downAt.y);
+    }
     if (!g.moved) return;
+    if (dimDragRef.current) {
+      moveDimDrag(e.clientX, e.clientY);
+      return;
+    }
 
     // Dragging a selected element / wall corner, or sketching freehand.
     if (g.onElement || activeTool === 'ai_draw') {
@@ -3796,6 +4006,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const onCanvasPointerUp = (e: React.PointerEvent<SVGSVGElement>, cancelled = false) => {
     if (e.pointerType === 'mouse') {
+      const md = mouseDimRef.current;
+      if (md) {
+        mouseDimRef.current = null;
+        if (md.moved) {
+          if (cancelled) { dimDragRef.current = null; setDimDrag(null); } else endDimDrag();
+        } else if (!cancelled) {
+          openWallEditRef.current(md.wallId);
+        }
+        return;
+      }
       flushMove();
       latestInputRef.current.handleMouseUp();
       return;
@@ -3816,6 +4036,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (g.kind !== 'single') return;
     g.kind = 'none';
 
+    if (dimDragRef.current) {
+      g.dimHit = null;
+      if (cancelled) { dimDragRef.current = null; setDimDrag(null); } else endDimDrag();
+      return;
+    }
     if (cancelled) {
       cancelSingleGesture();
       commitPendingView();
@@ -3920,6 +4145,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
    */
   const buildExportSvg = useCallback((): { text: string; width: number; height: number } | null => {
     if (!svgRef.current || !plan) return null;
+    // A selected wall is drawn blue; the picture shows the plan as it is, not the selection.
+    if (selectedElement) flushSync(() => setSelectedElement(null));
     const bbox = calculatePlanBoundingBox(
       editorState.walls, editorState.rooms, editorState.doors, editorState.windows,
       editorState.furniture, editorState.columns, editorState.stairs, plan.plotLength, plan.plotWidth
@@ -3931,6 +4158,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     const x = (bbox.centerX - bbox.width / 2) * k + panX - margin;
     const y = (bbox.centerY - bbox.height / 2) * k + panY - margin;
     const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
+    // Editing aids are not part of the drawing: selection handles and highlights, the AI
+    // preview and the live guide while drawing stay out of a picture or print.
+    clone.querySelectorAll('.fp-wall-segment-hint, .fp-ai-preview, .fp-live-dim, .fp-wall-handles').forEach(n => n.remove());
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
     // Export at a fixed, generous resolution regardless of the current zoom.
@@ -3941,7 +4171,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     clone.setAttribute('height', String(height));
     clone.removeAttribute('style');
     return { text: new XMLSerializer().serializeToString(clone), width, height };
-  }, [plan, editorState, zoom, panX, panY]);
+  }, [plan, editorState, zoom, panX, panY, selectedElement]);
 
   const handleExportPNG = useCallback(() => {
     const svg = buildExportSvg();
@@ -4579,7 +4809,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const currentFloor = floorLevels[activeFloorIndex] || { name: plan.floorName };
 
   const hintKey = activeTool === 'select' && editorState.walls.length === 0 && editorState.rooms.length === 0 ? 'start' : activeTool;
-  const activeHint = TOOL_HINTS[hintKey] && !seenHints.includes(hintKey) ? hintKey : null;
+  const activeHint = showTips && TOOL_HINTS[hintKey] && !seenHints.includes(hintKey) ? hintKey : null;
 
   // Measurement text: a fixed, readable size on screen at any zoom, scaled by the user's
   // text-size setting. It is drawn from the wall's real length on every render.
@@ -4595,7 +4825,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <polyline
           points={raw.map(p => { const s = toScreen(p.x, p.y); return `${s.x},${s.y}`; }).join(' ')}
           fill="none"
-          stroke="#a8a29e"
+          stroke="#94a3b8"
           strokeWidth={1.5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -4610,14 +4840,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <g key={w.id}>
             <line
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke="#ea580c"
+              stroke="#0f172a"
               strokeOpacity={pending ? 0.75 : 0.6}
               strokeWidth={Math.max(4, w.thickness * GRID_SIZE_PX * zoom)}
               strokeLinecap="square"
               strokeDasharray={pending ? '10,7' : undefined}
             />
-            <circle cx={a.x} cy={a.y} r={4} fill="#ffffff" stroke="#c2410c" strokeWidth={2} />
-            <circle cx={b.x} cy={b.y} r={4} fill="#ffffff" stroke="#c2410c" strokeWidth={2} />
+            <circle cx={a.x} cy={a.y} r={4} fill="#ffffff" stroke="#1e293b" strokeWidth={2} />
+            <circle cx={b.x} cy={b.y} r={4} fill="#ffffff" stroke="#1e293b" strokeWidth={2} />
             {longEnough && (
               <text
                 x={(a.x + b.x) / 2}
@@ -4626,7 +4856,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 fontSize={dimFontPx}
                 fontWeight="700"
                 fontFamily="'Outfit', sans-serif"
-                fill="#9a3412"
+                fill="#0f172a"
                 stroke="#ffffff"
                 strokeWidth={3}
                 paintOrder="stroke"
@@ -4719,7 +4949,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             type="button"
             className="fp-mobile-menu-btn"
             onClick={() => setShowMobileMenu(true)}
-            title="CAD Options & Levels"
+            title="Floors and view options"
             aria-label="More Options"
             id="fp-mobile-menu-btn"
           >
@@ -4775,22 +5005,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             id="fp-header-new-project-btn"
             style={{ width: 'auto', padding: '0 10px', gap: 6 }}
           >
-            <FilePlus size={15} color="#c2410c" />
+            <FilePlus size={15} color="#1e293b" />
             <span className="fp-tool-btn-label" style={{ display: 'inline', fontWeight: 600 }}>New Project</span>
           </button>
 
           {/* Professional Floor Selector & Menu */}
-          <div className="fp-floor-selector-group" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fafaf9', padding: '2px 8px', borderRadius: 6, border: '1px solid #e7e5e4' }}>
-            <Layers size={14} color="#c2410c" />
+          <div className="fp-floor-selector-group" style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f8fafc', padding: '2px 8px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+            <Layers size={14} color="#1e293b" />
             <select
               value={activeFloorIndex}
               onChange={e => handleSwitchFloor(Number(e.target.value))}
               className="fp-floor-dropdown"
-              style={{ background: 'transparent', color: '#1c1917', border: 'none', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+              style={{ background: 'transparent', color: '#0f172a', border: 'none', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
               title="Select Active Floor Level"
             >
               {floorLevels.map((lvl, idx) => (
-                <option key={lvl.id || idx} value={idx} style={{ background: '#fafaf9', color: '#1c1917' }}>
+                <option key={lvl.id || idx} value={idx} style={{ background: '#f8fafc', color: '#0f172a' }}>
                   {lvl.name}
                 </option>
               ))}
@@ -4801,7 +5031,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 className="fp-floor-menu-btn"
                 onClick={() => setShowFloorMenu(m => !m)}
                 title="Floor Operations (Add, Rename, Duplicate, Delete)"
-                style={{ background: 'transparent', border: 'none', color: '#57534e', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px' }}
+                style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px' }}
               >
                 <MoreVertical size={14} />
               </button>
@@ -4816,7 +5046,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     className="fp-more-item"
                     onClick={() => { setShowFloorMenu(false); handleAddFloor(); }}
                   >
-                    <Plus size={14} color="#c2410c" />
+                    <Plus size={14} color="#1e293b" />
                     <span>Add Floor</span>
                   </button>
                   <button
@@ -4824,7 +5054,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     className="fp-more-item"
                     onClick={() => { setShowFloorMenu(false); handleRenameFloor(); }}
                   >
-                    <Edit size={14} color="#b45309" />
+                    <Edit size={14} color="#334155" />
                     <span>Rename Floor</span>
                   </button>
                   <button
@@ -4937,7 +5167,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               type="button"
               className={`fp-view-mode-btn ${viewMode === 'design' ? 'active' : ''}`}
               onClick={() => setViewMode('design')}
-              title="Design CAD View"
+              title="Design view"
             >
               Design
             </button>
@@ -4945,7 +5175,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               type="button"
               className={`fp-view-mode-btn ${viewMode === 'blueprint' ? 'active' : ''}`}
               onClick={() => setViewMode('blueprint')}
-              title="Blueprint CAD View"
+              title="Blueprint view"
             >
               Blueprint
             </button>
@@ -4959,17 +5189,28 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </button>
           </div>
 
-          {/* 3D Preview */}
-          <button
-            type="button"
-            className="fp-tool-btn"
-            onClick={() => setShow3D(true)}
-            title="3D Architectural Preview"
-            id="fp-3d-btn"
-          >
-            <Box size={18} />
-            <span className="fp-tool-btn-label">3D</span>
-          </button>
+          {/* Floorplanner-style Segmented 2D / 3D Toggle */}
+          <div className="fp-floorplanner-dim-toggle" role="group" aria-label="Dimension View Mode">
+            <button
+              type="button"
+              className={`fp-dim-toggle-btn ${!show3D ? 'active' : ''}`}
+              onClick={() => setShow3D(false)}
+              title="2D CAD Floor Plan"
+              id="fp-2d-btn"
+            >
+              <span>2D</span>
+            </button>
+            <button
+              type="button"
+              className={`fp-dim-toggle-btn ${show3D ? 'active' : ''}`}
+              onClick={() => setShow3D(true)}
+              title="3D Walkthrough Preview"
+              id="fp-3d-btn"
+            >
+              <Box size={14} />
+              <span>3D</span>
+            </button>
+          </div>
 
           {/* Live Room Schedule / Counter Button ("namba room ethana irukku") */}
           <button
@@ -4987,13 +5228,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <button
             type="button"
             className="fp-copilot-btn"
-            onClick={() => setIsAiAssistantOpen(prev => !prev)}
-            title="✨ AI Floor Plan Assistant (Ctrl + K)"
+            onClick={() => { setIsMistryAiOpen(prev => !prev); setIsAiAssistantOpen(false); }}
+            title="Building Mistry AI: ask for a change to the plan (Ctrl + K)"
             id="fp-copilot-btn"
             data-testid="fp-ai-assistant-btn"
           >
-            <Sparkles size={16} className="animate-pulse text-amber-300" />
-            <span>✨ AI Assistant</span>
+            <Sparkles size={16} />
+            <span>Building Mistry AI</span>
             <span className="hidden sm:inline text-[10px] opacity-75 px-1.5 py-0.5 rounded bg-black/20 font-mono">
               Ctrl+K
             </span>
@@ -5018,7 +5259,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               type="button"
               className="fp-tool-btn"
               onClick={() => setShowExportMenu(m => !m)}
-              title="Export CAD Drawings"
+              title="Export or print the plan"
               id="fp-export-menu-btn"
             >
               <Download size={18} />
@@ -5033,7 +5274,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   onClick={() => { setShowExportMenu(false); handleExportDXF(); }}
                   id="fp-export-dxf-btn"
                 >
-                  <FileCode size={16} color="#c2410c" />
+                  <FileCode size={16} color="#1e293b" />
                   <span>AutoCAD DXF (.dxf)</span>
                 </button>
                 <button
@@ -5043,7 +5284,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   id="fp-export-json-btn"
                 >
                   <FileDown size={16} color="#15803d" />
-                  <span>Project CAD JSON (.json)</span>
+                  <span>Plan file (.json)</span>
                 </button>
                 <button
                   type="button"
@@ -5051,8 +5292,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   onClick={() => { setShowExportMenu(false); handleExportPDF(); }}
                   id="fp-export-pdf-btn"
                 >
-                  <FileDown size={16} color="#b45309" />
-                  <span>Architectural PDF Sheet</span>
+                  <FileDown size={16} color="#334155" />
+                  <span>Print / PDF</span>
                 </button>
                 <button
                   type="button"
@@ -5060,7 +5301,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   onClick={() => { setShowExportMenu(false); handleExportSVG(); }}
                   id="fp-export-svg-btn"
                 >
-                  <Download size={16} color="#c2410c" />
+                  <Download size={16} color="#1e293b" />
                   <span>SVG Vector Drawing (.svg)</span>
                 </button>
                 <button
@@ -5069,7 +5310,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   onClick={() => { setShowExportMenu(false); handleExportJPEG(); }}
                   id="fp-export-jpeg-btn"
                 >
-                  <Download size={16} color="#f97316" />
+                  <Download size={16} color="#334155" />
                   <span>JPEG High-Res Image (.jpg)</span>
                 </button>
                 <button
@@ -5090,7 +5331,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             type="button"
             className={`fp-tool-btn ${isLayersOpen ? 'active' : ''}`}
             onClick={() => setIsLayersOpen(o => !o)}
-            title="CAD Layers Panel"
+            title="Layers"
             id="fp-layers-toggle-btn"
           >
             <Layers size={18} />
@@ -5114,7 +5355,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             type="button"
             className="fp-tool-btn"
             onClick={() => setShowSettingsModal(true)}
-            title="CAD & Snapping Settings"
+            title="Drawing settings"
             id="fp-settings-btn"
           >
             <Settings size={18} />
@@ -5151,7 +5392,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   className="fp-more-item"
                   onClick={() => { setShowMoreMenu(false); handleLoadStarterPlan(); }}
                 >
-                  <Sparkles size={16} color="#b45309" /> Load 30x40 Sample Plan
+                  <Sparkles size={16} color="#334155" /> Load 30x40 Sample Plan
                 </button>
                 <button
                   type="button"
@@ -5249,6 +5490,26 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           >
             <Eraser size={18} />
             <span>Eraser</span>
+          </button>
+          <button
+            type="button"
+            className={`fp-tool-palette-btn ${activeTool === 'split' ? 'active' : ''}`}
+            onClick={() => { setActiveTool('split'); setSelectedElement(null); setIsDrawingWall(false); setWallStart(null); }}
+            title="Split: click a wall where it should be cut into two walls"
+            id="fp-tool-split"
+          >
+            <Split size={18} />
+            <span>Split</span>
+          </button>
+          <button
+            type="button"
+            className="fp-tool-palette-btn"
+            onClick={() => setShowChecks(true)}
+            title="Measurement check: small differences between measurements that should match"
+            id="fp-tool-checks"
+          >
+            <Ruler size={18} />
+            <span>Check{alignmentIssues.length ? ` (${alignmentIssues.length})` : ''}</span>
           </button>
         </div>
 
@@ -5403,7 +5664,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             type="button"
             className={`fp-tool-palette-btn ${showDimensions ? 'active' : ''}`}
             onClick={() => setShowDimensions(d => !d)}
-            title="Toggle CAD Dimensions (M)"
+            title="Show or hide measurements (M)"
             id="fp-tool-dimension"
           >
             <Ruler size={18} />
@@ -5451,7 +5712,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             type="button"
             className={`fp-tool-palette-btn ${viewMode === 'blueprint' ? 'active' : ''}`}
             onClick={() => setViewMode(v => v === 'blueprint' ? 'design' : 'blueprint')}
-            title="Toggle Blueprint Blue CAD Theme"
+            title="Blueprint view"
           >
             <FileCode size={18} />
             <span>Blueprint</span>
@@ -5460,7 +5721,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             type="button"
             className="fp-tool-palette-btn"
             onClick={() => setShow3D(true)}
-            title="Open 3D Architectural Preview"
+            title="Open the 3D preview"
           >
             <Box size={18} />
             <span>3D</span>
@@ -5468,16 +5729,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <button
             type="button"
             className="fp-tool-palette-btn fp-tool-copilot"
-            onClick={() => setIsAiAssistantOpen(prev => !prev)}
-            title="✨ AI Floor Plan Assistant Panel (Ctrl + K)"
+            onClick={() => { setIsMistryAiOpen(prev => !prev); setIsAiAssistantOpen(false); }}
+            title="Building Mistry AI: ask for a change to the plan (Ctrl + K)"
             id="fp-tool-copilot-palette"
             style={{
-              background: '#fff7ed',
-              border: '1.5px solid #fdba74',
+              background: '#f8fafc',
+              border: '1.5px solid #cbd5e1',
             }}
           >
-            <Sparkles size={18} color="#b45309" className="animate-pulse" />
-            <span style={{ color: '#b45309', fontWeight: 800 }}>AI Assist</span>
+            <Sparkles size={18} color="#334155" className="animate-pulse" />
+            <span style={{ color: '#0f172a', fontWeight: 800 }}>AI Assist</span>
           </button>
         </div>
 
@@ -5511,11 +5772,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         )}
       </div>
 
-      {/* ── Dynamic Live One-Line Hint Bar (Priority 2) ── */}
-      <div className="fp-live-hint-bar no-print" role="status" aria-live="polite">
-        <span className="fp-live-hint-tag">{activeTool.replace('_', ' ')}</span>
-        <span className="fp-live-hint-text">{getLiveToolHint(activeTool)}</span>
-      </div>
+      {/* ── One-line tool tip: only when tips are turned on in Settings ── */}
+      {showTips && (
+        <div className="fp-live-hint-bar no-print" role="status" aria-live="polite">
+          <span className="fp-live-hint-tag">{activeTool.replace('_', ' ')}</span>
+          <span className="fp-live-hint-text">{getLiveToolHint(activeTool)}</span>
+        </div>
+      )}
 
       {/* ── Desktop Professional CAD Workspace ────────── */}
       <div className="fp-desktop-workspace">
@@ -5561,7 +5824,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <span className="fp-vert-tool-label">Measure</span>
           </button>
 
-          <div style={{ height: 1, background: '#f5f5f4', margin: '4px 0', width: '80%' }} />
+          <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0', width: '80%' }} />
 
           <button
             type="button"
@@ -5609,7 +5872,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <span className="fp-vert-tool-label">Delete</span>
           </button>
 
-          <div style={{ height: 1, background: '#f5f5f4', margin: '4px 0', width: '80%' }} />
+          <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0', width: '80%' }} />
 
           <button
             type="button"
@@ -5641,6 +5904,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           isOpen={isShapeLibraryOpen}
           onToggleOpen={() => setIsShapeLibraryOpen(o => !o)}
           onSelectShape={handleSelectShapeFromLibrary}
+          onSelectTemplate={handleApplyStarterTemplate}
           selectedCanvasElement={selectedElement}
           onSaveSelectionAsCustom={handleSaveSelectionAsCustom}
         />
@@ -5687,7 +5951,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               type="button"
               className="fp-mobile-mode-btn btn-3d"
               onClick={() => setShow3D(true)}
-              title="Open 3D Architectural Preview"
+              title="Open the 3D preview"
             >
               <Box size={14} />
               3D
@@ -5735,16 +5999,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </button>
           </div>
 
-          {/* Mobile Floating AI Assistant Button (< 768px) */}
+          {/* Building Mistry AI: one entry point, on every screen size */}
           <button
             type="button"
             className="fp-fab-ai no-print"
-            onClick={() => setIsAiAssistantOpen(true)}
-            title="AI Floor Plan Assistant"
-            aria-label="AI Floor Plan Assistant"
+            onClick={() => { setIsMistryAiOpen(true); setIsAiAssistantOpen(false); setIsCopilotOpen(false); }}
+            title="Building Mistry AI: ask for a change to the plan"
+            aria-label="Open Building Mistry AI"
             id="fp-mobile-fab-ai"
           >
             <Sparkles size={18} />
+            <span className="fp-fab-ai-label">AI</span>
           </button>
 
           {/* Sketch result that needs a decision: a large correction is shown on the canvas
@@ -5752,7 +6017,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           {sketchProposal && (
             <div className="fp-ai-stroke-card no-print" role="dialog" aria-label="Check these walls" id="fp-sketch-review">
               <div className="fp-ai-stroke-content">
-                <PenTool size={16} color="#c2410c" style={{ flexShrink: 0 }} />
+                <PenTool size={16} color="#1e293b" style={{ flexShrink: 0 }} />
                 <span className="fp-ai-stroke-text">
                   {describeSketch(sketchProposal.result, v => formatDimension(v, unit))}. Use these walls?
                 </span>
@@ -5811,42 +6076,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </div>
           )}
 
-          {/* Floating Canvas AI Copilot Pill */}
-
-          <button
-            type="button"
-            className="fp-canvas-floating-copilot"
-            onClick={() => setIsCopilotOpen(true)}
-            title="Open AI Floor Plan Copilot (Straighten zig-zags & weld gaps)"
-            id="fp-canvas-floating-copilot-btn"
-          >
-            <Sparkles size={16} color="#b45309" />
-            <span>AI Copilot</span>
-            {(geometryReport.zigzagCount > 0 || geometryReport.openGapCount > 0) && (
-              <span className="fp-copilot-floating-badge">
-                {geometryReport.zigzagCount + geometryReport.openGapCount} Fixes
-              </span>
-            )}
-          </button>
-
-          {/* ── AI Real-Time Live Assist Canvas HUD ("user summa line draw panna athe understand panna purinjiganu") ── */}
-          <div className="fp-ai-live-hud" id="fp-ai-live-hud">
-            <div className={`fp-ai-hud-indicator ${isAiLiveAssistActive ? 'active' : 'inactive'}`} />
-            <button
-              type="button"
-              className="fp-ai-hud-toggle"
-              onClick={() => setIsAiLiveAssistActive(a => !a)}
-              title="Toggle AI Real-Time Sketch & Drawing Understanding"
-            >
-              <Sparkles size={14} color={isAiLiveAssistActive ? '#b45309' : '#57534e'} />
-              <span>AI Live Assist: {isAiLiveAssistActive ? 'ON' : 'OFF'}</span>
-            </button>
-          </div>
+          {/* The older "AI Copilot" pill and "AI Live Assist" switch used to float here. They
+              are folded into the one Building Mistry AI button above, so nothing else sits on
+              the drawing. Live stroke reading stays off unless turned on in Settings. */}
 
           {/* Real-Time AI Understanding Feedback Toast */}
           {aiLiveFeedback && (
             <div className="fp-ai-feedback-toast" role="status" aria-live="polite">
-              <Sparkles size={16} color="#b45309" />
+              <Sparkles size={16} color="#334155" />
               <span>{aiLiveFeedback.message}</span>
             </div>
           )}
@@ -5902,31 +6139,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </>
             )}
 
-            {/* Planner 5D Wood Flooring Parquet Pattern */}
-            <pattern
-              id="fp-wood-parquet"
-              width={48 * zoom}
-              height={48 * zoom}
-              patternUnits="userSpaceOnUse"
-              patternTransform={`translate(${panX % (48 * zoom)}, ${panY % (48 * zoom)})`}
-            >
-              <rect width={48 * zoom} height={48 * zoom} fill="#dfbe98" />
-              <path
-                d={`M 0 0 L ${48*zoom} 0 M 0 ${24*zoom} L ${48*zoom} ${24*zoom} M ${24*zoom} 0 L ${24*zoom} ${24*zoom} M 0 ${48*zoom} L ${48*zoom} ${48*zoom} M ${12*zoom} ${24*zoom} L ${12*zoom} ${48*zoom} M ${36*zoom} ${24*zoom} L ${36*zoom} ${48*zoom}`}
-                stroke="#af8a64"
-                strokeWidth={1}
-                fill="none"
-                opacity={0.85}
-              />
-              <path
-                d={`M 2 ${8*zoom} L ${22*zoom} ${8*zoom} M 2 ${16*zoom} L ${22*zoom} ${16*zoom} M ${26*zoom} ${32*zoom} L ${46*zoom} ${32*zoom} M ${26*zoom} ${40*zoom} L ${46*zoom} ${40*zoom}`}
-                stroke="#c49e75"
-                strokeWidth={0.6}
-                strokeDasharray={`${4*zoom},${3*zoom}`}
-                fill="none"
-                opacity={0.5}
-              />
-            </pattern>
+            {/* Rooms use one plain light fill (ROOM_FILL); there is no floor texture. */}
 
             {/* Planner 5D Dimension Arrow Markers */}
             <marker
@@ -6030,7 +6243,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             const rw = room.width * GRID_SIZE_PX * zoom;
             const rh = room.height * GRID_SIZE_PX * zoom;
             const isSelected = selectedElement?.id === room.id;
-            const isWoodFloor = room.floorFinish !== 'Color Tint';
             const wallThickPx = Math.max(7, Math.min(14, (room.wallThickness || 0.75) * 8 * zoom));
             const hasPoly = !!(room.polygonPoints && room.polygonPoints.length >= 3);
             const polyPointsStr = hasPoly
@@ -6045,23 +6257,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               >
                 {hasPoly ? (
                   <>
-                    {/* 1. Polygon Floor Finish */}
+                    {/* 1. One plain, light fill for every room (the floor finish is a property, not drawn) */}
                     <polygon
                       points={polyPointsStr}
-                      fill={isWoodFloor ? 'url(#fp-wood-parquet)' : (room.color || ROOM_COLORS[room.roomType] || 'rgba(251,191,36,0.18)')}
+                      fill={viewMode === 'blueprint' ? 'rgba(30,58,138,0.18)' : ROOM_FILL}
                     />
-                    {isWoodFloor && (
-                      <polygon
-                        points={polyPointsStr}
-                        fill={room.color || 'rgba(217, 119, 6, 0.08)'}
-                        style={{ pointerEvents: 'none' }}
-                      />
-                    )}
-                    {/* 2. Polygon Perimeter Wall Border */}
+                    {/* 2. Outline: only for a room placed by hand (a wall room's walls are drawn already) */}
                     <polygon
                       points={polyPointsStr}
                       fill="none"
-                      stroke={isSelected ? '#059669' : (viewMode === 'blueprint' ? '#93c5fd' : '#10b981')}
+                      stroke={room.fromWalls ? 'none' : (viewMode === 'blueprint' ? '#93c5fd' : '#1e293b')}
                       strokeWidth={wallThickPx}
                       style={{ pointerEvents: 'none' }}
                     />
@@ -6070,7 +6275,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       <polygon
                         points={polyPointsStr}
                         fill="none"
-                        stroke="#38bdf8"
+                        stroke="#2563eb"
                         strokeWidth={2.5 * zoom}
                         strokeDasharray={`${6 * zoom},${4 * zoom}`}
                         style={{ pointerEvents: 'none' }}
@@ -6079,28 +6284,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </>
                 ) : (
                   <>
-                    {/* 1. Floor Finish (Wood Parquet or Plain Color Tint) */}
+                    {/* 1. Plain light fill */}
                     <rect
                       x={rx}
                       y={ry}
                       width={rw}
                       height={rh}
-                      fill={isWoodFloor ? 'url(#fp-wood-parquet)' : (room.color || ROOM_COLORS[room.roomType] || 'rgba(251,191,36,0.18)')}
+                      fill={viewMode === 'blueprint' ? 'rgba(30,58,138,0.18)' : ROOM_FILL}
                       rx={2 * zoom}
                     />
-                    {/* Subtle room tint overlay on top of wood floor */}
-                    {isWoodFloor && (
-                      <rect
-                        x={rx}
-                        y={ry}
-                        width={rw}
-                        height={rh}
-                        fill={room.color || 'rgba(217, 119, 6, 0.08)'}
-                        rx={2 * zoom}
-                        style={{ pointerEvents: 'none' }}
-                      />
-                    )}
-
                     {/* 2. Planner 5D Perimeter Wall Border */}
                     <rect
                       x={rx}
@@ -6108,7 +6300,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       width={rw}
                       height={rh}
                       fill="none"
-                      stroke={isSelected ? '#059669' : (viewMode === 'blueprint' ? '#93c5fd' : '#10b981')}
+                      stroke={room.fromWalls ? 'none' : (viewMode === 'blueprint' ? '#93c5fd' : '#1e293b')}
                       strokeWidth={wallThickPx}
                       rx={2 * zoom}
                       style={{ pointerEvents: 'none' }}
@@ -6122,7 +6314,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         width={rw + 8 * zoom}
                         height={rh + 8 * zoom}
                         fill="none"
-                        stroke="#38bdf8"
+                        stroke="#2563eb"
                         strokeWidth={2 * zoom}
                         strokeDasharray={`${6 * zoom},${4 * zoom}`}
                         rx={4 * zoom}
@@ -6133,7 +6325,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 )}
 
                 {/* On-Canvas Rotation Knob & Stalk */}
-                {isSelected && !room.locked && (
+                {isSelected && !room.locked && !room.fromWalls && (
                   <g
                     className="fp-rotation-handle-group"
                     style={{ cursor: 'pointer' }}
@@ -6189,7 +6381,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     height={22 * zoom}
                     rx={6 * zoom}
                     fill="rgba(255, 255, 255, 0.94)"
-                    stroke="#d6d3d1"
+                    stroke="#cbd5e1"
                     strokeWidth={1}
                   />
                   <text
@@ -6197,7 +6389,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     y={ry + rh / 2 + 4 * zoom}
                     textAnchor="middle"
                     fontSize={Math.max(8.5, 10.5 * zoom)}
-                    fill="#1c1917"
+                    fill="#0f172a"
                     fontFamily="'Outfit', sans-serif"
                     fontWeight="700"
                   >
@@ -6295,7 +6487,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         y={ry - 16 * zoom}
                         textAnchor="middle"
                         fontSize={Math.max(8, 10 * zoom)}
-                        fill="#1c1917"
+                        fill="#0f172a"
                         fontFamily="'Outfit', sans-serif"
                         fontWeight="700"
                       >
@@ -6331,7 +6523,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                           y={ry + rh / 2 + 2 * zoom}
                           textAnchor="middle"
                           fontSize={Math.max(8, 10 * zoom)}
-                          fill="#1c1917"
+                          fill="#0f172a"
                           fontFamily="'Outfit', sans-serif"
                           fontWeight="700"
                         >
@@ -6363,8 +6555,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               >
                 <rect
                   x={sx} y={sy} width={sw} height={sl}
-                  fill={viewMode === 'blueprint' ? 'rgba(234,179,8,0.1)' : 'rgba(254,243,199,0.4)'}
-                  stroke={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#fde047' : '#d97706'}
+                  fill={viewMode === 'blueprint' ? 'rgba(234,179,8,0.1)' : 'rgba(241,245,249,0.6)'}
+                  stroke={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#fde047' : '#475569'}
                   strokeWidth={2 * zoom}
                 />
                 {/* Steps lines */}
@@ -6374,7 +6566,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <line
                       key={i}
                       x1={sx} y1={stepY} x2={sx + sw} y2={stepY}
-                      stroke={viewMode === 'blueprint' ? '#fde047' : '#d97706'}
+                      stroke={viewMode === 'blueprint' ? '#fde047' : '#475569'}
                       strokeWidth={1 * zoom}
                     />
                   );
@@ -6383,15 +6575,15 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <line
                   x1={sx + sw / 2} y1={sy + sl - 6 * zoom}
                   x2={sx + sw / 2} y2={sy + 10 * zoom}
-                  stroke="#b45309" strokeWidth={2 * zoom}
+                  stroke="#475569" strokeWidth={2 * zoom}
                 />
                 <polygon
                   points={`${sx + sw / 2},${sy + 4 * zoom} ${sx + sw / 2 - 4 * zoom},${sy + 12 * zoom} ${sx + sw / 2 + 4 * zoom},${sy + 12 * zoom}`}
-                  fill="#b45309"
+                  fill="#475569"
                 />
                 <text
                   x={sx + sw / 2} y={sy + sl / 2} textAnchor="middle"
-                  fontSize={8 * zoom} fill="#b45309" fontWeight="700"
+                  fontSize={8 * zoom} fill="#334155" fontWeight="700"
                 >
                   UP
                 </text>
@@ -6418,7 +6610,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <rect
                     x={fx - 4 * zoom} y={fy - 4 * zoom}
                     width={fw + 8 * zoom} height={fh + 8 * zoom}
-                    fill="none" stroke="#f59e0b" strokeWidth={2 * zoom}
+                    fill="none" stroke="#2563eb" strokeWidth={2 * zoom}
                     strokeDasharray={`${4 * zoom},${2 * zoom}`}
                   />
                 )}
@@ -6459,14 +6651,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 {col.shape === 'round' ? (
                   <circle
                     cx={cx} cy={cy} r={cw / 2}
-                    fill={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#38bdf8' : '#334155'}
+                    fill={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#38bdf8' : '#334155'}
                     stroke="#ffffff" strokeWidth={1 * zoom}
                   />
                 ) : (
                   <>
                     <rect
                       x={cx - cw / 2} y={cy - cd / 2} width={cw} height={cd}
-                      fill={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#1e40af' : '#1e293b'}
+                      fill={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#1e40af' : '#1e293b'}
                       stroke="#ffffff" strokeWidth={1.2 * zoom}
                     />
                     {/* Crosshatch */}
@@ -6497,17 +6689,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               editorState.windows
             );
 
+            // Walls are #1E293B (partitions a little lighter); the selected wall is blue.
             const wallFillColor = isSelected
-              ? '#f59e0b'
+              ? '#2563eb'
               : viewMode === 'blueprint'
               ? (wall.wallType === 'exterior' ? '#93c5fd' : '#bfdbfe')
-              : (wall.wallType === 'exterior' ? '#0f172a' : wall.wallType === 'partition' ? '#475569' : '#1e293b');
+              : (wall.wallType === 'partition' ? '#475569' : '#1e293b');
 
             const wallBorderColor = isSelected
-              ? '#fbbf24'
+              ? '#1d4ed8'
               : viewMode === 'blueprint'
               ? '#60a5fa'
-              : '#020617';
+              : '#0f172a';
 
             return (
               <g
@@ -6666,8 +6859,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   y={dy - wallThickPx / 2}
                   width={4 * zoom}
                   height={wallThickPx}
-                  fill={isSelected ? '#f59e0b' : '#b45309'}
-                  stroke={isSelected ? '#fbbf24' : '#78350f'}
+                  fill={isSelected ? '#2563eb' : '#475569'}
+                  stroke={isSelected ? '#1d4ed8' : '#334155'}
                   strokeWidth={1}
                 />
                 <rect
@@ -6675,8 +6868,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   y={dy - wallThickPx / 2}
                   width={4 * zoom}
                   height={wallThickPx}
-                  fill={isSelected ? '#f59e0b' : '#b45309'}
-                  stroke={isSelected ? '#fbbf24' : '#78350f'}
+                  fill={isSelected ? '#2563eb' : '#475569'}
+                  stroke={isSelected ? '#1d4ed8' : '#334155'}
                   strokeWidth={1}
                 />
 
@@ -6689,7 +6882,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={dy - wallThickPx / 2}
                       x2={dx - dw / 2}
                       y2={dy + wallThickPx / 2}
-                      stroke={isSelected ? '#f59e0b' : '#94a3b8'}
+                      stroke={isSelected ? '#2563eb' : '#94a3b8'}
                       strokeWidth={2 * zoom}
                     />
                     <line
@@ -6697,7 +6890,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={dy - wallThickPx / 2}
                       x2={dx + dw / 2}
                       y2={dy + wallThickPx / 2}
-                      stroke={isSelected ? '#f59e0b' : '#94a3b8'}
+                      stroke={isSelected ? '#2563eb' : '#94a3b8'}
                       strokeWidth={2 * zoom}
                     />
                     <line
@@ -6705,7 +6898,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={dy}
                       x2={dx + dw / 2}
                       y2={dy}
-                      stroke={isSelected ? '#f59e0b' : '#64748b'}
+                      stroke={isSelected ? '#2563eb' : '#64748b'}
                       strokeWidth={1.5 * zoom}
                       strokeDasharray={`${4 * zoom},${3 * zoom}`}
                     />
@@ -6718,8 +6911,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y={dy - dw}
                       width={3.5 * zoom}
                       height={dw}
-                      fill={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#93c5fd' : '#f8fafc'}
-                      stroke={isSelected ? '#fbbf24' : viewMode === 'blueprint' ? '#60a5fa' : '#334155'}
+                      fill={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#93c5fd' : '#f8fafc'}
+                      stroke={isSelected ? '#1d4ed8' : viewMode === 'blueprint' ? '#60a5fa' : '#334155'}
                       strokeWidth={1.5 * zoom}
                       rx={1}
                     />
@@ -6728,7 +6921,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <path
                       d={`M ${dx - dw / 2} ${dy - dw} A ${dw} ${dw} 0 0 1 ${dx + dw / 2} ${dy}`}
                       fill="none"
-                      stroke={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#60a5fa' : '#64748b'}
+                      stroke={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#60a5fa' : '#64748b'}
                       strokeWidth={1.2 * zoom}
                       strokeDasharray={`${4 * zoom},${3 * zoom}`}
                     />
@@ -6784,7 +6977,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   width={ww}
                   height={wallThickPx}
                   fill={viewMode === 'blueprint' ? 'rgba(30,58,138,0.4)' : 'rgba(255,255,255,0.95)'}
-                  stroke={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#93c5fd' : '#0284c7'}
+                  stroke={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#93c5fd' : '#0284c7'}
                   strokeWidth={1.8 * zoom}
                 />
 
@@ -6794,7 +6987,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   y1={wy - wallThickPx / 2 - 2 * zoom}
                   x2={wx + ww / 2 + 3 * zoom}
                   y2={wy - wallThickPx / 2 - 2 * zoom}
-                  stroke={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#60a5fa' : '#0369a1'}
+                  stroke={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#60a5fa' : '#0369a1'}
                   strokeWidth={2.5 * zoom}
                 />
 
@@ -6806,7 +6999,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={wy - 2 * zoom}
                       x2={wx + 4 * zoom}
                       y2={wy - 2 * zoom}
-                      stroke={isSelected ? '#fbbf24' : '#0284c7'}
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
                       strokeWidth={1.8 * zoom}
                     />
                     <line
@@ -6814,7 +7007,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={wy + 2 * zoom}
                       x2={wx + ww / 2 - 3 * zoom}
                       y2={wy + 2 * zoom}
-                      stroke={isSelected ? '#fbbf24' : '#0284c7'}
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
                       strokeWidth={1.8 * zoom}
                     />
                   </>
@@ -6839,7 +7032,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={wy}
                       x2={wx + ww / 2 - 2 * zoom}
                       y2={wy}
-                      stroke={isSelected ? '#fbbf24' : '#38bdf8'}
+                      stroke={isSelected ? '#1d4ed8' : '#38bdf8'}
                       strokeWidth={2 * zoom}
                     />
                     <line
@@ -6847,7 +7040,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={wy - wallThickPx / 2}
                       x2={wx}
                       y2={wy + wallThickPx / 2}
-                      stroke={isSelected ? '#fbbf24' : '#0284c7'}
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
                       strokeWidth={2 * zoom}
                     />
                   </>
@@ -6858,7 +7051,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       y1={wy}
                       x2={wx + ww / 2 - 2 * zoom}
                       y2={wy}
-                      stroke={isSelected ? '#fbbf24' : '#38bdf8'}
+                      stroke={isSelected ? '#1d4ed8' : '#38bdf8'}
                       strokeWidth={2 * zoom}
                     />
                   </>
@@ -6898,7 +7091,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <text
                   x={ax} y={ay}
                   fontSize={Math.max(9, (annot.fontSize || 10) * zoom)}
-                  fill={isSelected ? '#f59e0b' : viewMode === 'blueprint' ? '#67e8f9' : '#0f172a'}
+                  fill={isSelected ? '#2563eb' : viewMode === 'blueprint' ? '#67e8f9' : '#0f172a'}
                   fontFamily="'Outfit', sans-serif"
                   fontWeight="600"
                 >
@@ -6915,12 +7108,76 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               y1={wallStart.y * GRID_SIZE_PX * zoom + panY}
               x2={currentMousePos.x * GRID_SIZE_PX * zoom + panX}
               y2={currentMousePos.y * GRID_SIZE_PX * zoom + panY}
-              stroke={viewMode === 'blueprint' ? '#60a5fa' : '#f59e0b'}
+              stroke={viewMode === 'blueprint' ? '#60a5fa' : '#1e293b'}
               strokeWidth={Math.max(2, wallThickness * GRID_SIZE_PX * zoom)}
               strokeDasharray={`${8 * zoom},${4 * zoom}`}
-              opacity={0.7}
+              opacity={0.55}
+              style={{ pointerEvents: 'none' }}
             />
           )}
+          {/* Building Mistry AI preview: what Apply would change. New or moved walls dashed
+              blue, walls that would go dashed red, changed rooms outlined with their new size.
+              Nothing here is part of the plan. */}
+          {aiPreview && (() => {
+            const now = new Map(editorState.walls.map(w => [w.id, w]));
+            const next = new Map(aiPreview.walls.map(w => [w.id, w]));
+            const same = (a: FloorPlanWall, b: FloorPlanWall) => a.x1 === b.x1 && a.y1 === b.y1 && a.x2 === b.x2 && a.y2 === b.y2;
+            const added = aiPreview.walls.filter(w => !now.has(w.id) || !same(now.get(w.id)!, w));
+            const gone = editorState.walls.filter(w => !next.has(w.id) || !same(next.get(w.id)!, w));
+            const roomsNow = new Map(editorState.rooms.map(r => [r.id, r]));
+            const changedRooms = aiPreview.rooms.filter(r => {
+              const o = roomsNow.get(r.id);
+              return !o || Math.abs(roomArea(o) - roomArea(r)) > 1e-6 || o.label !== r.label;
+            });
+            const line = (w: FloorPlanWall, color: string, key: string, dash: string) => {
+              const a = toScreen(w.x1, w.y1), b = toScreen(w.x2, w.y2);
+              return <line key={key} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={color} strokeWidth={Math.max(3, (w.thickness || 0.5) * GRID_SIZE_PX * zoom)} strokeOpacity={0.55} strokeDasharray={dash} strokeLinecap="butt" />;
+            };
+            return (
+              <g className="fp-ai-preview" style={{ pointerEvents: 'none' }}>
+                {gone.map(w => line(w, '#dc2626', `g-${w.id}`, '6,5'))}
+                {added.map(w => line(w, '#2563eb', `a-${w.id}`, '10,5'))}
+                {changedRooms.map(r => {
+                  const pts = roomOutline(r).map(p => toScreen(p.x, p.y));
+                  const c = pts.reduce((s, p) => ({ x: s.x + p.x / pts.length, y: s.y + p.y / pts.length }), { x: 0, y: 0 });
+                  return (
+                    <g key={`r-${r.id}`}>
+                      <polygon points={pts.map(p => `${p.x},${p.y}`).join(' ')} fill="rgba(37, 99, 235, 0.08)" stroke="#2563eb" strokeWidth={1.5} strokeDasharray="4,4" />
+                      <text x={c.x} y={c.y} textAnchor="middle" fontSize={12} fontWeight={700} fill="#1e3a8a" fontFamily="'Outfit', sans-serif">
+                        {(r.label || r.roomType)} · {formatAreaShort(roomArea(r), unit)}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })()}
+
+          {/* Live dimension line beside the wall being drawn. Dashed: it is a guide while the
+              finger moves; the wall's real dimension line appears once the wall is placed. */}
+          {isDrawingWall && wallStart && currentMousePos && (() => {
+            const a = toScreen(wallStart.x, wallStart.y), b = toScreen(currentMousePos.x, currentMousePos.y);
+            const px = Math.hypot(b.x - a.x, b.y - a.y);
+            if (px < 24) return null;
+            const len = Math.hypot(currentMousePos.x - wallStart.x, currentMousePos.y - wallStart.y);
+            const n = { x: (a.y - b.y) / px, y: (b.x - a.x) / px };
+            const normal = n.y < 0 || (n.y === 0 && n.x < 0) ? n : { x: -n.x, y: -n.y };
+            const text = formatDimension(len, unit);
+            const labelLength = text.length * dimFontPx * 0.6 + 12;
+            const labelHeight = dimFontPx + 8;
+            const half = Math.max(3, wallThickness * GRID_SIZE_PX * zoom) / 2;
+            const d = layoutDimension(a, b, normal, { offset: half + 22 + labelHeight / 2, gap: half + 3, overshoot: 5, labelLength, labelHeight, arrow: 7 });
+            return (
+              <g className="fp-live-dim" style={{ pointerEvents: 'none' }}>
+                {d.extensions.map(([p, q], i) => <line key={i} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="#475569" strokeWidth={0.9} />)}
+                <line x1={d.line[0].x} y1={d.line[0].y} x2={d.line[1].x} y2={d.line[1].y} stroke="#475569" strokeWidth={1.2} strokeDasharray="5,3" />
+                <g transform={`rotate(${d.rotation}, ${d.label.x}, ${d.label.y})`}>
+                  <rect x={d.label.x - labelLength / 2} y={d.label.y - labelHeight / 2} width={labelLength} height={labelHeight} rx={4} fill="#0f172a" />
+                  <text x={d.label.x} y={d.label.y + dimFontPx * 0.36} textAnchor="middle" fontSize={dimFontPx} fill="#ffffff" fontFamily="'Outfit', sans-serif" fontWeight="700">{text}</text>
+                </g>
+              </g>
+            );
+          })()}
 
           {/* ── Blueprint Overlays ───────────────────── */}
           {viewMode === 'blueprint' && (
@@ -6973,15 +7230,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 const text = formatDimension(len, unit);
                 const labelLength = text.length * dimFontPx * 0.6 + 12;
                 const labelHeight = dimFontPx + 8;
+                // Where the user moved this label to (display only; see FloorPlanWall).
+                const dragging = dimDrag?.wallId === wall.id;
+                const extraOut = (dragging ? dimDrag!.offset : wall.dimensionOffset || 0) * GRID_SIZE_PX * zoom;
+                const placed = dragging ? dimDrag!.shift : wall.dimensionShift;
+                const slide = (placed !== undefined ? placed : autoDimSlide(wall)) * GRID_SIZE_PX * zoom;
                 const d = layoutDimension(p1, p2, side, {
                   // Clear of the wall face and of the round resize handles at its ends.
-                  offset: halfThick + (isMobile ? 26 : 20) + labelHeight / 2,
+                  offset: halfThick + (isMobile ? 26 : 20) + labelHeight / 2 + extraOut,
                   gap: halfThick + 3,
                   overshoot: 5,
                   labelLength,
                   labelHeight,
                   arrow: 7,
                 });
+                const label = { x: d.label.x + ((p2.x - p1.x) / onScreen) * slide, y: d.label.y + ((p2.y - p1.y) / onScreen) * slide };
+                const lineMid = { x: (d.line[0].x + d.line[1].x) / 2, y: (d.line[0].y + d.line[1].y) / 2 };
                 const hitW = Math.max(labelLength, isMobile ? 56 : 44);
                 const hitH = Math.max(labelHeight, isMobile ? 40 : 28);
                 return (
@@ -6997,28 +7261,31 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         markerStart={onScreen > 26 ? 'url(#fp-dim-arrow-red-start)' : undefined}
                         markerEnd={onScreen > 26 ? 'url(#fp-dim-arrow-red-end)' : undefined}
                       />
+                      {Math.abs(slide) > onScreen / 2 - labelLength / 2 && (
+                        <line x1={lineMid.x} y1={lineMid.y} x2={label.x} y2={label.y} stroke={dimColor} strokeWidth={0.8} strokeDasharray="2,2" />
+                      )}
                     </g>
                     <g
-                      transform={`rotate(${d.rotation}, ${d.label.x}, ${d.label.y})`}
+                      transform={`rotate(${d.rotation}, ${label.x}, ${label.y})`}
                       className="fp-wall-dim-label"
-                      style={{ pointerEvents: dimLabelsTappable ? 'auto' : 'none', cursor: dimLabelsTappable ? 'text' : undefined }}
+                      style={{ pointerEvents: dimLabelsTappable ? 'auto' : 'none', cursor: dimLabelsTappable ? (dragging ? 'grabbing' : 'text') : undefined }}
                       {...dimDownProps(wall.id)}
                     >
-                      <title>{`Wall length ${text} (centre to centre). Tap to type an exact length.`}</title>
-                      <rect x={d.label.x - hitW / 2} y={d.label.y - hitH / 2} width={hitW} height={hitH} fill="transparent" />
+                      <title>{`Wall length ${text} (centre to centre). Tap to type an exact length; drag to move the label.`}</title>
+                      <rect x={label.x - hitW / 2} y={label.y - hitH / 2} width={hitW} height={hitH} fill="transparent" />
                       <rect
-                        x={d.label.x - labelLength / 2}
-                        y={d.label.y - labelHeight / 2}
+                        x={label.x - labelLength / 2}
+                        y={label.y - labelHeight / 2}
                         width={labelLength}
                         height={labelHeight}
                         rx={4}
                         fill="#ffffff"
-                        stroke={isSelected ? '#dc2626' : 'rgba(220, 38, 38, 0.45)'}
-                        strokeWidth={isSelected ? 1.6 : 1}
+                        stroke={isSelected || dragging ? '#dc2626' : 'rgba(220, 38, 38, 0.45)'}
+                        strokeWidth={isSelected || dragging ? 1.6 : 1}
                       />
                       <text
-                        x={d.label.x}
-                        y={d.label.y + dimFontPx * 0.36}
+                        x={label.x}
+                        y={label.y + dimFontPx * 0.36}
                         textAnchor="middle"
                         fontSize={dimFontPx}
                         fill="#b91c1c"
@@ -7039,6 +7306,28 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               Above every wall and label, so they can always be grabbed. Each handle sits in a
               larger invisible circle (44 px across on a phone) so a finger need not be exact.
               Dragging one moves the corner; every wall that meets there follows. */}
+          {/* The part of the selected wall that "Erase part" removes (when other walls meet it),
+              and a cut mark where Split will cut it: where the wall was tapped. */}
+          {selectedWall && activeTool === 'select' && wallTap?.id === selectedWall.id && isLayerVisible('walls') && (() => {
+            const seg = wallSegmentAt(editorState.walls, selectedWall.id, wallTap.point, joinTolerance(unit));
+            if (!seg) return null;
+            const len = wallLength(selectedWall);
+            if (len <= 0) return null;
+            const ux = (selectedWall.x2 - selectedWall.x1) / len, uy = (selectedWall.y2 - selectedWall.y1) / len;
+            const t = Math.min(len, Math.max(0, (wallTap.point.x - selectedWall.x1) * ux + (wallTap.point.y - selectedWall.y1) * uy));
+            const a = toScreen(seg.a.x, seg.a.y), b = toScreen(seg.b.x, seg.b.y);
+            const m = toScreen(selectedWall.x1 + ux * t, selectedWall.y1 + uy * t);
+            const half = Math.max(8, (selectedWall.thickness || 0.75) * GRID_SIZE_PX * zoom / 2 + 6);
+            return (
+              <g className="fp-wall-segment-hint" style={{ pointerEvents: 'none' }}>
+                {!seg.whole && (
+                  <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#2563eb" strokeOpacity={0.3} strokeWidth={half * 2} strokeLinecap="butt" />
+                )}
+                <line x1={m.x - uy * half} y1={m.y + ux * half} x2={m.x + uy * half} y2={m.y - ux * half} stroke="#2563eb" strokeWidth={2.5} strokeDasharray="4,3" />
+              </g>
+            );
+          })()}
+
           {selectedElement?.type === 'wall' && activeTool === 'select' && isLayerVisible('walls') && (() => {
             const wall = editorState.walls.find(w => w.id === selectedElement.id);
             if (!wall) return null;
@@ -7058,11 +7347,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       <circle cx={h.x} cy={h.y} r={isMobile ? 22 : 13} fill="transparent" />
                       <circle
                         cx={h.x} cy={h.y} r={r}
-                        fill={wall.locked ? '#a8a29e' : '#ffffff'}
-                        stroke={wall.locked ? '#78716c' : '#ea580c'}
+                        fill={wall.locked ? '#94a3b8' : '#ffffff'}
+                        stroke={wall.locked ? '#64748b' : '#2563eb'}
                         strokeWidth={3}
                       />
-                      <circle cx={h.x} cy={h.y} r={r * 0.34} fill={wall.locked ? '#78716c' : '#ea580c'} />
+                      <circle cx={h.x} cy={h.y} r={r * 0.34} fill={wall.locked ? '#64748b' : '#2563eb'} />
                     </g>
                   );
                 })}
@@ -7079,7 +7368,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <polyline
                   points={freehandPoints.map(p => `${p.x * GRID_SIZE_PX * zoom + panX},${p.y * GRID_SIZE_PX * zoom + panY}`).join(' ')}
                   fill="none"
-                  stroke="#a8a29e"
+                  stroke="#94a3b8"
                   strokeWidth={1.5}
                   strokeDasharray="2,5"
                   style={{ pointerEvents: 'none' }}
@@ -7139,7 +7428,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       x={0}
                       y={2 * zoom}
                       textAnchor="middle"
-                      fill="#1c1917"
+                      fill="#0f172a"
                       fontSize={11 * zoom}
                       fontWeight="bold"
                       fontFamily="'Outfit', sans-serif"
@@ -7199,6 +7488,30 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           )}
         </svg>
 
+        {/* Measurement check: a small badge at each spot where two measurements that should
+            match differ by a few millimetres. Tapping one opens the check; nothing changes
+            until a measurement is chosen there. */}
+        {alignmentIssues.length > 0 && showDimensions && activeTool === 'select' && !isDrawingWall && !dimDrag && !isDragging && !resizingWall && (
+          <div className="fp-check-badges no-print">
+            {alignmentIssues.slice(0, 12).map(issue => {
+              const s = toScreen(issue.focus.x, issue.focus.y);
+              return (
+                <button
+                  key={issue.id}
+                  type="button"
+                  className="fp-check-badge"
+                  style={{ left: s.x, top: s.y }}
+                  onClick={() => setShowChecks(true)}
+                  title={`Measurements differ by ${formatMm(issue.differenceMm)}. Tap to check.`}
+                  aria-label={`Measurements differ by ${formatMm(issue.differenceMm)}. Open the measurement check.`}
+                >
+                  {formatMm(issue.differenceMm)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Live Snap Circle Indicator */}
         {snapIndicator && (
           <div
@@ -7214,7 +7527,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             className="fp-live-length-badge"
             style={{ left: liveLengthBadge.screenX, top: liveLengthBadge.screenY }}
           >
-            {liveLengthBadge.lengthStr} • {liveLengthBadge.angleDeg}°
+            <strong>{liveLengthBadge.lengthStr}</strong>
+            {liveLengthBadge.alt && <span className="fp-live-length-alt"> · {liveLengthBadge.alt}</span>}
+            <span className="fp-live-length-alt"> · {liveLengthBadge.angleDeg}°</span>
+            {liveLengthBadge.snapped && <span className="fp-live-length-snap">{liveLengthBadge.snapped}</span>}
           </div>
         )}
 
@@ -7581,7 +7897,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 }}
                 title="Tap to type exact length (Enter)"
               >
-                <Ruler size={12} style={{ color: '#ea580c' }} />
+                <Ruler size={12} style={{ color: '#0f172a' }} />
                 <span>{formatDimension(len, unit)}</span>
               </button>
               <button
@@ -7646,28 +7962,70 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       <span>Size</span>
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="fp-dock-mini-btn"
-                    onClick={toggleDockMinimized}
-                    title="Expand Full Controls (▲)"
-                    id="fp-dock-expand-btn"
-                  >
-                    <ChevronUp size={13} />
-                    <span>{isMobile ? 'Edit' : 'Expand'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="fp-dock-mini-btn"
-                    onClick={handleRotateSelected}
-                    disabled={isLocked}
-                    title="Rotate 90° (R)"
-                    aria-label="Rotate 90 degrees"
-                    id="fp-dock-rotate-btn"
-                  >
-                    <RotateCw size={13} />
-                    <span>Rotate</span>
-                  </button>
+                  {selectedElement.type === 'wall' && (
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={handleSplitSelectedWall}
+                      disabled={isLocked}
+                      title="Cut this wall into two walls where you tapped it"
+                      id="fp-dock-split-btn"
+                    >
+                      <Split size={13} />
+                      <span>Split</span>
+                    </button>
+                  )}
+                  {selectedElement.type === 'wall' && selectedWallJoints > 0 && (
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={handleEraseSelectedPart}
+                      disabled={isLocked}
+                      title="Erase only the highlighted part of this wall, up to the next joint"
+                      id="fp-dock-erase-part-btn"
+                    >
+                      <Eraser size={13} />
+                      <span>Erase part</span>
+                    </button>
+                  )}
+                  {selectedElement.type === 'room' ? (
+                    // A room has one sheet for name, type, size and delete.
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={() => openRoomSheet(selectedElement.id)}
+                      title="Name, type and size of this room"
+                      id="fp-dock-room-btn"
+                    >
+                      <Edit size={13} />
+                      <span>Edit room</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={toggleDockMinimized}
+                      title="Expand Full Controls (▲)"
+                      id="fp-dock-expand-btn"
+                    >
+                      <ChevronUp size={13} />
+                      <span>{isMobile ? 'Edit' : 'Expand'}</span>
+                    </button>
+                  )}
+                  {!(selectedElement.type === 'room' && (entity as FloorPlanRoom).fromWalls) && (
+                    <button
+                      type="button"
+                      className="fp-dock-mini-btn"
+                      onClick={handleRotateSelected}
+                      disabled={isLocked}
+                      title="Rotate 90° (R)"
+                      aria-label="Rotate 90 degrees"
+                      id="fp-dock-rotate-btn"
+                    >
+                      <RotateCw size={13} />
+                      <span>Rotate</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="fp-dock-mini-btn"
@@ -7742,7 +8100,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               <div className="fp-prop-dock-title">
                 {selectedElement.type.toUpperCase()}{' '}
-                <span style={{ color: '#c2410c', fontSize: '0.78rem' }}>
+                <span style={{ color: '#1e293b', fontSize: '0.78rem' }}>
                   {(entity as any).label || (entity as any).itemType || (entity as any).doorType || (entity as any).windowType || (entity as any).wallType || ''}
                 </span>
               </div>
@@ -7867,90 +8225,21 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         </select>
                       </div>
 
-                      {/* Width with Steppers < > */}
-                      <div className="fp-prop-pill">
-                        <span className="fp-prop-pill-label">Width, {unit === 'feet' ? 'ft' : 'm'}</span>
-                        <button
-                          type="button"
-                          className="fp-stepper-btn"
-                          disabled={isLocked || r.width <= 1}
-                          onClick={() => {
-                            const step = unit === 'feet' ? 0.5 : 0.25;
-                            dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { width: Math.max(1, +(r.width - step).toFixed(2)) } });
-                            markUnsaved();
-                          }}
-                          title="Decrease Width"
-                        >
-                          &lt;
-                        </button>
-                        <input
-                          type="number"
-                          step={unit === 'feet' ? 0.5 : 0.25}
-                          className="fp-prop-pill-input"
-                          value={r.width}
-                          disabled={isLocked}
-                          onChange={e => {
-                            dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { width: parseFloat(e.target.value) || 1 } });
-                            markUnsaved();
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="fp-stepper-btn"
-                          disabled={isLocked}
-                          onClick={() => {
-                            const step = unit === 'feet' ? 0.5 : 0.25;
-                            dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { width: +(r.width + step).toFixed(2) } });
-                            markUnsaved();
-                          }}
-                          title="Increase Width"
-                        >
-                          &gt;
-                        </button>
-                      </div>
+                      {/* Size: typed in the room sheet, which moves the room's walls (rooms next to it follow). */}
+                      <button
+                        type="button"
+                        className="fp-prop-pill fp-prop-pill-btn"
+                        onClick={() => openRoomSheet(r.id)}
+                        disabled={isLocked}
+                        title="Change the width and length of this room"
+                        id="fp-dock-room-size"
+                      >
+                        <span className="fp-prop-pill-label">Size</span>
+                        <strong>{(() => { const b = roomBox(r); return b ? `${formatDimension(b.maxX - b.minX, unit)} × ${formatDimension(b.maxY - b.minY, unit)}` : formatAreaShort(roomArea(r), unit); })()}</strong>
+                      </button>
 
-                      {/* Height (Length) with Steppers < > */}
-                      <div className="fp-prop-pill">
-                        <span className="fp-prop-pill-label">Height, {unit === 'feet' ? 'ft' : 'm'}</span>
-                        <button
-                          type="button"
-                          className="fp-stepper-btn"
-                          disabled={isLocked || r.height <= 1}
-                          onClick={() => {
-                            const step = unit === 'feet' ? 0.5 : 0.25;
-                            dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { height: Math.max(1, +(r.height - step).toFixed(2)) } });
-                            markUnsaved();
-                          }}
-                          title="Decrease Height"
-                        >
-                          &lt;
-                        </button>
-                        <input
-                          type="number"
-                          step={unit === 'feet' ? 0.5 : 0.25}
-                          className="fp-prop-pill-input"
-                          value={r.height}
-                          disabled={isLocked}
-                          onChange={e => {
-                            dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { height: parseFloat(e.target.value) || 1 } });
-                            markUnsaved();
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="fp-stepper-btn"
-                          disabled={isLocked}
-                          onClick={() => {
-                            const step = unit === 'feet' ? 0.5 : 0.25;
-                            dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { height: +(r.height + step).toFixed(2) } });
-                            markUnsaved();
-                          }}
-                          title="Increase Height"
-                        >
-                          &gt;
-                        </button>
-                      </div>
-
+                      {!r.fromWalls && (
+                      <>
                       {/* Wall Thickness with Steppers < > */}
                       <div className="fp-prop-pill">
                         <span className="fp-prop-pill-label">Thick, {unit === 'feet' ? 'in' : 'cm'}</span>
@@ -8042,20 +8331,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         ))}
                       </div>
 
-                      {/* Floor Finish Toggle (Wood Floor / Plain Color) */}
-                      <button
-                        type="button"
-                        className={`fp-prop-toggle-btn ${r.floorFinish !== 'Color Tint' ? 'active' : ''}`}
-                        disabled={isLocked}
-                        onClick={() => {
-                          const next = r.floorFinish === 'Color Tint' ? 'Wood Parquet' : 'Color Tint';
-                          dispatch({ type: 'UPDATE_ROOM', id: r.id, changes: { floorFinish: next } });
-                          markUnsaved();
-                        }}
-                        title="Toggle Wood Flooring Parquet vs Plain Tint"
-                      >
-                        {r.floorFinish === 'Color Tint' ? '🎨 Plain Tint' : '🪵 Wood Floor'}
-                      </button>
+                      </>
+                      )}
 
                       {/* Room Schedule & Total Rooms button ("namba room ethana irukku") */}
                       <button
@@ -8254,6 +8531,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </div>
 
               <div className="fp-prop-dock-actions">
+                {selectedElement.type === 'wall' && (
+                  <>
+                    <button type="button" className="fp-dock-action-btn" onClick={handleSplitSelectedWall} disabled={isLocked} title="Split here: cut this wall into two walls where you tapped it" id="fp-dock-split-here-btn">
+                      <Split size={14} />
+                    </button>
+                    {selectedWallJoints > 0 && (
+                      <>
+                        <button type="button" className="fp-dock-action-btn" onClick={handleSplitSelectedAtJoints} disabled={isLocked} title={`Split at the ${selectedWallJoints} joint${selectedWallJoints === 1 ? '' : 's'}: one wall per part`} id="fp-dock-split-joints-btn">
+                          <Columns size={14} />
+                        </button>
+                        <button type="button" className="fp-dock-action-btn danger" onClick={handleEraseSelectedPart} disabled={isLocked} title="Erase only the highlighted part, up to the next joint" id="fp-dock-erase-part-full-btn">
+                          <Eraser size={14} />
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
                 <button
                   type="button"
                   className="fp-dock-action-btn"
@@ -8594,12 +8888,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           </div>
           <div
             className="fp-info-item"
-            style={{ cursor: 'pointer', background: '#fff7ed', borderRadius: 6, padding: '2px 8px' }}
+            style={{ cursor: 'pointer', background: '#f8fafc', borderRadius: 6, padding: '2px 8px' }}
             onClick={() => setShowRoomScheduleModal(true)}
             title="Click to view Room Schedule & Details"
           >
-            <span className="fp-info-label" style={{ color: '#c2410c' }}>Rooms 📋</span>
-            <span className="fp-info-value" style={{ color: '#c2410c', fontWeight: 800 }}>{editorState.rooms.length}</span>
+            <span className="fp-info-label" style={{ color: '#1e293b' }}>Rooms 📋</span>
+            <span className="fp-info-value" style={{ color: '#1e293b', fontWeight: 800 }}>{editorState.rooms.length}</span>
           </div>
           <div className="fp-info-item">
             <span className="fp-info-label">Columns</span>
@@ -8628,7 +8922,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       {isLayersOpen && (
         <div className="fp-layers-drawer no-print" id="fp-layers-panel">
           <div className="fp-layers-header">
-            <h3><Layers size={16} color="#c2410c" /> CAD Layers</h3>
+            <h3><Layers size={16} color="#1e293b" /> Layers</h3>
             <button
               type="button"
               className="fp-layer-icon-btn"
@@ -8647,7 +8941,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       width: 10,
                       height: 10,
                       borderRadius: '50%',
-                      background: layer.color || '#f97316',
+                      background: layer.color || '#334155',
                       display: 'inline-block',
                     }}
                   />
@@ -8682,7 +8976,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <aside className="fp-desktop-right-panel no-print" aria-label="Symbol & Structure Library">
           {/* Numerical Precision Inspector */}
           <div className="fp-numerical-inspector">
-            <h4>Numerical Precision Inspector</h4>
+            <h4>Exact position</h4>
             {selectedElement ? (
               <div>
                 {selectedElement.type === 'wall' && (() => {
@@ -8694,7 +8988,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <div className="fp-inspector-content">
                       <div className="fp-inspector-row">
                         <label>Wall Type</label>
-                        <span style={{ fontWeight: 600, color: '#c2410c' }}>{w.wallType}</span>
+                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{w.wallType}</span>
                       </div>
                       <div className="fp-inspector-row">
                         <label>Length</label>
@@ -8727,7 +9021,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       </div>
                       <div className="fp-inspector-row">
                         <label>Angle</label>
-                        <span style={{ fontSize: '0.8rem', color: '#57534e' }}>{Math.round(ang)}°</span>
+                        <span style={{ fontSize: '0.8rem', color: '#475569' }}>{Math.round(ang)}°</span>
                       </div>
                     </div>
                   );
@@ -8788,7 +9082,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       </div>
                       <div className="fp-inspector-row">
                         <label>Perimeter</label>
-                        <span style={{ color: '#c2410c', fontWeight: 600, fontSize: '0.8rem' }}>
+                        <span style={{ color: '#1e293b', fontWeight: 600, fontSize: '0.8rem' }}>
                           {perim} {unit}
                         </span>
                       </div>
@@ -8980,7 +9274,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 })()}
               </div>
             ) : (
-              <p style={{ fontSize: '0.75rem', color: '#57534e', margin: 0 }}>
+              <p style={{ fontSize: '0.75rem', color: '#475569', margin: 0 }}>
                 Select any wall, room, door, window, or symbol to view and edit its exact real-world dimensions.
               </p>
             )}
@@ -9001,35 +9295,35 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               {activeDesktopCategory === 'STRUCTURE' && (
                 <div className="fp-accordion-body">
                   <button type="button" className="fp-symbol-item-btn" onClick={handleAddSquareRoom}>
-                    <Square size={16} color="#c2410c" />
+                    <Square size={16} color="#1e293b" />
                     <span>Square Room</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={handleAddLShapedRoom}>
-                    <Shapes size={16} color="#c2410c" />
+                    <Shapes size={16} color="#1e293b" />
                     <span>L-Shaped Room</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={handleAddUShapedRoom}>
-                    <Shapes size={16} color="#c2410c" />
+                    <Shapes size={16} color="#1e293b" />
                     <span>U-Shaped Room</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={handleAddTShapedRoom}>
-                    <Shapes size={16} color="#c2410c" />
+                    <Shapes size={16} color="#1e293b" />
                     <span>T-Shaped Room</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => { setActiveTool('room'); onNotify('Click canvas to place custom room', 'info'); }}>
-                    <Shapes size={16} color="#c2410c" />
+                    <Shapes size={16} color="#1e293b" />
                     <span>Custom Room</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWallPreset('exterior')}>
-                    <Pencil size={16} color="#b45309" />
+                    <Pencil size={16} color="#334155" />
                     <span>9" Exterior Wall</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWallPreset('interior')}>
-                    <Pencil size={16} color="#b45309" />
+                    <Pencil size={16} color="#334155" />
                     <span>4.5" Interior Wall</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWallPreset('partition')}>
-                    <Pencil size={16} color="#b45309" />
+                    <Pencil size={16} color="#334155" />
                     <span>3" Partition Wall</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddStairPreset('Straight')}>
@@ -9037,7 +9331,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <span>Staircase Flight</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={handleAddLanding}>
-                    <Square size={16} color="#b45309" />
+                    <Square size={16} color="#334155" />
                     <span>Landing Platform</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={handleAddVoid}>
@@ -9065,23 +9359,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               {activeDesktopCategory === 'OPENINGS' && (
                 <div className="fp-accordion-body">
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Single')}>
-                    <DoorOpen size={16} color="#c2410c" />
+                    <DoorOpen size={16} color="#1e293b" />
                     <span>Single Door</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Double')}>
-                    <DoorOpen size={16} color="#c2410c" />
+                    <DoorOpen size={16} color="#1e293b" />
                     <span>Double Door</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Sliding')}>
-                    <DoorOpen size={16} color="#c2410c" />
+                    <DoorOpen size={16} color="#1e293b" />
                     <span>Sliding Door</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddWindowPreset('Single Window')}>
-                    <AppWindow size={16} color="#c2410c" />
+                    <AppWindow size={16} color="#1e293b" />
                     <span>Single Window</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddDoorPreset('Opening')}>
-                    <Split size={16} color="#b45309" />
+                    <Split size={16} color="#334155" />
                     <span>Wall Opening</span>
                   </button>
                 </div>
@@ -9125,11 +9419,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <span>Kitchen Counter Sink</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'bathroom', itemType: 'Bathroom Commode', label: 'Commode', width: 2.2, height: 2.5 })}>
-                    <Bath size={16} color="#c2410c" />
+                    <Bath size={16} color="#1e293b" />
                     <span>Bathroom Commode</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddFurnitureItem({ category: 'kitchen', itemType: 'Refrigerator', label: 'Fridge', width: 2.8, height: 2.8 })}>
-                    <Box size={16} color="#b45309" />
+                    <Box size={16} color="#334155" />
                     <span>Refrigerator</span>
                   </button>
                 </div>
@@ -9149,19 +9443,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               {activeDesktopCategory === 'ELECTRICAL' && (
                 <div className="fp-accordion-body">
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Ceiling Light')}>
-                    <Zap size={16} color="#b45309" />
+                    <Zap size={16} color="#334155" />
                     <span>Ceiling Light</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Wall Switch')}>
-                    <Zap size={16} color="#b45309" />
+                    <Zap size={16} color="#334155" />
                     <span>Wall Switch</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Power Socket')}>
-                    <Zap size={16} color="#b45309" />
+                    <Zap size={16} color="#334155" />
                     <span>Power Socket</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddElectricalItem('Ceiling Fan')}>
-                    <RotateCw size={16} color="#b45309" />
+                    <RotateCw size={16} color="#334155" />
                     <span>Ceiling Fan</span>
                   </button>
                 </div>
@@ -9181,19 +9475,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               {activeDesktopCategory === 'ANNOTATION' && (
                 <div className="fp-accordion-body">
                   <button type="button" className="fp-symbol-item-btn" onClick={() => setShowDimensions(d => !d)}>
-                    <Ruler size={16} color="#c2410c" />
+                    <Ruler size={16} color="#1e293b" />
                     <span>Dimension Lines ({showDimensions ? 'ON' : 'OFF'})</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddAnnotationPreset('note')}>
-                    <Type size={16} color="#c2410c" />
-                    <span>Architectural Note</span>
+                    <Type size={16} color="#1e293b" />
+                    <span>Note</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddAnnotationPreset('label')}>
-                    <ChevronRight size={16} color="#c2410c" />
+                    <ChevronRight size={16} color="#1e293b" />
                     <span>Direction Arrow</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => handleAddAnnotationPreset('label')}>
-                    <Type size={16} color="#c2410c" />
+                    <Type size={16} color="#1e293b" />
                     <span>Room Label Tag</span>
                   </button>
                 </div>
@@ -9227,19 +9521,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     <span>Tape Measure</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => setShowRoomScheduleModal(true)}>
-                    <Calculator size={16} color="#c2410c" />
+                    <Calculator size={16} color="#1e293b" />
                     <span>Area Schedule</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => setShowRoomScheduleModal(true)}>
-                    <ScanLine size={16} color="#c2410c" />
+                    <ScanLine size={16} color="#1e293b" />
                     <span>Perimeter Breakdown</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => setShowBgImageModal(true)}>
-                    <ImageIcon size={16} color="#b45309" />
+                    <ImageIcon size={16} color="#334155" />
                     <span>Background Image</span>
                   </button>
                   <button type="button" className="fp-symbol-item-btn" onClick={() => setShowSettingsModal(true)}>
-                    <Settings size={16} color="#57534e" />
+                    <Settings size={16} color="#475569" />
                     <span>Scale & Snapping</span>
                   </button>
                 </div>
@@ -9397,30 +9691,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </select>
                 </div>
                 <div className="fp-prop-row">
-                  <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={0.5}
-                    value={room.width}
-                    onChange={e => {
-                      dispatch({ type: 'UPDATE_ROOM', id: room.id, changes: { width: parseFloat(e.target.value) || 1 } });
-                      markUnsaved();
-                    }}
-                  />
-                </div>
-                <div className="fp-prop-row">
-                  <label>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
-                  <input
-                    type="number"
-                    min={1}
-                    step={0.5}
-                    value={room.height}
-                    onChange={e => {
-                      dispatch({ type: 'UPDATE_ROOM', id: room.id, changes: { height: parseFloat(e.target.value) || 1 } });
-                      markUnsaved();
-                    }}
-                  />
+                  <label>Size</label>
+                  {/* Typed in the room sheet: a room made by walls changes size by moving its
+                      walls, which a plain number box here could not do. */}
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => openRoomSheet(room.id)} id="fp-prop-room-size">
+                    {(() => { const b = roomBox(room); return b ? `${formatDimension(b.maxX - b.minX, unit)} × ${formatDimension(b.maxY - b.minY, unit)}` : formatAreaShort(roomArea(room), unit); })()} · Change
+                  </button>
                 </div>
                 <div className="fp-prop-row">
                   <label>Area</label>
@@ -9638,7 +9914,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               {sketchAngles === '45' ? 'Straighten: 45° + 90°' : sketchAngles === '90' ? 'Straighten: 90° only' : 'Straighten: off'}
             </button>
           )}
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Thick:</span>
+          <span style={{ fontSize: '0.68rem', color: '#475569', padding: '0 4px', fontWeight: 600 }}>Thick:</span>
           {wallThicknessPresets(unit).map(p => (
             <button
               key={p.label}
@@ -9685,7 +9961,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       {activeTool === 'door' && (
         <div className="fp-mobile-subtoolbar no-print">
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Door:</span>
+          <span style={{ fontSize: '0.68rem', color: '#475569', padding: '0 4px', fontWeight: 600 }}>Door:</span>
           {DOOR_TYPES.map(dt => (
             <button
               key={dt}
@@ -9701,7 +9977,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       {activeTool === 'window' && (
         <div className="fp-mobile-subtoolbar no-print">
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Window:</span>
+          <span style={{ fontSize: '0.68rem', color: '#475569', padding: '0 4px', fontWeight: 600 }}>Window:</span>
           {WINDOW_TYPES.map(wt => (
             <button
               key={wt}
@@ -9717,7 +9993,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       {activeTool === 'room' && (
         <div className="fp-mobile-subtoolbar no-print">
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Room:</span>
+          <span style={{ fontSize: '0.68rem', color: '#475569', padding: '0 4px', fontWeight: 600 }}>Room:</span>
           {ROOM_TYPES.slice(0, 5).map(rt => (
             <button
               key={rt}
@@ -9731,7 +10007,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <button
             type="button"
             className="fp-mobile-sub-btn"
-            style={{ background: '#ffedd5', color: '#c2410c' }}
+            style={{ background: '#f1f5f9', color: '#1e293b' }}
             onClick={() => setShowAddRoomModal(true)}
           >
             + Custom Size
@@ -9741,7 +10017,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       {activeTool === 'column' && (
         <div className="fp-mobile-subtoolbar no-print">
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Column:</span>
+          <span style={{ fontSize: '0.68rem', color: '#475569', padding: '0 4px', fontWeight: 600 }}>Column:</span>
           {[
             { id: 'square', label: '9"×9" Square' },
             { id: 'rectangular', label: '9"×15" Rect' },
@@ -9761,7 +10037,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       {activeTool === 'stairs' && (
         <div className="fp-mobile-subtoolbar no-print">
-          <span style={{ fontSize: '0.68rem', color: '#57534e', padding: '0 4px', fontWeight: 600 }}>Stair:</span>
+          <span style={{ fontSize: '0.68rem', color: '#475569', padding: '0 4px', fontWeight: 600 }}>Stair:</span>
           {[
             { id: 'straight', label: 'Straight' },
             { id: 'l-shape', label: 'L-Shape' },
@@ -9861,19 +10137,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <Ruler size={20} />
           <span className="fp-mobile-tool-label">Tape</span>
         </button>
-        </div>
 
+        {/* Everything else (Split, measurement check, shapes, furniture…): a plain item in
+            the same bar, not a large floating button. */}
         <button
           type="button"
-          className="fp-mobile-tool-fab"
+          className={`fp-mobile-tool-btn fp-mobile-tool-more ${activeTool === 'split' || showMobileMoreTools ? 'active' : ''}`}
           onClick={() => setShowMobileMoreTools(true)}
-          title="Add shapes, furniture and more tools"
-          aria-label="Add shapes, furniture and more tools"
+          title="Split, measurement check, shapes, furniture and more tools"
+          aria-label="More tools"
           aria-expanded={showMobileMoreTools}
           id="fp-mobile-tool-more"
         >
-          <Plus size={26} />
+          {activeTool === 'split' ? <Split size={20} /> : <MoreVertical size={20} />}
+          <span className="fp-mobile-tool-label">{activeTool === 'split' ? 'Split' : 'More'}</span>
         </button>
+        </div>
       </nav>
 
       {/* ── Bottom Status Bar ─────────────────────────── */}
@@ -9917,8 +10196,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-furniture-dialog">
             <div className="fp-furniture-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Armchair size={20} color="#c2410c" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                <Armchair size={20} color="#1e293b" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                   CAD Architectural Symbols & Furniture
                 </h3>
               </div>
@@ -9981,8 +10260,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-calc-dialog">
             <div className="fp-calc-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Calculator size={20} color="#b45309" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                <Calculator size={20} color="#334155" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                   Floor Plan Material & Quantity Estimation
                 </h3>
               </div>
@@ -10035,7 +10314,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </tr>
                   <tr>
                     <td><strong>Cement Bags (PPC/OPC)</strong></td>
-                    <td><strong style={{ color: '#c2410c' }}>{estimatedCementBags} bags</strong></td>
+                    <td><strong style={{ color: '#1e293b' }}>{estimatedCementBags} bags</strong></td>
                     <td>Masonry mortar 1:6 + Internal/External plaster</td>
                   </tr>
                   <tr>
@@ -10098,11 +10377,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <Box size={20} color="#15803d" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                     Floor Plan Room Schedule & Breakdown
                   </h3>
-                  <span style={{ fontSize: '0.78rem', color: '#57534e' }}>
-                    Total Rooms in Floor Plan: <strong style={{ color: '#15803d' }}>{editorState.rooms.length} Rooms</strong> • Total Built-up Area: <strong style={{ color: '#c2410c' }}>{totalFloorArea.toFixed(1)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}</strong>
+                  <span style={{ fontSize: '0.78rem', color: '#475569' }}>
+                    Total Rooms in Floor Plan: <strong style={{ color: '#15803d' }}>{editorState.rooms.length} Rooms</strong> • Total Built-up Area: <strong style={{ color: '#1e293b' }}>{totalFloorArea.toFixed(1)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}</strong>
                   </span>
                 </div>
               </div>
@@ -10125,7 +10404,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   <span className="fp-room-stat-label">Total Rooms</span>
                 </div>
                 <div className="fp-room-stat-card">
-                  <span className="fp-room-stat-num" style={{ color: '#c2410c' }}>
+                  <span className="fp-room-stat-num" style={{ color: '#1e293b' }}>
                     {totalFloorArea.toFixed(1)} <small style={{ fontSize: '0.75rem' }}>{unit === 'feet' ? 'sq.ft' : 'sq.m'}</small>
                   </span>
                   <span className="fp-room-stat-label">Total Built-up Area</span>
@@ -10146,11 +10425,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               {/* Rooms Schedule Table */}
               <div style={{ marginBottom: 16 }}>
-                <h5 style={{ margin: '0 0 8px 0', color: '#57534e', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <h5 style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   All Configured Rooms & Dimensions
                 </h5>
                 {editorState.rooms.length > 0 ? (
-                  <div style={{ overflowX: 'auto', border: '1px solid #e7e5e4', borderRadius: 10 }}>
+                  <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 10 }}>
                     <table className="fp-room-table">
                       <thead>
                         <tr>
@@ -10167,7 +10446,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       <tbody>
                         {editorState.rooms.map((rm, idx) => (
                           <tr key={rm.id}>
-                            <td style={{ color: '#78716c', fontWeight: 700 }}>{idx + 1}</td>
+                            <td style={{ color: '#64748b', fontWeight: 700 }}>{idx + 1}</td>
                             <td>
                               <input
                                 type="text"
@@ -10178,9 +10457,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                                 }}
                                 style={{
                                   background: '#ffffff',
-                                  border: '1px solid #e7e5e4',
+                                  border: '1px solid #e2e8f0',
                                   borderRadius: 5,
-                                  color: '#1c1917',
+                                  color: '#0f172a',
                                   padding: '4px 8px',
                                   fontSize: '0.82rem',
                                   fontWeight: 600,
@@ -10198,9 +10477,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                                 }}
                                 style={{
                                   background: '#ffffff',
-                                  border: '1px solid #e7e5e4',
+                                  border: '1px solid #e2e8f0',
                                   borderRadius: 5,
-                                  color: '#1c1917',
+                                  color: '#0f172a',
                                   padding: '4px 6px',
                                   fontSize: '0.78rem',
                                 }}
@@ -10281,54 +10560,54 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     </table>
                   </div>
                 ) : (
-                  <div style={{ padding: 30, textAlign: 'center', color: '#78716c', background: '#fafaf9', borderRadius: 8 }}>
+                  <div style={{ padding: 30, textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: 8 }}>
                     No rooms created in this floor plan yet. Use the form below to add your first room!
                   </div>
                 )}
               </div>
 
               {/* Quick Add Room by Height & Width Inputs */}
-              <div style={{ padding: 16, background: '#fafaf9', border: '1.5px solid #fdba74', borderRadius: 12 }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: '#1c1917', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Plus size={16} color="#c2410c" /> Add Room with Exact Height & Width
+              <div style={{ padding: 16, background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: 12 }}>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Plus size={16} color="#1e293b" /> Add Room with Exact Height & Width
                 </h4>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#57534e', marginBottom: 4 }}>Type of Room</label>
+                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Type of Room</label>
                     <select
                       value={draftRoomType}
                       onChange={e => setDraftRoomType(e.target.value as RoomType)}
-                      style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 6, color: '#1c1917', padding: '7px 10px', fontSize: '0.82rem' }}
+                      style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 10px', fontSize: '0.82rem' }}
                     >
                       {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#57534e', marginBottom: 4 }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
                     <input
                       type="number"
                       step={0.5}
                       value={draftRoomWidth}
                       onChange={e => setDraftRoomWidth(parseFloat(e.target.value) || 1)}
-                      style={{ width: 85, background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 6, color: '#1c1917', padding: '7px 8px', fontSize: '0.82rem', fontWeight: 600 }}
+                      style={{ width: 85, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 8px', fontSize: '0.82rem', fontWeight: 600 }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#57534e', marginBottom: 4 }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
+                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
                     <input
                       type="number"
                       step={0.5}
                       value={draftRoomHeight}
                       onChange={e => setDraftRoomHeight(parseFloat(e.target.value) || 1)}
-                      style={{ width: 85, background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 6, color: '#1c1917', padding: '7px 8px', fontSize: '0.82rem', fontWeight: 600 }}
+                      style={{ width: 85, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 8px', fontSize: '0.82rem', fontWeight: 600 }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#57534e', marginBottom: 4 }}>Floor Finish</label>
+                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Floor Finish</label>
                     <select
                       value={draftRoomFloorFinish}
                       onChange={e => setDraftRoomFloorFinish(e.target.value)}
-                      style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 6, color: '#1c1917', padding: '7px 10px', fontSize: '0.82rem' }}
+                      style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 10px', fontSize: '0.82rem' }}
                     >
                       <option value="Wood Parquet">🪵 Wood Floor Parquet</option>
                       <option value="Color Tint">🎨 Color Tint</option>
@@ -10366,8 +10645,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-calc-dialog" style={{ maxWidth: 480 }}>
             <div className="fp-calc-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Plus size={20} color="#c2410c" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                <Plus size={20} color="#1e293b" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                   Add Room by Exact Dimensions
                 </h3>
               </div>
@@ -10383,13 +10662,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <div className="fp-calc-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#57534e', marginBottom: 6, fontWeight: 600 }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
                     Type of Room
                   </label>
                   <select
                     value={draftRoomType}
                     onChange={e => setDraftRoomType(e.target.value as RoomType)}
-                    style={{ width: '100%', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 8, color: '#1c1917', padding: '9px 12px', fontSize: '0.85rem' }}
+                    style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.85rem' }}
                   >
                     {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
                   </select>
@@ -10397,7 +10676,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#57534e', marginBottom: 6, fontWeight: 600 }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
                       Width ({unit === 'feet' ? 'ft' : 'm'})
                     </label>
                     <input
@@ -10405,11 +10684,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       step={0.5}
                       value={draftRoomWidth}
                       onChange={e => setDraftRoomWidth(parseFloat(e.target.value) || 1)}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 8, color: '#1c1917', padding: '9px 12px', fontSize: '0.9rem', fontWeight: 700 }}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.9rem', fontWeight: 700 }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#57534e', marginBottom: 6, fontWeight: 600 }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
                       Height / Length ({unit === 'feet' ? 'ft' : 'm'})
                     </label>
                     <input
@@ -10417,14 +10696,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       step={0.5}
                       value={draftRoomHeight}
                       onChange={e => setDraftRoomHeight(parseFloat(e.target.value) || 1)}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 8, color: '#1c1917', padding: '9px 12px', fontSize: '0.9rem', fontWeight: 700 }}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.9rem', fontWeight: 700 }}
                     />
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#57534e', marginBottom: 6, fontWeight: 600 }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
                       Wall Thickness ({unit === 'feet' ? 'in' : 'cm'})
                     </label>
                     <input
@@ -10435,17 +10714,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                         const val = parseFloat(e.target.value) || 9;
                         setDraftRoomThickness(unit === 'feet' ? val / 12 : val / 100);
                       }}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 8, color: '#1c1917', padding: '9px 12px', fontSize: '0.9rem' }}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.9rem' }}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#57534e', marginBottom: 6, fontWeight: 600 }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
                       Floor Finish
                     </label>
                     <select
                       value={draftRoomFloorFinish}
                       onChange={e => setDraftRoomFloorFinish(e.target.value)}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: 8, color: '#1c1917', padding: '9px 12px', fontSize: '0.85rem' }}
+                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.85rem' }}
                     >
                       <option value="Wood Parquet">🪵 Wood Floor Parquet</option>
                       <option value="Color Tint">🎨 Plain Tint</option>
@@ -10487,8 +10766,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-calc-dialog" style={{ maxWidth: 580 }}>
             <div className="fp-calc-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <History size={20} color="#c2410c" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                <History size={20} color="#1e293b" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                   Floor Plan Version Snapshots
                 </h3>
               </div>
@@ -10509,7 +10788,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   placeholder="Snapshot label (Prior to adding master bedroom)"
                   value={versionNote}
                   onChange={e => setVersionNote(e.target.value)}
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, background: '#ffffff', border: '1px solid #e7e5e4', color: '#1c1917', fontSize: '0.85rem' }}
+                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: '0.85rem' }}
                 />
                 <button
                   type="button"
@@ -10522,7 +10801,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               {/* List of Saved Snapshots */}
               <div style={{ marginTop: 16 }}>
-                <h5 style={{ margin: '0 0 8px 0', color: '#57534e', fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                <h5 style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase' }}>
                   Previous Snapshots
                 </h5>
                 {plan.versionHistory && plan.versionHistory.length > 0 ? (
@@ -10535,16 +10814,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           padding: '10px 14px',
-                          background: '#fafaf9',
+                          background: '#f8fafc',
                           borderRadius: 8,
-                          border: '1px solid #e7e5e4',
+                          border: '1px solid #e2e8f0',
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 600, color: '#1c1917', fontSize: '0.85rem' }}>
+                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.85rem' }}>
                             {v.note || 'Snapshot'}
                           </div>
-                          <div style={{ fontSize: '0.72rem', color: '#78716c' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
                             {new Date(v.timestamp).toLocaleString('en-IN')}
                           </div>
                         </div>
@@ -10559,7 +10838,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#78716c', fontSize: '0.85rem' }}>
+                  <div style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
                     No version snapshots recorded yet. Create one above to preserve your design milestones.
                   </div>
                 )}
@@ -10575,8 +10854,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-calc-dialog" style={{ maxWidth: 500 }}>
             <div className="fp-calc-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Keyboard size={20} color="#c2410c" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                <Keyboard size={20} color="#1e293b" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                   Keyboard Shortcuts
                 </h3>
               </div>
@@ -10592,28 +10871,28 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <div className="fp-calc-body">
               <table className="fp-calc-table">
                 <tbody>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>V</kbd></td><td>Select / Move Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>W</kbd></td><td>Wall Tool: one straight wall at a time</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>S</kbd></td><td>Sketch Walls: a rough outline becomes straight walls</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>R</kbd></td><td>Place Room Tool (rotates the selection when something is selected)</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>D</kbd></td><td>Place Door Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Enter</kbd></td><td>Type an exact size for the selected wall</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>M</kbd></td><td>Toggle Dimensions & Measurements</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>G</kbd></td><td>Toggle Grid</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>H</kbd></td><td>Pan / Hand Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>F</kbd></td><td>Fit the Plan to the Screen</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>0</kbd></td><td>Reset the View to 100%</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>+ / -</kbd></td><td>Zoom In / Out</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Z</kbd></td><td>Undo</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Y / Ctrl + Shift + Z</kbd></td><td>Redo</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + D</kbd></td><td>Duplicate Selected Element</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + L</kbd></td><td>Lock / Unlock Selected Element</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + C / Ctrl + V</kbd></td><td>Copy / Paste</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Ctrl + S</kbd></td><td>Save Floor Plan</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Del / Backspace</kbd></td><td>Delete Selected Element</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd></td><td>Cancel Drawing / Deselect</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Mouse Wheel</kbd></td><td>Zoom In / Out</td></tr>
-                  <tr><td><kbd style={{ background: '#f5f5f4', padding: '2px 6px', borderRadius: 4 }}>Middle Mouse / Alt+Drag</kbd></td><td>Pan Canvas</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>V</kbd></td><td>Select / Move Tool</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>W</kbd></td><td>Wall Tool: one straight wall at a time</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>S</kbd></td><td>Sketch Walls: a rough outline becomes straight walls</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>R</kbd></td><td>Place Room Tool (rotates the selection when something is selected)</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>D</kbd></td><td>Place Door Tool</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Enter</kbd></td><td>Type an exact size for the selected wall</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>M</kbd></td><td>Toggle Dimensions & Measurements</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>G</kbd></td><td>Toggle Grid</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>H</kbd></td><td>Pan / Hand Tool</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>F</kbd></td><td>Fit the Plan to the Screen</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>0</kbd></td><td>Reset the View to 100%</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>+ / -</kbd></td><td>Zoom In / Out</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Z</kbd></td><td>Undo</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Y / Ctrl + Shift + Z</kbd></td><td>Redo</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + D</kbd></td><td>Duplicate Selected Element</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + L</kbd></td><td>Lock / Unlock Selected Element</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + C / Ctrl + V</kbd></td><td>Copy / Paste</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + S</kbd></td><td>Save Floor Plan</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Del / Backspace</kbd></td><td>Delete Selected Element</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd></td><td>Cancel Drawing / Deselect</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Mouse Wheel</kbd></td><td>Zoom In / Out</td></tr>
+                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Middle Mouse / Alt+Drag</kbd></td><td>Pan Canvas</td></tr>
                 </tbody>
               </table>
             </div>
@@ -10627,8 +10906,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-calc-dialog" style={{ maxWidth: 480 }}>
             <div className="fp-calc-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ImageIcon size={20} color="#c2410c" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
+                <ImageIcon size={20} color="#1e293b" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
                   Background Reference Plan Image
                 </h3>
               </div>
@@ -10642,18 +10921,18 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </div>
 
             <div className="fp-calc-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ fontSize: '0.82rem', color: '#57534e', margin: 0 }}>
+              <p style={{ fontSize: '0.82rem', color: '#475569', margin: 0 }}>
                 Import an existing blueprint, surveyor drawing, or sketch (PNG/JPG) to trace over in Building Mistry CAD.
               </p>
 
               <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#57534e', display: 'block', marginBottom: 6 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
                   Upload Image File
                 </label>
                 <input
                   type="file"
                   accept="image/png, image/jpeg, image/webp"
-                  style={{ fontSize: '0.8rem', color: '#1c1917' }}
+                  style={{ fontSize: '0.8rem', color: '#0f172a' }}
                   onChange={e => {
                     const file = e.target.files?.[0];
                     if (!file) return;
@@ -10684,7 +10963,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div>
-                      <label style={{ fontSize: '0.78rem', color: '#57534e' }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
+                      <label style={{ fontSize: '0.78rem', color: '#475569' }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
                       <input
                         type="number"
                         className="fp-inspector-input"
@@ -10698,7 +10977,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                       />
                     </div>
                     <div>
-                      <label style={{ fontSize: '0.78rem', color: '#57534e' }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
+                      <label style={{ fontSize: '0.78rem', color: '#475569' }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
                       <input
                         type="number"
                         className="fp-inspector-input"
@@ -10714,7 +10993,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   </div>
 
                   <div>
-                    <label style={{ fontSize: '0.78rem', color: '#57534e', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <label style={{ fontSize: '0.78rem', color: '#475569', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span>Opacity</span>
                       <span>{Math.round((currentFloor.backgroundImage.opacity ?? 0.5) * 100)}%</span>
                     </label>
@@ -10795,9 +11074,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-calc-dialog" style={{ maxWidth: 560 }}>
             <div className="fp-calc-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Settings size={20} color="#c2410c" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1c1917' }}>
-                  CAD Precision & Drawing Settings
+                <Settings size={20} color="#1e293b" />
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
+                  Drawing settings
                 </h3>
               </div>
               <button
@@ -10810,9 +11089,31 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </div>
 
             <div className="fp-calc-body">
+              {/* Help that is off by default, so nothing pops up while drawing */}
+              <div style={{ marginBottom: 16, display: 'grid', gap: 8 }}>
+                <label className="fp-setting-switch">
+                  <input
+                    type="checkbox"
+                    checked={showTips}
+                    onChange={e => { setShowTips(e.target.checked); writeSetting('bm_fp_show_tips', e.target.checked ? '1' : '0'); }}
+                    id="fp-setting-tips"
+                  />
+                  <span><strong>Show tips</strong> A one-line tip for the tool in hand, and first-use tips.</span>
+                </label>
+                <label className="fp-setting-switch">
+                  <input
+                    type="checkbox"
+                    checked={isAiLiveAssistActive}
+                    onChange={e => setIsAiLiveAssistActive(e.target.checked)}
+                    id="fp-setting-live-assist"
+                  />
+                  <span><strong>Read sketch strokes live</strong> Guesses what a freehand stroke is (door, window, room) and asks. Off by default.</span>
+                </label>
+              </div>
+
               {/* Wall Thickness Presets */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
                   Standard Wall Thickness Presets
                 </label>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -10838,10 +11139,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               {/* Grid Spacing Presets */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
                   Snap Step
                 </label>
-                <p style={{ fontSize: '0.8rem', color: '#57534e', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0 0 0' }}>
                   With Snap to Grid on, wall ends and anything you place or drag land on multiples of this.
                 </p>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -10861,10 +11162,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               {/* How far a finger reaches for a corner or wall */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
                   Snap Reach
                 </label>
-                <p style={{ fontSize: '0.8rem', color: '#57534e', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0 0 0' }}>
                   How close a wall end must be to a corner, crossing or wall before it joins it.
                 </p>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -10884,10 +11185,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               {/* Measurement text size: a view setting only */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
                   Measurement Text Size
                 </label>
-                <p style={{ fontSize: '0.8rem', color: '#57534e', margin: '4px 0 0 0' }}>
+                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0 0 0' }}>
                   Changes how large measurements are written on the plan. It never changes a wall's length.
                 </p>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
@@ -10908,11 +11209,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
               {/* CAD Snapping Toggles */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
                   Snapping & Alignment Guides
                 </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#1c1917', cursor: 'pointer', fontSize: '0.88rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
                     <input
                       type="checkbox"
                       checked={snapToGridEnabled}
@@ -10920,7 +11221,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     />
                     <span><strong>Snap to Grid:</strong> Magnetic alignment to background grid intervals</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#1c1917', cursor: 'pointer', fontSize: '0.88rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
                     <input
                       type="checkbox"
                       checked={snapToEndpointsEnabled}
@@ -10928,7 +11229,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     />
                     <span><strong>Snap to Endpoints:</strong> Automatic magnetic corner joining for enclosed walls</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#1c1917', cursor: 'pointer', fontSize: '0.88rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
                     <input
                       type="checkbox"
                       checked={snapToWallEnabled}
@@ -10936,7 +11237,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     />
                     <span><strong>Snap Along Walls:</strong> Automatic hosting for doors, windows, TVs & ACs</span>
                   </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#1c1917', cursor: 'pointer', fontSize: '0.88rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
                     <input
                       type="checkbox"
                       checked={isOrthoActive}
@@ -10948,11 +11249,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </div>
 
               {/* Starter Plan Template Loader */}
-              <div style={{ borderTop: '1px solid #e7e5e4', paddingTop: 16, marginTop: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase' }}>
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 16 }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
                   Architectural Starter Plan
                 </label>
-                <p style={{ fontSize: '0.82rem', color: '#57534e', margin: '6px 0 12px 0' }}>
+                <p style={{ fontSize: '0.82rem', color: '#475569', margin: '6px 0 12px 0' }}>
                   Load a verified 30×40 2BHK architectural plan with living room, master bedroom, kitchen, dining, toilet, and columns.
                 </p>
                 <button
@@ -10995,6 +11296,170 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           />
         </Field>
       </Sheet>
+
+      {/* ── Measurement check ──────────────────────────────────────────────
+          Each item shows two real measurements from the same line and their difference. The
+          user picks the right one; the other is moved to match (joined walls follow). Nothing
+          is changed without that choice. */}
+      <Sheet
+        open={showChecks}
+        title="Measurement check"
+        subtitle={alignmentIssues.length ? `${alignmentIssues.length} small difference${alignmentIssues.length === 1 ? '' : 's'} found` : 'No small differences'}
+        onClose={() => setShowChecks(false)}
+      >
+        {alignmentIssues.length === 0 ? (
+          <Note tone="ok">The walls line up. No measurements are a few millimetres apart.</Note>
+        ) : (
+          <div className="fp-checks" id="fp-checks">
+            <p className="m-calc-note" style={{ marginTop: 0 }}>
+              These measurements are a few millimetres apart, where they are probably meant to be the same. Pick the measurement that is right. Nothing changes until you do.
+            </p>
+            {alignmentIssues.map(issue => {
+              const show = (m: { value: number; mm: number }) =>
+                baseUnitOf(unit) === 'feet' ? `${formatDimension(m.value, unit)} (${formatMm(m.mm)})` : formatMm(m.mm);
+              return (
+                <div key={issue.id} className="fp-check" data-check-id={issue.id}>
+                  <div className="fp-check-title">
+                    {issue.kind === 'step'
+                      ? `Two walls are ${formatMm(issue.differenceMm)} out of line`
+                      : `A wall is ${formatMm(issue.differenceMm)} out of straight`}
+                  </div>
+                  <div className="fp-check-ref">Measured from {issue.reference}</div>
+                  <dl className="fp-check-values">
+                    {issue.measurements.map(m => (
+                      <div key={m.label}><dt>{m.label}</dt><dd>{show(m)}</dd></div>
+                    ))}
+                    <div className="is-diff"><dt>Difference</dt><dd>{formatMm(issue.differenceMm)}</dd></div>
+                  </dl>
+                  <div className="fp-check-actions">
+                    {([0, 1] as const).map(k => (
+                      <button
+                        key={k}
+                        type="button"
+                        className="m-btn is-small is-primary"
+                        onClick={() => { if (applyEdit(applyAlignmentFix(editorState, issue, k, unit, newPlanId))) setShowChecks(alignmentIssues.length > 1); }}
+                      >
+                        Use {formatMm(issue.measurements[k].mm)}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="m-btn is-small"
+                      onClick={() => {
+                        const vw = containerRef.current?.clientWidth || window.innerWidth;
+                        const vh = containerRef.current?.clientHeight || window.innerHeight;
+                        setPanX(Math.round(vw / 2 - issue.focus.x * GRID_SIZE_PX * zoom));
+                        setPanY(Math.round(vh / 2 - issue.focus.y * GRID_SIZE_PX * zoom));
+                        setSelectedElement({ type: 'wall', id: issue.wallIds[0] });
+                        setShowChecks(false);
+                      }}
+                    >
+                      Show
+                    </button>
+                    <button type="button" className="m-btn is-small" onClick={() => setIgnoredChecks(list => [...list, issue.id])}>
+                      Keep as drawn
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Sheet>
+
+      {/* ── Room: name, type, size and delete, in one sheet ────────────────────
+          A room made by walls changes size by moving its walls (rooms next to it follow);
+          the sheet says which wall moves and refuses a change that would break the plan. */}
+      {(() => {
+        const room = roomSheet ? editorState.rooms.find(r => r.id === roomSheet.id) : undefined;
+        if (!roomSheet || !room) return null;
+        const box = roomBox(room);
+        const inner = roomInteriors.get(room.id);
+        const COMMON: RoomType[] = ['Bedroom', 'Master Bedroom', 'Kitchen', 'Bathroom', 'Toilet', 'Living Room', 'Dining', 'Balcony', 'Pooja', 'Store', 'Study', 'Utility'];
+        const setType = (rt: RoomType) => {
+          const generic = !room.label || /^Room \d+$/.test(room.label) || room.label === room.roomType;
+          dispatchWithHistory({ type: 'UPDATE_ROOM', id: room.id, changes: { roomType: rt, ...(generic ? { label: rt } : {}) } });
+        };
+        return (
+          <Sheet
+            open
+            title={room.label || room.roomType}
+            subtitle={`${formatPlanArea(roomArea(room), unit)}${inner ? ` · inside ${formatDimension(inner.width, unit)} × ${formatDimension(inner.height, unit)}` : ''}`}
+            onClose={() => setRoomSheet(null)}
+            footer={
+              <>
+                <button type="button" className="m-btn is-danger" onClick={() => { setRoomSheet(null); setSelectedElement({ type: 'room', id: room.id }); if (room.fromWalls) setConfirmRoomDelete(room.id); else dispatchWithHistory({ type: 'DELETE_ROOM', id: room.id }); }} disabled={!!room.locked} id="fp-room-sheet-delete">
+                  <Trash2 size={18} /> Delete
+                </button>
+                <button type="button" className="m-btn is-primary" onClick={applyRoomSize} disabled={!!room.locked} id="fp-room-sheet-apply">
+                  <Check size={18} /> Done
+                </button>
+              </>
+            }
+          >
+            {roomSheet.error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{roomSheet.error}</Note></div>}
+            {room.locked && <div style={{ marginBottom: 12 }}><Note>This room is locked. Unlock it to change it.</Note></div>}
+            <Field label="Name">
+              <input
+                type="text"
+                value={room.label}
+                maxLength={40}
+                disabled={!!room.locked}
+                onChange={e => dispatch({ type: 'UPDATE_ROOM', id: room.id, changes: { label: e.target.value } })}
+                id="fp-room-sheet-name"
+              />
+            </Field>
+            <div className="m-chips fp-room-type-chips" role="group" aria-label="Room type">
+              {COMMON.map(rt => (
+                <button key={rt} type="button" className={`m-chip ${room.roomType === rt ? 'is-on' : ''}`} aria-pressed={room.roomType === rt} disabled={!!room.locked} onClick={() => setType(rt)}>
+                  {rt}
+                </button>
+              ))}
+            </div>
+            {box || !room.polygonPoints ? (
+              <>
+                <div className="m-field-2" style={{ marginTop: 12 }}>
+                  <Field label="Width (left to right)">
+                    <input type="text" inputMode="decimal" autoComplete="off" value={roomSheet.width} disabled={!!room.locked}
+                      onChange={e => setRoomSheet({ ...roomSheet, width: e.target.value, error: '' })} id="fp-room-sheet-width" />
+                  </Field>
+                  <Field label="Length (top to bottom)">
+                    <input type="text" inputMode="decimal" autoComplete="off" value={roomSheet.length} disabled={!!room.locked}
+                      onChange={e => setRoomSheet({ ...roomSheet, length: e.target.value, error: '' })} id="fp-room-sheet-length" />
+                  </Field>
+                </div>
+                {room.fromWalls && (
+                  <div className="m-field-2">
+                    <Segmented label="Wall that moves for the width" value={roomSheet.widthSide} onChange={v => setRoomSheet({ ...roomSheet, widthSide: v })}
+                      options={[{ value: 'right', label: 'Right wall' }, { value: 'left', label: 'Left wall' }]} />
+                    <Segmented label="Wall that moves for the length" value={roomSheet.lengthSide} onChange={v => setRoomSheet({ ...roomSheet, lengthSide: v })}
+                      options={[{ value: 'bottom', label: 'Bottom wall' }, { value: 'top', label: 'Top wall' }]} />
+                  </div>
+                )}
+                <p className="m-calc-note">
+                  Wall centre to wall centre, the same as the area. {room.fromWalls ? 'Rooms next to the moved wall grow or shrink with it.' : ''}
+                </p>
+              </>
+            ) : (
+              <p className="m-calc-note">This room is not a rectangle, so its size is changed by moving its walls or corners.</p>
+            )}
+          </Sheet>
+        );
+      })()}
+
+      <ConfirmSheet
+        open={!!confirmRoomDelete}
+        title={`Delete ${(() => { const r = editorState.rooms.find(x => x.id === confirmRoomDelete); return r ? r.label || r.roomType : 'this room'; })()}?`}
+        message="The room's own walls are removed with it. Walls it shares with other rooms stay, so the rooms next to it are not opened up. You can undo this."
+        confirmLabel="Delete room"
+        danger
+        onConfirm={() => {
+          const id = confirmRoomDelete;
+          setConfirmRoomDelete(null);
+          if (id) applyEdit(deleteRoom(editorState, id, unit, newPlanId));
+        }}
+        onCancel={() => setConfirmRoomDelete(null)}
+      />
 
       {/* ── Exact wall size: length, thickness and position, typed in ───────── */}
       <Sheet
@@ -11190,13 +11655,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <div className="fp-copilot-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div className="fp-copilot-badge-icon">
-                  <Sparkles size={20} color="#b45309" />
+                  <Sparkles size={20} color="#334155" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1c1917' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
                     AI Floor Plan Copilot
                   </h3>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#57534e' }}>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#475569' }}>
                     Auto-straightens zig-zag walls, heals broken gaps & auto-generates rooms
                   </p>
                 </div>
@@ -11219,7 +11684,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1c1917' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
                     Plan Geometry Health
                   </span>
                   <span style={{ fontSize: '0.75rem', fontWeight: 600, color: geometryReport.healthScore >= 80 ? '#15803d' : '#b45309' }}>
@@ -11237,7 +11702,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     }}
                   />
                 </div>
-                <div style={{ fontSize: '0.78rem', color: '#57534e', marginTop: 6 }}>
+                <div style={{ fontSize: '0.78rem', color: '#475569', marginTop: 6 }}>
                   {geometryReport.summaryMessage}
                 </div>
               </div>
@@ -11256,10 +11721,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ fontSize: '1.4rem' }}>🪄</div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1c1917' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0f172a' }}>
                     1-Click Auto-Heal & Generate Rooms
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#44403c' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#334155' }}>
                     Fixes all zig-zags, welds gaps, and automatically creates furnished rooms!
                   </div>
                 </div>
@@ -11395,6 +11860,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         </div>
       )}
 
+      {/* ── Building Mistry AI: proposals previewed on the plan, applied on Apply ── */}
+      <MistryAiSheet
+        open={isMistryAiOpen}
+        onClose={() => setIsMistryAiOpen(false)}
+        state={editorState}
+        unit={unit}
+        plot={{ length: plan.plotLength, width: plan.plotWidth }}
+        selected={selectedElement}
+        newId={newPlanId}
+        onPreview={next => setAiPreview(next)}
+        onApply={next => applyEdit(
+          { ok: true, state: next, summary: 'Building Mistry AI change applied', changes: [], warnings: [] },
+          selectedElement && [...next.walls, ...next.rooms].some(e => e.id === selectedElement.id) ? selectedElement : null,
+        )}
+        onUndo={handleUndo}
+      />
+
       {/* ── AI Floor Plan Assistant Side Panel / Mobile Bottom Sheet ── */}
       <AIAssistantPanel
         isOpen={isAiAssistantOpen}
@@ -11523,7 +12005,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
             {/* Floor Levels Switcher */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#57534e', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Floor Levels
               </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -11625,7 +12107,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 }}
               >
                 <div className="fp-mobile-grid-btn-icon"><Layers size={18} /></div>
-                <span>CAD Layers</span>
+                <span>Layers</span>
               </button>
 
               <button
@@ -11637,7 +12119,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 }}
               >
                 <div className="fp-mobile-grid-btn-icon"><Settings size={18} /></div>
-                <span>CAD Settings</span>
+                <span>Drawing settings</span>
               </button>
 
               <button
@@ -11682,7 +12164,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           <div className="fp-mobile-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="CAD Shapes">
             <div className="fp-mobile-sheet-handle" />
             <div className="fp-mobile-sheet-header">
-              <span className="fp-mobile-sheet-title">CAD Shapes & Geometry</span>
+              <span className="fp-mobile-sheet-title">Room shapes</span>
               <button
                 type="button"
                 className="fp-mobile-sheet-close"
@@ -11705,7 +12187,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="fp-mobile-grid-btn-icon"><Square size={18} /></div>
                 <div>
                   <div>Rectangle Room</div>
-                  <div style={{ fontSize: '0.68rem', color: '#57534e' }}>14 × 12 {unit === 'feet' ? 'ft' : 'm'} standard</div>
+                  <div style={{ fontSize: '0.68rem', color: '#475569' }}>14 × 12 {unit === 'feet' ? 'ft' : 'm'} standard</div>
                 </div>
               </button>
 
@@ -11720,7 +12202,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="fp-mobile-grid-btn-icon"><Square size={18} /></div>
                 <div>
                   <div>Square Room</div>
-                  <div style={{ fontSize: '0.68rem', color: '#57534e' }}>10 × 10 {unit === 'feet' ? 'ft' : 'm'} room</div>
+                  <div style={{ fontSize: '0.68rem', color: '#475569' }}>10 × 10 {unit === 'feet' ? 'ft' : 'm'} room</div>
                 </div>
               </button>
 
@@ -11737,7 +12219,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="fp-mobile-grid-btn-icon"><Shapes size={18} /></div>
                 <div>
                   <div>Circle / Round</div>
-                  <div style={{ fontSize: '0.68rem', color: '#57534e' }}>Circular pillar or round space</div>
+                  <div style={{ fontSize: '0.68rem', color: '#475569' }}>Circular pillar or round space</div>
                 </div>
               </button>
 
@@ -11755,7 +12237,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="fp-mobile-grid-btn-icon"><Pencil size={18} /></div>
                 <div>
                   <div>Polygon / L-Shape</div>
-                  <div style={{ fontSize: '0.68rem', color: '#57534e' }}>Multi-corner room geometry</div>
+                  <div style={{ fontSize: '0.68rem', color: '#475569' }}>Multi-corner room geometry</div>
                 </div>
               </button>
 
@@ -11771,7 +12253,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                 <div className="fp-mobile-grid-btn-icon"><Layers size={18} /></div>
                 <div>
                   <div>Browse Full Shape Library</div>
-                  <div style={{ fontSize: '0.68rem', color: '#57534e' }}>Access 50+ architectural symbols & room presets</div>
+                  <div style={{ fontSize: '0.68rem', color: '#475569' }}>More than 50 symbols and ready room shapes</div>
                 </div>
               </button>
             </div>
@@ -11798,7 +12280,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
             {/* Searchable Tool Picker (Priority 3) */}
             <div className="fp-mobile-search-bar">
-              <Search size={16} color="#78716c" />
+              <Search size={16} color="#64748b" />
               <input
                 type="text"
                 value={mobileToolSearch}
@@ -11813,12 +12295,44 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                   aria-label="Clear search"
                 >
-                  <X size={14} color="#78716c" />
+                  <X size={14} color="#64748b" />
                 </button>
               )}
             </div>
 
             <div className="fp-mobile-sheet-grid">
+              {(!mobileToolSearch || 'split cut wall segment'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className={`fp-mobile-grid-btn ${activeTool === 'split' ? 'active' : ''}`}
+                  id="fp-mobile-tool-split"
+                  onClick={() => {
+                    setActiveTool('split');
+                    setSelectedElement(null);
+                    setShowMobileMoreTools(false);
+                    onNotify('Split: tap a wall where it should be cut into two walls.', 'info');
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Split size={18} /></div>
+                  <span>Split wall</span>
+                </button>
+              )}
+
+              {(!mobileToolSearch || 'measurement check dimension correction align mm'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  className="fp-mobile-grid-btn"
+                  id="fp-mobile-tool-checks"
+                  onClick={() => {
+                    setShowMobileMoreTools(false);
+                    setShowChecks(true);
+                  }}
+                >
+                  <div className="fp-mobile-grid-btn-icon"><Ruler size={18} /></div>
+                  <span>Check measurements{alignmentIssues.length ? ` (${alignmentIssues.length})` : ''}</span>
+                </button>
+              )}
+
               {(!mobileToolSearch || 'room shapes library'.includes(mobileToolSearch.toLowerCase())) && (
                 <button
                   type="button"
@@ -11918,7 +12432,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                     setShowMobileMoreTools(false);
                   }}
                 >
-                  <div className="fp-mobile-grid-btn-icon" style={{ color: '#c2410c' }}><PenTool size={18} /></div>
+                  <div className="fp-mobile-grid-btn-icon" style={{ color: '#1e293b' }}><PenTool size={18} /></div>
                   <span>Sketch Walls</span>
                 </button>
               )}
@@ -12025,8 +12539,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
             <div className="fp-mobile-sheet-grid">
               <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '0.68rem', color: '#57534e' }}>TOTAL FLOOR AREA</span>
-                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#c2410c' }}>
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>TOTAL FLOOR AREA</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1e293b' }}>
                   {totalFloorArea.toFixed(1)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}
                 </span>
               </div>
@@ -12039,35 +12553,35 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
                   setShowRoomScheduleModal(true);
                 }}
               >
-                <span style={{ fontSize: '0.68rem', color: '#57534e' }}>ROOMS SCHEDULE</span>
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>ROOMS SCHEDULE</span>
                 <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#15803d' }}>
                   {editorState.rooms.length} Rooms (View)
                 </span>
               </div>
 
               <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '0.68rem', color: '#57534e' }}>WALLS COUNT</span>
-                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1c1917' }}>
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>WALLS COUNT</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
                   {editorState.walls.length} Walls
                 </span>
               </div>
 
               <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '0.68rem', color: '#57534e' }}>COLUMNS COUNT</span>
-                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1c1917' }}>
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>COLUMNS COUNT</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
                   {editorState.columns.length} Columns
                 </span>
               </div>
 
               <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '0.68rem', color: '#57534e' }}>OPENINGS</span>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#1c1917' }}>
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>OPENINGS</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a' }}>
                   {editorState.doors.length} Doors • {editorState.windows.length} Windows
                 </span>
               </div>
 
               <div className="fp-mobile-grid-btn" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: '0.68rem', color: '#57534e' }}>SAVE STATUS</span>
+                <span style={{ fontSize: '0.68rem', color: '#475569' }}>SAVE STATUS</span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700, color: saveStatus === 'saved' ? '#15803d' : '#b45309' }}>
                   {saveStatus === 'saved' ? 'Saved to local database' : 'Unsaved changes pending'}
                 </span>

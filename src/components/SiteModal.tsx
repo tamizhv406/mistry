@@ -397,7 +397,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
                   borderRadius: '10px',
                   overflow: 'hidden',
                   border: '1px solid var(--border-light)',
-                  backgroundColor: '#f5f5f4',
+                  backgroundColor: '#f1f5f9',
                   flexShrink: 0,
                   display: 'flex',
                   alignItems: 'center',

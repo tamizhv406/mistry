@@ -4,6 +4,8 @@ import './index.css';
 import './styles/mobile.css';
 import './styles/ai-surfaces.css';
 import './styles/admin-portal.css';
+import './styles/planner-tools.css';
+import './styles/design-system.css';
 import App from './App.tsx';
 
 // Register Service Worker for PWA offline capabilities

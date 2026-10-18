@@ -124,8 +124,8 @@ const editorSrc = readFileSync(resolve('src/views/FloorPlanEditorView.tsx'), 'ut
 const cssSrc = readFileSync(resolve('src/index.css'), 'utf8');
 
 // AI Live HUD & Toggle
-assert(editorSrc.includes('id="fp-ai-live-hud"'), 'Canvas contains AI Live Assist HUD');
-assert(editorSrc.includes('isAiLiveAssistActive'), 'State tracks isAiLiveAssistActive toggle');
+assert(!editorSrc.includes('id="fp-ai-live-hud"'), 'No AI switch floats on the drawing (one Building Mistry AI button instead)');
+assert(editorSrc.includes('const [isAiLiveAssistActive, setIsAiLiveAssistActive] = useState(false);'), 'Live stroke reading is off by default');
 assert(editorSrc.includes('fp-ai-feedback-toast'), 'Canvas renders real-time AI understanding toast');
 
 // AI Smart Draw Tool

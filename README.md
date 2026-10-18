@@ -10,7 +10,9 @@ Each **project** keeps its own floor plans, workers and attendance, materials an
 | Area | What you can do |
 | --- | --- |
 | **Home** | Pick a project. See today's attendance, today's expenses, pending salary, advances, stock and recent activity. |
-| **Floor Planner** | Draw walls by tapping or dragging, with live lengths and snapping. Rooms appear automatically when walls close, with exact area. Doors and windows sit on walls. Several floors per plan. Undo/redo, autosave, 3D preview, picture / print / plan-file export. |
+| **Floor Planner** | Draw walls by tapping or dragging, with a live dimension line (ft-in, metres and mm) and snapping. Erase only part of a wall, split a wall, drag measurement labels clear. A measurement check shows small differences (for example 150 mm and 140 mm from the same line) and lines walls up only when you pick the right measurement. Rooms appear automatically when walls close, with exact area; name, type, size and delete them in one sheet. Doors and windows sit on walls. Several floors per plan. Undo/redo, autosave, 3D preview, picture / print / plan-file export. |
+| **Building Mistry AI** | In the Floor Planner: "Fix my plan", "Make this bedroom 10 feet wide", "Add a bathroom". Each request is previewed on the plan and changes it only on Apply, with Undo. |
+| **Building Calculator** | Four plain questions (size, floors, house type, sand), then approximate quantities, material and labour cost and a total, with what is not included. |
 | **Attendance & Salary** | One tap per worker: Present, Half Day, Leave, Absent, Overtime. Correct any past day. Each worker has a calendar, exact date lists per status, and a salary breakdown with every payment and advance. |
 | **Materials** | Record purchases (cement by brand and type), usage, returns and adjustments. Stock balance and full movement history per item. |
 | **Tools** | Tool catalog with photographs. Issue tools to people and record returns with date, time and condition. |
@@ -67,8 +69,18 @@ Usage can not exceed stock. A wrong entry is cancelled with a reason and stays v
 - Moving a corner moves every wall that meets there, so joined walls stay joined.
 - A door or window must be on a wall, fit within it, and not overlap another opening.
 - Each floor has its own undo history. All floors are saved together; changes are saved automatically, and again when you leave the editor or the app goes to the background.
-- Touch: two fingers always zoom and pan; a placing tool acts on a tap, never on a drag.
+- Touch: two fingers always zoom and pan; a placing tool acts on a tap, never on a drag. The eraser and Split also act on a tap only.
+- Eraser: a tap erases only the part of a wall between the two nearest joints; the walls it meets are not touched. Split cuts a wall into two walls. Both keep doors and windows exactly where they are.
+- No measured dimension is changed silently: the measurement check, "Fix my plan" and every AI change are shown first and applied only when you choose.
+- Tips and tutorials are off by default (Drawing settings → Show tips).
 - A plan drawn here is a **conceptual layout**. It is not a certified structural or architectural drawing; verify all dimensions on site.
+- Geometry rules in detail: [docs/FLOOR_PLANNER_GEOMETRY.md](docs/FLOOR_PLANNER_GEOMETRY.md).
+
+## Building Calculator notes
+
+- The questions: square feet of one floor, number of floors, **Pillar & Beam House** or **Pillar-Free Traditional House**, and **Full M-Sand** or **River Sand for Plastering Only**.
+- Quantities are rule-of-thumb rates per sq.ft of built-up area (`src/utils/estimator.ts`, with sources). Concrete and steel grades do not change them, so they are not asked for: the defaults (M20, Fe500, `ENGINEERING_DEFAULTS` in `src/domain/estimate.ts`) are written only into the saved estimate and the exported file, under "For your engineer".
+- The result says "Approximate estimate only. Actual cost may vary." and lists what is not included (tiles, paint, doors, windows, electrical work, plumbing and more). It is not a structural design, an engineer's approval or a quote.
 
 ## Data and privacy
 

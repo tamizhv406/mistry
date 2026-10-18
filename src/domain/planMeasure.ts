@@ -205,6 +205,16 @@ export function formatDimension(value: number, unit: FloorPlanUnit): string {
   }
 }
 
+/**
+ * The same length in the other units people use on site, for the live label while drawing:
+ * a feet plan shows metres and millimetres, a metre plan shows millimetres and feet-inches.
+ */
+export function formatOtherUnits(value: number, unit: FloorPlanUnit): string {
+  const metres = feetBased(unit) ? value * 0.3048 : value;
+  const mm = Math.round(metres * 1000).toLocaleString('en-IN');
+  return feetBased(unit) ? `${metres.toFixed(2)} m · ${mm} mm` : `${mm} mm · ${formatDimension(metres / 0.3048, 'feet')}`;
+}
+
 /** A length as editable text that `parseLengthInput` reads back to the same value. */
 export function formatLengthForInput(value: number, unit: FloorPlanUnit): string {
   switch (unit) {

@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Search, X, Star, Clock, ChevronDown, ChevronRight,
-  Plus, Layers, Trash2, HelpCircle, Filter, ArrowLeft
+  Plus, Layers, Trash2, HelpCircle, Filter, ArrowLeft,
+  LayoutTemplate, Sparkles, Building2, Check
 } from 'lucide-react';
 import {
   SHAPE_CATEGORIES, SHAPE_LIBRARY_CATALOG,
@@ -11,6 +12,7 @@ import {
 import type { ShapeCategory, ShapeLibraryItem } from '../services/shapeLibraryCatalog';
 import { ArchitecturalSymbol } from './visuals/ArchitecturalSymbols';
 import type { User, FloorPlanUnit } from '../db/types';
+import { STARTER_TEMPLATES, type FloorPlanStarterTemplate } from '../services/floorPlanService';
 
 interface FloorPlanShapeLibraryProps {
   user: User;
@@ -18,12 +20,13 @@ interface FloorPlanShapeLibraryProps {
   isOpen: boolean;
   onToggleOpen: () => void;
   onSelectShape: (item: ShapeLibraryItem) => void;
+  onSelectTemplate?: (template: FloorPlanStarterTemplate) => void;
   selectedCanvasElement?: { type: string; id: string } | null;
   onSaveSelectionAsCustom?: (name: string) => void;
   className?: string;
 }
 
-type TabType = 'all' | 'favorites' | 'recents' | 'custom';
+type TabType = 'templates' | 'all' | 'favorites' | 'recents' | 'custom';
 
 export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
   user,
@@ -31,6 +34,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
   isOpen,
   onToggleOpen,
   onSelectShape,
+  onSelectTemplate,
   selectedCanvasElement,
   onSaveSelectionAsCustom,
   className = '',
@@ -39,6 +43,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('all');
+  const [templateCategory, setTemplateCategory] = useState<string>('all');
 
   // Dedicated Category Filter ('all' or specific ShapeCategory)
   const [selectedCategory, setSelectedCategory] = useState<ShapeCategory | 'all'>('all');
@@ -51,6 +56,84 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
   const [customItems, setCustomItems] = useState<ShapeLibraryItem[]>([]);
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customShapeName, setCustomShapeName] = useState('');
+
+  // Canva-Style Starter Templates search & filter
+  const searchedTemplates = useMemo(() => {
+    let list = STARTER_TEMPLATES;
+    if (templateCategory !== 'all') {
+      list = list.filter(t => t.bhk.toLowerCase().includes(templateCategory.toLowerCase()));
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        t =>
+          t.name.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.bhk.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [templateCategory, searchQuery]);
+
+  // Scaled schematic SVG thumbnail for each template card
+  const renderTemplateThumbnail = (tpl: FloorPlanStarterTemplate) => {
+    const pLen = tpl.plotLength || 40;
+    const pWid = tpl.plotWidth || 30;
+    return (
+      <svg
+        viewBox={`-2 -2 ${pLen + 4} ${pWid + 4}`}
+        className="fp-tpl-card-svg"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <rect
+          x={0}
+          y={0}
+          width={pLen}
+          height={pWid}
+          fill="#f8fafc"
+          stroke="#94a3b8"
+          strokeWidth="0.75"
+          strokeDasharray="2,2"
+          rx="1"
+        />
+        {tpl.rooms.map((r, idx) => (
+          <g key={r.id || idx}>
+            <rect
+              x={r.x}
+              y={r.y}
+              width={r.width}
+              height={r.height}
+              fill="rgba(241, 245, 249, 0.95)"
+              stroke="#cbd5e1"
+              strokeWidth="0.5"
+            />
+            <text
+              x={r.x + r.width / 2}
+              y={r.y + r.height / 2 + 1}
+              fontSize={Math.max(2.2, Math.min(3.6, r.width / 3.8))}
+              textAnchor="middle"
+              fill="#475569"
+              fontWeight="600"
+            >
+              {r.label.split(' ')[0]}
+            </text>
+          </g>
+        ))}
+        {tpl.walls.map((w, idx) => (
+          <line
+            key={w.id || idx}
+            x1={w.x1}
+            y1={w.y1}
+            x2={w.x2}
+            y2={w.y2}
+            stroke="#1e293b"
+            strokeWidth={w.wallType === 'exterior' ? '1.4' : '0.8'}
+            strokeLinecap="round"
+          />
+        ))}
+      </svg>
+    );
+  };
 
   // Load favorites & recents on mount or user change
   useEffect(() => {
@@ -237,13 +320,24 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
         <div className="fp-shape-tabs" role="tablist">
           <button
             type="button"
+            className={`fp-shape-tab ${activeTab === 'templates' ? 'active' : ''}`}
+            onClick={() => setActiveTab('templates')}
+            title="Canva-style Architectural Floor Plan Templates"
+            id="fp-shape-tab-templates"
+          >
+            <LayoutTemplate size={12} />
+            <span>Templates</span>
+          </button>
+          <button
+            type="button"
             className={`fp-shape-tab ${activeTab === 'all' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('all');
             }}
-            title="All Categories"
+            title="All Shape Categories"
+            id="fp-shape-tab-all"
           >
-            All
+            All Shapes
           </button>
           <button
             type="button"
@@ -283,46 +377,74 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
         </div>
 
         {/* ── Category Quick Filter Pills Bar ─────────── */}
-        {/* Allows opening each shape category individually on its own */}
-        <div className="fp-shape-cat-pills-wrap">
-          <div className="fp-shape-cat-pills">
-            <button
-              type="button"
-              className={`fp-shape-cat-pill ${selectedCategory === 'all' ? 'active' : ''}`}
-              onClick={() => {
-                setSelectedCategory('all');
-                if (!activeAccordionCategory) setActiveAccordionCategory('Floor Plan');
-              }}
-              title="Show all categories list"
-            >
-              All Types
-            </button>
-            {SHAPE_CATEGORIES.map(cat => {
-              const count = (shapesByCategory[cat.id] || []).length;
-              const isSelected = selectedCategory === cat.id;
-              return (
+        {activeTab === 'templates' ? (
+          <div className="fp-shape-cat-pills-wrap">
+            <div className="fp-shape-cat-pills">
+              {[
+                { id: 'all', label: 'All Plans' },
+                { id: '1 BHK', label: '1 BHK' },
+                { id: '2 BHK', label: '2 BHK' },
+                { id: '3 BHK', label: '3 BHK' },
+                { id: 'Studio', label: 'Studio' },
+                { id: 'Commercial', label: 'Office' },
+              ].map(tag => (
                 <button
-                  key={cat.id}
+                  key={tag.id}
                   type="button"
-                  className={`fp-shape-cat-pill ${isSelected ? 'active' : ''}`}
-                  onClick={() => {
-                    setSelectedCategory(cat.id);
-                    setActiveAccordionCategory(cat.id);
-                  }}
-                  title={`Open ${cat.label} exclusively (${count} shapes)`}
+                  className={`fp-shape-cat-pill ${templateCategory === tag.id ? 'active' : ''}`}
+                  onClick={() => setTemplateCategory(tag.id)}
                 >
-                  <span>{cat.icon}</span>
-                  <span>{cat.label.replace(/^\d+\.\s*/, '')}</span>
-                  {count > 0 && <span className="fp-shape-cat-pill-count">{count}</span>}
+                  <span>{tag.label}</span>
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="fp-shape-cat-pills-wrap">
+            <div className="fp-shape-cat-pills">
+              <button
+                type="button"
+                className={`fp-shape-cat-pill ${selectedCategory === 'all' ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedCategory('all');
+                  if (!activeAccordionCategory) setActiveAccordionCategory('Floor Plan');
+                }}
+                title="Show all categories list"
+              >
+                All Types
+              </button>
+              {SHAPE_CATEGORIES.map(cat => {
+                const count = (shapesByCategory[cat.id] || []).length;
+                const isSelected = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`fp-shape-cat-pill ${isSelected ? 'active' : ''}`}
+                    onClick={() => {
+                      setSelectedCategory(cat.id);
+                      setActiveAccordionCategory(cat.id);
+                    }}
+                    title={`Open ${cat.label} exclusively (${count} shapes)`}
+                  >
+                    <span>{cat.icon}</span>
+                    <span>{cat.label.replace(/^\d+\.\s*/, '')}</span>
+                    {count > 0 && <span className="fp-shape-cat-pill-count">{count}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* ── Subtitle Info / Single Category Banner ───── */}
         <div className="fp-shape-status-row">
-          {selectedCategory !== 'all' ? (
+          {activeTab === 'templates' ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontSize: '0.72rem', color: '#64748b' }}>
+              <span>{searchedTemplates.length} verified architectural plans • 1-click load</span>
+              <span style={{ fontSize: '0.68rem', color: '#0284c7', fontWeight: 600 }}>Canva Style</span>
+            </div>
+          ) : selectedCategory !== 'all' ? (
             <div className="fp-shape-single-cat-badge">
               <span>Showing <strong>{selectedCategory}</strong> ({shapesByCategory[selectedCategory]?.length || 0} items)</span>
               <button
@@ -334,9 +456,9 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontSize: '0.72rem', color: '#78716c' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', fontSize: '0.72rem', color: '#64748b' }}>
               <span>{totalResultsCount} shapes • Click option to open</span>
-              <span style={{ fontSize: '0.68rem', color: '#c2410c' }}>1 open at a time</span>
+              <span style={{ fontSize: '0.68rem', color: '#1e293b' }}>1 open at a time</span>
             </div>
           )}
         </div>
@@ -365,7 +487,54 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
         className="fp-shape-lib-content"
         onWheel={e => e.stopPropagation()}
       >
-        {totalResultsCount === 0 ? (
+        {activeTab === 'templates' ? (
+          <div className="fp-canva-templates-list">
+            {searchedTemplates.length === 0 ? (
+              <div className="fp-shape-empty-state">
+                <HelpCircle size={28} className="fp-shape-empty-icon" />
+                <p className="fp-shape-empty-title">No templates found</p>
+                <p className="fp-shape-empty-sub">
+                  {searchQuery ? `No layout matches "${searchQuery}"` : 'No templates match this filter'}
+                </p>
+              </div>
+            ) : (
+              searchedTemplates.map(tpl => (
+                <div key={tpl.id} className="fp-canva-tpl-card" id={`canva-tpl-${tpl.id}`}>
+                  <div
+                    className="fp-canva-tpl-preview"
+                    onClick={() => onSelectTemplate?.(tpl)}
+                    title={`Click to load ${tpl.name}`}
+                  >
+                    {renderTemplateThumbnail(tpl)}
+                    <span className="fp-canva-tpl-bhk-tag">{tpl.bhk}</span>
+                  </div>
+                  <div className="fp-canva-tpl-body">
+                    <h4 className="fp-canva-tpl-title">{tpl.name}</h4>
+                    <p className="fp-canva-tpl-desc">{tpl.description}</p>
+                    <div className="fp-canva-tpl-meta">
+                      <span className="fp-canva-tpl-size">
+                        {tpl.plotLength} × {tpl.plotWidth} {tpl.unit === 'feet' ? 'ft' : 'm'}
+                      </span>
+                      <span>•</span>
+                      <span>{tpl.rooms.length} rooms</span>
+                      <span>•</span>
+                      <span>{tpl.walls.length} walls</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="fp-canva-tpl-use-btn"
+                      onClick={() => onSelectTemplate?.(tpl)}
+                      id={`use-tpl-btn-${tpl.id}`}
+                    >
+                      <Sparkles size={13} />
+                      <span>Use Template</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        ) : totalResultsCount === 0 ? (
           <div className="fp-shape-empty-state">
             <HelpCircle size={28} className="fp-shape-empty-icon" />
             <p className="fp-shape-empty-title">No shapes found</p>
@@ -410,7 +579,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
                         onClick={e => handleToggleFavorite(e, item.id)}
                         title={isFav ? 'Remove from Favorites' : 'Add to Favorites'}
                       >
-                        <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#b45309' : '#57534e'} />
+                        <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#b45309' : '#475569'} />
                       </button>
                       {item.isCustom && (
                         <button
@@ -495,7 +664,7 @@ export const FloorPlanShapeLibrary: React.FC<FloorPlanShapeLibraryProps> = ({
                               onClick={e => handleToggleFavorite(e, item.id)}
                               title={isFav ? 'Remove from Favorites' : 'Add to Favorites'}
                             >
-                              <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#b45309' : '#57534e'} />
+                              <Star size={12} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#b45309' : '#475569'} />
                             </button>
                             {item.isCustom && (
                               <button

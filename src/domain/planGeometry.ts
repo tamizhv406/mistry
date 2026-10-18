@@ -358,18 +358,19 @@ export function syncRoomsWithWalls(
   const removed: FloorPlanRoom[] = [];
   let changed = false;
 
-  const claim = (room: FloorPlanRoom): number => {
+  // The walls moved and the room's centre is no longer inside any space: it takes the nearest
+  // free space if that is close to where the room was. Only used once every room whose centre
+  // is still inside a space has claimed it, so a room whose own space was erased can not take
+  // over the space of the room next door.
+  const nearestFree = (room: FloorPlanRoom): number => {
     const c = centreOf(room);
-    let idx = faces.findIndex((f, i) => !taken.has(i) && pointInPolygon(c, f.points));
-    if (idx < 0) {
-      // The walls moved: take the nearest free space if it is close to where the room was.
-      let best = Infinity;
-      faces.forEach((f, i) => {
-        if (taken.has(i)) return;
-        const d = Math.hypot(f.centroid.x - c.x, f.centroid.y - c.y);
-        if (d < best && d <= Math.max(room.width, room.height)) { best = d; idx = i; }
-      });
-    }
+    let idx = -1;
+    let best = Infinity;
+    faces.forEach((f, i) => {
+      if (taken.has(i)) return;
+      const d = Math.hypot(f.centroid.x - c.x, f.centroid.y - c.y);
+      if (d < best && d <= Math.max(room.width, room.height)) { best = d; idx = i; }
+    });
     return idx;
   };
 
@@ -393,9 +394,22 @@ export function syncRoomsWithWalls(
     next.push(room);
   }
 
+  const claimed = new Map<string, number>();
   for (const room of rooms) {
     if (!room.fromWalls) continue;
-    const idx = claim(room);
+    const c = centreOf(room);
+    const idx = faces.findIndex((f, i) => !taken.has(i) && pointInPolygon(c, f.points));
+    if (idx >= 0) { taken.add(idx); claimed.set(room.id, idx); }
+  }
+  for (const room of rooms) {
+    if (!room.fromWalls || claimed.has(room.id)) continue;
+    const idx = nearestFree(room);
+    if (idx >= 0) { taken.add(idx); claimed.set(room.id, idx); }
+  }
+
+  for (const room of rooms) {
+    if (!room.fromWalls) continue;
+    const idx = claimed.get(room.id) ?? -1;
     if (idx < 0) {
       removed.push(room);
       changed = true;
@@ -613,46 +627,5 @@ export function reanchorOpenings<T extends FloorPlanDoor | FloorPlanWindow>(
   return { openings: changed ? kept : openings, removed, changed };
 }
 
-/**
- * Partial Eraser helper: Splits a wall into two connected wall segments at point (px, py).
- * If the click is within endMargin of either end, the wall is not split.
- * Returns the two new wall segments [w1, w2] or null if the split point is too close to endpoints.
- */
-export function splitWallAtPoint(
-  wall: FloorPlanWall,
-  px: number,
-  py: number,
-  newIdFn: () => string,
-  endMargin: number = 0.5
-): [FloorPlanWall, FloorPlanWall] | null {
-  const len = wallLengthOf(wall);
-  if (len <= endMargin * 2) return null;
-
-  const ux = (wall.x2 - wall.x1) / len;
-  const uy = (wall.y2 - wall.y1) / len;
-
-  // Project point onto the wall line
-  const t = (px - wall.x1) * ux + (py - wall.y1) * uy;
-  if (t <= endMargin || t >= len - endMargin) {
-    return null;
-  }
-
-  const splitX = round4(wall.x1 + ux * t);
-  const splitY = round4(wall.y1 + uy * t);
-
-  const w1: FloorPlanWall = {
-    ...wall,
-    id: wall.id, // keep original id for first segment
-    x2: splitX,
-    y2: splitY,
-  };
-
-  const w2: FloorPlanWall = {
-    ...wall,
-    id: newIdFn(),
-    x1: splitX,
-    y1: splitY,
-  };
-
-  return [w1, w2];
-}
+// Splitting and erasing part of a wall: see splitWall and eraseWallSegment in planEdit.ts,
+// which also keep doors and windows on the part they stand on.

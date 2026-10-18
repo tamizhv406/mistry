@@ -20,6 +20,45 @@ import {
 
 export type LengthUnit = 'ft' | 'm';
 
+// ---------------------------------------------------------------------------
+// The calculator's plain-language choices
+// ---------------------------------------------------------------------------
+
+/**
+ * The two house types the calculator offers, in the words people use on site. The rule-of-
+ * thumb rates are for pillar & beam (RCC-framed) houses; a pillar-free (load-bearing) house is
+ * calculated with the same rates and the result says which two rates differ in practice.
+ */
+export const HOUSE_TYPES: { value: StructureType; label: string; detail: string }[] = [
+  {
+    value: 'Framed Structure (RCC)',
+    label: 'Pillar & Beam House',
+    detail: 'Concrete pillars and beams carry the house. Suitable for planning upper floors, with professional structural design.',
+  },
+  {
+    value: 'Load Bearing',
+    label: 'Pillar-Free Traditional House',
+    detail: 'Thick walls carry the house. Only when it suits your design and an engineer has checked it.',
+  },
+];
+
+export const houseTypeLabel = (s: StructureType) => HOUSE_TYPES.find(h => h.value === s)?.label
+  ?? (s === 'Steel Frame' ? 'Steel frame building' : s === 'Composite' ? 'Steel and concrete building' : s);
+
+/**
+ * Engineering defaults used for every estimate and kept off the calculator screens.
+ *
+ * The quantities come from rule-of-thumb rates per sq.ft of built-up area, which do not depend
+ * on the concrete or steel grade, so nobody needs to choose one to get an estimate. The grades
+ * below are what those rates assume for an ordinary house (M20 concrete, Fe500 TMT steel).
+ * They are stored with a saved estimate and written in the exported file under "For your
+ * engineer", never presented as a design: the engineer sets the real grades.
+ */
+export const ENGINEERING_DEFAULTS: { concreteGrade: ConcreteGrade; steelGrade: SteelGrade } = { concreteGrade: 'M20', steelGrade: 'Fe500' };
+
+/** Finishes and services the material quantities do not cover, one per line. */
+export const FINISHES_NOT_COUNTED = ['Tiles', 'Paint', 'Doors', 'Windows', 'Electrical work', 'Plumbing'];
+
 /** One foot is exactly 0.3048 m. */
 export const FT_PER_M = 1 / 0.3048;
 
@@ -225,7 +264,10 @@ export interface EstimateOutcome {
   total: number;
   costPerSqFt: number;
   examplePricesLeft: number;
+  /** Shown on the result screen, in plain words. */
   assumptions: string[];
+  /** Defaults behind the rates (concrete and steel grade). Kept off the screens: saved estimate and file only. */
+  engineerNotes: string[];
   notIncluded: string[];
   warnings: string[];
   disclaimer: string;
@@ -302,9 +344,12 @@ export function buildEstimate(input: EstimateInput): { ok: true; value: Estimate
 
   const warnings = [...areaCheck.warnings];
   if (input.structureType === 'Load Bearing') {
-    warnings.push('The rates are for RCC-framed houses. A load-bearing house normally needs less steel and more bricks: change those two rates to your engineer\'s figures.');
+    warnings.push('These rates are for a pillar & beam house. A pillar-free traditional house usually needs less steel and more bricks: ask your engineer for those two figures.');
+    if (input.floors > 2) {
+      warnings.push('For more than two floors, a pillar & beam house with professional structural design is the usual choice. Check with an engineer before planning a pillar-free house this tall.');
+    }
   } else if (input.structureType !== 'Framed Structure (RCC)') {
-    warnings.push(`The rates are for RCC-framed houses and are not reliable for a ${input.structureType.toLowerCase()} building. Use your engineer's rates.`);
+    warnings.push(`These rates are for a pillar & beam house and are not reliable for a ${houseTypeLabel(input.structureType).toLowerCase()}. Use your engineer's figures.`);
   }
   if (NON_HOUSE.test(input.buildingType)) {
     warnings.push('The rates are planning figures for houses. For this kind of building treat the result as a rough guide only.');
@@ -325,20 +370,20 @@ export function buildEstimate(input: EstimateInput): { ok: true; value: Estimate
     areas.plotSqFt === null
       ? 'The plot size was not given, so it could not be checked against the building.'
       : `The plot is ${fmt(areas.plotSqFt)} sq.ft; the building covers ${areas.coveragePct}% of it. The plot area is not used in the quantities.`,
-    `Each quantity = built-up area × a rate per sq.ft. The rates are published planning figures for RCC-framed houses; ${input.quality === 'Custom' ? 'Standard' : input.quality} takes ${LEVEL_WORD[input.quality]} of each published range.`,
+    `Each quantity = built-up area × a rate per sq.ft. The rates are published planning figures for pillar & beam houses; ${input.quality === 'Custom' ? 'Standard' : input.quality} takes ${LEVEL_WORD[input.quality]} of each published range.`,
     ratesChanged.length
       ? `You changed ${ratesChanged.length === 1 ? 'this rate' : 'these rates'}: ${ratesChanged.map(f => RATE_FIELDS.find(r => r.field === f)?.label).join(', ')}.`
       : 'No rate was changed from the published figure.',
     calc.factorsUsed.sandCftPerSqFt > 0
-      ? `Sand: ${Math.round(RIVER_SAND_SHARE * 100)}% is taken as river sand for plastering and the rest as M-sand, unless you changed the two rates. This split is the app's own assumption.`
-      : 'All sand is taken as M-sand.',
-    `Concrete grade ${input.concreteGrade}, steel grade ${input.steelGrade} and the structure type are recorded on the estimate. They do not change the quantities.`,
+      ? `Sand: ${Math.round(RIVER_SAND_SHARE * 100)}% is taken as river sand for plastering and the rest as M-sand (crusher sand), unless you changed the two rates. This split is the app's own assumption.`
+      : 'All sand is taken as M-sand (crusher sand).',
+    `House type: ${houseTypeLabel(input.structureType)}. It does not change the quantities.`,
     'No wastage is added. When ordering, sources suggest about 5–10% extra, more for bricks and tiles.',
     `Labour = built-up area × ₹${fmt(input.prices.labourPerSqFt)} per sq.ft.`,
   ];
 
   const notIncluded = [
-    ...(finishingCost > 0 ? [] : ['Finishes and services: tiles, paint, doors and windows, electrical, plumbing']),
+    ...(finishingCost > 0 ? [] : FINISHES_NOT_COUNTED),
     'Compound wall, water tank, sump and septic tank',
     'Earth filling, deep or special foundations',
     'Approvals, design fees, taxes and price changes',
@@ -358,6 +403,10 @@ export function buildEstimate(input: EstimateInput): { ok: true; value: Estimate
       costPerSqFt: Math.round(total / areas.builtUpSqFt),
       examplePricesLeft,
       assumptions,
+      engineerNotes: [
+        `Concrete grade ${input.concreteGrade} and steel grade ${input.steelGrade} are assumed. They do not change these quantities; the engineer sets the real grades.`,
+        `Construction type: ${input.structureType}.`,
+      ],
       notIncluded,
       warnings,
       disclaimer: PRELIMINARY_ESTIMATE_DISCLAIMER,
@@ -380,10 +429,9 @@ export function estimateReportRows(
     ...(meta.project ? [['Project', meta.project]] : []),
     [],
     ['Building type', input.buildingType],
-    ['Construction type', input.structureType],
+    ['House type', houseTypeLabel(input.structureType)],
+    ['Sand', input.includeRiverSand ? 'River sand for plastering only, M-sand for the rest' : 'Full M-sand (crusher sand)'],
     ['Level', input.quality],
-    ['Concrete grade', input.concreteGrade],
-    ['Steel grade', input.steelGrade],
     [],
     ['Plot area (sq.ft)', a.plotSqFt === null ? 'not given' : String(a.plotSqFt)],
     ['Building on one floor (sq.ft)', String(a.footprintSqFt)],
@@ -409,6 +457,9 @@ export function estimateReportRows(
     [],
     ['NOT INCLUDED'],
     ...result.notIncluded.map(t => [t]),
+    [],
+    ['FOR YOUR ENGINEER (assumed for the rates, not a design)'],
+    ...result.engineerNotes.map(t => [t]),
     ...(result.warnings.length ? [[], ['CHECK'], ...result.warnings.map(t => [t])] : []),
     [],
     ['LIMITS', result.disclaimer],

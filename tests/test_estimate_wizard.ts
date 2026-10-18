@@ -102,10 +102,14 @@ async function run() {
   console.log('\n--- 5. What does and does not change a quantity ---');
   const lb = value({ ...base, structureType: 'Load Bearing' });
   check('Construction type changes no quantity', ['Cement', 'Steel', 'M-Sand', 'Aggregate', 'Bricks'].every(m => qty(lb, m) === qty(std, m)));
-  check('…but says the rates are for RCC frames', lb.warnings.some(w => /load-bearing/i.test(w)) && !std.warnings.some(w => /RCC-framed/.test(w)));
+  check('…but says, in plain words, the rates are for a pillar & beam house', lb.warnings.some(w => /pillar-free/i.test(w)) && !std.warnings.some(w => /pillar/i.test(w)));
+  check('A pillar-free house over two floors is warned about', value({ ...base, structureType: 'Load Bearing', floors: 3 }).warnings.some(w => /more than two floors/.test(w)) && !lb.warnings.some(w => /more than two floors/.test(w)));
+  check('House types use the plain names', est.HOUSE_TYPES.map(h => h.label).join() === 'Pillar & Beam House,Pillar-Free Traditional House');
   const grade = value({ ...base, concreteGrade: 'M30', steelGrade: 'Fe550' });
   check('Concrete and steel grade change no quantity', ['Cement', 'Steel', 'Aggregate'].every(m => qty(grade, m) === qty(std, m)));
-  check('…and the assumptions say so', grade.assumptions.some(t => /M30/.test(t) && /do not change the quantities/.test(t)));
+  check('Grades are not in the on-screen assumptions', !grade.assumptions.some(t => /M\d\d|Fe\d{3}/.test(t)) && !std.assumptions.some(t => /M20|Fe500/.test(t)));
+  check('…but are kept as engineering defaults for the file', grade.engineerNotes.some(t => /M30/.test(t) && /Fe550/.test(t) && /do not change these quantities/.test(t)));
+  check('The documented defaults are M20 and Fe500', est.ENGINEERING_DEFAULTS.concreteGrade === 'M20' && est.ENGINEERING_DEFAULTS.steelGrade === 'Fe500');
   check('The plot size changes no quantity', qty(value({ ...base, plot: dims(100, 100) }), 'Cement') === 900);
   check('Shed and commercial buildings are flagged as outside the rates', value({ ...base, buildingType: 'Industrial Shed' }).warnings.some(w => /rough guide/.test(w)));
 
@@ -126,10 +130,11 @@ async function run() {
   check('Labour = built-up area × rate', std.labourCost === 2000 * 320);
   check('Total = materials + labour', std.total === expectedMaterials + 640000 && std.finishingCost === 0);
   check('Cost per sq.ft is over the built-up area', std.costPerSqFt === Math.round(std.total / 2000));
-  check('Finishes are listed as not included', std.notIncluded.some(t => /Finishes/.test(t)));
+  check('Tiles, paint, doors, windows, electrical and plumbing are each listed as not included',
+    ['Tiles', 'Paint', 'Doors', 'Windows', 'Electrical work', 'Plumbing'].every(t => std.notIncluded.includes(t)), std.notIncluded);
   const fin = value({ ...base, finishingPerSqFt: 600 });
   check('A finishing allowance adds built-up area × rate', fin.finishingCost === 1200000 && fin.total === std.total + 1200000);
-  check('…and is no longer listed as left out', !fin.notIncluded.some(t => /Finishes/.test(t)));
+  check('…and they are no longer listed as left out', !fin.notIncluded.some(t => ['Tiles', 'Paint', 'Plumbing'].includes(t)));
   check('A new price changes the cost, not the quantity', (() => { const o = value({ ...base, prices: { ...EXAMPLE_PRICES, cementPerBag: 450 } }); return qty(o, 'Cement') === 900 && o.materialCost === expectedMaterials + 900 * 30; })());
   check('Labour priced at 0 gives no labour cost', value({ ...base, prices: { ...EXAMPLE_PRICES, labourPerSqFt: 0 } }).labourCost === 0);
   check('Example prices are counted and warned about', std.examplePricesLeft === 6 && std.warnings.some(w => /example values/.test(w)), std.examplePricesLeft);
@@ -138,6 +143,7 @@ async function run() {
     return o.examplePricesLeft === 0 && !o.warnings.some(w => /example values/.test(w));
   })());
   check('The result is labelled as approximate', /approximate/i.test(std.disclaimer) && /not a structural design/.test(std.disclaimer));
+  check('…with the exact wording', std.disclaimer.startsWith('Approximate estimate only. Actual cost may vary.') && /guaranteed quote/.test(std.disclaimer));
   check('The assumptions state the area sum', std.assumptions[0].includes('1,000 sq.ft') && std.assumptions[0].includes('2 floors') && std.assumptions[0].includes('2,000 sq.ft'));
   check('The same input always gives the same result', JSON.stringify(value(base)) === JSON.stringify(std));
 

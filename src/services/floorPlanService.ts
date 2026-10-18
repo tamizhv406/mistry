@@ -418,6 +418,72 @@ export const STARTER_TEMPLATES: FloorPlanStarterTemplate[] = [
       { id: 'wn-3', windowType: 'Standard', x: 35, y: 35, width: 4, rotation: 0 },
     ],
   },
+  {
+    id: 'tpl-studio',
+    name: 'Modern Studio Apartment (25 × 20 ft)',
+    description: 'Open living-bedroom space, pantry kitchenette, and modern bath (500 sq.ft)',
+    bhk: 'Studio',
+    plotLength: 25,
+    plotWidth: 20,
+    unit: 'feet',
+    walls: [
+      { id: 'w-1', x1: 0, y1: 0, x2: 25, y2: 0, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-2', x1: 25, y1: 0, x2: 25, y2: 20, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-3', x1: 25, y1: 20, x2: 0, y2: 20, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-4', x1: 0, y1: 20, x2: 0, y2: 0, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-5', x1: 17, y1: 12, x2: 25, y2: 12, thickness: 0.5, wallType: 'interior' },
+      { id: 'w-6', x1: 17, y1: 12, x2: 17, y2: 20, thickness: 0.5, wallType: 'interior' },
+    ],
+    rooms: [
+      { id: 'r-1', roomType: 'Living Room', label: 'Studio Suite & Living', x: 0, y: 0, width: 17, height: 20, rotation: 0 },
+      { id: 'r-2', roomType: 'Kitchen', label: 'Open Kitchenette', x: 17, y: 0, width: 8, height: 12, rotation: 0 },
+      { id: 'r-3', roomType: 'Bathroom', label: 'Attached Bath', x: 17, y: 12, width: 8, height: 8, rotation: 0 },
+    ],
+    doors: [
+      { id: 'd-1', doorType: 'Main Entrance', x: 0.5, y: 8, width: 3.5, rotation: 0, swingAngle: 90 },
+      { id: 'd-2', doorType: 'Bathroom', x: 17, y: 15, width: 2.5, rotation: 90, swingAngle: 90 },
+    ],
+    windows: [
+      { id: 'wn-1', windowType: 'Large', x: 4, y: 0, width: 5, rotation: 0 },
+      { id: 'wn-2', windowType: 'Standard', x: 6, y: 20, width: 4, rotation: 0 },
+    ],
+  },
+  {
+    id: 'tpl-office',
+    name: 'Open Office Floor Plan (45 × 30 ft)',
+    description: 'Executive cabin, open workspace cubicles, conference room & reception (1350 sq.ft)',
+    bhk: 'Commercial',
+    plotLength: 45,
+    plotWidth: 30,
+    unit: 'feet',
+    walls: [
+      { id: 'w-1', x1: 0, y1: 0, x2: 45, y2: 0, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-2', x1: 45, y1: 0, x2: 45, y2: 30, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-3', x1: 45, y1: 30, x2: 0, y2: 30, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-4', x1: 0, y1: 30, x2: 0, y2: 0, thickness: 0.75, wallType: 'exterior' },
+      { id: 'w-5', x1: 0, y1: 14, x2: 18, y2: 14, thickness: 0.5, wallType: 'interior' },
+      { id: 'w-6', x1: 18, y1: 0, x2: 18, y2: 30, thickness: 0.5, wallType: 'interior' },
+      { id: 'w-7', x1: 32, y1: 0, x2: 32, y2: 16, thickness: 0.5, wallType: 'interior' },
+      { id: 'w-8', x1: 32, y1: 16, x2: 45, y2: 16, thickness: 0.5, wallType: 'interior' },
+    ],
+    rooms: [
+      { id: 'r-1', roomType: 'Office', label: 'Executive Cabin', x: 0, y: 0, width: 18, height: 14, rotation: 0 },
+      { id: 'r-2', roomType: 'Office', label: 'Conference Room', x: 0, y: 14, width: 18, height: 16, rotation: 0 },
+      { id: 'r-3', roomType: 'Office', label: 'Open Workspace', x: 18, y: 0, width: 14, height: 30, rotation: 0 },
+      { id: 'r-4', roomType: 'Custom', label: 'Reception & Lounge', x: 32, y: 0, width: 13, height: 16, rotation: 0 },
+      { id: 'r-5', roomType: 'Utility', label: 'Server & Pantry', x: 32, y: 16, width: 13, height: 14, rotation: 0 },
+    ],
+    doors: [
+      { id: 'd-1', doorType: 'Double', x: 44.5, y: 6, width: 5, rotation: 90, swingAngle: 90 },
+      { id: 'd-2', doorType: 'Single', x: 18, y: 6, width: 3, rotation: 90, swingAngle: 90 },
+      { id: 'd-3', doorType: 'Single', x: 18, y: 20, width: 3, rotation: 90, swingAngle: 90 },
+    ],
+    windows: [
+      { id: 'wn-1', windowType: 'Large', x: 4, y: 0, width: 8, rotation: 0 },
+      { id: 'wn-2', windowType: 'Large', x: 22, y: 0, width: 8, rotation: 0 },
+      { id: 'wn-3', windowType: 'Large', x: 8, y: 30, width: 8, rotation: 0 },
+    ],
+  },
 ];
 
 // ============================================================

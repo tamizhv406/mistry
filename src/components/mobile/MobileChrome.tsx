@@ -94,17 +94,17 @@ export const MobileTopBar: React.FC<ChromeProps> = ({ user, sites, siteId, onSel
 };
 
 /**
- * Bottom navigation (phone only), a floating pill: Home | Projects | (Floor Plan) | Reports | More.
- * The Floor Planner is the centre of the app, so it is the round button in the middle.
+ * Bottom navigation (phone only): one flat, compact bar with five equal tabs,
+ * Home | Projects | Floor Plan | Reports | More.
  */
 export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNavigate, onOpenClassic, onLogout, canInstall, onInstall, siteId }) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const trashCount = useLiveQuery(async () => (await db.getAllTrash(user)).length, [user]) || 0;
 
-  const tabs: { view: string; label: string; icon: React.ReactNode; match: string[]; core?: boolean }[] = [
+  const tabs: { view: string; label: string; icon: React.ReactNode; match: string[] }[] = [
     { view: 'dashboard', label: 'Home', icon: <Home size={22} />, match: ['dashboard'] },
     { view: 'my-sites', label: 'Projects', icon: <Building2 size={22} />, match: ['my-sites'] },
-    { view: 'floor-plans', label: 'Floor Plan', icon: <PenTool size={24} />, match: ['floor-plans', 'floor-plan-editor'], core: true },
+    { view: 'floor-plans', label: 'Floor Plan', icon: <PenTool size={22} />, match: ['floor-plans', 'floor-plan-editor'] },
     { view: 'reports', label: 'Reports', icon: <BarChart3 size={22} />, match: ['reports'] },
   ];
   const moreActive = !tabs.some(t => t.match.includes(currentView));
@@ -129,8 +129,8 @@ export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNa
     <>
       <nav className="m-nav no-print" aria-label="Main">
         {tabs.map(t => (
-          <button key={t.view} type="button" className={`m-nav-btn${t.core ? ' is-core' : ''}`} aria-current={t.match.includes(currentView) ? 'page' : undefined} onClick={() => onNavigate(t.view)}>
-            {t.core ? <span className="m-nav-core">{t.icon}</span> : t.icon}
+          <button key={t.view} type="button" className="m-nav-btn" aria-current={t.match.includes(currentView) ? 'page' : undefined} onClick={() => onNavigate(t.view)}>
+            {t.icon}
             <span>{t.label}</span>
           </button>
         ))}

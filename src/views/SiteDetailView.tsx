@@ -209,7 +209,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '12px',
-            boxShadow: '0 1px 3px rgba(28, 25, 23, 0.06)',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
             marginBottom: '18px',
           }}
         >
@@ -236,7 +236,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                   Admin view
                 </span>
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#57534e' }}>
+              <div style={{ fontSize: '0.78rem', color: '#475569' }}>
                 Super Admin Active Inspection — All project modifications are audit-logged
               </div>
             </div>

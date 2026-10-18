@@ -100,8 +100,95 @@ finger moves, then:
 - shows it dashed with **Use / Leave open / Redraw**, when a correction is larger (a gap wider
   than the snap reach was closed, or the stroke was moved further than the review limit).
 
+## Wall segments: erase part of a wall, split a wall
+
+Implemented in [planEdit.ts](../src/domain/planEdit.ts). Every function there returns a whole,
+consistent floor (rooms re-derived, doors and windows kept on their wall) or a refusal with a
+reason, and never changes its input. The editor applies the result as one undo step and shows
+what it did with an Undo button.
+
+- **Junctions** (`wallJunctions`): the points along a wall where another wall ends on it
+  (T-junction) or crosses it. Points within the join tolerance of the wall's own ends are
+  corners, not junctions. They divide the wall into **segments** (`wallSegmentAt`).
+- **Eraser** (`eraseWallSegment`): a tap on a wall erases only the segment under the finger,
+  between the two nearest junctions. The rest of the wall keeps its exact coordinates, and the
+  walls it meets are not touched. A wall nothing meets is erased whole. Doors and windows on the
+  erased part go with it (the result says so); the others stay exactly where they were and are
+  moved onto the remaining piece they stand on (`rehost`). Before this, the eraser only split
+  the wall in two, erased nothing, and let doors on the far half be clamped onto the near half.
+- **Split** (`splitWall`): cuts a wall into two walls at the point nearest the tap (on the grid
+  when Snap is on; exactly on a junction when the tap is within the join tolerance of one). Both
+  parts keep thickness, type and height. Refused near either end and through a door or window.
+  `splitWallAtJunctions` cuts at every junction at once.
+- The selected wall shows the segment "Erase part" would remove (blue band) and a dashed cut
+  mark where Split will cut.
+- Eraser and Split act on a tap only. A pinch or a pan that starts on a wall never erases or
+  cuts it: in those tools elements do not take the press, the canvas hit-tests the tap with a
+  finger-sized reach in screen pixels.
+
+## Measurement check (small differences that should match)
+
+`findAlignmentIssues` reports measurements a few millimetres apart (0.5 mm to 100 mm by
+default) that are probably meant to be the same:
+
+- **out of line:** the two ends of one near-horizontal or near-vertical wall are at different
+  distances from the same reference line, e.g. 150 mm at one end and 140 mm at the other;
+- **step:** two walls that continue each other end to end sit on lines a few mm apart.
+
+Both measurements are taken from a real line (the top or left edge of the plot) and are the
+drawing's own numbers. A difference larger than 100 mm is taken to be intended; diagonal walls
+are never reported. Nothing is changed by finding issues: the editor shows a small "≠ 10 mm"
+badge on the plan and the **Measurement check** sheet lists both measurements and the
+difference. The user picks the measurement that is right (`applyAlignmentFix`); the other end,
+or the other wall, is moved to it with `moveJoint`, so joined walls follow, and a jog that ends
+up with no length is removed. "Keep as drawn" hides the item for the session.
+
+## Rooms changed through their walls
+
+- `resizeRoom` sets a room's width (left to right) and/or length (top to bottom), centre line to
+  centre line like its area. A room made by walls changes by moving the walls of one side (right
+  and bottom by default, or the side chosen); rooms next to the moved wall grow or shrink with
+  it and every changed room is listed. Refused, with the reason, when a wall on that side runs on
+  past the room (it would reshape other rooms), when it would close up another room, and for
+  sizes that are not numbers, are below 3 ft / 0.9 m or above 200 ft / 60 m. A hand-placed room
+  simply gets the new size. Before this, the size boxes changed a wall-made room's record only;
+  its walls redrew it at the old size, so the change never showed.
+- `deleteRoom` removes a wall-made room with the wall parts only it uses; walls shared with
+  another room stay. A room whose walls are all shared is refused (deleting it would open the
+  rooms around it).
+- `addRoom` draws a walled room with a door: in a corner of a chosen room (two new inside walls)
+  or against the outside of the drawing where it fits on the plot.
+- `syncRoomsWithWalls` (planGeometry.ts): a room whose space was erased can no longer take over
+  the space of the room next door. Rooms whose centre is still inside a space claim it first;
+  only rooms left over fall back to the nearest free space.
+
+## Measurement labels
+
+A wall's length label can be dragged out from the wall or along it to a clearer spot. Where it
+is drawn is saved on the wall (`dimensionOffset`, `dimensionShift`, plan units) and never
+changes the wall or its length. A tap on a label still opens the exact-length box. The text size
+is the *Measurement text size* setting. While a wall is drawn, a dashed guide dimension line
+shows its length, and the live label adds the other units (a feet plan shows metres and
+millimetres, a metre plan millimetres and feet-inches) and what the end snapped to.
+
+## Building Mistry AI on the device
+
+[planCommands.ts](../src/services/planCommands.ts) reads requests such as "Fix my plan", "Make
+this bedroom 10 feet wide", "Add a bathroom in bedroom 1" and "Rename this room to Pooja" and
+turns them into a **proposal**: the complete next floor plus a list of what changes, built from
+the functions above. The AI sheet draws it dashed over the plan; nothing changes until Apply.
+A proposal that removes anything asks a second time. After Apply the editor checks that the
+drawing really changed before saying "Done", and Undo restores it. A request for a whole new
+layout goes to the `floor-plan-ai` server function when it is configured, otherwise to the
+built-in layout rules; the sheet says which.
+
 ## Tests
 
+- [tests/test_plan_editing.ts](../tests/test_plan_editing.ts): junctions and segments, erasing
+  one segment, splitting, the 150 mm / 140 mm measurement check and its fix, room resize through
+  walls, deleting and adding rooms, undo, saving and reopening.
+- [tests/test_plan_commands.ts](../tests/test_plan_commands.ts): reading sizes from requests,
+  room choice, proposals that change the real walls, "Fix my plan", bad and missing input.
 - [tests/test_floor_plan_sketch.ts](../tests/test_floor_plan_sketch.ts): simplification, angle
   snapping, joins, closure, duplicates.
 - [tests/test_floor_plan_measure.ts](../tests/test_floor_plan_measure.ts): typed measurements and
@@ -110,13 +197,16 @@ finger moves, then:
 - [tests/test_floor_plan_core.ts](../tests/test_floor_plan_core.ts): units, rooms from walls,
   floors, history, import and export.
 
-Touch behaviour (two fingers never draw, tap versus drag, handle targets) is not covered by
-`npm test`; it was checked in a phone-sized Chrome through the DevTools protocol.
+Touch behaviour (two fingers never draw, tap versus drag, handle targets, segment erase, split,
+the measurement check, label dragging, the AI sheet) is not covered by `npm test`; it was
+checked in a 390 × 844 touch-emulated Chrome through the DevTools protocol, not on a real phone.
 
 ## Not implemented
 
 - **Multi-select.** The editor holds a single selection. Selecting several items, and moving or
   deleting them together, needs the selection model, drag code and property panels reworked.
+- **Non-rectangular room sizes.** Width and length can be typed for rectangular rooms only;
+  L-shaped and other rooms are resized by moving their walls or corners.
 - **Rotating a door or window to any angle.** They take the angle of the wall they sit on;
   Rotate turns them a quarter turn and Mirror flips the swing.
 - **Sharing.** Export is PNG, JPEG, SVG, DXF, project JSON and print / PDF; there is no share

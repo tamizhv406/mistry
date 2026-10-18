@@ -196,7 +196,7 @@ export interface EstimationCalculationResult {
 }
 
 export const PRELIMINARY_ESTIMATE_DISCLAIMER =
-  'This is an approximate first budget made from published rule-of-thumb rates, not from drawings. It is not a structural design or a bill of quantities, and it must not be used to size footings, columns, beams, slabs or reinforcement. Get quantities from your engineer\'s drawings before ordering.';
+  'Approximate estimate only. Actual cost may vary. It is worked out from published rule-of-thumb rates, not from drawings. It is not a structural design, an engineer\'s approval or a guaranteed quote, and it must not be used to size foundations, pillars, beams, slabs or steel. Get the real quantities from your engineer\'s drawings before ordering.';
 
 /**
  * Approximate material quantities and cost for a building.

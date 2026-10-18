@@ -263,9 +263,9 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
               <PenTool size={24} />
             </div>
             <div>
-              <h1 className="fp-list-title">Floor Plan Creator</h1>
+              <h1 className="fp-list-title">Floor Plans</h1>
               <p className="fp-list-subtitle">
-                Architectural 2D layout design, multi-floor levels, and real-time CAD workspace
+                Draw your house: walls, rooms, doors and windows, floor by floor.
               </p>
             </div>
           </div>
@@ -306,7 +306,7 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
         {/* Real Database Dashboard Stats Row */}
         <div className="fp-dashboard-stats">
           <div className="fp-stat-card">
-            <div className="fp-stat-icon-wrap" style={{ background: 'rgba(217, 119, 6, 0.12)', color: '#d97706' }}>
+            <div className="fp-stat-icon-wrap" style={{ background: '#f1f5f9', color: '#0f172a' }}>
               <PenTool size={20} />
             </div>
             <div className="fp-stat-info">

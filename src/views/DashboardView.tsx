@@ -109,12 +109,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {isAdmin(user) && (
         <div
           style={{
-            background: 'linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%)',
+            background: 'linear-gradient(135deg, #fffbeb 0%, #f8fafc 100%)',
             border: '1px solid #fcd34d',
             borderRadius: '18px',
             padding: '16px 20px',
             marginBottom: '20px',
-            boxShadow: '0 1px 3px rgba(28, 25, 23, 0.06)',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -157,7 +157,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Full Cross-Contractor Oversight
                 </span>
               </div>
-              <p style={{ color: '#57534e', fontSize: '0.82rem', margin: '2px 0 0 0' }}>
+              <p style={{ color: '#475569', fontSize: '0.82rem', margin: '2px 0 0 0' }}>
                 You have unrestricted administrative authority across all registered mistries, sites, materials, labour ledgers, and audit trails.
               </p>
             </div>
@@ -308,7 +308,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div className="expense-pill">
-              <div className="pill-dot" style={{ backgroundColor: '#f97316' }} />
+              <div className="pill-dot" style={{ backgroundColor: '#334155' }} />
               <span className="pill-title">Electricity:</span>
               <span className="pill-amount">₹{stats.totalElectricityExpense.toLocaleString('en-IN')}</span>
             </div>
@@ -433,7 +433,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 {/* Header: the site photo when it has one, then status, actions and the name */}
                 {site.imageUrl && (
-                  <div style={{ width: '100%', height: '120px', overflow: 'hidden', backgroundColor: '#f5f5f4' }}>
+                  <div style={{ width: '100%', height: '120px', overflow: 'hidden', backgroundColor: '#f1f5f9' }}>
                     <SafeImage
                       src={site.imageUrl}
                       alt={site.name}
@@ -465,7 +465,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           padding: 0,
                           borderRadius: '10px',
                           backgroundColor: '#ffffff',
-                          color: '#44403c',
+                          color: '#334155',
                           border: '1px solid var(--border-light)',
                         }}
                       >
