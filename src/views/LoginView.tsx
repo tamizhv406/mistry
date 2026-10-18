@@ -398,36 +398,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               </span>
             </div>
 
-            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748b' }}>
                 <ShieldCheck size={14} color="#6366f1" />
-                <span>Super Admin Portal</span>
+                <span>Super Admin Portal: Sign in with registered administrator credentials above</span>
               </div>
-
-              <button
-                type="button"
-                onClick={handleSuperAdminDirectLogin}
-                disabled={loading}
-                style={{
-                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                  border: '1.5px solid #f59e0b',
-                  color: '#fbbf24',
-                  fontWeight: 700,
-                  fontSize: '0.9rem',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(245, 158, 11, 0.22)',
-                  width: '100%',
-                }}
-              >
-                <Crown size={18} color="#f59e0b" />
-                <span>👑 Super Admin Instant Login (tamizh)</span>
-              </button>
             </div>
           </form>
         ) : (
@@ -532,7 +507,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           setError('');
           setSuccessMessage(msg);
         }}
-        onDirectSuperAdminLogin={handleSuperAdminDirectLogin}
       />
 
       {/* Mandatory Initial Password Setup Modal */}
