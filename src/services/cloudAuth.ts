@@ -66,7 +66,16 @@ export async function resolveAuthenticatedUser(authUser: AuthUser, remember = tr
       .select('user_id,email,username,full_name,mobile,role,is_active,permissions')
       .eq('user_id', authUser.id)
       .single();
-    if (!error && data) {
+
+    if (error) {
+      // If network is offline, attempt verified local cache fallback
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return await resolveOfflineWorkspaceUser(authUser.id);
+      }
+      throw new Error(`Account verification failed: ${error.message || 'Membership profile query error'}`);
+    }
+
+    if (data) {
       const member = data as MemberProfile;
       if (!member.is_active) {
         await supabase.auth.signOut();
@@ -74,22 +83,16 @@ export async function resolveAuthenticatedUser(authUser: AuthUser, remember = tr
       }
       return cacheAuthenticatedProfile(authUser, member, remember);
     }
-  } catch (err) {
-    if (err instanceof InactiveAccountError) throw err;
-  }
 
-  // Graceful fallback for standard user if mistry_members table is not yet migrated:
-  const fallbackMember: MemberProfile = {
-    user_id: authUser.id,
-    email: authUser.email || '',
-    username: String(authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'User'),
-    full_name: String(authUser.user_metadata?.full_name || ''),
-    mobile: String(authUser.user_metadata?.mobile || ''),
-    role: 'USER',
-    is_active: true,
-    permissions: {},
-  };
-  return cacheAuthenticatedProfile(authUser, fallbackMember, remember);
+    throw new Error('Membership record not found for this account. Please contact the administrator.');
+  } catch (err: any) {
+    if (err instanceof InactiveAccountError) throw err;
+    // Check if network failed and we have a verified offline profile
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return await resolveOfflineWorkspaceUser(authUser.id);
+    }
+    throw err;
+  }
 }
 
 export async function resolveOfflineWorkspaceUser(authUserId: string): Promise<User> {

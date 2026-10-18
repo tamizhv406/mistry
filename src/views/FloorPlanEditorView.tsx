@@ -12,8 +12,9 @@ import {
   ChevronUp, GripHorizontal, SlidersHorizontal, Grid as GridIcon,
   MoreVertical, Shapes, Minus, Type, Image as ImageIcon,
   Maximize, Minimize, FilePlus, Edit, Bed, Sofa, Utensils, Bath, Zap,
-  Eraser, Search, LocateFixed, LayoutGrid,
+  Eraser, Search, LocateFixed, LayoutGrid, Share2, Volume2, VolumeX,
 } from 'lucide-react';
+import { speakTamil, isVoiceEnabled, toggleVoice } from '../utils/tamilVoice';
 import type {
   FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanDoor, FloorPlanWindow,
   FloorPlanFurniture, FloorPlanStaircase, FloorPlanColumn, FloorPlanAnnotation,
@@ -517,6 +518,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [isShapeLibraryOpen, setIsShapeLibraryOpen] = useState(false);
   const [showZoomDropdown, setShowZoomDropdown] = useState(false);
   const [clipboardElement, setClipboardElement] = useState<{ type: string; data: any } | null>(null);
+  const [isVoiceActive, setIsVoiceActive] = useState<boolean>(() => isVoiceEnabled());
 
   // Modals & Panels
   const [showFurnitureModal, setShowFurnitureModal] = useState(false);
@@ -1358,7 +1360,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
   }, [user, onNotify, saveNow]);
 
-  const handleSave = useCallback(() => { void saveNow(true); }, [saveNow]);
+  const handleSave = useCallback(() => {
+    void saveNow(true);
+    speakTamil('திட்டம் சேமிக்கப்பட்டது');
+  }, [saveNow]);
 
   // Autosave shortly after the last change.
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3406,7 +3411,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<SVGSVGElement>) => {
-      if (e.touches.length === 2) {
+      if (e.touches.length >= 2) {
+        setIsDrawingWall(false);
+        setWallStart(null);
+        setIsDragging(false);
+        setDragStartPos(null);
+        setLiveLengthBadge(null);
+        setSnapIndicator(null);
         const t1 = e.touches[0];
         const t2 = e.touches[1];
         const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -3420,6 +3431,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           dist,
         };
         setIsPanning(true);
+        return;
       } else if (e.touches.length === 1) {
         const t = e.touches[0];
         if (activeTool === 'pan') {
@@ -4137,6 +4149,37 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const estimatedTileArea = Math.ceil(totalFloorArea * 1.1); // 10% wastage
   const estimatedPaintLitres = Math.ceil((wallArea * 2) / 80);
 
+  // 1-Click WhatsApp Sharing with Tamil Voice notification (Issue S & Y)
+  const handleSharePlanToWhatsApp = useCallback(() => {
+    if (!plan) return;
+    const currentFloor = floorLevels[activeFloorIndex];
+    const floorName = currentFloor?.name || plan.floorName || 'Floor Plan';
+    const site = plan.siteName ? `\n🏗️ Site: ${plan.siteName}` : '';
+    const text = `📐 *Building Mistry - Floor Plan & Material Estimate*
+🏢 Plan: ${plan.buildingName} - ${floorName}${site}
+📏 Floor Area: ${totalFloorArea.toFixed(1)} ${unit === 'feet' ? 'sq.ft' : 'sq.m'}
+🧱 செங்கல் (Bricks): ${estimatedBricks.toLocaleString()} pcs
+🎒 சிமெண்ட் (Cement): ${estimatedCementBags} bags (50kg)
+⏳ மணல் (M-Sand): ${estimatedSandCuFt} cu.ft (${(estimatedSandCuFt / 100).toFixed(1)} units)
+🏗️ கம்பி (Steel): ${estimatedSteelKg} kg
+🚪 Doors: ${editorState.doors.length} | 🪟 Windows: ${editorState.windows.length} | 🏠 Rooms: ${editorState.rooms.length}
+
+_Shared via Building Mistry App_`;
+
+    speakTamil('திட்டம் மற்றும் மதிப்பீடு வாட்ஸ்அப்பில் பகிரப்படுகிறது');
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({
+        title: `${plan.buildingName} - Plan & Materials`,
+        text: text,
+      }).catch(() => {
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+      });
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+    }
+  }, [plan, floorLevels, activeFloorIndex, totalFloorArea, unit, estimatedBricks, estimatedCementBags, estimatedSandCuFt, estimatedSteelKg, editorState]);
+
   // ── Export Handlers ───────────────────────────────────
 
   /**
@@ -4458,11 +4501,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     finish: string = 'Wood Parquet'
   ) => {
     if (!plan) return;
+    const validW = Number.isFinite(w) && w > 0 ? Math.max(1, Math.min(200, w)) : 10;
+    const validH = Number.isFinite(h) && h > 0 ? Math.max(1, Math.min(200, h)) : 10;
+
     const roomCount = editorState.rooms.length;
     const plotL = plan.plotLength || 40;
     const plotW = plan.plotWidth || 30;
-    const posX = Math.max(1, Math.min(plotL - w, 4 + (roomCount % 3) * 4));
-    const posY = Math.max(1, Math.min(plotW - h, 4 + Math.floor(roomCount / 3) * 4));
+    const posX = Math.max(1, Math.min(plotL - validW, 4 + (roomCount % 3) * 4));
+    const posY = Math.max(1, Math.min(plotW - validH, 4 + Math.floor(roomCount / 3) * 4));
     const newId = uid('room');
 
     const newRoom: FloorPlanRoom = {
@@ -4471,8 +4517,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       label: `${type} ${roomCount + 1}`,
       x: snapToGrid(posX),
       y: snapToGrid(posY),
-      width: w,
-      height: h,
+      width: validW,
+      height: validH,
       rotation: 0,
       color: ROOM_COLORS[type],
       floorFinish: finish,
@@ -5359,6 +5405,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             id="fp-settings-btn"
           >
             <Settings size={18} />
+          </button>
+
+          {/* Tamil Voice Guidance Button */}
+          <button
+            type="button"
+            className={`fp-tool-btn ${isVoiceActive ? 'active' : ''}`}
+            onClick={() => {
+              const next = toggleVoice();
+              setIsVoiceActive(next);
+              onNotify(next ? 'Tamil Voice guidance enabled (குரல் உதவி ஆன்)' : 'Voice guidance disabled', 'info');
+            }}
+            title={isVoiceActive ? 'Tamil Voice Assistant On (குரல் உதவி ஆன்)' : 'Enable Voice Assistant'}
+            id="fp-voice-toggle-btn"
+          >
+            {isVoiceActive ? <Volume2 size={18} color="#16a34a" /> : <VolumeX size={18} />}
+            <span className="fp-tool-btn-label">Voice</span>
           </button>
 
           {/* More Dropdown */}
@@ -10063,7 +10125,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'select' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('select'); setIsDrawingWall(false); setWallStart(null); }}
+          onClick={() => {
+            setActiveTool('select');
+            setIsDrawingWall(false);
+            setWallStart(null);
+            speakTamil('தேர்வு செய்க');
+          }}
           title="Select / Move"
           id="fp-mobile-tool-select"
         >
@@ -10075,7 +10142,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'wall' || activeTool === 'ai_draw' ? 'active' : ''}`}
           aria-pressed={activeTool === 'wall' || activeTool === 'ai_draw'}
-          onClick={() => { setActiveTool(wallMode); setSelectedElement(null); }}
+          onClick={() => {
+            setActiveTool(wallMode);
+            setSelectedElement(null);
+            speakTamil('சுவர் வரையவும்');
+          }}
           title="Draw walls (Straight or Sketch)"
           id="fp-mobile-tool-wall"
         >
@@ -10086,7 +10157,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'eraser' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('eraser'); setSelectedElement(null); setIsDrawingWall(false); setWallStart(null); }}
+          onClick={() => {
+            setActiveTool('eraser');
+            setSelectedElement(null);
+            setIsDrawingWall(false);
+            setWallStart(null);
+            speakTamil('அழிக்கவும்');
+          }}
           title="Eraser (Tap any wall, door, window or furniture to delete)"
           id="fp-mobile-tool-eraser"
         >
@@ -10097,7 +10174,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'door' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('door'); setSelectedElement(null); }}
+          onClick={() => {
+            setActiveTool('door');
+            setSelectedElement(null);
+            speakTamil('கதவு');
+          }}
           title="Place Door"
           id="fp-mobile-tool-door"
         >
@@ -10108,7 +10189,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'window' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('window'); setSelectedElement(null); }}
+          onClick={() => {
+            setActiveTool('window');
+            setSelectedElement(null);
+            speakTamil('ஜன்னல்');
+          }}
           title="Place Window"
           id="fp-mobile-tool-window"
         >
@@ -10119,7 +10204,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'room' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('room'); setSelectedElement(null); }}
+          onClick={() => {
+            setActiveTool('room');
+            setSelectedElement(null);
+            speakTamil('அறை');
+          }}
           title="Place Room"
           id="fp-mobile-tool-room"
         >
@@ -10130,7 +10219,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
-          onClick={() => { setActiveTool('measure'); setSelectedElement(null); setIsMeasuring(false); setMeasureStart(null); setMeasureCurrent(null); }}
+          onClick={() => {
+            setActiveTool('measure');
+            setSelectedElement(null);
+            setIsMeasuring(false);
+            setMeasureStart(null);
+            setMeasureCurrent(null);
+            speakTamil('அளவு நாடா');
+          }}
           title="Measure a distance"
           id="fp-mobile-tool-measure"
         >
@@ -10143,7 +10239,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         <button
           type="button"
           className={`fp-mobile-tool-btn fp-mobile-tool-more ${activeTool === 'split' || showMobileMoreTools ? 'active' : ''}`}
-          onClick={() => setShowMobileMoreTools(true)}
+          onClick={() => {
+            setShowMobileMoreTools(true);
+            speakTamil('கூடுதல் கருவிகள்');
+          }}
           title="Split, measurement check, shapes, furniture and more tools"
           aria-label="More tools"
           aria-expanded={showMobileMoreTools}
@@ -10277,22 +10376,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             <div className="fp-calc-body">
               <div className="fp-calc-metric-grid">
                 <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Floor Area</span>
+                  <span className="fp-calc-metric-title">Floor Area (தரை பரப்பு)</span>
                   <span className="fp-calc-metric-num">{totalFloorArea.toFixed(0)}</span>
                   <span className="fp-calc-metric-unit">{unit === 'feet' ? 'sq.ft' : 'sq.m'}</span>
                 </div>
                 <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Wall Length</span>
+                  <span className="fp-calc-metric-title">Wall Length (சுவர் நீளம்)</span>
                   <span className="fp-calc-metric-num">{totalWallLength.toFixed(1)}</span>
                   <span className="fp-calc-metric-unit">{unit === 'feet' ? 'ft' : 'm'}</span>
                 </div>
                 <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Est. Bricks</span>
+                  <span className="fp-calc-metric-title">Est. Bricks (செங்கல்)</span>
                   <span className="fp-calc-metric-num">{estimatedBricks.toLocaleString()}</span>
                   <span className="fp-calc-metric-unit">Standard modular</span>
                 </div>
                 <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Cement Bags</span>
+                  <span className="fp-calc-metric-title">Cement Bags (சிமெண்ட்)</span>
                   <span className="fp-calc-metric-num">{estimatedCementBags}</span>
                   <span className="fp-calc-metric-unit">50 kg bags</span>
                 </div>
@@ -10301,39 +10400,39 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
               <table className="fp-calc-table">
                 <thead>
                   <tr>
-                    <th>Material Item</th>
+                    <th>Material Item (பொருட்கள்)</th>
                     <th>Calculated Quantity</th>
                     <th>Usage Basis</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td><strong>Red Clay Bricks / AAC Blocks</strong></td>
+                    <td><strong>செங்கல் (Red Clay Bricks / AAC)</strong></td>
                     <td><strong style={{ color: '#b45309' }}>{estimatedBricks.toLocaleString()} pcs</strong></td>
                     <td>Based on {totalWallLength.toFixed(1)} {unit} wall length & {ceilingHeight} ft ceiling height</td>
                   </tr>
                   <tr>
-                    <td><strong>Cement Bags (PPC/OPC)</strong></td>
+                    <td><strong>சிமெண்ட் மூட்டைகள் (Cement Bags PPC/OPC)</strong></td>
                     <td><strong style={{ color: '#1e293b' }}>{estimatedCementBags} bags</strong></td>
                     <td>Masonry mortar 1:6 + Internal/External plaster</td>
                   </tr>
                   <tr>
-                    <td><strong>Sand / M-Sand</strong></td>
-                    <td><strong>{estimatedSandCuFt} cu.ft</strong></td>
+                    <td><strong>மணல் (Sand / M-Sand)</strong></td>
+                    <td><strong>{estimatedSandCuFt} cu.ft ({(estimatedSandCuFt / 100).toFixed(1)} units)</strong></td>
                     <td>Mortar binding & wall finishing</td>
                   </tr>
                   <tr>
-                    <td><strong>Steel Rebar</strong></td>
+                    <td><strong>கம்பி (Steel Rebar)</strong></td>
                     <td><strong>{estimatedSteelKg} kg</strong></td>
                     <td>Columns, lintels & sill bands</td>
                   </tr>
                   <tr>
-                    <td><strong>Flooring Tiles</strong></td>
+                    <td><strong>தரை டைல்ஸ் (Flooring Tiles)</strong></td>
                     <td><strong>{estimatedTileArea} sq.ft</strong></td>
                     <td>Carpet area + 10% cutting wastage</td>
                   </tr>
                   <tr>
-                    <td><strong>Wall Paint (2 Coats)</strong></td>
+                    <td><strong>சுவர் பெயிண்ட் (Wall Paint 2 Coats)</strong></td>
                     <td><strong>{estimatedPaintLitres} litres</strong></td>
                     <td>Interior & exterior wall surface coverage</td>
                   </tr>
@@ -10342,6 +10441,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             </div>
 
             <div className="fp-calc-footer">
+              <button
+                type="button"
+                className="btn btn-success"
+                style={{ background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                onClick={handleSharePlanToWhatsApp}
+                title="Share estimate and plan details to WhatsApp"
+                id="fp-calc-whatsapp-btn"
+              >
+                <Share2 size={16} />
+                <span>WhatsApp-ல் அனுப்பு</span>
+              </button>
               {onOpenEstimator && (
                 <button
                   type="button"
@@ -12599,6 +12709,32 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             >
               View Full Room Schedule Table
             </button>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn btn-success"
+                style={{ background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontWeight: 700 }}
+                onClick={handleSharePlanToWhatsApp}
+                title="Share estimate and plan details to WhatsApp"
+                id="fp-mobile-whatsapp-btn"
+              >
+                <Share2 size={16} />
+                <span>WhatsApp-ல் அனுப்பு</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                onClick={() => {
+                  setShowMobileDetails(false);
+                  setShowEstimationModal(true);
+                }}
+              >
+                <Calculator size={16} />
+                <span>பொருட்கள் (Materials)</span>
+              </button>
+            </div>
 
             <p className="fp-wall-edit-note" style={{ marginTop: 12 }}>
               Areas are measured to the wall centre lines. {PLAN_DISCLAIMER} {PLAN_REVIEW_NOTE}
