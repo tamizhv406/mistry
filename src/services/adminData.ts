@@ -48,7 +48,10 @@ export async function getAuthorizedRecords(client = supabase): Promise<Authorize
       .order('table_name')
       .order('record_id')
       .range(offset, offset + pageSize - 1);
-    if (error) throw new Error(`Could not load authorized construction records: ${error.message}`);
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('schema cache')) return [];
+      throw new Error(`Could not load authorized construction records: ${error.message}`);
+    }
     const page = (data || []) as AuthorizedRecord[];
     records.push(...page);
     if (page.length < pageSize) return records;
@@ -62,7 +65,10 @@ export async function getAdminAuditLogs(client = supabase): Promise<AdminAuditLo
     .select('id,actor_id,target_user_id,action,details,created_at')
     .order('created_at', { ascending: false })
     .limit(200);
-  if (error) throw new Error(`Could not load the secure admin audit log: ${error.message}`);
+  if (error) {
+    if (error.code === 'PGRST205' || error.message?.includes('schema cache')) return [];
+    throw new Error(`Could not load the secure admin audit log: ${error.message}`);
+  }
   return ((data || []) as AuditRow[]).map(row => ({
     id: String(row.id),
     action: row.action,
@@ -83,7 +89,10 @@ export async function getMemberProfiles(client = supabase): Promise<MemberRow[]>
     .from('mistry_members')
     .select('user_id,email,username,full_name,mobile,role,is_active,permissions,created_at')
     .order('created_at', { ascending: false });
-  if (error) throw new Error(`Could not load authorized account profiles: ${error.message}`);
+  if (error) {
+    if (error.code === 'PGRST205' || error.message?.includes('schema cache')) return [];
+    throw new Error(`Could not load authorized account profiles: ${error.message}`);
+  }
   return (data || []) as MemberRow[];
 }
 

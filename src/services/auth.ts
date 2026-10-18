@@ -140,6 +140,25 @@ export async function registerUser(
 }
 
 /**
+ * Resends email confirmation for unconfirmed accounts
+ */
+export async function resendConfirmationEmail(email: string): Promise<{ success: boolean; error?: string }> {
+  if (!supabase || !isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase is not configured.' };
+  }
+  try {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim().toLowerCase(),
+    });
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Could not resend confirmation email.' };
+  }
+}
+
+/**
  * Changes a user's password (verifying current password)
  */
 export async function changePassword(

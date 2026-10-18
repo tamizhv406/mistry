@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HardHat, Eye, EyeOff, Lock, User, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
-import { loginUser, registerUser } from '../services/auth';
+import { loginUser, registerUser, resendConfirmationEmail } from '../services/auth';
 import type { User as UserType } from '../db/types';
 import { ForgotPasswordModal } from '../components/ForgotPasswordModal';
 import { ChangeInitialPasswordModal } from '../components/ChangeInitialPasswordModal';
@@ -30,6 +30,23 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleResendConfirmation = async () => {
+    const targetEmail = identifier.trim() || email.trim();
+    if (!targetEmail) {
+      setError('Enter your email address above to resend confirmation.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    const res = await resendConfirmationEmail(targetEmail);
+    setLoading(false);
+    if (res.success) {
+      setSuccessMessage('Confirmation email resent! Please check your inbox and spam folder.');
+    } else {
+      setError(res.error || 'Could not resend confirmation email. Please try again later.');
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!identifier.trim()) {
@@ -54,7 +71,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           onLoginSuccess(res.user);
         }
       } else {
-        setError(res.error || 'Login failed. Please verify credentials.');
+        const rawErr = res.error || 'Login failed.';
+        if (rawErr.toLowerCase().includes('email not confirmed')) {
+          setError('Email not confirmed. Check your inbox/spam or click Resend below.');
+        } else if (rawErr.toLowerCase().includes('invalid login credentials')) {
+          setError('Invalid email or password. Please verify credentials or reset password.');
+        } else {
+          setError(rawErr);
+        }
       }
     } catch (err: any) {
       setError('Authentication error: ' + err.message);
@@ -175,13 +199,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <div style={{
             backgroundColor: '#fee2e2',
             color: '#991b1b',
-            padding: '10px 14px',
+            padding: '12px 14px',
             borderRadius: '10px',
             fontSize: '0.88rem',
             fontWeight: 600,
             marginBottom: '18px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
           }}>
-            {error}
+            <div>{error}</div>
+            {(error.toLowerCase().includes('confirm') || error.toLowerCase().includes('not confirmed')) && (
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={loading}
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '5px 12px',
+                  backgroundColor: '#991b1b',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Resend Confirmation Email (உறுதிப்படுத்தல் இணைப்பை மீண்டும் அனுப்புக)
+              </button>
+            )}
           </div>
         )}
 
