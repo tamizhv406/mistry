@@ -42,3 +42,5 @@ android/local.properties
 # Other people's projects downloaded for reference; not part of this app
 .github/workflows/Home_View-main/
 .github/workflows/PlaceIt-master/
+
+.vercel

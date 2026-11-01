@@ -314,6 +314,8 @@ export interface FloorPlanStarterTemplate {
   doors: any[];
   windows: any[];
   furniture?: any[];
+  stairs?: any[];
+  columns?: any[];
 }
 
 export const STARTER_TEMPLATES: FloorPlanStarterTemplate[] = [
@@ -381,6 +383,39 @@ export const STARTER_TEMPLATES: FloorPlanStarterTemplate[] = [
       { id: 'wn-1', windowType: 'Large', x: 6, y: 0, width: 6, rotation: 0 },
       { id: 'wn-2', windowType: 'Standard', x: 28, y: 0, width: 4, rotation: 0 },
       { id: 'wn-3', windowType: 'Standard', x: 28, y: 30, width: 4, rotation: 0 },
+    ],
+    stairs: [
+      {
+        id: 'stair-1',
+        stairType: 'Straight',
+        x: 1,
+        y: 1,
+        width: 3.5,
+        length: 10.0,
+        steps: 16,
+        direction: 'up',
+        rotation: 90,
+      },
+    ],
+    columns: [
+      { id: 'col-1', x: 0, y: 0, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-2', x: 22, y: 0, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-3', x: 40, y: 0, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-4', x: 0, y: 18, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-5', x: 22, y: 18, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-6', x: 40, y: 18, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-7', x: 0, y: 30, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-8', x: 22, y: 30, width: 1, depth: 1, shape: 'rectangular' },
+      { id: 'col-9', x: 40, y: 30, width: 1, depth: 1, shape: 'rectangular' },
+    ],
+    furniture: [
+      { id: 'f-1', category: 'living', itemType: '3-Seater Sofa', label: 'Sofa', x: 4, y: 3, width: 7, height: 3, rotation: 0 },
+      { id: 'f-2', category: 'living', itemType: 'Wall Mounted TV', label: 'Smart TV', x: 12, y: 0.3, width: 4, height: 0.5, rotation: 0, wallMounted: true },
+      { id: 'f-3', category: 'dining', itemType: '4-seat Dining Table', label: 'Dining Table', x: 3, y: 21, width: 3.5, height: 3.5, rotation: 0 },
+      { id: 'f-4', category: 'bedroom', itemType: 'King Bed', label: 'King Bed', x: 26, y: 3, width: 6, height: 6.5, rotation: 0 },
+      { id: 'f-5', category: 'bedroom', itemType: 'Split AC Indoor Unit', label: 'Inverter AC', x: 34, y: 0.4, width: 3.5, height: 0.8, rotation: 0, wallMounted: true },
+      { id: 'f-6', category: 'bathroom', itemType: 'Toilet', label: 'WC Toilet', x: 16, y: 24, width: 2, height: 2.5, rotation: 0 },
+      { id: 'f-7', category: 'bathroom', itemType: 'Wash Basin', label: 'Wash Basin', x: 19, y: 20, width: 2, height: 1.5, rotation: 0 },
     ],
   },
   {
@@ -709,6 +744,19 @@ export function createStarterFloorPlan(
       { id: 'col-7', x: 0, y: 30, width: 1, depth: 1, shape: 'rectangular' },
       { id: 'col-8', x: 22, y: 30, width: 1, depth: 1, shape: 'rectangular' },
       { id: 'col-9', x: 40, y: 30, width: 1, depth: 1, shape: 'rectangular' },
+    ],
+    stairs: [
+      {
+        id: 'stair-main',
+        stairType: 'Straight',
+        x: 1,
+        y: 1,
+        width: 3.5,
+        length: 10.0,
+        steps: 16,
+        direction: 'up',
+        rotation: 90,
+      },
     ],
     furniture: [
       { id: 'f-1', category: 'living', itemType: '3-Seater Sofa', label: 'Sofa', x: 4, y: 3, width: 7, height: 3, rotation: 0 },

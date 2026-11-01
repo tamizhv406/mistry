@@ -2566,6 +2566,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       wallId: w.wallId ? wallIdMap.get(w.wallId) : undefined,
     }));
     const furniture = (tpl.furniture || []).map(f => ({ ...f, id: uid('furn') }));
+    const stairs = (tpl.stairs || []).map(s => ({ ...s, id: uid('stair') }));
+    const columns = (tpl.columns || []).map(c => ({ ...c, id: uid('col') }));
 
     const nextState: EditorState = {
       walls,
@@ -2573,8 +2575,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       doors,
       windows,
       furniture,
-      stairs: [],
-      columns: [],
+      stairs,
+      columns,
       annotations: [],
     };
     dispatchWithHistory({ type: 'SET_STATE', payload: nextState });
