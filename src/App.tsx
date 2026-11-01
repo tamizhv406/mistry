@@ -44,7 +44,7 @@ import { OtherExpenseModal } from './components/OtherExpenseModal';
 import { CommentModal } from './components/CommentModal';
 
 import { useSiteData } from './hooks/useSiteData';
-import { getCurrentUser, logoutUser, initAuth, isAdmin } from './services/auth';
+import { getCurrentUser, logoutUser, initAuth, isAdmin, getLocalWorkspaceUser } from './services/auth';
 
 import type {
   Site,
@@ -75,7 +75,8 @@ const PROJECT_VIEWS: AppViewName[] = ['labour', 'worker', 'stock', 'toolroom', '
 const CURRENT_SITE_KEY = 'mistry_current_site';
 
 export function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User>(() => getCurrentUser() || getLocalWorkspaceUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<AppViewName>('dashboard');
   // The current project is remembered on this device so the app reopens where the user left off.
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => {
@@ -143,8 +144,8 @@ export function App() {
         }
       }
     }).catch(error => {
-      setCurrentUser(null);
-      addToast(error instanceof Error ? error.message : 'Could not verify your secure account.', 'error');
+      setCurrentUser(getLocalWorkspaceUser());
+      addToast(error instanceof Error ? error.message : 'Could not verify cloud account. Using local workspace.', 'info');
     });
 
     if (checkPasswordRecoveryUrl()) {
@@ -157,7 +158,7 @@ export function App() {
         if (event === 'PASSWORD_RECOVERY') {
           setIsRecoveryModalOpen(true);
         }
-        if (event === 'SIGNED_OUT') setCurrentUser(null);
+        if (event === 'SIGNED_OUT') setCurrentUser(getLocalWorkspaceUser());
       });
       authSub = data?.subscription || null;
     }
@@ -317,12 +318,16 @@ export function App() {
     // The next person to use this device must not sync into this person's cloud account.
     if (supabase) void supabase.auth.signOut();
     logoutUser();
-    setCurrentUser(null);
-    addToast('Signed out of Building Mistry', 'info');
+    setCurrentUser(getLocalWorkspaceUser());
+    addToast('Signed out of cloud account. Switched to Local Builder mode.', 'info');
   };
 
   // Navigation Helper with deep tab and sub-tab support
   const handleNavigate = (view: string, siteId?: string, tab?: string, subTab?: string) => {
+    if (view === 'login' || view === 'auth') {
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (view === 'site-detail' && siteId) {
       setSelectedSiteId(siteId);
       if (tab) setCurrentSiteTab(tab as any);
@@ -494,23 +499,11 @@ export function App() {
     });
   };
 
-  // If user is not authenticated, show Login Screen
-  if (!currentUser) {
-    return (
-      <>
-        <LoginView
-          onLoginSuccess={user => {
-            setCurrentUser(user);
-            addToast(`Welcome, ${user.fullName}!`, 'success');
-          }}
-        />
-        <Toast toasts={toasts} onDismiss={removeToast} />
-      </>
-    );
-  }
+  // Active user: falls back to local workspace builder if currentUser is null
+  const activeUser = currentUser || getLocalWorkspaceUser();
 
   const chromeProps = {
-    user: currentUser,
+    user: activeUser,
     currentView,
     sites: userSites,
     siteId: selectedSiteId,
@@ -525,10 +518,10 @@ export function App() {
 
   return (
     <div className={`app-container ${currentView === 'floor-plan-editor' ? 'm-immersive' : ''}`}>
-      <MobileTopBar {...chromeProps} />
+      {currentView !== 'floor-plan-editor' && <MobileTopBar {...chromeProps} />}
 
       <AppShell
-        user={currentUser}
+        user={activeUser}
         currentView={currentView}
         onNavigate={handleNavigate}
         onLogout={handleLogout}
@@ -810,7 +803,7 @@ export function App() {
       </AppShell>
 
       {/* Mobile Bottom Navigation Bar */}
-      <MobileBottomNav {...chromeProps} />
+      {currentView !== 'floor-plan-editor' && <MobileBottomNav {...chromeProps} />}
 
       {/* Fast Mobile Site Selector Sheet */}
       {isSitePickerOpen && (
@@ -1106,6 +1099,72 @@ export function App() {
         onClose={() => setIsRecoveryModalOpen(false)}
         onSuccess={msg => addToast(msg, 'success')}
       />
+
+      {/* Optional Supabase Cloud Account Modal */}
+      {isAuthModalOpen && (
+        <div
+          className="bm-modal-overlay"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 16,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAuthModalOpen(false);
+          }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              maxWidth: 460,
+              background: '#ffffff',
+              borderRadius: 16,
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(false)}
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                background: '#f1f5f9',
+                border: 'none',
+                borderRadius: '50%',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                zIndex: 10,
+              }}
+              title="Close"
+              aria-label="Close"
+            >
+              <X size={18} color="#475569" />
+            </button>
+            <LoginView
+              onLoginSuccess={user => {
+                setCurrentUser(user);
+                setIsAuthModalOpen(false);
+                addToast(`Connected to cloud profile: ${user.fullName || user.username}!`, 'success');
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

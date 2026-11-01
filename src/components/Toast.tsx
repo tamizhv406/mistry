@@ -29,7 +29,9 @@ const SingleToast: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => vo
   // The parent passes a new callback on every render. Reading it through a ref keeps the
   // timer running instead of restarting it, so a toast really does close after its time.
   const dismissRef = useRef(onDismiss);
-  dismissRef.current = onDismiss;
+  useEffect(() => {
+    dismissRef.current = onDismiss;
+  }, [onDismiss]);
 
   useEffect(() => {
     // Errors stay longer so they can be read.

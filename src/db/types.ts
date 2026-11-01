@@ -449,6 +449,7 @@ export interface User {
   permissions?: Record<string, { read: boolean; write: boolean }>;
   isActive: boolean;
   offlineLimited?: boolean;
+  isLocal?: boolean;
   mustChangePassword?: boolean;
   lastLoginAt?: string;
   createdAt: string;

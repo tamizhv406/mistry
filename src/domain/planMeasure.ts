@@ -377,6 +377,232 @@ export function layoutDimension(
 }
 
 // ---------------------------------------------------------------------------
+// Multi-wall Dimension Anti-Collision & Tiered Spacing
+// ---------------------------------------------------------------------------
+
+export interface WallDimItem {
+  id: string;
+  p1: Pt;
+  p2: Pt;
+  normal: Pt;
+  text: string;
+  halfThickness: number;
+  userOffset?: number;
+  userShift?: number;
+  isSelected?: boolean;
+}
+
+export interface WallDimConfig {
+  isMobile?: boolean;
+  dimFontPx: number;
+}
+
+export interface WallDimLayout {
+  id: string;
+  d: DimensionLayout;
+  label: Pt;
+  lineMid: Pt;
+  slide: number;
+  tierOffset: number;
+  labelLength: number;
+  labelHeight: number;
+  hitW: number;
+  hitH: number;
+  needsLeader: boolean;
+}
+
+/**
+ * Computes dimension layouts for a collection of walls simultaneously.
+ * Detects parallel nearby walls and clusters at corners/junctions,
+ * automatically applying tiering (staggered perpendicular offsets)
+ * and longitudinal sliding to eliminate label collisions and bunching.
+ */
+export function computeWallDimensionLayouts(
+  items: WallDimItem[],
+  cfg: WallDimConfig
+): Map<string, WallDimLayout> {
+  const layouts = new Map<string, WallDimLayout>();
+  if (items.length === 0) return layouts;
+
+  const isMobile = Boolean(cfg.isMobile);
+  const dimFontPx = cfg.dimFontPx;
+  const baseMargin = isMobile ? 26 : 20;
+
+  // 1. Initialise candidates
+  const list = items.map(item => {
+    const onScreen = Math.hypot(item.p2.x - item.p1.x, item.p2.y - item.p1.y);
+    const unitDir: Pt = onScreen > 1e-4
+      ? { x: (item.p2.x - item.p1.x) / onScreen, y: (item.p2.y - item.p1.y) / onScreen }
+      : { x: 1, y: 0 };
+    const labelLength = item.text.length * dimFontPx * 0.6 + 14;
+    const labelHeight = dimFontPx + 8;
+    const baseOffset = item.halfThickness + baseMargin + labelHeight / 2 + (item.userOffset || 0);
+
+    return {
+      ...item,
+      onScreen,
+      unitDir,
+      labelLength,
+      labelHeight,
+      baseOffset,
+      tierOffset: 0,
+      slide: item.userShift || 0,
+      d: layoutDimension(item.p1, item.p2, item.normal, {
+        offset: baseOffset,
+        gap: item.halfThickness + 3,
+        overshoot: 5,
+        labelLength,
+        labelHeight,
+        arrow: 7,
+      }),
+      label: { x: 0, y: 0 },
+      radW: 0,
+      radH: 0,
+    };
+  });
+
+  const updateItemGeom = (it: typeof list[0]) => {
+    const d = layoutDimension(it.p1, it.p2, it.normal, {
+      offset: it.baseOffset + it.tierOffset,
+      gap: it.halfThickness + 3,
+      overshoot: 5,
+      labelLength: it.labelLength,
+      labelHeight: it.labelHeight,
+      arrow: 7,
+    });
+    it.d = d;
+    it.label = {
+      x: d.label.x + it.unitDir.x * it.slide,
+      y: d.label.y + it.unitDir.y * it.slide,
+    };
+    const rad = (d.rotation * Math.PI) / 180;
+    const c = Math.abs(Math.cos(rad));
+    const s = Math.abs(Math.sin(rad));
+    // Bounding half-extents plus 8px safety padding
+    it.radW = (it.labelLength * c + it.labelHeight * s) / 2 + 8;
+    it.radH = (it.labelLength * s + it.labelHeight * c) / 2 + 8;
+  };
+
+  list.forEach(updateItemGeom);
+
+  // 2. Parallel Wall Tiering: separate dimension lines for parallel walls running close to each other
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i];
+      const b = list[j];
+      const dot = Math.abs(a.unitDir.x * b.unitDir.x + a.unitDir.y * b.unitDir.y);
+      if (dot < 0.94) continue; // Not parallel
+
+      // Project b onto a's longitudinal axis to check if they overlap along length
+      const t1 = (b.p1.x - a.p1.x) * a.unitDir.x + (b.p1.y - a.p1.y) * a.unitDir.y;
+      const t2 = (b.p2.x - a.p1.x) * a.unitDir.x + (b.p2.y - a.p1.y) * a.unitDir.y;
+      const minB = Math.min(t1, t2);
+      const maxB = Math.max(t1, t2);
+      const overlap = Math.min(a.onScreen, maxB) - Math.max(0, minB);
+      if (overlap < 15) continue; // Don't run alongside each other
+
+      // Midpoints of dimension lines
+      const midA = { x: (a.d.line[0].x + a.d.line[1].x) / 2, y: (a.d.line[0].y + a.d.line[1].y) / 2 };
+      const midB = { x: (b.d.line[0].x + b.d.line[1].x) / 2, y: (b.d.line[0].y + b.d.line[1].y) / 2 };
+      const dist = Math.hypot(midB.x - midA.x, midB.y - midA.y);
+      const perpDist = Math.abs((midB.x - midA.x) * a.normal.x + (midB.y - midA.y) * a.normal.y);
+      const normDot = a.normal.x * b.normal.x + a.normal.y * b.normal.y;
+
+      // If dimension lines are close or run at the same perpendicular offset (within 22px)
+      if (dist < a.labelHeight + 20 || (normDot > 0.5 && perpDist < a.labelHeight + 22)) {
+        // Wall to tier: non-selected wall, or shorter wall
+        const target = a.isSelected ? b : (b.isSelected ? a : (a.onScreen >= b.onScreen ? b : a));
+        target.tierOffset += target.labelHeight + 16;
+        updateItemGeom(target);
+      }
+    }
+  }
+
+  // 3. Iterative 2D Label Collision Avoidance (3 passes)
+  for (let pass = 0; pass < 3; pass++) {
+    let hadCollision = false;
+
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+
+        const dx = Math.abs(a.label.x - b.label.x);
+        const dy = Math.abs(a.label.y - b.label.y);
+        const touchX = a.radW + b.radW;
+        const touchY = a.radH + b.radH;
+
+        if (dx < touchX && dy < touchY) {
+          hadCollision = true;
+          // Determine which wall to adjust
+          const movable = a.isSelected && !b.isSelected ? b : (b.isSelected && !a.isSelected ? a : (a.onScreen >= b.onScreen ? b : a));
+          const stationary = movable === a ? b : a;
+
+          // Attempt 1: Slide movable along its wall direction to clear stationary
+          const toMov = { x: movable.label.x - stationary.label.x, y: movable.label.y - stationary.label.y };
+          const proj = toMov.x * movable.unitDir.x + toMov.y * movable.unitDir.y;
+          const slideDir = proj >= 0 ? 1 : -1;
+          const shiftNeeded = (touchX + 12);
+          const candidateSlide = movable.slide + slideDir * shiftNeeded;
+          const maxSlide = Math.max(0, (movable.onScreen - movable.labelLength) / 2 + 20);
+
+          let slideApplied = false;
+          if (Math.abs(candidateSlide) <= maxSlide) {
+            const oldSlide = movable.slide;
+            movable.slide = candidateSlide;
+            updateItemGeom(movable);
+
+            // Verify if collision with stationary was resolved
+            const newDx = Math.abs(movable.label.x - stationary.label.x);
+            const newDy = Math.abs(movable.label.y - stationary.label.y);
+            if (newDx >= touchX || newDy >= touchY) {
+              slideApplied = true;
+            } else {
+              // Revert if it didn't clear
+              movable.slide = oldSlide;
+              updateItemGeom(movable);
+            }
+          }
+
+          // Attempt 2: If slide didn't work, tier outward into next offset level
+          if (!slideApplied) {
+            movable.tierOffset += movable.labelHeight + 16;
+            updateItemGeom(movable);
+          }
+        }
+      }
+    }
+
+    if (!hadCollision) break;
+  }
+
+  // 4. Build output map
+  for (const it of list) {
+    const lineMid: Pt = { x: (it.d.line[0].x + it.d.line[1].x) / 2, y: (it.d.line[0].y + it.d.line[1].y) / 2 };
+    const distToMid = Math.hypot(it.label.x - lineMid.x, it.label.y - lineMid.y);
+    const hitW = Math.max(it.labelLength, isMobile ? 56 : 44);
+    const hitH = Math.max(it.labelHeight, isMobile ? 40 : 28);
+    const needsLeader = !it.d.fits || Math.abs(it.slide) > Math.max(0, it.onScreen / 2 - it.labelLength / 2) || (it.tierOffset > 0 && Math.abs(it.slide) > 5);
+
+    layouts.set(it.id, {
+      id: it.id,
+      d: it.d,
+      label: it.label,
+      lineMid,
+      slide: it.slide,
+      tierOffset: it.tierOffset,
+      labelLength: it.labelLength,
+      labelHeight: it.labelHeight,
+      hitW,
+      hitH,
+      needsLeader,
+    });
+  }
+
+  return layouts;
+}
+
+// ---------------------------------------------------------------------------
 // Clear (inside) room size
 // ---------------------------------------------------------------------------
 

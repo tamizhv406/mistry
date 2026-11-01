@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Trash2,
   Database,
+  LogIn,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -344,27 +345,53 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               </div>
             )}
             {!collapsed && (
-              <button
-                type="button"
-                className="sidebar-logout-btn"
-                onClick={onLogout}
-                title="Sign out"
-                aria-label="Sign out of Building Mistry"
-              >
-                <LogOut size={16} />
-              </button>
+              user.id === 'local-builder-user' ? (
+                <button
+                  type="button"
+                  className="sidebar-logout-btn"
+                  onClick={() => onNavigate('login')}
+                  title="Connect Supabase Cloud / Sign in"
+                  aria-label="Connect Supabase Cloud"
+                  style={{ color: '#38bdf8' }}
+                >
+                  <LogIn size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="sidebar-logout-btn"
+                  onClick={onLogout}
+                  title="Sign out"
+                  aria-label="Sign out of Building Mistry"
+                >
+                  <LogOut size={16} />
+                </button>
+              )
             )}
           </div>
           {collapsed && (
-            <button
-              type="button"
-              className="sidebar-logout-btn sidebar-logout-btn--collapsed"
-              onClick={onLogout}
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut size={16} />
-            </button>
+            user.id === 'local-builder-user' ? (
+              <button
+                type="button"
+                className="sidebar-logout-btn sidebar-logout-btn--collapsed"
+                onClick={() => onNavigate('login')}
+                title="Connect Supabase Cloud / Sign in"
+                aria-label="Connect Supabase Cloud"
+                style={{ color: '#38bdf8' }}
+              >
+                <LogIn size={16} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="sidebar-logout-btn sidebar-logout-btn--collapsed"
+                onClick={onLogout}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut size={16} />
+              </button>
+            )
           )}
         </div>
       )}

@@ -150,6 +150,27 @@ export function roomPerimeter(room: Pick<FloorPlanRoom, 'width' | 'height' | 'po
     : 2 * (Math.abs(room.width) + Math.abs(room.height));
 }
 
+/**
+ * Extracts polygon vertices for a room.
+ * For polygon rooms, returns polygonPoints.
+ * For standard rectangle rooms, returns the 4 corner points in clockwise order.
+ */
+export function getRoomPolygonVertices(room: FloorPlanRoom): Array<{ x: number; y: number }> {
+  if (room.polygonPoints && room.polygonPoints.length >= 3) {
+    return room.polygonPoints.map(p => ({ x: p.x, y: p.y }));
+  }
+  const x = room.x;
+  const y = room.y;
+  const w = room.width;
+  const h = room.height;
+  return [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Rooms from connected walls
 // ---------------------------------------------------------------------------
@@ -487,13 +508,84 @@ export function adoptRoomsMatchingWalls(rooms: FloorPlanRoom[], walls: FloorPlan
 /**
  * Moves a corner. Every wall end that sits on the corner moves with it, so walls that were
  * joined stay joined. `walls` must be the walls as they were when the drag started.
+ * When primaryWallId and primaryEndpoint are specified, that wall's opposite endpoint is
+ * strictly anchored and protected from collapsing to zero length.
  */
-export function moveJoint(walls: FloorPlanWall[], from: Pt, to: Pt, tolerance: number): FloorPlanWall[] {
+export function moveJoint(
+  walls: FloorPlanWall[],
+  from: Pt,
+  to: Pt,
+  tolerance: number,
+  primaryWallId?: string,
+  primaryEndpoint?: 1 | 2
+): FloorPlanWall[] {
   const moved = walls.map(w => {
-    const at1 = Math.hypot(w.x1 - from.x, w.y1 - from.y) <= tolerance;
-    const at2 = Math.hypot(w.x2 - from.x, w.y2 - from.y) <= tolerance;
+    let at1 = Math.hypot(w.x1 - from.x, w.y1 - from.y) <= tolerance;
+    let at2 = Math.hypot(w.x2 - from.x, w.y2 - from.y) <= tolerance;
+
+    // Anchor opposite endpoint for the wall currently being resized:
+    if (primaryWallId && w.id === primaryWallId) {
+      if (primaryEndpoint === 1) {
+        at1 = true;
+        at2 = false;
+      } else if (primaryEndpoint === 2) {
+        at1 = false;
+        at2 = true;
+      }
+    }
+
     if (!at1 && !at2) return w;
-    return { ...w, x1: at1 ? to.x : w.x1, y1: at1 ? to.y : w.y1, x2: at2 ? to.x : w.x2, y2: at2 ? to.y : w.y2 };
+
+    let targetX1 = at1 ? to.x : w.x1;
+    let targetY1 = at1 ? to.y : w.y1;
+    let targetX2 = at2 ? to.x : w.x2;
+    let targetY2 = at2 ? to.y : w.y2;
+
+    // Safety guard against 0-length collapse:
+    // Ensure at least 0.05 units separation between endpoints
+    const newLen = Math.hypot(targetX2 - targetX1, targetY2 - targetY1);
+    const minLen = 0.05;
+    if (newLen < minLen) {
+      if (at1 && !at2) {
+        const dx = targetX1 - targetX2;
+        const dy = targetY1 - targetY2;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1e-6) {
+          targetX1 = targetX2 + (dx / dist) * minLen;
+          targetY1 = targetY2 + (dy / dist) * minLen;
+        } else {
+          const odx = from.x - targetX2;
+          const ody = from.y - targetY2;
+          const odist = Math.hypot(odx, ody);
+          if (odist > 1e-6) {
+            targetX1 = targetX2 + (odx / odist) * minLen;
+            targetY1 = targetY2 + (ody / odist) * minLen;
+          } else {
+            targetX1 = targetX2 + minLen;
+          }
+        }
+      } else if (at2 && !at1) {
+        const dx = targetX2 - targetX1;
+        const dy = targetY2 - targetY1;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1e-6) {
+          targetX2 = targetX1 + (dx / dist) * minLen;
+          targetY2 = targetY1 + (dy / dist) * minLen;
+        } else {
+          const odx = from.x - targetX1;
+          const ody = from.y - targetY1;
+          const odist = Math.hypot(odx, ody);
+          if (odist > 1e-6) {
+            targetX2 = targetX1 + (odx / odist) * minLen;
+            targetY2 = targetY1 + (ody / odist) * minLen;
+          } else {
+            targetX2 = targetX1 + minLen;
+          }
+        }
+      }
+    }
+
+    return { ...w, x1: targetX1, y1: targetY1, x2: targetX2, y2: targetY2 };
   });
   return reattachTees(walls, moved, tolerance);
 }

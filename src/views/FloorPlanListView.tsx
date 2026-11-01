@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { isAdminRole, type FloorPlan, type FloorPlanUnit, type Site, type User } from '../db/types';
 import {
   softDeleteFloorPlan,
@@ -60,6 +61,7 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<FloorPlanStarterTemplate | null>(null);
   const [templateSiteId, setTemplateSiteId] = useState<string>('');
+  const [planToDelete, setPlanToDelete] = useState<FloorPlan | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Update filter if initialSiteId changes
@@ -127,8 +129,14 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
     ? new Date(recentlyEditedPlan.updatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
     : '—';
 
-  const handleDelete = async (fp: FloorPlan) => {
-    if (!confirm(`Move "${fp.floorName}" to Recycle Bin?`)) return;
+  const handleDelete = (fp: FloorPlan) => {
+    setPlanToDelete(fp);
+  };
+
+  const confirmDeletePlan = async () => {
+    if (!planToDelete) return;
+    const fp = planToDelete;
+    setPlanToDelete(null);
     const res = await softDeleteFloorPlan(user, fp.id);
     if (res.success) {
       onNotify(`"${fp.floorName}" moved to Recycle Bin`, 'info');
@@ -786,6 +794,18 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Confirm Soft-Delete Modal */}
+      <ConfirmModal
+        isOpen={!!planToDelete}
+        title="Move Floor Plan to Recycle Bin"
+        message={`Are you sure you want to move "${planToDelete?.floorName || 'this floor plan'}" to the Recycle Bin? You can restore it anytime.`}
+        confirmLabel="Move to Trash"
+        type="trash"
+        isDanger={true}
+        onConfirm={confirmDeletePlan}
+        onCancel={() => setPlanToDelete(null)}
+      />
 
       {/* New Floor Plan Setup Modal */}
       {showNewPlanModal && (

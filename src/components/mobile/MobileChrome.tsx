@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   BarChart3, Building2, Calculator, CalendarCheck, Check, ChevronDown, ChevronRight, Database, Download, HardHat, Home,
-  LayoutGrid, LogOut, Menu, Package, PenTool, Plus, ShieldCheck, Trash2, Wallet, Wrench,
+  LayoutGrid, LogIn, LogOut, Menu, Package, PenTool, Plus, ShieldCheck, Trash2, Wallet, Wrench,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -24,7 +24,9 @@ interface ChromeProps {
 }
 
 /** Slim top bar (phone only): brand, project switcher, account. */
-export const MobileTopBar: React.FC<ChromeProps> = ({ user, sites, siteId, onSelectSite, onNavigate, onNewSite, onLogout }) => {
+export const MobileTopBar: React.FC<ChromeProps> = ({ user, currentView, sites, siteId, onSelectSite, onNavigate, onNewSite, onLogout }) => {
+  if (currentView === 'floor-plan-editor') return null;
+
   const [pickerOpen, setPickerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -83,10 +85,18 @@ export const MobileTopBar: React.FC<ChromeProps> = ({ user, sites, siteId, onSel
             <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>Backup &amp; Data</span><span className="m-row-sub">Save or restore everything on this device</span></span>
             <ChevronRight size={20} className="is-muted" />
           </button>
-          <button type="button" className="m-row" onClick={() => { setAccountOpen(false); onLogout(); }}>
-            <span className="m-row-icon"><LogOut size={20} /></span>
-            <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>Sign out</span><span className="m-row-sub">Your data stays on this device</span></span>
-          </button>
+          {user.id === 'local-builder-user' ? (
+            <button type="button" className="m-row" onClick={() => { setAccountOpen(false); onNavigate('login'); }}>
+              <span className="m-row-icon"><LogIn size={20} color="#0284c7" /></span>
+              <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>Connect Supabase Cloud</span><span className="m-row-sub">Sign in to sync your projects online</span></span>
+              <ChevronRight size={20} className="is-muted" />
+            </button>
+          ) : (
+            <button type="button" className="m-row" onClick={() => { setAccountOpen(false); onLogout(); }}>
+              <span className="m-row-icon"><LogOut size={20} /></span>
+              <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>Sign out</span><span className="m-row-sub">Your data stays on this device</span></span>
+            </button>
+          )}
         </div>
       </Sheet>
     </>
@@ -98,6 +108,8 @@ export const MobileTopBar: React.FC<ChromeProps> = ({ user, sites, siteId, onSel
  * Home | Projects | Floor Plan | Reports | More.
  */
 export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNavigate, onOpenClassic, onLogout, canInstall, onInstall, siteId }) => {
+  if (currentView === 'floor-plan-editor') return null;
+
   const [moreOpen, setMoreOpen] = useState(false);
   const trashCount = useLiveQuery(async () => (await db.getAllTrash(user)).length, [user]) || 0;
 
@@ -122,7 +134,10 @@ export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNa
     { label: `Recycle Bin${trashCount ? ` (${trashCount})` : ''}`, sub: 'Restore deleted records', icon: <Trash2 size={20} />, onClick: () => go('trash') },
     { label: 'Backup & Data', sub: 'Save or restore this device', icon: <Database size={20} />, onClick: () => go('backup') },
     { label: 'Install app', sub: 'Add Mistry to your home screen', icon: <Download size={20} />, onClick: () => { setMoreOpen(false); onInstall(); }, show: canInstall },
-    { label: 'Sign out', sub: user.fullName || user.username, icon: <LogOut size={20} />, onClick: () => { setMoreOpen(false); onLogout(); } },
+    ...(user.id === 'local-builder-user'
+      ? [{ label: 'Connect Supabase Cloud', sub: 'Sign in to sync your projects online', icon: <LogIn size={20} />, onClick: () => go('login') }]
+      : [{ label: 'Sign out', sub: user.fullName || user.username, icon: <LogOut size={20} />, onClick: () => { setMoreOpen(false); onLogout(); } }]
+    ),
   ];
 
   return (

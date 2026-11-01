@@ -27,25 +27,75 @@ export function isMistry(user?: User | null): boolean {
   return user?.role === 'MISTRY' || user?.role === 'MISTRY_USER';
 }
 
+export const LOCAL_BUILDER_ID = 'local_builder';
+
+export function getLocalWorkspaceUser(): User {
+  return {
+    id: LOCAL_BUILDER_ID,
+    username: 'builder',
+    fullName: 'Building Mistry Builder',
+    mobile: '',
+    email: 'builder@local.device',
+    passwordHash: '',
+    role: 'MISTRY',
+    isActive: true,
+    isLocal: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export async function initDefaultUser(): Promise<void> {
-  if (!supabase) {
-    setCurrentUser(null);
-    return;
+  // If user already has a valid session cached in localStorage, verify or retain it
+  const cached = getCurrentUser();
+  if (cached && cached.id && !cached.isLocal) {
+    if (supabase && isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!error && data.session?.user) {
+          let user: User;
+          try {
+            user = await resolveAuthenticatedUser(data.session.user);
+          } catch (error) {
+            if (error instanceof InactiveAccountError) throw error;
+            user = await resolveOfflineWorkspaceUser(data.session.user.id);
+          }
+          setCurrentUser(user);
+          return;
+        }
+      } catch {
+        // Fall back to cached or local profile
+      }
+    }
   }
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw new Error(`Could not read the Supabase session: ${error.message}`);
-  if (!data.session?.user) {
-    setCurrentUser(null);
-    return;
+
+  if (supabase && isSupabaseConfigured()) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session?.user) {
+        let user: User;
+        try {
+          user = await resolveAuthenticatedUser(data.session.user);
+        } catch (error) {
+          if (error instanceof InactiveAccountError) throw error;
+          user = await resolveOfflineWorkspaceUser(data.session.user.id);
+        }
+        setCurrentUser(user);
+        return;
+      }
+    } catch {
+      // Continue to local user fallback
+    }
   }
-  let user: User;
+
+  // Open application directly in Local Builder mode (no mandatory login)
+  const localUser = getLocalWorkspaceUser();
   try {
-    user = await resolveAuthenticatedUser(data.session.user);
-  } catch (error) {
-    if (error instanceof InactiveAccountError) throw error;
-    user = await resolveOfflineWorkspaceUser(data.session.user.id);
+    await db.users.put(localUser);
+  } catch {
+    // Storage quota or index error
   }
-  setCurrentUser(user);
+  setCurrentUser(localUser);
 }
 
 export const initAuth = initDefaultUser;
@@ -337,10 +387,14 @@ export function setCurrentUser(user: User | null, remember: boolean = true): voi
 
 export async function logoutUser(): Promise<void> {
   if (supabase) {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw new Error(`Could not sign out of Supabase Auth: ${error.message}`);
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore network errors on sign out
+    }
   }
-  setCurrentUser(null);
+  const localUser = getLocalWorkspaceUser();
+  setCurrentUser(localUser);
 }
 
 export interface AdminUserListItem extends Omit<User, 'passwordHash'> {

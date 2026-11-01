@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 scratch/
 floor-plan-creator-application/
+building-mistry-floorplanner-updated*/
 
 
 # Android signing and local build settings (never commit)
