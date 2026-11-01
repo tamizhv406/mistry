@@ -6027,6 +6027,19 @@ _Shared via Building Mistry App_`;
             </button>
           )}
 
+          {/* Three-Line Hamburger Menu to Toggle Left Drawer (Layouts & Elements) */}
+          <button
+            type="button"
+            className={`fp-mobile-header-btn ${isLeftDrawerOpen ? 'active' : ''}`}
+            onClick={() => setIsLeftDrawerOpen(o => !o)}
+            title="Toggle Layouts & Elements (☰)"
+            aria-label="Layouts and Elements (☰)"
+            id="fp-mobile-drawer-toggle-btn"
+            style={{ width: 36, height: 36 }}
+          >
+            <Menu size={20} />
+          </button>
+
           {/* Plan name with its save state and size underneath. Tap for the full overview. */}
           <div
             className="fp-mobile-title-group"
@@ -6075,15 +6088,16 @@ _Shared via Building Mistry App_`;
             )}
           </button>
 
+          {/* Three-Dots Menu Button: Plan & Floor Overview (⋮) */}
           <button
             type="button"
-            className="fp-mobile-menu-btn"
-            onClick={() => setShowMobileMenu(true)}
-            title="Floors and view options"
-            aria-label="More Options"
+            className={`fp-mobile-menu-btn ${showMobileDetails ? 'active' : ''}`}
+            onClick={() => setShowMobileDetails(o => !o)}
+            title="Plan & Floor Overview (⋮)"
+            aria-label="Plan and Floor Overview (⋮)"
             id="fp-mobile-menu-btn"
           >
-            <MoreVertical size={18} />
+            <MoreVertical size={20} />
           </button>
         </div>
       </header>
@@ -6798,9 +6812,16 @@ _Shared via Building Mistry App_`;
         </aside>
         )}
 
-        {/* ── Expandable Left Drawer (Image 1) ── */}
-        {!isMobile && isLeftDrawerOpen && (
-          <aside className="fp-builder-drawer no-print" aria-label="Insert Library">
+        {/* ── Expandable Left Drawer (Desktop & Mobile) ── */}
+        {isLeftDrawerOpen && (
+          <>
+            {isMobile && (
+              <div
+                className="fp-drawer-mobile-backdrop no-print"
+                onClick={() => setIsLeftDrawerOpen(false)}
+              />
+            )}
+            <aside className="fp-builder-drawer no-print" aria-label="Insert Library">
             {/* Top Header Row with Segmented Tabs and Inside Close Button */}
             <div className="fp-drawer-header-row">
               <div className="fp-drawer-segmented">
@@ -7118,7 +7139,8 @@ _Shared via Building Mistry App_`;
               )}
             </div>
           </aside>
-        )}
+        </>
+      )}
 
         {/* ── Center Workspace: Shape Library + Canvas ────── */}
         <div className="fp-canvas-workspace">
@@ -15763,15 +15785,62 @@ _Shared via Building Mistry App_`;
           <div className="fp-mobile-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="Plan Overview">
             <div className="fp-mobile-sheet-handle" />
             <div className="fp-mobile-sheet-header">
-              <span className="fp-mobile-sheet-title">Plan Overview & Statistics</span>
+              <span className="fp-mobile-sheet-title">Plan & Floor Overview</span>
               <button
                 type="button"
                 className="fp-mobile-sheet-close"
                 onClick={() => setShowMobileDetails(false)}
                 aria-label="Close"
+                title="Close Overview (✕)"
               >
                 <X size={16} />
               </button>
+            </div>
+
+            {/* Floor Levels Switcher */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Floor Levels
+                </span>
+                <button
+                  type="button"
+                  style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => {
+                    setShowMobileDetails(false);
+                    setShowMobileMenu(true);
+                  }}
+                >
+                  More Options →
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {floorLevels.map((lvl, idx) => (
+                  <button
+                    key={lvl.id || idx}
+                    type="button"
+                    className={`fp-mobile-sub-btn ${idx === activeFloorIndex ? 'active' : ''}`}
+                    onClick={() => {
+                      handleSwitchFloor(idx);
+                      setShowMobileDetails(false);
+                    }}
+                  >
+                    {idx === activeFloorIndex && <Check size={12} />}
+                    {lvl.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="fp-mobile-sub-btn"
+                  onClick={() => {
+                    handleAddFloor();
+                    setShowMobileDetails(false);
+                  }}
+                  title="Add Level"
+                >
+                  <Plus size={12} /> Add Level
+                </button>
+              </div>
             </div>
 
             <div className="fp-mobile-sheet-grid">

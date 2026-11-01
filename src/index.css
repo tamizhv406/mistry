@@ -8095,7 +8095,6 @@ input:focus, select:focus, textarea:focus {
   .fp-editor-header,
   .fp-builder-header,
   .fp-builder-rail,
-  .fp-builder-drawer,
   .fp-toolbar,
   .fp-desktop-left-toolbar,
   .fp-desktop-right-panel,
@@ -8106,6 +8105,32 @@ input:focus, select:focus, textarea:focus {
   .fp-floating-cad-controls,
   .fp-live-hint-bar {
     display: none !important;
+  }
+
+  /* Slide-over Drawer for Mobile */
+  .fp-builder-drawer {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 86vw !important;
+    max-width: 330px !important;
+    height: 100dvh !important;
+    z-index: 250 !important;
+    background: #ffffff !important;
+    box-shadow: 8px 0 24px rgba(15, 23, 42, 0.25) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    animation: fpSlideInLeft 0.2s ease-out;
+  }
+
+  .fp-drawer-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 249;
+    backdrop-filter: blur(2px);
+    animation: fpFadeIn 0.2s ease-out;
   }
 
   .fp-editor-root {
@@ -8143,6 +8168,24 @@ input:focus, select:focus, textarea:focus {
     overflow: hidden !important;
     overscroll-behavior: none !important;
     touch-action: none !important;
+  }
+}
+
+@keyframes fpSlideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fpFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
