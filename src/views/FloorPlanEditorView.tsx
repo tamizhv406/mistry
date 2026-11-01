@@ -6690,6 +6690,7 @@ _Shared via Building Mistry App_`;
       {/* ── Desktop Professional CAD Workspace ────────── */}
       <div className="fp-desktop-workspace">
         {/* ── Slim Left Rail (Icon Dock - Image 1) ── */}
+        {!isMobile && (
         <aside className="fp-builder-rail no-print" aria-label="Tool Rail">
           {/* Top Plus Button to Toggle Left Insert Drawer */}
           <button
@@ -6761,9 +6762,10 @@ _Shared via Building Mistry App_`;
             </button>
           </div>
         </aside>
+        )}
 
         {/* ── Expandable Left Drawer (Image 1) ── */}
-        {isLeftDrawerOpen && (
+        {!isMobile && isLeftDrawerOpen && (
           <aside className="fp-builder-drawer no-print" aria-label="Insert Library">
             {/* Top Segmented Capsule Tabs */}
             <div className="fp-drawer-segmented">
@@ -9912,6 +9914,209 @@ _Shared via Building Mistry App_`;
             );
           }
 
+          // Contextual Stairs Toolbar: Compact bottom sheet on mobile only
+          if (selectedElement.type === 'stairs') {
+            if (!isMobile) return null; // Desktop uses the Right Side Panel!
+            const stair = entity as FloorPlanStaircase;
+            const isFeet = baseUnitOf(unit) === 'feet';
+            const isLocked = !!stair.locked;
+            return (
+              <div className="fp-mobile-wall-sheet fp-mobile-stairs-sheet no-print">
+                <div className="fp-mobile-wall-info">
+                  <span className="fp-mobile-wall-badge" style={{ background: '#2563eb', color: '#ffffff' }}>STAIRS</span>
+                  <span className="fp-mobile-wall-len">
+                    {formatDimension(stair.width, unit)} × {formatDimension(stair.length, unit)}
+                  </span>
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-step"
+                    disabled={isLocked}
+                    onClick={() => {
+                      const nw = Math.max(isFeet ? 1.5 : 0.5, +(stair.width - (isFeet ? 0.5 : 0.15)).toFixed(2));
+                      const nl = Math.max(isFeet ? 3.0 : 1.0, +(stair.length - (isFeet ? 1.0 : 0.3)).toFixed(2));
+                      const ns = Math.max(6, Math.round(nl / (isFeet ? 0.75 : 0.23)));
+                      dispatchWithHistory({
+                        type: 'UPDATE_STAIRS',
+                        id: stair.id,
+                        changes: { width: nw, length: nl, steps: ns },
+                      });
+                      markUnsaved();
+                    }}
+                    title="Chinnathu (- Scale)"
+                    style={{ padding: '0 8px', width: 'auto', gap: 4 }}
+                  >
+                    <Minus size={14} />
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>Smaller</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-step"
+                    disabled={isLocked}
+                    onClick={() => {
+                      const nw = +(stair.width + (isFeet ? 0.5 : 0.15)).toFixed(2);
+                      const nl = +(stair.length + (isFeet ? 1.0 : 0.3)).toFixed(2);
+                      const ns = Math.max(6, Math.round(nl / (isFeet ? 0.75 : 0.23)));
+                      dispatchWithHistory({
+                        type: 'UPDATE_STAIRS',
+                        id: stair.id,
+                        changes: { width: nw, length: nl, steps: ns },
+                      });
+                      markUnsaved();
+                    }}
+                    title="Perusu (+ Scale)"
+                    style={{ padding: '0 8px', width: 'auto', gap: 4, background: '#2563eb', color: '#ffffff', borderColor: '#2563eb' }}
+                  >
+                    <Plus size={14} />
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700 }}>Bigger</span>
+                  </button>
+                </div>
+                <div className="fp-mobile-stairs-steppers">
+                  <div className="fp-mobile-stepper-chip">
+                    <span>W:</span>
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        const nw = Math.max(isFeet ? 1.5 : 0.5, +(stair.width - (isFeet ? 0.25 : 0.1)).toFixed(2));
+                        dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { width: nw } });
+                        markUnsaved();
+                      }}
+                    >
+                      -
+                    </button>
+                    <span>{formatDimension(stair.width, unit)}</span>
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        const nw = +(stair.width + (isFeet ? 0.25 : 0.1)).toFixed(2);
+                        dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { width: nw } });
+                        markUnsaved();
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="fp-mobile-stepper-chip">
+                    <span>L:</span>
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        const nl = Math.max(isFeet ? 3.0 : 1.0, +(stair.length - (isFeet ? 0.5 : 0.15)).toFixed(2));
+                        const ns = Math.max(6, Math.round(nl / (isFeet ? 0.75 : 0.23)));
+                        dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { length: nl, steps: ns } });
+                        markUnsaved();
+                      }}
+                    >
+                      -
+                    </button>
+                    <span>{formatDimension(stair.length, unit)}</span>
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        const nl = +(stair.length + (isFeet ? 0.5 : 0.15)).toFixed(2);
+                        const ns = Math.max(6, Math.round(nl / (isFeet ? 0.75 : 0.23)));
+                        dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { length: nl, steps: ns } });
+                        markUnsaved();
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="fp-mobile-stepper-chip">
+                    <span>Steps:</span>
+                    <button
+                      type="button"
+                      disabled={isLocked || (stair.steps ?? 16) <= 4}
+                      onClick={() => {
+                        dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { steps: Math.max(4, (stair.steps ?? 16) - 1) } });
+                        markUnsaved();
+                      }}
+                    >
+                      -
+                    </button>
+                    <span>{stair.steps ?? 16}</span>
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => {
+                        dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { steps: (stair.steps ?? 16) + 1 } });
+                        markUnsaved();
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div className="fp-mobile-wall-actions">
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-btn"
+                    disabled={isLocked}
+                    onClick={() => {
+                      const newRot = ((stair.rotation || 0) + 90) % 360;
+                      dispatchWithHistory({ type: 'UPDATE_STAIRS', id: stair.id, changes: { rotation: newRot } });
+                      markUnsaved();
+                    }}
+                    title="Rotate 90°"
+                    id="fp-mobile-stairs-rotate-btn"
+                  >
+                    <RotateCw size={13} />
+                    <span>Rotate</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-btn"
+                    disabled={isLocked}
+                    onClick={() => {
+                      dispatchWithHistory({
+                        type: 'UPDATE_STAIRS',
+                        id: stair.id,
+                        changes: { direction: stair.direction === 'up' ? 'down' : 'up' },
+                      });
+                      markUnsaved();
+                    }}
+                    title="Flip UP/DN"
+                    id="fp-mobile-stairs-flip-btn"
+                  >
+                    <FlipVertical size={13} />
+                    <span>{stair.direction === 'up' ? 'UP' : 'DN'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-btn"
+                    onClick={handleToggleLockSelected}
+                    title={isLocked ? 'Unlock' : 'Lock'}
+                    id="fp-mobile-stairs-lock-btn"
+                  >
+                    {isLocked ? <Lock size={13} /> : <Unlock size={13} />}
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-btn danger"
+                    disabled={isLocked}
+                    onClick={handleDeleteSelected}
+                    title="Delete Stair"
+                    id="fp-mobile-stairs-delete-btn"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    className="fp-mobile-wall-btn"
+                    onClick={() => setSelectedElement(null)}
+                    title="Close"
+                    id="fp-mobile-stairs-close-btn"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
           const isLocked = !!entity.locked;
           // Phones have no side inspector, so the dock is always there, compact until opened.
           const dockMinimized = isMobile ? phoneDockOpenFor !== selectedElement.id : isBottomDockMinimized;
@@ -10796,6 +11001,7 @@ _Shared via Building Mistry App_`;
     </div>
 
         {/* ── Modern Right Inspector Panel (Image 2) ── */}
+        {!isMobile && (
         <aside className="fp-desktop-right-panel no-print" aria-label="Properties Inspector">
           {/* Top Quick Actions Bar (Image 2: Align Left, Center, Right, Flip, Rotate, Lock, Delete) */}
           <div className="fp-inspector-top-actions">
@@ -12452,6 +12658,7 @@ _Shared via Building Mistry App_`;
             </div>
           </div>
         </aside>
+        )}
       </div>
 
       {/* ── Mobile Contextual Subtoolbar (< 768px) ────── */}
@@ -12759,6 +12966,23 @@ _Shared via Building Mistry App_`;
         >
           <Square size={20} />
           <span className="fp-mobile-tool-label">Room</span>
+        </button>
+
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn ${activeTool === 'stairs' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTool('stairs');
+            setSelectedElement(null);
+            speakTamil('படிக்கட்டு');
+          }}
+          title="Place Stairs (படிக்கட்டு)"
+          id="fp-mobile-tool-stairs"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M20 5h-4v4h-4v4H8v4H4v3" />
+          </svg>
+          <span className="fp-mobile-tool-label">Stairs</span>
         </button>
 
         <button
@@ -15148,6 +15372,25 @@ _Shared via Building Mistry App_`;
                 <div>
                   <div>Polygon / L-Shape</div>
                   <div style={{ fontSize: '0.68rem', color: '#475569' }}>Multi-corner room geometry</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="fp-mobile-grid-btn"
+                style={{ gridColumn: 'span 2' }}
+                onClick={() => {
+                  setActiveTool('stairs');
+                  setSelectedElement(null);
+                  setShowMobileShapes(false);
+                  onNotify('Stairs active: tap canvas to place staircase', 'info');
+                  speakTamil('படிக்கட்டு');
+                }}
+              >
+                <div className="fp-mobile-grid-btn-icon"><Split size={18} /></div>
+                <div>
+                  <div>Staircase (படிக்கட்டு)</div>
+                  <div style={{ fontSize: '0.68rem', color: '#475569' }}>Straight, L-shape, U-shape, Spiral</div>
                 </div>
               </button>
 
