@@ -3298,13 +3298,43 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 4px 0 16px rgba(15, 23, 42, 0.04);
 }
 
+.fp-drawer-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px 8px;
+}
+
 .fp-drawer-segmented {
   display: flex;
+  flex: 1;
   background: #f1f5f9;
   padding: 4px;
   border-radius: 8px;
-  margin: 12px 14px 8px;
+  margin: 0;
   border: 1px solid #e2e8f0;
+}
+
+.fp-drawer-close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.fp-drawer-close-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+  border-color: #fca5a5;
+  transform: scale(1.05);
 }
 
 .fp-drawer-segment {

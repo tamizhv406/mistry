@@ -13,7 +13,7 @@ import {
   MoreVertical, Shapes, Minus, Type, Image as ImageIcon,
   Maximize, Minimize, FilePlus, Edit, Bed, Sofa, Utensils, Bath, Zap,
   Eraser, Search, LocateFixed, LayoutGrid, Share2, Volume2, VolumeX,
-  Monitor, Tablet, Smartphone, Link as LinkIcon, AlignLeft, AlignCenter, AlignRight,
+  Monitor, Tablet, Smartphone, Link as LinkIcon, AlignLeft, AlignCenter, AlignRight, Menu,
 } from 'lucide-react';
 import { speakTamil, isVoiceEnabled, toggleVoice } from '../utils/tamilVoice';
 import type {
@@ -650,8 +650,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   );
 
   // SaaS Design System Layout State (matching uploaded reference images)
-  const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(true);
-  const [leftDrawerTab, setLeftDrawerTab] = useState<'elements' | 'layouts'>('elements');
+  const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  const [leftDrawerTab, setLeftDrawerTab] = useState<'elements' | 'layouts'>('layouts');
   const [leftDrawerSearch, setLeftDrawerSearch] = useState('');
   const [deviceViewport, setDeviceViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [accordionSections, setAccordionSections] = useState({
@@ -6111,6 +6112,18 @@ _Shared via Building Mistry App_`;
             </button>
           )}
 
+          {/* Three-Line Hamburger Menu to Toggle Left Drawer (Layouts & Elements) */}
+          <button
+            type="button"
+            className={`fp-builder-icon-btn ${isLeftDrawerOpen ? 'active' : ''}`}
+            onClick={() => setIsLeftDrawerOpen(o => !o)}
+            title="Toggle Layouts & Elements (☰)"
+            id="fp-builder-menu-toggle-btn"
+            style={{ marginRight: 2 }}
+          >
+            <Menu size={18} />
+          </button>
+
           <div className="fp-builder-logo">
             <Layers size={20} color="#2563eb" />
           </div>
@@ -6341,6 +6354,25 @@ _Shared via Building Mistry App_`;
           <div className="fp-builder-avatar" title={user.fullName || user.username || 'User Profile'}>
             <span>{(user.fullName || user.username || 'U')[0].toUpperCase()}</span>
           </div>
+
+          {/* Plan & Floor Overview / Properties Toggle (Three Dots) */}
+          <button
+            type="button"
+            className={`fp-builder-icon-btn ${isRightPanelOpen || selectedElement ? 'active' : ''}`}
+            onClick={() => {
+              if (selectedElement) {
+                setSelectedElement(null);
+                setIsRightPanelOpen(true);
+              } else {
+                setIsRightPanelOpen(o => !o);
+              }
+            }}
+            title="Plan & Floor Overview / Properties (⋮)"
+            id="fp-overview-toggle-btn"
+            style={{ marginLeft: 4 }}
+          >
+            <MoreVertical size={18} />
+          </button>
         </div>
       </header>
 
@@ -6694,15 +6726,15 @@ _Shared via Building Mistry App_`;
         {/* ── Slim Left Rail (Icon Dock - Image 1) ── */}
         {!isMobile && (
         <aside className="fp-builder-rail no-print" aria-label="Tool Rail">
-          {/* Top Plus Button to Toggle Left Insert Drawer */}
+          {/* Top Menu Button to Toggle Left Insert Drawer */}
           <button
             type="button"
             className={`fp-rail-plus-btn ${isLeftDrawerOpen ? 'active' : ''}`}
             onClick={() => setIsLeftDrawerOpen(o => !o)}
-            title="Add & Insert Elements (+)"
+            title="Layouts & Elements (☰)"
             id="fp-builder-insert-btn"
           >
-            <Plus size={16} />
+            <Menu size={18} />
           </button>
 
           <div className="fp-rail-divider" />
@@ -6769,21 +6801,32 @@ _Shared via Building Mistry App_`;
         {/* ── Expandable Left Drawer (Image 1) ── */}
         {!isMobile && isLeftDrawerOpen && (
           <aside className="fp-builder-drawer no-print" aria-label="Insert Library">
-            {/* Top Segmented Capsule Tabs */}
-            <div className="fp-drawer-segmented">
+            {/* Top Header Row with Segmented Tabs and Inside Close Button */}
+            <div className="fp-drawer-header-row">
+              <div className="fp-drawer-segmented">
+                <button
+                  type="button"
+                  className={`fp-drawer-segment ${leftDrawerTab === 'layouts' ? 'active' : ''}`}
+                  onClick={() => setLeftDrawerTab('layouts')}
+                >
+                  Layouts
+                </button>
+                <button
+                  type="button"
+                  className={`fp-drawer-segment ${leftDrawerTab === 'elements' ? 'active' : ''}`}
+                  onClick={() => setLeftDrawerTab('elements')}
+                >
+                  Elements
+                </button>
+              </div>
               <button
                 type="button"
-                className={`fp-drawer-segment ${leftDrawerTab === 'layouts' ? 'active' : ''}`}
-                onClick={() => setLeftDrawerTab('layouts')}
+                className="fp-drawer-close-btn"
+                onClick={() => setIsLeftDrawerOpen(false)}
+                title="Close Drawer (✕)"
+                id="fp-drawer-close-btn"
               >
-                Layouts
-              </button>
-              <button
-                type="button"
-                className={`fp-drawer-segment ${leftDrawerTab === 'elements' ? 'active' : ''}`}
-                onClick={() => setLeftDrawerTab('elements')}
-              >
-                Elements
+                <X size={16} />
               </button>
             </div>
 
@@ -11003,9 +11046,9 @@ _Shared via Building Mistry App_`;
     </div>
 
         {/* ── Modern Right Inspector Panel (Image 2) ── */}
-        {!isMobile && (
+        {!isMobile && (isRightPanelOpen || !!selectedElement) && (
         <aside className="fp-desktop-right-panel no-print" aria-label="Properties Inspector">
-          {/* Top Quick Actions Bar (Image 2: Align Left, Center, Right, Flip, Rotate, Lock, Delete) */}
+          {/* Top Quick Actions Bar (Image 2: Align Left, Center, Right, Flip, Rotate, Lock, Delete, Close) */}
           <div className="fp-inspector-top-actions">
             <button
               type="button"
@@ -11079,6 +11122,19 @@ _Shared via Building Mistry App_`;
               id="fp-action-wall-delete"
             >
               <Trash2 size={15} />
+            </button>
+            <button
+              type="button"
+              className="fp-inspect-icon-btn"
+              onClick={() => {
+                setSelectedElement(null);
+                setIsRightPanelOpen(false);
+              }}
+              title="Close Inspector (✕)"
+              id="fp-close-inspector-btn"
+              style={{ marginLeft: 'auto' }}
+            >
+              <X size={15} />
             </button>
           </div>
 
@@ -11407,15 +11463,29 @@ _Shared via Building Mistry App_`;
           {/* Numerical Precision Inspector for other elements */}
           {selectedElement?.type !== 'wall' && (
             <div className="fp-numerical-inspector">
-              <h4>
-                {selectedElement?.type === 'room' && 'Room Properties'}
-                {selectedElement?.type === 'door' && 'Door Properties'}
-                {selectedElement?.type === 'window' && 'Window Properties'}
-                {selectedElement?.type === 'furniture' && 'Object Properties'}
-                {selectedElement?.type === 'stairs' && 'Stairs Properties'}
-                {selectedElement?.type === 'column' && 'Column Properties'}
-                {!selectedElement && 'Plan & Floor Overview'}
-              </h4>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h4 style={{ margin: 0 }}>
+                  {selectedElement?.type === 'room' && 'Room Properties'}
+                  {selectedElement?.type === 'door' && 'Door Properties'}
+                  {selectedElement?.type === 'window' && 'Window Properties'}
+                  {selectedElement?.type === 'furniture' && 'Object Properties'}
+                  {selectedElement?.type === 'stairs' && 'Stairs Properties'}
+                  {selectedElement?.type === 'column' && 'Column Properties'}
+                  {!selectedElement && 'Plan & Floor Overview'}
+                </h4>
+                <button
+                  type="button"
+                  className="fp-inspect-icon-btn"
+                  onClick={() => {
+                    setSelectedElement(null);
+                    setIsRightPanelOpen(false);
+                  }}
+                  title="Close (✕)"
+                  style={{ width: 26, height: 26 }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
               {selectedElement ? (
                 <div>
 
@@ -12299,7 +12369,19 @@ _Shared via Building Mistry App_`;
                 <div className="fp-default-info-card">
                   <div className="fp-default-info-header">
                     <span className="fp-default-info-title">Plan Overview</span>
-                    <span className="fp-default-info-badge">{unit === 'feet' ? 'Imperial (ft)' : 'Metric (m)'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="fp-default-info-badge">{unit === 'feet' ? 'Imperial (ft)' : 'Metric (m)'}</span>
+                      <button
+                        type="button"
+                        className="fp-inspect-icon-btn"
+                        onClick={() => setIsRightPanelOpen(false)}
+                        title="Close Plan Overview (✕)"
+                        id="fp-close-overview-btn"
+                        style={{ width: 24, height: 24 }}
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="fp-info-grid">
