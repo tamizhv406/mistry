@@ -1339,3 +1339,50 @@
     justify-content: center;
   }
 }
+
+
+
+/* --------------------------------------------------------------------------
+   PROJECTS MODULE - CONSTRUCTION SAAS SPECIFIC STYLES
+   -------------------------------------------------------------------------- */
+
+.projects-responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  width: 100%;
+}
+
+.project-saas-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.project-saas-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+  border-color: #BFDBFE;
+}
+
+/* Tablet: 2-column cards */
+@media (max-width: 1200px) {
+  .projects-responsive-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 16px;
+  }
+}
+
+/* Mobile: 1-column cards */
+@media (max-width: 768px) {
+  .projects-responsive-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+}

@@ -16,6 +16,7 @@ import { AppShell } from './components/AppShell';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
+import { ProjectsView } from './views/ProjectsView';
 import { SiteDetailView } from './views/SiteDetailView';
 import { TrashView } from './views/TrashView';
 import { BackupView } from './views/BackupView';
@@ -565,33 +566,20 @@ export function App() {
         )}
 
         {currentView === 'my-sites' && (
-          <DashboardView
-            onlySites={true}
+          <ProjectsView
+            user={currentUser}
             onOpenSite={siteId => {
               setSelectedSiteId(siteId);
-              handleNavigate('site-detail', siteId);
+              handleNavigate('site-detail', siteId, 'overview');
             }}
-            onOpenNewSiteModal={() => {
-              setSiteToEdit(null);
-              setSiteModalOpen(true);
-            }}
+            onOpenNewSiteModal={openNewSiteModal}
             onEditSite={site => {
               setSiteToEdit(site);
               setSiteModalOpen(true);
             }}
             onDeleteSiteToTrash={site => handleSoftDelete('sites', site.id, site.name)}
             onNotify={addToast}
-            user={currentUser}
-            onNavigate={(view, siteId, tab, subTab) => handleNavigate(view, siteId, tab, subTab)}
-            onOpenMaterialModal={category => {
-              setMatCategory(category || 'sand');
-              setMatToEdit(null);
-              setMatModalOpen(true);
-            }}
-            onOpenExpenseModal={() => {
-              setOtherToEdit(null);
-              setOtherModalOpen(true);
-            }}
+            onNavigate={handleNavigate}
           />
         )}
 
