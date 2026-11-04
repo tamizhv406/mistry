@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, X, Download } from 'lucide-react';
 import { db } from './db/db';
@@ -537,22 +537,40 @@ export function App() {
         {/* Main View Router */}
         <main>
         {currentView === 'dashboard' && (
-          <HomeView
-            user={currentUser}
-            sites={userSites}
-            siteId={selectedSiteId}
-            onSelectSite={handleSelectSite}
-            onGo={view => handleNavigate(view)}
-            onOpenClassic={id => handleNavigate('site-detail', id, 'overview')}
-            onNewSite={openNewSiteModal}
+          <DashboardView
+            onlySites={false}
+            onOpenSite={siteId => {
+              setSelectedSiteId(siteId);
+              handleNavigate('site-detail', siteId);
+            }}
+            onOpenNewSiteModal={openNewSiteModal}
+            onEditSite={site => {
+              setSiteToEdit(site);
+              setSiteModalOpen(true);
+            }}
+            onDeleteSiteToTrash={site => handleSoftDelete('sites', site.id, site.name)}
             onNotify={addToast}
+            user={currentUser}
+            onNavigate={(view, siteId, tab, subTab) => handleNavigate(view, siteId, tab, subTab)}
+            onOpenMaterialModal={category => {
+              setMatCategory(category || 'sand');
+              setMatToEdit(null);
+              setMatModalOpen(true);
+            }}
+            onOpenExpenseModal={() => {
+              setOtherToEdit(null);
+              setOtherModalOpen(true);
+            }}
           />
         )}
 
         {currentView === 'my-sites' && (
           <DashboardView
             onlySites={true}
-            onOpenSite={handleSelectSite}
+            onOpenSite={siteId => {
+              setSelectedSiteId(siteId);
+              handleNavigate('site-detail', siteId);
+            }}
             onOpenNewSiteModal={() => {
               setSiteToEdit(null);
               setSiteModalOpen(true);
@@ -564,6 +582,16 @@ export function App() {
             onDeleteSiteToTrash={site => handleSoftDelete('sites', site.id, site.name)}
             onNotify={addToast}
             user={currentUser}
+            onNavigate={(view, siteId, tab, subTab) => handleNavigate(view, siteId, tab, subTab)}
+            onOpenMaterialModal={category => {
+              setMatCategory(category || 'sand');
+              setMatToEdit(null);
+              setMatModalOpen(true);
+            }}
+            onOpenExpenseModal={() => {
+              setOtherToEdit(null);
+              setOtherModalOpen(true);
+            }}
           />
         )}
 
@@ -734,36 +762,37 @@ export function App() {
 
         {currentView === 'floor-plan-editor' && currentUser && (
           <ErrorBoundary>
-          selectedFloorPlanId ? (
-            <FloorPlanEditorView
-              planId={selectedFloorPlanId}
-              user={currentUser}
-              onBack={() => setCurrentView('floor-plans')}
-              onBackToSite={(siteId) => {
-                setSelectedSiteId(siteId);
-                setCurrentView('site-detail');
-              }}
-              onNotify={addToast}
-              onOpenEstimator={(areaSqFt) => {
-                handleNavigate('estimator');
-                setEstimatorAreaSqFt(areaSqFt);
-                addToast(`Floor plan area ${areaSqFt.toFixed(0)} sq.ft is set as the building size on one floor`, 'info');
-              }}
-            />
-          ) : (
-            <FloorPlanListView
-              user={currentUser}
-              onOpenEditor={(planId) => {
-                setSelectedFloorPlanId(planId);
-                setCurrentView('floor-plan-editor');
-              }}
-              onNotify={addToast}
-              onOpenNewSiteModal={() => {
-                setSiteToEdit(null);
-                setSiteModalOpen(true);
-              }}
-            />
-          )          </ErrorBoundary>
+            {selectedFloorPlanId ? (
+              <FloorPlanEditorView
+                planId={selectedFloorPlanId}
+                user={currentUser}
+                onBack={() => setCurrentView('floor-plans')}
+                onBackToSite={(siteId) => {
+                  setSelectedSiteId(siteId);
+                  setCurrentView('site-detail');
+                }}
+                onNotify={addToast}
+                onOpenEstimator={(areaSqFt) => {
+                  handleNavigate('estimator');
+                  setEstimatorAreaSqFt(areaSqFt);
+                  addToast(`Floor plan area ${areaSqFt.toFixed(0)} sq.ft is set as the building size on one floor`, 'info');
+                }}
+              />
+            ) : (
+              <FloorPlanListView
+                user={currentUser}
+                onOpenEditor={(planId) => {
+                  setSelectedFloorPlanId(planId);
+                  setCurrentView('floor-plan-editor');
+                }}
+                onNotify={addToast}
+                onOpenNewSiteModal={() => {
+                  setSiteToEdit(null);
+                  setSiteModalOpen(true);
+                }}
+              />
+            )}
+          </ErrorBoundary>
         )}
 
         {currentView === 'estimator' && (

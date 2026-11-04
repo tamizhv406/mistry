@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   HardHat,
-  Home,
+  LayoutDashboard,
   Building2,
   PenTool,
   Layers,
@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Trash2,
   Database,
+  Settings,
   LogIn,
   LogOut,
   ChevronLeft,
@@ -67,7 +68,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {
           id: 'dashboard',
           label: 'Home Dashboard',
-          icon: <Home size={20} />,
+          icon: <LayoutDashboard size={20} />,
           view: 'dashboard',
         },
         {
@@ -105,7 +106,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {
           id: 'dashboard',
           label: 'Dashboard',
-          icon: <Home size={20} />,
+          icon: <LayoutDashboard size={20} />,
           view: 'dashboard',
         },
         {
@@ -128,13 +129,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         },
         {
           id: 'stock',
-          label: 'Materials',
+          label: 'Materials Management',
           icon: <Layers size={20} />,
           view: 'stock',
         },
         {
           id: 'toolroom',
-          label: 'Tools',
+          label: 'Tools Management',
           icon: <Wrench size={20} />,
           view: 'toolroom',
         },
@@ -156,6 +157,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           icon: <Calculator size={20} />,
           view: 'estimator',
         },
+        {
+          id: 'backup',
+          label: 'Backup & Data',
+          icon: <Database size={20} />,
+          view: 'backup',
+        },
+        {
+          id: 'settings',
+          label: 'Settings',
+          icon: <Settings size={20} />,
+          view: 'backup',
+        },
       ];
 
   const bottomItems: SidebarItem[] = isOwner
@@ -165,8 +178,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           ? [
               {
                 id: 'admin',
-                label: isSuperAdmin(user) ? 'Super Admin' : 'Admin Portal',
-                icon: <ShieldCheck size={20} />,
+                label: isSuperAdmin(user) ? 'Master Admin' : 'Admin Portal',
+                icon: isSuperAdmin(user) ? <Crown size={20} /> : <ShieldCheck size={20} />,
                 view: 'admin',
                 adminOnly: true,
               },
@@ -179,20 +192,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           view: 'trash',
           badge: trashCount > 0 ? trashCount : undefined,
         },
-        {
-          id: 'backup',
-          label: 'Backup & Data',
-          icon: <Database size={20} />,
-          view: 'backup',
-        },
       ];
 
   const isItemActive = (item: SidebarItem): boolean => {
+    if (item.id === 'settings' && currentView === 'backup') return false; // keep Backup distinct from Settings
     if (item.view === currentView) return true;
     if (item.view === 'dashboard' && currentView === 'dashboard') return true;
     if (item.view === 'my-sites' && currentView === 'my-sites') return true;
     if (item.view === 'floor-plans' && (currentView === 'floor-plans' || currentView === 'floor-plan-editor')) return true;
-    if (item.view === 'labour' && currentView === 'worker') return true;
+    if (item.view === 'labour' && (currentView === 'labour' || currentView === 'worker')) return true;
     return false;
   };
 
@@ -223,7 +231,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {!collapsed && (
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name">Building Mistry</span>
-            <span className="sidebar-brand-sub">Construction Manager</span>
+            <span className="sidebar-brand-sub">Construction ERP</span>
           </div>
         )}
       </div>
@@ -247,7 +255,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 type="button"
                 className={`sidebar-nav-item ${isItemActive(item) ? 'sidebar-nav-item--active' : ''}`}
                 onClick={() => handleItemClick(item)}
-                title={collapsed ? item.label : undefined}
+                title={item.label}
                 aria-current={isItemActive(item) ? 'page' : undefined}
               >
                 <span className="sidebar-nav-icon">{item.icon}</span>
@@ -268,38 +276,37 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       <div className="sidebar-divider" />
 
       {/* Bottom Items */}
-      <nav className="sidebar-bottom-nav">
-        <ul className="sidebar-nav-list" role="list">
-          {bottomItems.map(item => (
-            <li key={item.id}>
-              <button
-                type="button"
-                className={`sidebar-nav-item ${
-                  item.id === 'admin'
-                    ? isSuperAdmin(user)
-                      ? 'sidebar-nav-item--admin-super'
-                      : 'sidebar-nav-item--admin'
-                    : ''
-                } ${isItemActive(item) ? 'sidebar-nav-item--active' : ''}`}
-                onClick={() => onNavigate(item.view)}
-                title={collapsed ? item.label : undefined}
-              >
-                <span className="sidebar-nav-icon">
-                  {item.id === 'admin' && isSuperAdmin(user) ? (
-                    <Crown size={20} />
-                  ) : (
-                    item.icon
+      {bottomItems.length > 0 && (
+        <nav className="sidebar-bottom-nav">
+          <ul className="sidebar-nav-list" role="list">
+            {bottomItems.map(item => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  className={`sidebar-nav-item ${
+                    item.id === 'admin'
+                      ? isSuperAdmin(user)
+                        ? 'sidebar-nav-item--admin-super'
+                        : 'sidebar-nav-item--admin'
+                      : ''
+                  } ${isItemActive(item) ? 'sidebar-nav-item--active' : ''}`}
+                  onClick={() => onNavigate(item.view)}
+                  title={item.label}
+                >
+                  <span className="sidebar-nav-icon">{item.icon}</span>
+                  {!collapsed && <span className="sidebar-nav-label">{item.label}</span>}
+                  {item.badge && !collapsed && (
+                    <span className="sidebar-nav-badge">{item.badge}</span>
                   )}
-                </span>
-                {!collapsed && <span className="sidebar-nav-label">{item.label}</span>}
-                {item.badge && !collapsed && (
-                  <span className="sidebar-nav-badge">{item.badge}</span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
+                  {item.badge && collapsed && (
+                    <span className="sidebar-nav-badge-dot" />
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
 
       {/* User Profile Section */}
       {user && (
@@ -312,7 +319,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   ? '#f59e0b'
                   : user.role === 'SUB_ADMIN'
                   ? '#6366f1'
-                  : '#0ea5e9',
+                  : '#2563eb',
               }}
             >
               {isSuperAdmin(user)
@@ -337,7 +344,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   }}
                 >
                   {isSuperAdmin(user)
-                    ? 'Real Admin'
+                    ? 'Master Admin'
                     : user.role === 'SUB_ADMIN'
                     ? 'Sub-Admin'
                     : user.role}
