@@ -1,0 +1,295 @@
+import { db } from './db';
+import { userCanAccessRecord, type User } from './types';
+import { USER_TABLES } from '../services/syncTombstones';
+import { todayKey } from '../utils/datetime';
+
+export interface BackupData {
+  version: number;
+  appName: string;
+  exportedAt: string;
+  data: {
+    sites: any[];
+    materials: any[];
+    rodEntries: any[];
+    workers: any[];
+    attendance: any[];
+    labourAdvances: any[];
+    salaryPayments: any[];
+    tools: any[];
+    teaSnacksExpenses: any[];
+    poojaExpenses: any[];
+    electricityBills: any[];
+    waterBills: any[];
+    siteComments: any[];
+    otherExpenses: any[];
+    activityLogs: any[];
+    materialPrices?: any[];
+    estimates?: any[];
+    payments?: any[];
+    floorPlans?: any[];
+    stockMovements?: any[];
+    catalogItems?: any[];
+    toolAssets?: any[];
+    toolIssues?: any[];
+  };
+}
+
+type BackupRecord = { userId?: string; siteId?: string };
+
+function filterBackupRows<T extends BackupRecord>(
+  table: string,
+  rows: T[] | undefined,
+  user: User,
+  siteOwners: Map<string, string>
+): T[] | undefined {
+  if (!rows) return rows;
+  const userOwnedTable = (USER_TABLES as readonly string[]).includes(table);
+  return rows.filter(row => {
+    const ownerId = userOwnedTable
+      ? row.userId
+      : row.siteId
+        ? siteOwners.get(row.siteId)
+        : row.userId;
+    return userCanAccessRecord(user, table, 'read', ownerId);
+  });
+}
+
+export function filterBackupDataForUser(data: BackupData['data'], user: User): BackupData['data'] {
+  const siteOwners = new Map(data.sites.map(site => [site.id, site.userId]));
+  const filter = (table: string, rows: BackupRecord[] | undefined) =>
+    filterBackupRows(table, rows, user, siteOwners);
+
+  return {
+    ...data,
+    sites: filter('sites', data.sites) || [],
+    materials: filter('materials', data.materials) || [],
+    rodEntries: filter('rodEntries', data.rodEntries) || [],
+    workers: filter('workers', data.workers) || [],
+    attendance: filter('attendance', data.attendance) || [],
+    labourAdvances: filter('labourAdvances', data.labourAdvances) || [],
+    salaryPayments: filter('salaryPayments', data.salaryPayments) || [],
+    tools: filter('tools', data.tools) || [],
+    teaSnacksExpenses: filter('teaSnacksExpenses', data.teaSnacksExpenses) || [],
+    poojaExpenses: filter('poojaExpenses', data.poojaExpenses) || [],
+    electricityBills: filter('electricityBills', data.electricityBills) || [],
+    waterBills: filter('waterBills', data.waterBills) || [],
+    siteComments: filter('siteComments', data.siteComments) || [],
+    otherExpenses: filter('otherExpenses', data.otherExpenses) || [],
+    activityLogs: filter('activityLogs', data.activityLogs) || [],
+    materialPrices: filter('materialPrices', data.materialPrices),
+    estimates: filter('estimates', data.estimates),
+    payments: filter('payments', data.payments),
+    floorPlans: filter('floorPlans', data.floorPlans),
+    stockMovements: filter('stockMovements', data.stockMovements),
+    catalogItems: filter('catalogItems', data.catalogItems),
+    toolAssets: filter('toolAssets', data.toolAssets),
+    toolIssues: filter('toolIssues', data.toolIssues),
+  };
+}
+
+export async function exportDatabaseBackup(user: User): Promise<void> {
+  const [
+    sites,
+    materials,
+    rodEntries,
+    workers,
+    attendance,
+    labourAdvances,
+    salaryPayments,
+    tools,
+    teaSnacksExpenses,
+    poojaExpenses,
+    electricityBills,
+    waterBills,
+    siteComments,
+    otherExpenses,
+    activityLogs,
+    materialPrices,
+    estimates,
+    payments,
+    floorPlans,
+    stockMovements,
+    catalogItems,
+    toolAssets,
+    toolIssues,
+  ] = await Promise.all([
+    db.sites.toArray(),
+    db.materials.toArray(),
+    db.rodEntries.toArray(),
+    db.workers.toArray(),
+    db.attendance.toArray(),
+    db.labourAdvances.toArray(),
+    db.salaryPayments.toArray(),
+    db.tools.toArray(),
+    db.teaSnacksExpenses.toArray(),
+    db.poojaExpenses.toArray(),
+    db.electricityBills.toArray(),
+    db.waterBills.toArray(),
+    db.siteComments.toArray(),
+    db.otherExpenses.toArray(),
+    db.activityLogs.toArray(),
+    db.materialPrices.toArray(),
+    db.estimates.toArray(),
+    db.payments.toArray(),
+    db.floorPlans.toArray(),
+    db.stockMovements.toArray(),
+    db.catalogItems.toArray(),
+    db.toolAssets.toArray(),
+    db.toolIssues.toArray(),
+  ]);
+
+  const data = filterBackupDataForUser({
+    sites,
+    materials,
+    rodEntries,
+    workers,
+    attendance,
+    labourAdvances,
+    salaryPayments,
+    tools,
+    teaSnacksExpenses,
+    poojaExpenses,
+    electricityBills,
+    waterBills,
+    siteComments,
+    otherExpenses,
+    activityLogs,
+    materialPrices,
+    estimates,
+    payments,
+    floorPlans,
+    stockMovements,
+    catalogItems,
+    toolAssets,
+    toolIssues,
+  }, user);
+
+  const backup: BackupData = {
+    version: 5,
+    appName: 'Building Mistry',
+    exportedAt: new Date().toISOString(),
+    data,
+  };
+
+  const jsonStr = JSON.stringify(backup, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = todayKey();
+  a.href = url;
+  a.download = `building_mistry_backup_${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+export async function importDatabaseBackup(file: File): Promise<{ success: boolean; message: string; recordCount: number }> {
+  try {
+    const text = await file.text();
+    const backup: BackupData = JSON.parse(text);
+
+    if (!backup.appName || backup.appName !== 'Building Mistry' || !backup.data) {
+      throw new Error('Invalid backup file format. Must be an official Building Mistry backup.');
+    }
+
+    const { data } = backup;
+    let totalRestored = 0;
+
+    // Use transaction to ensure atomic replacement
+    await db.transaction('rw', [
+      db.sites,
+      db.materials,
+      db.rodEntries,
+      db.workers,
+      db.attendance,
+      db.labourAdvances,
+      db.salaryPayments,
+      db.tools,
+      db.teaSnacksExpenses,
+      db.poojaExpenses,
+      db.electricityBills,
+      db.waterBills,
+      db.siteComments,
+      db.otherExpenses,
+      db.activityLogs,
+      db.materialPrices,
+      db.estimates,
+      db.payments,
+      db.floorPlans,
+      db.stockMovements,
+      db.catalogItems,
+      db.toolAssets,
+      db.toolIssues,
+    ], async () => {
+      // Clear existing records
+      await Promise.all([
+        db.sites.clear(),
+        db.materials.clear(),
+        db.rodEntries.clear(),
+        db.workers.clear(),
+        db.attendance.clear(),
+        db.labourAdvances.clear(),
+        db.salaryPayments.clear(),
+        db.tools.clear(),
+        db.teaSnacksExpenses.clear(),
+        db.poojaExpenses.clear(),
+        db.electricityBills.clear(),
+        db.waterBills.clear(),
+        db.siteComments.clear(),
+        db.otherExpenses.clear(),
+        db.activityLogs.clear(),
+        db.materialPrices.clear(),
+        db.estimates.clear(),
+        db.payments.clear(),
+      ]);
+
+      // Bulk add
+      if (data.sites?.length) { await db.sites.bulkAdd(data.sites); totalRestored += data.sites.length; }
+      if (data.materials?.length) { await db.materials.bulkAdd(data.materials); totalRestored += data.materials.length; }
+      if (data.rodEntries?.length) { await db.rodEntries.bulkAdd(data.rodEntries); totalRestored += data.rodEntries.length; }
+      if (data.workers?.length) { await db.workers.bulkAdd(data.workers); totalRestored += data.workers.length; }
+      if (data.attendance?.length) { await db.attendance.bulkAdd(data.attendance); totalRestored += data.attendance.length; }
+      if (data.labourAdvances?.length) { await db.labourAdvances.bulkAdd(data.labourAdvances); totalRestored += data.labourAdvances.length; }
+      if (data.salaryPayments?.length) { await db.salaryPayments.bulkAdd(data.salaryPayments); totalRestored += data.salaryPayments.length; }
+      if (data.tools?.length) { await db.tools.bulkAdd(data.tools); totalRestored += data.tools.length; }
+      if (data.teaSnacksExpenses?.length) { await db.teaSnacksExpenses.bulkAdd(data.teaSnacksExpenses); totalRestored += data.teaSnacksExpenses.length; }
+      if (data.poojaExpenses?.length) { await db.poojaExpenses.bulkAdd(data.poojaExpenses); totalRestored += data.poojaExpenses.length; }
+      if (data.electricityBills?.length) { await db.electricityBills.bulkAdd(data.electricityBills); totalRestored += data.electricityBills.length; }
+      if (data.waterBills?.length) { await db.waterBills.bulkAdd(data.waterBills); totalRestored += data.waterBills.length; }
+      if (data.siteComments?.length) { await db.siteComments.bulkAdd(data.siteComments); totalRestored += data.siteComments.length; }
+      if (data.otherExpenses?.length) { await db.otherExpenses.bulkAdd(data.otherExpenses); totalRestored += data.otherExpenses.length; }
+      if (data.activityLogs?.length) { await db.activityLogs.bulkAdd(data.activityLogs); totalRestored += data.activityLogs.length; }
+      if (data.materialPrices?.length) { await db.materialPrices.bulkAdd(data.materialPrices); totalRestored += data.materialPrices.length; }
+      if (data.estimates?.length) { await db.estimates.bulkAdd(data.estimates); totalRestored += data.estimates.length; }
+      if (data.payments?.length) { await db.payments.bulkAdd(data.payments); totalRestored += data.payments.length; }
+
+      // Tables added in later backup versions. An older backup file has no entry for them,
+      // so the records already on this device are left alone instead of being wiped.
+      const optional: [keyof BackupData['data'], { clear(): Promise<void>; bulkAdd(rows: any[]): Promise<unknown> }][] = [
+        ['floorPlans', db.floorPlans],
+        ['stockMovements', db.stockMovements],
+        ['catalogItems', db.catalogItems],
+        ['toolAssets', db.toolAssets],
+        ['toolIssues', db.toolIssues],
+      ];
+      for (const [key, table] of optional) {
+        const rows = data[key];
+        if (!Array.isArray(rows)) continue;
+        await table.clear();
+        if (rows.length) { await table.bulkAdd(rows); totalRestored += rows.length; }
+      }    });
+
+    return {
+      success: true,
+      message: `Database successfully restored with ${totalRestored} records from ${new Date(backup.exportedAt).toLocaleString()}`,
+      recordCount: totalRestored,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Failed to import backup file.',
+      recordCount: 0,
+    };
+  }
+}
