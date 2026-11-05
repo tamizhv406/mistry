@@ -385,14 +385,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* 6. Material Stock Alerts */}
+          {/* 6. Pending Salaries */}
+          <div
+            className="erp-kpi-card cursor-pointer"
+            onClick={() => onNavigate ? onNavigate('labour') : undefined}
+            title="Click to view Attendance & Salary ledger"
+          >
+            <div className="erp-kpi-header">
+              <span className="erp-kpi-title">Pending Salaries</span>
+              <div
+                className="erp-kpi-icon-box"
+                style={{
+                  background: stats.pendingSalaries > 0 ? '#FEF3C7' : '#DCFCE7',
+                  color: stats.pendingSalaries > 0 ? '#D97706' : '#16A34A',
+                }}
+              >
+                <Wallet size={18} />
+              </div>
+            </div>
+            <div
+              className="erp-kpi-value"
+              style={{ color: stats.pendingSalaries > 0 ? '#D97706' : '#16A34A' }}
+            >
+              ₹{stats.pendingSalaries.toLocaleString('en-IN')}
+            </div>
+            <div className="erp-kpi-footer">
+              <span>{stats.pendingSalaries > 0 ? 'Due for disbursement' : 'All salaries cleared'}</span>
+            </div>
+          </div>
+
+          {/* 7. Material Stock Value & Alerts */}
           <div
             className="erp-kpi-card cursor-pointer"
             onClick={() => onNavigate ? onNavigate('stock') : undefined}
             title="Click to view Material Stock"
           >
             <div className="erp-kpi-header">
-              <span className="erp-kpi-title">Stock Alerts</span>
+              <span className="erp-kpi-title">Stock Value & Alerts</span>
               <div
                 className="erp-kpi-icon-box"
                 style={{
@@ -405,15 +434,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <div
               className="erp-kpi-value"
-              style={{ color: stats.materialStock.lowStockCount > 0 ? '#DC2626' : '#16A34A' }}
+              style={{ color: stats.materialStock.lowStockCount > 0 ? '#DC2626' : '#111827' }}
             >
-              {stats.materialStock.lowStockCount}
+              {stats.materialStock.lowStockCount > 0
+                ? `${stats.materialStock.lowStockCount} Low`
+                : `₹${Math.round(stats.totalMaterialStockValue).toLocaleString('en-IN')}`}
             </div>
             <div className="erp-kpi-footer">
               {stats.materialStock.lowStockCount > 0 ? (
                 <span className="text-red-600 font-bold">Action required: low stock</span>
               ) : (
-                <span className="text-emerald-600 font-medium">All levels optimal ({stats.materialStock.inStockCount} items)</span>
+                <span className="text-emerald-600 font-medium">Value: ₹{Math.round(stats.totalMaterialStockValue).toLocaleString('en-IN')} ({stats.materialStock.inStockCount} items)</span>
               )}
             </div>
           </div>
@@ -1049,6 +1080,78 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 10.5 Upcoming Deadlines & Milestones */}
+      {stats.upcomingDeadlines && stats.upcomingDeadlines.length > 0 && (
+        <div className="erp-section-card" style={{ marginBottom: '24px' }}>
+          <div className="erp-section-header">
+            <div className="erp-section-title-wrap">
+              <Clock size={20} className="erp-section-icon" />
+              <div>
+                <h3 className="erp-section-title">Upcoming Deadlines & Project Milestones</h3>
+                <p className="erp-section-subtitle">Deliverables, milestones, and handovers due within the next 14 days</p>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: '16px 22px 20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+            {stats.upcomingDeadlines.slice(0, 6).map(dl => (
+              <div
+                key={dl.id}
+                onClick={() => onOpenSite(dl.siteId)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  background: dl.isOverdue ? '#FEF2F2' : '#F8FAFC',
+                  border: `1px solid ${dl.isOverdue ? '#FECACA' : '#E2E8F0'}`,
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                    <span
+                      style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        background: dl.type === 'milestone' ? '#EFF6FF' : dl.type === 'project' ? '#F3E8FF' : '#FEF3C7',
+                        color: dl.type === 'milestone' ? '#1D4ED8' : dl.type === 'project' ? '#7E22CE' : '#B45309',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {dl.type}
+                    </span>
+                    <strong style={{ fontSize: '0.84rem', color: '#111827' }}>{dl.title}</strong>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                    {dl.siteName} • Due: {dl.dueDate}
+                  </span>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <span
+                    style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      background: dl.isOverdue ? '#DC2626' : dl.daysRemaining <= 3 ? '#F59E0B' : '#10B981',
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    {dl.isOverdue ? 'Overdue' : dl.daysRemaining === 0 ? 'Today' : `${dl.daysRemaining}d left`}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 11. Recent Activities Feed */}
       {stats.recentActivities.length > 0 && (

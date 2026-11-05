@@ -8,10 +8,10 @@
 export const SITE_TABLES = [
   'materials', 'rodEntries', 'workers', 'attendance', 'labourAdvances', 'salaryPayments', 'tools', 'teaSnacksExpenses',
   'poojaExpenses', 'electricityBills', 'waterBills', 'siteComments', 'otherExpenses', 'payments', 'stockMovements',
-  'toolAssets', 'toolIssues',
+  'toolAssets', 'toolIssues', 'tasks', 'milestones', 'siteDiaries', 'documents',
 ] as const;
 /** Records that belong to the user directly (found through their userId). */
-export const USER_TABLES = ['sites', 'floorPlans', 'estimates', 'materialPrices', 'catalogItems'] as const;
+export const USER_TABLES = ['sites', 'floorPlans', 'estimates', 'materialPrices', 'catalogItems', 'suppliers', 'notifications'] as const;
 
 export const SYNC_TABLES: readonly string[] = [...USER_TABLES, ...SITE_TABLES];
 

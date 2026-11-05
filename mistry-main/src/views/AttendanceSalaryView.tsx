@@ -42,6 +42,7 @@ import { AttendanceModal } from '../components/AttendanceModal';
 import { WorkerModal } from '../components/WorkerModal';
 import { AdvanceModal } from '../components/AdvanceModal';
 import { SalaryPaymentModal } from '../components/SalaryPaymentModal';
+import { generateLabourSalaryReportPdfBlob, downloadFile } from '../utils/pdfGenerator';
 
 export interface AttendanceSalaryViewProps {
   user: User;
@@ -192,7 +193,52 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   };
 
   const handleExportPDF = () => {
-    window.print();
+    try {
+      const items = (workers || []).map(w => {
+        const workerAttendance = (attendance || []).filter(a => a.workerId === w.id);
+        const workerAdvances = (advances || []).filter(a => a.workerId === w.id);
+        const workerPayments = (salaryPayments || []).filter(s => s.workerId === w.id);
+        const ledger = buildWorkerLedger(w, workerAttendance, workerAdvances, workerPayments, policy);
+        return {
+          workerName: w.name,
+          category: w.category,
+          dailyRate: w.dailyWage,
+          workedDays: ledger.workedDayEquivalents,
+          earnedAmount: ledger.earned,
+          advanceDeducted: ledger.recoverableAdvances,
+          salaryPaid: ledger.salaryPaid,
+          balanceDue: ledger.pending,
+        };
+      });
+
+      const totalWorkers = items.length;
+      const totalDaysWorked = items.reduce((sum, i) => sum + i.workedDays, 0);
+      const totalEarned = items.reduce((sum, i) => sum + i.earnedAmount, 0);
+      const totalAdvance = items.reduce((sum, i) => sum + i.advanceDeducted, 0);
+      const totalPaid = items.reduce((sum, i) => sum + i.salaryPaid, 0);
+      const totalBalanceDue = items.reduce((sum, i) => sum + i.balanceDue, 0);
+
+      const blob = generateLabourSalaryReportPdfBlob({
+        projectName: activeSite?.name || 'Project Workforce',
+        projectAddress: activeSite?.address || activeSite?.area,
+        monthName: formatMonth(selectedMonth),
+        generatedDate: formatDay(todayKey()),
+        totalWorkers,
+        totalDaysWorked,
+        totalEarned,
+        totalAdvance,
+        totalPaid,
+        totalBalanceDue,
+        items,
+      });
+
+      const cleanProjName = (activeSite?.name || 'Project').replace(/[^a-zA-Z0-9_-]/g, '_');
+      downloadFile(blob, `Muster_Roll_${cleanProjName}_${selectedMonth}.pdf`);
+      onNotify('Workforce Muster Roll & Salary Statement PDF downloaded successfully', 'success');
+    } catch (err: any) {
+      console.error('Failed to export Muster PDF:', err);
+      window.print();
+    }
   };
 
   return (

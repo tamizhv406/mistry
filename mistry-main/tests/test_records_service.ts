@@ -66,7 +66,7 @@ async function run() {
   const { todayKey, addDays } = await import('../src/utils/datetime');
 
   await db.open();
-  check('Database upgraded to v8', db.verno === 8, db.verno);
+  check('Database upgraded to v9', db.verno === 9, db.verno);
   check('Existing site survived the upgrade', (await db.sites.get('s1'))?.name === 'Test Site');
   check('Existing attendance survived', (await db.attendance.get('old-att'))?.status === 'present');
   check('Existing floor plan geometry survived', (await db.floorPlans.get('fp1'))?.walls[0].x2 === 10);

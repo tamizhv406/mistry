@@ -32,6 +32,12 @@ import type {
   CatalogItem,
   ToolAsset,
   ToolIssue,
+  TaskRecord,
+  MilestoneRecord,
+  SiteDiaryRecord,
+  SupplierRecord,
+  ProjectDocument,
+  AppNotification,
 } from './types';
 
 export class BuildingMistryDB extends Dexie {
@@ -61,6 +67,12 @@ export class BuildingMistryDB extends Dexie {
   catalogItems!: Table<CatalogItem, string>;
   toolAssets!: Table<ToolAsset, string>;
   toolIssues!: Table<ToolIssue, string>;
+  tasks!: Table<TaskRecord, string>;
+  milestones!: Table<MilestoneRecord, string>;
+  siteDiaries!: Table<SiteDiaryRecord, string>;
+  suppliers!: Table<SupplierRecord, string>;
+  documents!: Table<ProjectDocument, string>;
+  notifications!: Table<AppNotification, string>;
 
   constructor() {
     super('BuildingMistryDB');
@@ -221,6 +233,17 @@ export class BuildingMistryDB extends Dexie {
       catalogItems: 'id, kind, category, isDeleted',
       toolAssets: 'id, userId, siteId, isDeleted',
       toolIssues: 'id, userId, siteId, toolAssetId, isDeleted',
+    });
+
+    // Version 9: Construction ERP Upgrade (Tasks, Milestones, Site Diary, Suppliers, Documents, Notifications)
+    // Additive only: Dexie carries all existing versions (1 through 8) and records forward untouched.
+    this.version(9).stores({
+      tasks: 'id, userId, siteId, status, priority, dueDate, milestoneId, isDeleted',
+      milestones: 'id, userId, siteId, status, targetDate, isDeleted',
+      siteDiaries: 'id, userId, siteId, date, isDeleted, [siteId+date]',
+      suppliers: 'id, userId, name, phone, isDeleted',
+      documents: 'id, userId, siteId, category, isDeleted',
+      notifications: 'id, userId, siteId, type, isRead, createdAt',
     });
   }
 
@@ -792,6 +815,84 @@ export class BuildingMistryDB extends Dexie {
         amount: p.amount,
         deletedAt: p.deletedAt || p.updatedAt,
         rawData: p,
+      });
+    });
+
+    // 18. Tasks
+    const deletedTasks = await this.tasks.filter(t => t.isDeleted).toArray();
+    deletedTasks.forEach(t => {
+      trashItems.push({
+        id: t.id,
+        tableName: 'tasks',
+        entityType: 'Task',
+        title: t.title,
+        subtitle: `Site: ${siteMap.get(t.siteId) || 'Unknown'} | Due: ${t.dueDate} | Status: ${t.status}`,
+        siteId: t.siteId,
+        siteName: siteMap.get(t.siteId),
+        deletedAt: t.deletedAt || t.updatedAt,
+        rawData: t,
+      });
+    });
+
+    // 19. Milestones
+    const deletedMilestones = await this.milestones.filter(m => m.isDeleted).toArray();
+    deletedMilestones.forEach(m => {
+      trashItems.push({
+        id: m.id,
+        tableName: 'milestones',
+        entityType: 'Milestone',
+        title: m.title,
+        subtitle: `Site: ${siteMap.get(m.siteId) || 'Unknown'} | Target: ${m.targetDate}`,
+        siteId: m.siteId,
+        siteName: siteMap.get(m.siteId),
+        deletedAt: m.deletedAt || m.updatedAt,
+        rawData: m,
+      });
+    });
+
+    // 20. Site Diaries
+    const deletedDiaries = await this.siteDiaries.filter(d => d.isDeleted).toArray();
+    deletedDiaries.forEach(d => {
+      trashItems.push({
+        id: d.id,
+        tableName: 'siteDiaries',
+        entityType: 'Site Diary',
+        title: `Site Diary: ${d.date}`,
+        subtitle: `Site: ${siteMap.get(d.siteId) || 'Unknown'} | Workers: ${d.workersPresentCount}`,
+        siteId: d.siteId,
+        siteName: siteMap.get(d.siteId),
+        deletedAt: d.deletedAt || d.updatedAt,
+        rawData: d,
+      });
+    });
+
+    // 21. Suppliers
+    const deletedSuppliers = await this.suppliers.filter(s => s.isDeleted).toArray();
+    deletedSuppliers.forEach(s => {
+      trashItems.push({
+        id: s.id,
+        tableName: 'suppliers',
+        entityType: 'Supplier',
+        title: s.name,
+        subtitle: `Phone: ${s.phone} | Items: ${s.materialsSupplied?.join(', ') || 'N/A'}`,
+        deletedAt: s.deletedAt || s.updatedAt,
+        rawData: s,
+      });
+    });
+
+    // 22. Documents
+    const deletedDocuments = await this.documents.filter(d => d.isDeleted).toArray();
+    deletedDocuments.forEach(d => {
+      trashItems.push({
+        id: d.id,
+        tableName: 'documents',
+        entityType: `Document (${d.category})`,
+        title: d.title,
+        subtitle: `Site: ${siteMap.get(d.siteId) || 'Unknown'} | Category: ${d.category} | File: ${d.fileName}`,
+        siteId: d.siteId,
+        siteName: siteMap.get(d.siteId),
+        deletedAt: d.deletedAt || d.updatedAt,
+        rawData: d,
       });
     });
 

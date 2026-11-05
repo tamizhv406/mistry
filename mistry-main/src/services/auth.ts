@@ -20,7 +20,7 @@ export function isAdmin(user?: User | null): boolean {
 }
 
 export function isHouseOwner(user?: User | null): boolean {
-  return user?.role === 'HOUSE_OWNER';
+  return user?.role === 'HOUSE_OWNER' || user?.role === 'CLIENT';
 }
 
 export function isMistry(user?: User | null): boolean {

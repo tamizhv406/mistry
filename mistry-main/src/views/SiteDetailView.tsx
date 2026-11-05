@@ -38,6 +38,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useSiteData } from '../hooks/useSiteData';
+import { getCurrentUser, isHouseOwner } from '../services/auth';
 import { MaterialsTab } from './site-tabs/MaterialsTab';
 import { LabourTab } from './site-tabs/LabourTab';
 import { ToolsTab } from './site-tabs/ToolsTab';
@@ -46,6 +47,8 @@ import { PaymentsLedgerTab } from './site-tabs/PaymentsLedgerTab';
 import { CommentsTab } from './site-tabs/CommentsTab';
 import { ReportsTab } from './site-tabs/ReportsTab';
 import { EstimateVarianceTab } from './site-tabs/EstimateVarianceTab';
+import { TasksTab } from './site-tabs/TasksTab';
+import { DocumentsTab } from './site-tabs/DocumentsTab';
 
 import type {
   Site,
@@ -140,6 +143,8 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
   onTabChange,
 }) => {
   const data = useSiteData(siteId);
+  const currentUser = getCurrentUser();
+  const isClientMode = isHouseOwner(currentUser);
   const [activeTab, setActiveTab] = useState<
     | 'overview'
     | 'materials'
@@ -442,6 +447,27 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         </div>
       )}
 
+      {/* Client View Notice Banner */}
+      {isClientMode && (
+        <div style={{
+          padding: '12px 18px',
+          backgroundColor: '#eff6ff',
+          border: '1.5px solid #bfdbfe',
+          borderRadius: '10px',
+          color: '#1e40af',
+          fontSize: '0.86rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          marginBottom: '16px',
+        }}>
+          <ShieldCheck size={20} className="text-blue-600 flex-shrink-0" />
+          <span>
+            <strong>Client Portal Access:</strong> Viewing project overview, progress tasks, CAD floor plans, materials, and approved documents. (Workforce wages and contractor expenses are protected.)
+          </span>
+        </div>
+      )}
+
       {/* Main Tab Navigation Bar */}
       <div className="tab-navigation">
         <button
@@ -449,15 +475,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           onClick={() => { setActiveTab('overview'); onTabChange?.('overview'); }}
         >
           <TrendingUp size={17} />
-          <span>Overview</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'floor-plans' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('floor-plans'); onTabChange?.('floor-plans'); }}
-        >
-          <PenTool size={17} />
-          <span>Floor Planner {siteFloorPlans.length > 0 ? `(${siteFloorPlans.length})` : ''}</span>
+          <span>1. Overview</span>
         </button>
 
         <button
@@ -465,55 +483,51 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           onClick={() => { setActiveTab('tasks'); onTabChange?.('tasks'); }}
         >
           <Scale size={17} />
-          <span>Tasks & Progress</span>
+          <span>2. Tasks & Progress</span>
         </button>
+
+        <button
+          className={`tab-btn ${activeTab === 'floor-plans' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('floor-plans'); onTabChange?.('floor-plans'); }}
+        >
+          <PenTool size={17} />
+          <span>3. Floor Planner {siteFloorPlans.length > 0 ? `(${siteFloorPlans.length})` : ''}</span>
+        </button>
+
+        {!isClientMode && (
+          <button
+            className={`tab-btn ${activeTab === 'labour' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('labour'); setLabourSubTab('salary'); onTabChange?.('labour'); }}
+          >
+            <Users size={17} />
+            <span>4. Workers & Attendance ({workers.length})</span>
+          </button>
+        )}
 
         <button
           className={`tab-btn ${activeTab === 'materials' ? 'active' : ''}`}
           onClick={() => { setActiveTab('materials'); onTabChange?.('materials'); }}
         >
           <Layers size={17} />
-          <span>Materials ({materials.length + rodEntries.length})</span>
+          <span>{isClientMode ? '4. Materials' : '5. Materials'} ({materials.length + rodEntries.length})</span>
         </button>
 
-        <button
-          className={`tab-btn ${activeTab === 'labour' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('labour'); setLabourSubTab('salary'); onTabChange?.('labour'); }}
-        >
-          <Users size={17} />
-          <span>Workers & Attendance ({workers.length})</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'expenses' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('expenses'); onTabChange?.('expenses'); }}
-        >
-          <Coffee size={17} />
-          <span>Expenses</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'tools' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('tools'); onTabChange?.('tools'); }}
-        >
-          <Wrench size={17} />
-          <span>Tools ({tools.length})</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('payments'); onTabChange?.('payments'); }}
-        >
-          <Receipt size={17} />
-          <span>Ledger</span>
-        </button>
+        {!isClientMode && (
+          <button
+            className={`tab-btn ${activeTab === 'expenses' || activeTab === 'tools' || activeTab === 'payments' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('expenses'); onTabChange?.('expenses'); }}
+          >
+            <Coffee size={17} />
+            <span>6. Expenses</span>
+          </button>
+        )}
 
         <button
           className={`tab-btn ${activeTab === 'comments' || activeTab === 'documents' ? 'active' : ''}`}
           onClick={() => { setActiveTab('documents'); onTabChange?.('documents'); }}
         >
           <MessageSquare size={17} />
-          <span>Documents ({comments.length})</span>
+          <span>{isClientMode ? '5. Documents & Diary' : '7. Documents & Diary'}</span>
         </button>
 
         <button
@@ -521,16 +535,18 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           onClick={() => { setActiveTab('reports'); onTabChange?.('reports'); }}
         >
           <FileText size={17} />
-          <span>Reports</span>
+          <span>{isClientMode ? '6. Reports' : '8. Reports'}</span>
         </button>
 
-        <button
-          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('settings'); onTabChange?.('settings'); }}
-        >
-          <Settings size={17} />
-          <span>Settings</span>
-        </button>
+        {!isClientMode && (
+          <button
+            className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('settings'); onTabChange?.('settings'); }}
+          >
+            <Settings size={17} />
+            <span>9. Settings</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: OVERVIEW */}
@@ -1031,56 +1047,86 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
 
       {/* TAB 3: LABOUR */}
       {activeTab === 'labour' && (
-        <LabourTab
-          siteId={site.id}
-          workers={workers}
-          attendance={attendance}
-          advances={advances}
-          salaryPayments={salaryPayments}
-          initialSubTab={labourSubTab}
-          leavePaid={site.leavePaid}
-          onOpenWorkerModal={onOpenWorkerModal}
-          onOpenAttendanceModal={onOpenAttendanceModal}
-          onOpenAdvanceModal={onOpenAdvanceModal}
-          onOpenSalaryModal={onOpenSalaryModal}
-          onDeleteWorker={w => onTrashRecord('workers', w.id, w.name)}
-          onDeleteAttendance={a => onTrashRecord('attendance', a.id, `Attendance (${a.date})`)}
-          onDeleteAdvance={adv => onTrashRecord('labourAdvances', adv.id, `Advance ₹${adv.amount}`)}
-          onDeleteSalaryPayment={s => onTrashRecord('salaryPayments', s.id, `Salary ₹${s.paidAmount}`)}
-        />
+        isClientMode ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', margin: '20px 0' }}>
+            <ShieldCheck size={40} color="#3b82f6" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Internal Workforce Information</h3>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', maxWidth: '440px', margin: '0 auto 16px' }}>
+              Worker attendance rosters, wage formulas, and disbursement records are private to site engineers and project managers.
+            </p>
+            <button className="btn btn-primary btn-sm" onClick={() => setActiveTab('overview')}>Back to Overview</button>
+          </div>
+        ) : (
+          <LabourTab
+            siteId={site.id}
+            workers={workers}
+            attendance={attendance}
+            advances={advances}
+            salaryPayments={salaryPayments}
+            initialSubTab={labourSubTab}
+            leavePaid={site.leavePaid}
+            onOpenWorkerModal={onOpenWorkerModal}
+            onOpenAttendanceModal={onOpenAttendanceModal}
+            onOpenAdvanceModal={onOpenAdvanceModal}
+            onOpenSalaryModal={onOpenSalaryModal}
+            onDeleteWorker={w => onTrashRecord('workers', w.id, w.name)}
+            onDeleteAttendance={a => onTrashRecord('attendance', a.id, `Attendance (${a.date})`)}
+            onDeleteAdvance={adv => onTrashRecord('labourAdvances', adv.id, `Advance ₹${adv.amount}`)}
+            onDeleteSalaryPayment={s => onTrashRecord('salaryPayments', s.id, `Salary ₹${s.paidAmount}`)}
+          />
+        )
       )}
 
       {/* TAB 4: TOOLS */}
       {activeTab === 'tools' && (
-        <ToolsTab
-          siteId={site.id}
-          tools={tools}
-          onOpenToolModal={onOpenToolModal}
-          onDeleteTool={t => onTrashRecord('tools', t.id, t.toolName)}
-        />
+        isClientMode ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', margin: '20px 0' }}>
+            <ShieldCheck size={40} color="#3b82f6" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Contractor Assets & Machinery</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setActiveTab('overview')}>Back to Overview</button>
+          </div>
+        ) : (
+          <ToolsTab
+            siteId={site.id}
+            tools={tools}
+            onOpenToolModal={onOpenToolModal}
+            onDeleteTool={t => onTrashRecord('tools', t.id, t.toolName)}
+          />
+        )
       )}
 
       {/* TAB 5: DAILY EXPENSES */}
       {activeTab === 'expenses' && (
-        <DailyExpensesTab
-          siteId={site.id}
-          teaSnacks={teaSnacks}
-          poojas={poojas}
-          electricity={electricity}
-          water={water}
-          otherExpenses={otherExpenses}
-          initialSection={expenseSubSection}
-          onOpenTeaModal={onOpenTeaModal}
-          onOpenPoojaModal={onOpenPoojaModal}
-          onOpenElectricityModal={onOpenElectricityModal}
-          onOpenWaterModal={onOpenWaterModal}
-          onOpenOtherModal={onOpenOtherModal}
-          onDeleteTea={t => onTrashRecord('teaSnacksExpenses', t.id, `Tea on ${t.date}`)}
-          onDeletePooja={p => onTrashRecord('poojaExpenses', p.id, p.poojaName)}
-          onDeleteElectricity={e => onTrashRecord('electricityBills', e.id, `EB Bill ${e.month}`)}
-          onDeleteWater={w => onTrashRecord('waterBills', w.id, `Water ${w.supplier}`)}
-          onDeleteOther={o => onTrashRecord('otherExpenses', o.id, `Other: ${o.category} - ${o.description}`)}
-        />
+        isClientMode ? (
+          <div style={{ padding: '48px 20px', textAlign: 'center', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', margin: '20px 0' }}>
+            <ShieldCheck size={40} color="#3b82f6" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a' }}>Internal Operational Expenses</h3>
+            <p style={{ color: '#64748b', fontSize: '0.88rem', maxWidth: '440px', margin: '0 auto 16px' }}>
+              Daily petty cash, contractor utilities, and internal expense receipts are protected in client mode.
+            </p>
+            <button className="btn btn-primary btn-sm" onClick={() => setActiveTab('overview')}>Back to Overview</button>
+          </div>
+        ) : (
+          <DailyExpensesTab
+            siteId={site.id}
+            teaSnacks={teaSnacks}
+            poojas={poojas}
+            electricity={electricity}
+            water={water}
+            otherExpenses={otherExpenses}
+            initialSection={expenseSubSection}
+            onOpenTeaModal={onOpenTeaModal}
+            onOpenPoojaModal={onOpenPoojaModal}
+            onOpenElectricityModal={onOpenElectricityModal}
+            onOpenWaterModal={onOpenWaterModal}
+            onOpenOtherModal={onOpenOtherModal}
+            onDeleteTea={t => onTrashRecord('teaSnacksExpenses', t.id, `Tea on ${t.date}`)}
+            onDeletePooja={p => onTrashRecord('poojaExpenses', p.id, p.poojaName)}
+            onDeleteElectricity={e => onTrashRecord('electricityBills', e.id, `EB Bill ${e.month}`)}
+            onDeleteWater={w => onTrashRecord('waterBills', w.id, `Water ${w.supplier}`)}
+            onDeleteOther={o => onTrashRecord('otherExpenses', o.id, `Other: ${o.category} - ${o.description}`)}
+          />
+        )
       )}
 
       {/* TAB: PAYMENT LEDGER */}
@@ -1092,12 +1138,14 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         />
       )}
 
-      {/* TAB: DOCUMENTS & SITE NOTES */}
+      {/* TAB: DOCUMENTS & SITE DIARY */}
       {(activeTab === 'comments' || activeTab === 'documents') && (
-        <CommentsTab
+        <DocumentsTab
+          site={site}
           comments={comments}
           onOpenCommentModal={onOpenCommentModal}
           onDeleteComment={c => onTrashRecord('siteComments', c.id, `Site Note`)}
+          onNotify={onNotify}
         />
       )}
 
@@ -1121,8 +1169,17 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         />
       )}
 
-      {/* TAB: TASKS, MILESTONES & ESTIMATE VARIANCE */}
-      {(activeTab === 'variance' || activeTab === 'tasks') && (
+      {/* TAB: TASKS, MILESTONES & WORK PROGRESS */}
+      {activeTab === 'tasks' && (
+        <TasksTab
+          siteId={site.id}
+          workers={workers}
+          onNotify={onNotify}
+        />
+      )}
+
+      {/* TAB: ESTIMATE VARIANCE */}
+      {activeTab === 'variance' && (
         <EstimateVarianceTab
           site={site}
           summary={summary}

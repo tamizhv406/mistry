@@ -6,6 +6,18 @@ import { calculateFinancialBalance } from '../utils/financial';
 import { buildStock, type StockItem } from '../domain/stock';
 import { todayKey, monthKeyOf, addMonths, DEFAULT_TIME_ZONE } from '../utils/datetime';
 
+export interface UpcomingDeadlineItem {
+  id: string;
+  title: string;
+  dueDate: string;
+  type: 'task' | 'milestone' | 'project';
+  siteId: string;
+  siteName: string;
+  priority?: string;
+  daysRemaining: number;
+  isOverdue: boolean;
+}
+
 export interface SiteCardSummary {
   site: Site;
   totalExpense: number;
@@ -92,6 +104,9 @@ export function useOverallStats(user?: User | null) {
       catalogItems,
       estimates,
       floorPlans,
+      tasks,
+      milestones,
+      siteDiaries,
     ] = await Promise.all([
       db.materials.filter(m => !m.isDeleted && siteIds.includes(m.siteId)).toArray(),
       db.rodEntries.filter(r => !r.isDeleted && siteIds.includes(r.siteId)).toArray(),
@@ -109,6 +124,9 @@ export function useOverallStats(user?: User | null) {
       db.catalogItems.filter(c => !c.isDeleted).toArray(),
       db.estimates.filter(e => !e.isDeleted).toArray(),
       db.floorPlans.filter(f => !f.isDeleted).toArray(),
+      db.tasks.filter(t => !t.isDeleted && siteIds.includes(t.siteId)).toArray(),
+      db.milestones.filter(m => !m.isDeleted && siteIds.includes(m.siteId)).toArray(),
+      db.siteDiaries.filter(d => !d.isDeleted && siteIds.includes(d.siteId)).toArray(),
     ]);
 
     // Worker wage mapping
@@ -196,6 +214,103 @@ export function useOverallStats(user?: User | null) {
     const lowStockItems = stockItems.filter(s => s.isLowStock || s.isNegative);
     const inStockCount = stockItems.filter(s => s.onHand > 0).length;
     const negativeCount = stockItems.filter(s => s.isNegative).length;
+
+    // Material stock value: based on stock onHand and recorded rates
+    const stockRatesMap = new Map<string, number>();
+    materials.forEach(m => {
+      const key = m.materialName?.toLowerCase().trim() || m.category;
+      if (m.rate && Number(m.rate) > 0) stockRatesMap.set(key, Number(m.rate));
+    });
+    let totalMaterialStockValue = 0;
+    stockItems.forEach(item => {
+      if (item.onHand > 0) {
+        const rate = stockRatesMap.get(item.key.toLowerCase().trim()) || 0;
+        totalMaterialStockValue += item.onHand * rate;
+      }
+    });
+
+    // Worker-wise pending salary calculation
+    let pendingSalaries = 0;
+    workers.forEach(w => {
+      const wAtt = attendance.filter(a => a.workerId === w.id);
+      const earned = wAtt.reduce(
+        (sum, a) => sum + (Number(a.dailyWageSnapshot || w.dailyWage) || 0) * (Number(a.dayMultiplier) || 0),
+        0
+      );
+      const paid = salaryPayments.filter(s => s.workerId === w.id).reduce((sum, s) => sum + (Number(s.paidAmount) || 0), 0);
+      const adv = advances
+        .filter(a => a.workerId === w.id && a.advanceType !== 'Non-Recoverable')
+        .reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+      const netDue = Math.max(0, earned - paid - adv);
+      pendingSalaries += netDue;
+    });
+
+    // Upcoming Deadlines (within next 14 days)
+    const upcomingDeadlines: UpcomingDeadlineItem[] = [];
+    const nowTime = new Date().getTime();
+
+    // 1. Tasks
+    tasks.forEach(t => {
+      if (t.status !== 'Completed' && t.dueDate) {
+        const dueTime = new Date(t.dueDate).getTime();
+        const diffDays = Math.ceil((dueTime - nowTime) / (24 * 60 * 60 * 1000));
+        if (diffDays <= 14) {
+          upcomingDeadlines.push({
+            id: t.id,
+            title: t.title,
+            dueDate: t.dueDate,
+            type: 'task',
+            siteId: t.siteId,
+            siteName: siteMap.get(t.siteId) || 'Site',
+            priority: t.priority,
+            daysRemaining: diffDays,
+            isOverdue: diffDays < 0,
+          });
+        }
+      }
+    });
+
+    // 2. Milestones
+    milestones.forEach(m => {
+      if (m.status !== 'Completed' && m.targetDate) {
+        const targetTime = new Date(m.targetDate).getTime();
+        const diffDays = Math.ceil((targetTime - nowTime) / (24 * 60 * 60 * 1000));
+        if (diffDays <= 14) {
+          upcomingDeadlines.push({
+            id: m.id,
+            title: `Milestone: ${m.title}`,
+            dueDate: m.targetDate,
+            type: 'milestone',
+            siteId: m.siteId,
+            siteName: siteMap.get(m.siteId) || 'Site',
+            daysRemaining: diffDays,
+            isOverdue: diffDays < 0,
+          });
+        }
+      }
+    });
+
+    // 3. Project handovers
+    sites.forEach(s => {
+      if (s.status === 'Active' && s.expectedCompletionDate) {
+        const endTime = new Date(s.expectedCompletionDate).getTime();
+        const diffDays = Math.ceil((endTime - nowTime) / (24 * 60 * 60 * 1000));
+        if (diffDays <= 14) {
+          upcomingDeadlines.push({
+            id: s.id,
+            title: `Handover: ${s.name}`,
+            dueDate: s.expectedCompletionDate,
+            type: 'project',
+            siteId: s.id,
+            siteName: s.name,
+            daysRemaining: diffDays,
+            isOverdue: diffDays < 0,
+          });
+        }
+      }
+    });
+
+    upcomingDeadlines.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
     const materialStock: MaterialStockStats = {
       totalMaterialsCount: materials.length + rodEntries.length,
@@ -499,6 +614,30 @@ export function useOverallStats(user?: User | null) {
       }
     });
 
+    siteDiaries.forEach(d => {
+      activities.push({
+        id: `diary-${d.id}`,
+        type: 'diary',
+        title: `Site Diary (${d.date})`,
+        description: `${d.workersPresentCount} workers present • ${d.workCompleted.slice(0, 40)}...`,
+        siteName: siteMap.get(d.siteId) || 'Site',
+        siteId: d.siteId,
+        date: d.date || d.createdAt,
+      });
+    });
+
+    tasks.forEach(t => {
+      activities.push({
+        id: `task-${t.id}`,
+        type: 'task',
+        title: `Task: ${t.title} [${t.status}]`,
+        description: `Priority: ${t.priority} • Due: ${t.dueDate} • Progress: ${t.progressPercent}%`,
+        siteName: siteMap.get(t.siteId) || 'Site',
+        siteId: t.siteId,
+        date: t.updatedAt || t.createdAt,
+      });
+    });
+
     activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const recentActivities = activities.slice(0, 15);
 
@@ -512,6 +651,9 @@ export function useOverallStats(user?: User | null) {
       totalWorkers,
       attendanceToday,
       materialStock,
+      totalMaterialStockValue,
+      pendingSalaries,
+      upcomingDeadlines,
 
       totalMaterialExpense,
       totalLabourExpense: totalLabourGross,

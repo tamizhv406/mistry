@@ -636,6 +636,308 @@ export function generateBuildingEstimatePdfBlob(options: BuildingEstimatePdfOpti
   return new Blob([pdfBytes as any], { type: 'application/pdf' });
 }
 
+export interface DailySiteReportPdfOptions {
+  projectName: string;
+  clientName?: string;
+  location?: string;
+  date: string;
+  workCompleted: string;
+  workersPresentCount: number;
+  materialsUsed?: string;
+  equipmentUsed?: string;
+  siteIssuesAndDelays?: string;
+  engineerRemarks?: string;
+  supervisorNotes?: string;
+  dailyProgressPercent?: number;
+  weather?: string;
+}
+
+export function generateDailySiteReportPdfBlob(options: DailySiteReportPdfOptions): Blob {
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const pdf = new MinimalPdfDocument(pageWidth, pageHeight);
+
+  const margin = 32;
+  const contentWidth = pageWidth - margin * 2;
+
+  // Outer border
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.setLineWidth(1);
+  pdf.drawRect(margin, margin, contentWidth, pageHeight - margin * 2, false, true);
+
+  // Header
+  const headerH = 64;
+  const headerY = pageHeight - margin - headerH;
+  pdf.setFillColor(15, 23, 42); // Navy
+  pdf.drawRect(margin, headerY, contentWidth, headerH, true, false);
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('BUILDING MISTRY - DAILY SITE DIARY & PROGRESS REPORT', margin + 18, headerY + 40, 12, 'F2');
+
+  pdf.setFillColor(148, 163, 184);
+  const projText = `Project: ${options.projectName} | Location: ${options.location || 'Site Location'}`;
+  pdf.drawText(projText, margin + 18, headerY + 24, 8.5, 'F1');
+  pdf.drawText('Official Daily Site Progress Log & Inspection Record', margin + 18, headerY + 12, 8, 'F1');
+
+  // Date on Header Right
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText(`Date: ${options.date}`, margin + contentWidth - 130, headerY + 40, 9, 'F2');
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(`Progress: ${options.dailyProgressPercent || 0}%`, margin + contentWidth - 130, headerY + 24, 8.5, 'F2');
+
+  // Key Metrics Bar
+  let curY = headerY - 36;
+  pdf.setFillColor(248, 250, 252);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, curY, contentWidth - 16, 28, true, true);
+
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`Workers Present: ${options.workersPresentCount} Person(s)`, margin + 18, curY + 10, 8.5, 'F2');
+  pdf.drawText(`Weather: ${options.weather || 'Normal / Clear'}`, margin + 200, curY + 10, 8.5, 'F1');
+  pdf.drawText(`Client: ${options.clientName || 'N/A'}`, margin + 350, curY + 10, 8.5, 'F1');
+
+  // Section: Work Completed Today
+  curY -= 20;
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('1. WORK COMPLETED TODAY', margin + 10, curY, 9, 'F2');
+
+  curY -= 65;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, curY, contentWidth - 16, 60, true, true);
+  pdf.setFillColor(51, 65, 85);
+  pdf.drawText(options.workCompleted || 'No description provided.', margin + 16, curY + 44, 8, 'F1');
+
+  // Section: Materials & Equipment Used
+  curY -= 20;
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('2. MATERIALS & EQUIPMENT UTILIZATION', margin + 10, curY, 9, 'F2');
+
+  curY -= 55;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, curY, contentWidth - 16, 50, true, true);
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Materials:', margin + 16, curY + 34, 8, 'F2');
+  pdf.drawText(options.materialsUsed || 'None recorded', margin + 80, curY + 34, 8, 'F1');
+  pdf.drawText('Equipment:', margin + 16, curY + 18, 8, 'F2');
+  pdf.drawText(options.equipmentUsed || 'None recorded', margin + 80, curY + 18, 8, 'F1');
+
+  // Section: Site Issues, Delays & Safety
+  curY -= 20;
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('3. SITE ISSUES, DELAYS & SAFETY CONCERNS', margin + 10, curY, 9, 'F2');
+
+  curY -= 50;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, curY, contentWidth - 16, 45, true, true);
+  pdf.setFillColor(options.siteIssuesAndDelays ? 185 : 71, options.siteIssuesAndDelays ? 28 : 85, options.siteIssuesAndDelays ? 28 : 105);
+  pdf.drawText(options.siteIssuesAndDelays || 'No site issues or delays reported today. Site operating normally.', margin + 16, curY + 28, 8, 'F1');
+
+  // Section: Engineer Remarks & Supervisor Notes
+  curY -= 20;
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('4. ENGINEER REMARKS & SUPERVISOR NOTES', margin + 10, curY, 9, 'F2');
+
+  curY -= 55;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, curY, contentWidth - 16, 50, true, true);
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Engineer Remarks:', margin + 16, curY + 34, 8, 'F2');
+  pdf.drawText(options.engineerRemarks || 'Verified and approved as per specifications.', margin + 120, curY + 34, 8, 'F1');
+  pdf.drawText('Supervisor Notes:', margin + 16, curY + 18, 8, 'F2');
+  pdf.drawText(options.supervisorNotes || 'All work completed as per schedule.', margin + 120, curY + 18, 8, 'F1');
+
+  // Signature Blocks
+  curY -= 60;
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawLine(margin + 30, curY, margin + 180, curY);
+  pdf.drawLine(margin + contentWidth - 180, curY, margin + contentWidth - 30, curY);
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Site Engineer / Supervisor Signature', margin + 30, curY - 14, 8, 'F1');
+  pdf.drawText('Project Manager / Contractor Signature', margin + contentWidth - 180, curY - 14, 8, 'F1');
+
+  // Footer
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(`Building Mistry ERP | Verified Daily Construction Diary | Generated on ${options.date}`, margin + 12, margin + 8, 7, 'F1');
+
+  const pdfBytes = pdf.build();
+  return new Blob([pdfBytes as any], { type: 'application/pdf' });
+}
+
+export interface LabourSalaryReportItem {
+  workerName: string;
+  category: string;
+  dailyRate: number;
+  workedDays: number;
+  earnedAmount: number;
+  advanceDeducted: number;
+  salaryPaid: number;
+  balanceDue: number;
+}
+
+export interface LabourSalaryReportPdfOptions {
+  projectName: string;
+  projectAddress?: string;
+  monthName: string;
+  generatedDate: string;
+  totalWorkers: number;
+  totalDaysWorked: number;
+  totalEarned: number;
+  totalAdvance: number;
+  totalPaid: number;
+  totalBalanceDue: number;
+  items: LabourSalaryReportItem[];
+}
+
+/**
+ * Generates an enterprise-grade A4 Portrait PDF for Workforce Muster Roll & Monthly Salary Statement.
+ */
+export function generateLabourSalaryReportPdfBlob(options: LabourSalaryReportPdfOptions): Blob {
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const margin = 28;
+  const contentWidth = pageWidth - margin * 2;
+
+  const pdf = new MinimalPdfDocument(pageWidth, pageHeight);
+
+  // Top Banner
+  pdf.setFillColor(15, 23, 42); // #0f172a navy
+  pdf.drawRect(margin, pageHeight - margin - 50, contentWidth, 50, true, false);
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('BUILDING MISTRY ERP - WORKFORCE MUSTER ROLL & SALARY STATEMENT', margin + 14, pageHeight - margin - 22, 11, 'F2');
+  pdf.setFillColor(203, 213, 225);
+  pdf.drawText(`Enterprise Workforce & Payroll Audit | Period: ${options.monthName}`, margin + 14, pageHeight - margin - 38, 8, 'F1');
+
+  let curY = pageHeight - margin - 60;
+
+  // Project Info Card
+  curY -= 48;
+  pdf.setFillColor(248, 250, 252);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin, curY, contentWidth, 48, true, true);
+
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('Project / Site:', margin + 12, curY + 34, 8, 'F2');
+  pdf.drawText(options.projectName || 'Main Construction Site', margin + 80, curY + 34, 8, 'F1');
+
+  pdf.drawText('Address / Area:', margin + 12, curY + 20, 8, 'F2');
+  pdf.drawText(options.projectAddress || 'Site Location Not Specified', margin + 80, curY + 20, 8, 'F1');
+
+  pdf.drawText('Generated Date:', margin + 340, curY + 34, 8, 'F2');
+  pdf.drawText(options.generatedDate, margin + 420, curY + 34, 8, 'F1');
+
+  pdf.drawText('Active Workers:', margin + 340, curY + 20, 8, 'F2');
+  pdf.drawText(`${options.totalWorkers} Registered`, margin + 420, curY + 20, 8, 'F1');
+
+  // Summary Metrics (4 Cards)
+  curY -= 46;
+  const cardW = (contentWidth - 18) / 4;
+  const metrics = [
+    { label: 'TOTAL EARNED', value: `Rs. ${options.totalEarned.toLocaleString('en-IN')}`, fill: [239, 246, 255], stroke: [191, 219, 254], textCol: [37, 99, 235] },
+    { label: 'ADVANCE DEDUCTED', value: `Rs. ${options.totalAdvance.toLocaleString('en-IN')}`, fill: [254, 243, 199], stroke: [253, 230, 138], textCol: [217, 119, 6] },
+    { label: 'SALARY PAID', value: `Rs. ${options.totalPaid.toLocaleString('en-IN')}`, fill: [240, 253, 244], stroke: [187, 247, 208], textCol: [22, 163, 74] },
+    { label: 'OUTSTANDING BALANCE', value: `Rs. ${options.totalBalanceDue.toLocaleString('en-IN')}`, fill: [254, 242, 242], stroke: [254, 202, 202], textCol: [220, 38, 38] },
+  ];
+
+  metrics.forEach((m, idx) => {
+    const x = margin + idx * (cardW + 6);
+    pdf.setFillColor(m.fill[0], m.fill[1], m.fill[2]);
+    pdf.setStrokeColor(m.stroke[0], m.stroke[1], m.stroke[2]);
+    pdf.drawRect(x, curY, cardW, 40, true, true);
+
+    pdf.setFillColor(71, 85, 105);
+    pdf.drawText(m.label, x + 8, curY + 26, 6.5, 'F2');
+    pdf.setFillColor(m.textCol[0], m.textCol[1], m.textCol[2]);
+    pdf.drawText(m.value, x + 8, curY + 10, 9.5, 'F2');
+  });
+
+  // Table Title
+  curY -= 20;
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('WORKFORCE PAYROLL & SETTLEMENT BREAKDOWN', margin, curY, 8.5, 'F2');
+
+  // Table Header
+  curY -= 20;
+  pdf.setFillColor(226, 232, 240);
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawRect(margin, curY, contentWidth, 18, true, true);
+
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('Worker Name & Trade', margin + 8, curY + 5, 7.5, 'F2');
+  pdf.drawText('Daily Rate', margin + 170, curY + 5, 7.5, 'F2');
+  pdf.drawText('Days / Shifts', margin + 230, curY + 5, 7.5, 'F2');
+  pdf.drawText('Earned (Rs.)', margin + 300, curY + 5, 7.5, 'F2');
+  pdf.drawText('Advance (Rs.)', margin + 365, curY + 5, 7.5, 'F2');
+  pdf.drawText('Paid (Rs.)', margin + 430, curY + 5, 7.5, 'F2');
+  pdf.drawText('Balance Due (Rs.)', margin + 480, curY + 5, 7.5, 'F2');
+
+  // Table Rows (up to 25 items fitting on standard sheet)
+  const displayItems = options.items.slice(0, 25);
+  displayItems.forEach((w, index) => {
+    curY -= 17;
+    const isEven = index % 2 === 0;
+    pdf.setFillColor(isEven ? 255 : 248, isEven ? 255 : 250, isEven ? 255 : 252);
+    pdf.setStrokeColor(241, 245, 249);
+    pdf.drawRect(margin, curY, contentWidth, 17, true, true);
+
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(`${w.workerName} (${w.category})`.substring(0, 28), margin + 8, curY + 4, 7, 'F2');
+
+    pdf.setFillColor(71, 85, 105);
+    pdf.drawText(`Rs. ${w.dailyRate}`, margin + 170, curY + 4, 7, 'F1');
+    pdf.drawText(`${w.workedDays} days`, margin + 230, curY + 4, 7, 'F1');
+    pdf.drawText(`Rs. ${w.earnedAmount.toLocaleString('en-IN')}`, margin + 300, curY + 4, 7, 'F1');
+
+    pdf.setFillColor(217, 119, 6);
+    pdf.drawText(`Rs. ${w.advanceDeducted.toLocaleString('en-IN')}`, margin + 365, curY + 4, 7, 'F1');
+
+    pdf.setFillColor(22, 163, 74);
+    pdf.drawText(`Rs. ${w.salaryPaid.toLocaleString('en-IN')}`, margin + 430, curY + 4, 7, 'F1');
+
+    pdf.setFillColor(w.balanceDue > 0 ? 220 : 22, w.balanceDue > 0 ? 38 : 163, w.balanceDue > 0 ? 38 : 74);
+    pdf.drawText(`Rs. ${w.balanceDue.toLocaleString('en-IN')}`, margin + 480, curY + 4, 7, 'F2');
+  });
+
+  // Table Totals Row
+  curY -= 18;
+  pdf.setFillColor(241, 245, 249);
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawRect(margin, curY, contentWidth, 18, true, true);
+
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`TOTALS (${options.totalWorkers} Workers)`, margin + 8, curY + 5, 7.5, 'F2');
+  pdf.drawText(`${options.totalDaysWorked} shifts`, margin + 230, curY + 5, 7.5, 'F2');
+  pdf.drawText(`Rs. ${options.totalEarned.toLocaleString('en-IN')}`, margin + 300, curY + 5, 7.5, 'F2');
+  pdf.setFillColor(217, 119, 6);
+  pdf.drawText(`Rs. ${options.totalAdvance.toLocaleString('en-IN')}`, margin + 365, curY + 5, 7.5, 'F2');
+  pdf.setFillColor(22, 163, 74);
+  pdf.drawText(`Rs. ${options.totalPaid.toLocaleString('en-IN')}`, margin + 430, curY + 5, 7.5, 'F2');
+  pdf.setFillColor(options.totalBalanceDue > 0 ? 220 : 22, options.totalBalanceDue > 0 ? 38 : 163, options.totalBalanceDue > 0 ? 38 : 74);
+  pdf.drawText(`Rs. ${options.totalBalanceDue.toLocaleString('en-IN')}`, margin + 480, curY + 5, 7.5, 'F2');
+
+  // Signature Blocks
+  curY -= 55;
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawLine(margin + 30, curY, margin + 180, curY);
+  pdf.drawLine(margin + contentWidth - 180, curY, margin + contentWidth - 30, curY);
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Site Supervisor / Timekeeper Signature', margin + 30, curY - 14, 8, 'F1');
+  pdf.drawText('Authorised Signatory / Contractor Signature', margin + contentWidth - 180, curY - 14, 8, 'F1');
+
+  // Footer
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(`Building Mistry ERP | Verified Workforce Payroll Record | Confidential Document | Generated on ${options.generatedDate}`, margin + 10, margin + 8, 7, 'F1');
+
+  const pdfBytes = pdf.build();
+  return new Blob([pdfBytes as any], { type: 'application/pdf' });
+}
+
 /**
  * Triggers a real browser file download for any Blob or text content with genuine filename and MIME type.
  */

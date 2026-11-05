@@ -32,6 +32,7 @@ import { formatDay, todayKey } from '../utils/datetime';
 import { formatINR, formatQty, roundMoney } from '../utils/money';
 import { RecordPurchaseModal } from '../components/RecordPurchaseModal';
 import { StockOperationModal } from '../components/StockOperationModal';
+import { SupplierManagementModal } from '../components/SupplierManagementModal';
 
 export interface MaterialsViewProps {
   user: User;
@@ -65,6 +66,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   const [isStockOpModalOpen, setIsStockOpModalOpen] = useState(false);
   const [stockOpItem, setStockOpItem] = useState<StockItem | null>(null);
   const [stockOpMode, setStockOpMode] = useState<'usage' | 'opening' | 'return' | 'adjust_in' | 'adjust_out' | 'transfer'>('usage');
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
 
   // Live queries for active data
   const materialsQuery = useLiveQuery(async () => {
@@ -276,6 +278,27 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
         {/* Global Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowSupplierModal(true)}
+            style={{
+              padding: '9px 16px',
+              borderRadius: '8px',
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              color: '#1E293B',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            }}
+          >
+            <Building2 size={16} color="#2563EB" />
+            <span>Suppliers Directory</span>
+          </button>
+
           <button
             onClick={handleExportPDF}
             style={{
@@ -898,6 +921,15 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           onNotify(msg, 'success');
         }}
       />
+
+      {/* Supplier Management Directory Modal */}
+      {showSupplierModal && (
+        <SupplierManagementModal
+          user={user}
+          onClose={() => setShowSupplierModal(false)}
+          onNotify={onNotify}
+        />
+      )}
     </div>
   );
 };

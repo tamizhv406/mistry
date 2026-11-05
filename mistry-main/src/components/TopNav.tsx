@@ -110,7 +110,7 @@ export const TopNav: React.FC<TopNavProps> = ({
     const sites = await db.getSitesForUser(user);
     const siteIds = sites.map(s => s.id);
 
-    const [workers, materials, rodEntries, movements, catalog, attendance, floorPlans] = await Promise.all([
+    const [workers, materials, rodEntries, movements, catalog, attendance, floorPlans, tasks, appNotifications, milestones] = await Promise.all([
       db.workers.filter(w => !w.isDeleted && siteIds.includes(w.siteId)).toArray(),
       db.materials.filter(m => !m.isDeleted && siteIds.includes(m.siteId)).toArray(),
       db.rodEntries.filter(r => !r.isDeleted && siteIds.includes(r.siteId)).toArray(),
@@ -118,6 +118,9 @@ export const TopNav: React.FC<TopNavProps> = ({
       db.catalogItems.filter(c => !c.isDeleted).toArray(),
       db.attendance.filter(a => !a.isDeleted && siteIds.includes(a.siteId)).toArray(),
       db.floorPlans.filter(f => !f.isDeleted).toArray(),
+      db.tasks.filter(t => !t.isDeleted && siteIds.includes(t.siteId)).toArray(),
+      db.notifications.filter(n => (!n.userId || n.userId === user.id)).toArray(),
+      db.milestones.filter(m => !m.isDeleted && siteIds.includes(m.siteId)).toArray(),
     ]);
 
     // Build notifications from real records
@@ -166,6 +169,41 @@ export const TopNav: React.FC<TopNavProps> = ({
         timestamp: 'Pending',
       });
     }
+
+    // 4. Overdue tasks alert
+    const overdueTasks = tasks.filter(t => t.status !== 'Completed' && t.dueDate && t.dueDate < today);
+    if (overdueTasks.length > 0) {
+      notifications.push({
+        id: 'overdue-tasks-alert',
+        title: 'Overdue Construction Tasks',
+        message: `${overdueTasks.length} task${overdueTasks.length > 1 ? 's' : ''} past due (${overdueTasks.slice(0, 2).map(t => t.title).join(', ')}${overdueTasks.length > 2 ? '...' : ''})`,
+        type: 'danger',
+        targetView: 'site-detail',
+        siteId: overdueTasks[0].siteId,
+        tab: 'tasks',
+        timestamp: 'Action Needed',
+      });
+    }
+
+    // 5. In-app system notifications
+    const unreadAppNotifs = appNotifications.filter(n => !n.isRead);
+    unreadAppNotifs.forEach(n => {
+      let badgeType: 'warning' | 'info' | 'danger' | 'success' = 'info';
+      if (n.type === 'low_stock' || n.type === 'overdue_task') badgeType = 'danger';
+      else if (n.type === 'pending_salary' || n.type === 'pending_payment' || n.type === 'project_deadline') badgeType = 'warning';
+      else if (n.type === 'site_diary') badgeType = 'success';
+
+      notifications.push({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        type: badgeType,
+        targetView: n.siteId ? 'site-detail' : 'dashboard',
+        siteId: n.siteId,
+        tab: n.type === 'overdue_task' ? 'tasks' : n.type === 'site_diary' ? 'documents' : 'overview',
+        timestamp: n.createdAt ? n.createdAt.substring(0, 10) : 'Recent',
+      });
+    });
 
     return {
       sites,
