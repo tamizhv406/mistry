@@ -1,8 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import type { Site, User } from '../db/types';
+import type { Site, User, BuildingEstimate, StockMovement, CatalogItem, FloorPlan } from '../db/types';
 import { getCurrentUser } from '../services/auth';
 import { calculateFinancialBalance } from '../utils/financial';
+import { buildStock, type StockItem } from '../domain/stock';
+import { todayKey, monthKeyOf, addMonths, DEFAULT_TIME_ZONE } from '../utils/datetime';
 
 export interface SiteCardSummary {
   site: Site;
@@ -10,6 +12,10 @@ export interface SiteCardSummary {
   totalPaid: number;
   balance: number;
   extraPaid: number;
+  budget?: number;
+  progressPercentage: number;
+  workerCount: number;
+  materialCount: number;
 }
 
 export interface RecentActivity {
@@ -21,6 +27,41 @@ export interface RecentActivity {
   siteName: string;
   siteId: string;
   date: string;
+}
+
+export interface AttendanceTodayStats {
+  totalWorkers: number;
+  present: number;
+  halfDay: number;
+  leave: number;
+  absent: number;
+  overtime: number;
+  totalMarked: number;
+  unmarked: number;
+  attendanceRate: number;
+}
+
+export interface MaterialStockStats {
+  totalMaterialsCount: number;
+  inStockCount: number;
+  lowStockCount: number;
+  negativeCount: number;
+  lowStockItems: StockItem[];
+}
+
+export interface MonthlyTrendItem {
+  monthKey: string;
+  label: string;
+  expense: number;
+  paid: number;
+}
+
+export interface CategoryExpenseItem {
+  key: string;
+  label: string;
+  amount: number;
+  percentage: number;
+  color: string;
 }
 
 export function useOverallStats(user?: User | null) {
@@ -47,6 +88,10 @@ export function useOverallStats(user?: User | null) {
       electricity,
       water,
       otherExpenses,
+      stockMovements,
+      catalogItems,
+      estimates,
+      floorPlans,
     ] = await Promise.all([
       db.materials.filter(m => !m.isDeleted && siteIds.includes(m.siteId)).toArray(),
       db.rodEntries.filter(r => !r.isDeleted && siteIds.includes(r.siteId)).toArray(),
@@ -60,6 +105,10 @@ export function useOverallStats(user?: User | null) {
       db.electricityBills.filter(e => !e.isDeleted && siteIds.includes(e.siteId)).toArray(),
       db.waterBills.filter(w => !w.isDeleted && siteIds.includes(w.siteId)).toArray(),
       db.otherExpenses.filter(o => !o.isDeleted && siteIds.includes(o.siteId)).toArray(),
+      db.stockMovements.filter(s => !s.isDeleted && siteIds.includes(s.siteId)).toArray(),
+      db.catalogItems.filter(c => !c.isDeleted).toArray(),
+      db.estimates.filter(e => !e.isDeleted).toArray(),
+      db.floorPlans.filter(f => !f.isDeleted).toArray(),
     ]);
 
     // Worker wage mapping
@@ -125,6 +174,131 @@ export function useOverallStats(user?: User | null) {
     const overallBalance = overallFin.balanceDue;
     const overallExtraPaid = overallFin.extraPaid;
 
+    // Estimates mapping by siteId
+    const siteEstimateMap = new Map<string, BuildingEstimate>();
+    estimates.forEach(est => {
+      if (est.siteId) {
+        const existing = siteEstimateMap.get(est.siteId);
+        if (!existing || new Date(est.updatedAt || est.createdAt) > new Date(existing.updatedAt || existing.createdAt)) {
+          siteEstimateMap.set(est.siteId, est);
+        }
+      }
+    });
+
+    const totalBudget = Array.from(siteEstimateMap.values()).reduce(
+      (sum, est) => sum + (Number(est.totalEstimatedCost) || 0),
+      0
+    );
+    const remainingBudget = totalBudget > 0 ? Math.max(0, totalBudget - overallExpense) : undefined;
+
+    // Stock building and alerts
+    const stockItems = buildStock(materials, rodEntries, stockMovements, catalogItems);
+    const lowStockItems = stockItems.filter(s => s.isLowStock || s.isNegative);
+    const inStockCount = stockItems.filter(s => s.onHand > 0).length;
+    const negativeCount = stockItems.filter(s => s.isNegative).length;
+
+    const materialStock: MaterialStockStats = {
+      totalMaterialsCount: materials.length + rodEntries.length,
+      inStockCount,
+      lowStockCount: lowStockItems.length,
+      negativeCount,
+      lowStockItems,
+    };
+
+    // Attendance Today calculations (Asia/Kolkata timezone)
+    const today = todayKey(DEFAULT_TIME_ZONE);
+    const todaysAttendance = attendance.filter(a => a.date === today);
+    const present = todaysAttendance.filter(a => a.status === 'present').length;
+    const halfDay = todaysAttendance.filter(a => a.status === 'half_day').length;
+    const leave = todaysAttendance.filter(a => a.status === 'leave').length;
+    const absent = todaysAttendance.filter(a => a.status === 'absent').length;
+    const overtime = todaysAttendance.filter(a => a.status === 'overtime').length;
+
+    const markedWorkerIds = new Set(todaysAttendance.map(a => a.workerId));
+    const totalWorkers = workers.length;
+    const totalMarked = markedWorkerIds.size;
+    const unmarked = Math.max(0, totalWorkers - totalMarked);
+    const attendanceEffective = present + overtime + halfDay * 0.5;
+    const attendanceRate = totalWorkers > 0 ? Math.round((attendanceEffective / totalWorkers) * 100) : 0;
+
+    const attendanceToday: AttendanceTodayStats = {
+      totalWorkers,
+      present,
+      halfDay,
+      leave,
+      absent,
+      overtime,
+      totalMarked,
+      unmarked,
+      attendanceRate,
+    };
+
+    // Category Expense Breakdown with percentages
+    const categoryExpenses: CategoryExpenseItem[] = [
+      { key: 'materials', label: 'Materials', amount: totalMaterialExpense, percentage: 0, color: '#f59e0b' },
+      { key: 'labour', label: 'Labour Wages', amount: totalLabourGross, percentage: 0, color: '#10b981' },
+      { key: 'tools', label: 'Tools & Rentals', amount: totalToolsExpense, percentage: 0, color: '#3b82f6' },
+      { key: 'teaSnacks', label: 'Tea & Snacks', amount: totalTeaSnacksExpense, percentage: 0, color: '#eab308' },
+      { key: 'pooja', label: 'Pooja', amount: totalPoojaExpense, percentage: 0, color: '#8b5cf6' },
+      { key: 'electricity', label: 'Electricity', amount: totalElectricityExpense, percentage: 0, color: '#475569' },
+      { key: 'water', label: 'Water', amount: totalWaterExpense, percentage: 0, color: '#06b6d4' },
+      { key: 'other', label: 'Other', amount: totalOtherExpense, percentage: 0, color: '#6366f1' },
+    ];
+    if (overallExpense > 0) {
+      categoryExpenses.forEach(c => {
+        c.percentage = Math.round((c.amount / overallExpense) * 100);
+      });
+    }
+
+    // Monthly Expense Trends (past 6 months)
+    const currentMonthKey = monthKeyOf(today);
+    const monthKeys: string[] = [];
+    for (let i = 5; i >= 0; i--) {
+      monthKeys.push(addMonths(currentMonthKey, -i));
+    }
+
+    const monthMap = new Map<string, { expense: number; paid: number }>();
+    monthKeys.forEach(k => monthMap.set(k, { expense: 0, paid: 0 }));
+
+    const recordExpenseMonth = (dateStr: string | undefined, exp: number, pd: number) => {
+      if (!dateStr) return;
+      const mKey = dateStr.slice(0, 7);
+      if (monthMap.has(mKey)) {
+        const item = monthMap.get(mKey)!;
+        item.expense += exp;
+        item.paid += pd;
+      }
+    };
+
+    materials.forEach(m => recordExpenseMonth(m.purchaseDate || m.createdAt, Number(m.totalAmount) || 0, Number(m.paidAmount) || 0));
+    rodEntries.forEach(r => recordExpenseMonth(r.purchaseDate || r.createdAt, Number(r.totalAmount) || 0, Number(r.paidAmount) || 0));
+    tools.forEach(t => recordExpenseMonth(t.purchaseDate || t.createdAt, Number(t.cost) || 0, Number(t.paidAmount) || 0));
+    teaSnacks.forEach(t => recordExpenseMonth(t.date || t.createdAt, Number(t.totalAmount) || 0, Number(t.paidAmount) || 0));
+    pooja.forEach(p => recordExpenseMonth(p.date || p.createdAt, Number(p.totalAmount) || 0, Number(p.paidAmount) || 0));
+    electricity.forEach(e => recordExpenseMonth(e.dueDate || e.month || e.createdAt, Number(e.billAmount) || 0, Number(e.paidAmount) || 0));
+    water.forEach(w => recordExpenseMonth(w.date || w.createdAt, Number(w.billAmount) || 0, Number(w.paidAmount) || 0));
+    otherExpenses.forEach(o => recordExpenseMonth(o.date || o.createdAt, Number(o.amount) || 0, Number(o.paidAmount) || 0));
+    salaryPayments.forEach(s => recordExpenseMonth(s.date || s.createdAt, 0, Number(s.paidAmount) || 0));
+    advances.forEach(a => recordExpenseMonth(a.date || a.createdAt, 0, Number(a.amount) || 0));
+    attendance.forEach(a => {
+      const wage = workerWageMap.get(a.workerId) || 0;
+      const earned = wage * (Number(a.dayMultiplier) || 0);
+      recordExpenseMonth(a.date || a.createdAt, earned, 0);
+    });
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthlyTrends: MonthlyTrendItem[] = monthKeys.map(k => {
+      const [y, m] = k.split('-').map(Number);
+      const label = `${monthNames[m - 1]} '${String(y).slice(2)}`;
+      const val = monthMap.get(k) || { expense: 0, paid: 0 };
+      return {
+        monthKey: k,
+        label,
+        expense: Math.round(val.expense),
+        paid: Math.round(val.paid),
+      };
+    });
+
     // Per-site calculations
     const siteSummaries: SiteCardSummary[] = sites.map(site => {
       const sMat = materials.filter(m => m.siteId === site.id);
@@ -173,16 +347,52 @@ export function useOverallStats(user?: User | null) {
       const totalPaid = matPd + sAdv + sSal + toolsPd + teaPd + poojaPd + elecPd + waterPd + otherPd;
       const siteFin = calculateFinancialBalance(totalExpense, totalPaid);
 
+      const siteEstimate = siteEstimateMap.get(site.id);
+      const budget = siteEstimate ? Number(siteEstimate.totalEstimatedCost) : undefined;
+
+      // Progress percentage
+      let progressPercentage = 0;
+      if (site.status === 'Completed') {
+        progressPercentage = 100;
+      } else if (site.status === 'Planning') {
+        progressPercentage = 10;
+      } else if (budget && budget > 0) {
+        progressPercentage = Math.min(95, Math.round((totalExpense / budget) * 100));
+      } else if (site.status === 'Active') {
+        // Calculate based on start and expected completion dates if available
+        if (site.startDate && site.expectedCompletionDate) {
+          const start = new Date(site.startDate).getTime();
+          const end = new Date(site.expectedCompletionDate).getTime();
+          const now = Date.now();
+          if (end > start) {
+            const elapsed = Math.max(0, Math.min(1, (now - start) / (end - start)));
+            progressPercentage = Math.round(elapsed * 90);
+          } else {
+            progressPercentage = 45;
+          }
+        } else {
+          progressPercentage = 40;
+        }
+      } else if (site.status === 'On Hold') {
+        progressPercentage = 25;
+      }
+
+      const sWorkers = workers.filter(w => w.siteId === site.id);
+
       return {
         site,
         totalExpense,
         totalPaid,
         balance: siteFin.balanceDue,
         extraPaid: siteFin.extraPaid,
+        budget,
+        progressPercentage,
+        workerCount: sWorkers.length,
+        materialCount: sMat.length + sRods.length,
       };
     });
 
-    // Recent Activities (compile from materials, rod, advances, tools, pooja, electricity, water)
+    // Recent Activities
     const activities: RecentActivity[] = [];
 
     materials.forEach(m => {
@@ -263,8 +473,34 @@ export function useOverallStats(user?: User | null) {
       });
     });
 
+    sites.forEach(s => {
+      activities.push({
+        id: `site-create-${s.id}`,
+        type: 'project',
+        title: `Project: ${s.name}`,
+        description: `${s.status} • ${s.area || s.address || 'Address'} • Owner: ${s.ownerName}`,
+        siteName: s.name,
+        siteId: s.id,
+        date: s.createdAt,
+      });
+    });
+
+    floorPlans.forEach(fp => {
+      if (fp.siteId && siteMap.has(fp.siteId)) {
+        activities.push({
+          id: `fp-${fp.id}`,
+          type: 'floorplan',
+          title: `Floor Plan: ${fp.buildingName || 'Building'} (${fp.floorName || 'Plan'})`,
+          description: `Rooms: ${fp.rooms?.length || 0} • Walls: ${fp.walls?.length || 0}`,
+          siteName: siteMap.get(fp.siteId) || 'Site',
+          siteId: fp.siteId,
+          date: fp.updatedAt || fp.createdAt,
+        });
+      }
+    });
+
     activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const recentActivities = activities.slice(0, 10);
+    const recentActivities = activities.slice(0, 15);
 
     return {
       totalSites: sites.length,
@@ -272,6 +508,10 @@ export function useOverallStats(user?: User | null) {
       completedSites: sites.filter(s => s.status === 'Completed').length,
       onHoldSites: sites.filter(s => s.status === 'On Hold').length,
       planningSites: sites.filter(s => s.status === 'Planning').length,
+
+      totalWorkers,
+      attendanceToday,
+      materialStock,
 
       totalMaterialExpense,
       totalLabourExpense: totalLabourGross,
@@ -286,6 +526,11 @@ export function useOverallStats(user?: User | null) {
       overallPaid,
       overallBalance,
       overallExtraPaid,
+      totalBudget,
+      remainingBudget,
+
+      categoryExpenses,
+      monthlyTrends,
 
       siteSummaries,
       recentActivities,

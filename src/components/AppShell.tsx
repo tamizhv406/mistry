@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { WifiOff, Wifi } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
+import { TopNav } from './TopNav';
 import type { User } from '../db/types';
 
 interface AppShellProps {
   user: User | null;
   currentView: string;
-  onNavigate: (view: string, siteId?: string) => void;
+  onNavigate: (view: string, siteId?: string, tab?: string, subTab?: string) => void;
   onLogout: () => void;
   onOpenNewSiteModal: () => void;
   onOpenSiteTab?: (tab: string, subTab?: string) => void;
@@ -19,8 +20,11 @@ interface AppShellProps {
 }
 
 /**
- * Page frame: sidebar on wide screens, content area with network status banners.
- * On phones the top bar and bottom navigation come from components/mobile/MobileChrome.
+ * Enterprise ERP Shell:
+ * - Collapsible dark sidebar on desktop / tablet
+ * - Top navigation bar with global search, notifications, and profile
+ * - Network status banners
+ * - Mobile slide-out drawer
  */
 export const AppShell: React.FC<AppShellProps> = ({
   user,
@@ -41,6 +45,8 @@ export const AppShell: React.FC<AppShellProps> = ({
     }
   });
 
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
   const handleToggleCollapse = () => {
     setSidebarCollapsed(prev => {
       const next = !prev;
@@ -51,9 +57,14 @@ export const AppShell: React.FC<AppShellProps> = ({
     });
   };
 
+  const handleMobileNav = (view: string, siteId?: string) => {
+    setMobileDrawerOpen(false);
+    onNavigate(view, siteId);
+  };
+
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'shell-sidebar-collapsed' : ''}`}>
-      {/* Desktop Sidebar */}
+      {/* Desktop & Tablet Sidebar */}
       <div className="app-shell-sidebar desktop-only">
         <AppSidebar
           currentView={currentView}
@@ -67,8 +78,48 @@ export const AppShell: React.FC<AppShellProps> = ({
         />
       </div>
 
+      {/* Mobile Sidebar Drawer Overlay */}
+      {mobileDrawerOpen && (
+        <div
+          className="mobile-drawer-overlay no-print"
+          onClick={() => setMobileDrawerOpen(false)}
+        >
+          <div
+            className="mobile-drawer-content"
+            onClick={e => e.stopPropagation()}
+            style={{ width: '280px', height: '100%', background: 'var(--erp-sidebar-bg)' }}
+          >
+            <AppSidebar
+              currentView={currentView}
+              user={user}
+              collapsed={false}
+              onToggleCollapse={() => setMobileDrawerOpen(false)}
+              onNavigate={handleMobileNav}
+              onLogout={() => {
+                setMobileDrawerOpen(false);
+                onLogout();
+              }}
+              onOpenNewSiteModal={() => {
+                setMobileDrawerOpen(false);
+                onOpenNewSiteModal();
+              }}
+              onOpenSiteTab={onOpenSiteTab}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <div className="app-shell-main">
+        {/* Top Navigation Bar */}
+        <TopNav
+          user={user}
+          currentView={currentView}
+          onNavigate={onNavigate}
+          onLogout={onLogout}
+          onToggleSidebarMobile={() => setMobileDrawerOpen(prev => !prev)}
+        />
+
         {/* Network Status Banners */}
         {!isOnline && (
           <div className="offline-status-banner no-print" role="status">

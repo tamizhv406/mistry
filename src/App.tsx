@@ -16,13 +16,17 @@ import { AppShell } from './components/AppShell';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
+import { ProjectsView } from './views/ProjectsView';
 import { SiteDetailView } from './views/SiteDetailView';
 import { TrashView } from './views/TrashView';
 import { BackupView } from './views/BackupView';
 import { EstimatorView } from './views/EstimatorView';
 import { AdminDashboardView } from './views/AdminDashboardView';
 import { FloorPlanListView } from './views/FloorPlanListView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { FloorPlanEditorView } from './views/FloorPlanEditorView';
+import { MaterialsView } from './views/MaterialsView';
+import { AttendanceSalaryView } from './views/AttendanceSalaryView';
 import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { checkPasswordRecoveryUrl, isSupabaseConfigured, supabase } from './services/supabase';
@@ -536,26 +540,13 @@ export function App() {
         {/* Main View Router */}
         <main>
         {currentView === 'dashboard' && (
-          <HomeView
-            user={currentUser}
-            sites={userSites}
-            siteId={selectedSiteId}
-            onSelectSite={handleSelectSite}
-            onGo={view => handleNavigate(view)}
-            onOpenClassic={id => handleNavigate('site-detail', id, 'overview')}
-            onNewSite={openNewSiteModal}
-            onNotify={addToast}
-          />
-        )}
-
-        {currentView === 'my-sites' && (
           <DashboardView
-            onlySites={true}
-            onOpenSite={handleSelectSite}
-            onOpenNewSiteModal={() => {
-              setSiteToEdit(null);
-              setSiteModalOpen(true);
+            onlySites={false}
+            onOpenSite={siteId => {
+              setSelectedSiteId(siteId);
+              handleNavigate('site-detail', siteId);
             }}
+            onOpenNewSiteModal={openNewSiteModal}
             onEditSite={site => {
               setSiteToEdit(site);
               setSiteModalOpen(true);
@@ -563,6 +554,34 @@ export function App() {
             onDeleteSiteToTrash={site => handleSoftDelete('sites', site.id, site.name)}
             onNotify={addToast}
             user={currentUser}
+            onNavigate={(view, siteId, tab, subTab) => handleNavigate(view, siteId, tab, subTab)}
+            onOpenMaterialModal={category => {
+              setMatCategory(category || 'sand');
+              setMatToEdit(null);
+              setMatModalOpen(true);
+            }}
+            onOpenExpenseModal={() => {
+              setOtherToEdit(null);
+              setOtherModalOpen(true);
+            }}
+          />
+        )}
+
+        {currentView === 'my-sites' && (
+          <ProjectsView
+            user={currentUser}
+            onOpenSite={siteId => {
+              setSelectedSiteId(siteId);
+              handleNavigate('site-detail', siteId, 'overview');
+            }}
+            onOpenNewSiteModal={openNewSiteModal}
+            onEditSite={site => {
+              setSiteToEdit(site);
+              setSiteModalOpen(true);
+            }}
+            onDeleteSiteToTrash={site => handleSoftDelete('sites', site.id, site.name)}
+            onNotify={addToast}
+            onNavigate={handleNavigate}
           />
         )}
 
@@ -642,20 +661,12 @@ export function App() {
           />
         )}
 
-        {currentView === 'labour' && selectedSiteId && (
-          <LabourView
+        {currentView === 'labour' && currentUser && (
+          <AttendanceSalaryView
             user={currentUser}
-            siteId={selectedSiteId}
-            onBack={() => handleNavigate('dashboard')}
-            onOpenWorker={id => {
-              setSelectedWorkerId(id);
-              setCurrentView('worker');
-              window.scrollTo(0, 0);
-            }}
-            onAddWorker={() => {
-              setWorkerToEdit(null);
-              setWorkerModalOpen(true);
-            }}
+            sites={userSites}
+            initialSiteId={selectedSiteId}
+            onNavigateSiteDetail={(sId, tab) => handleNavigate('site-detail', sId, tab)}
             onNotify={addToast}
           />
         )}
@@ -677,16 +688,12 @@ export function App() {
           />
         )}
 
-        {currentView === 'stock' && selectedSiteId && (
-          <StockView
+        {currentView === 'stock' && currentUser && (
+          <MaterialsView
             user={currentUser}
-            siteId={selectedSiteId}
-            onBack={() => handleNavigate('dashboard')}
-            onOpenSteelPurchase={() => {
-              setRodToEdit(null);
-              setRodModalOpen(true);
-            }}
-            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'materials')}
+            sites={userSites}
+            initialSiteId={selectedSiteId}
+            onNavigateSiteDetail={(sId, tab) => handleNavigate('site-detail', sId, tab)}
             onNotify={addToast}
           />
         )}
@@ -732,38 +739,39 @@ export function App() {
         )}
 
         {currentView === 'floor-plan-editor' && currentUser && (
-          selectedFloorPlanId ? (
-            <FloorPlanEditorView
-              planId={selectedFloorPlanId}
-              user={currentUser}
-              onBack={() => setCurrentView('floor-plans')}
-              onBackToSite={(siteId) => {
-                setSelectedSiteId(siteId);
-                setCurrentView('site-detail');
-              }}
-              onNotify={addToast}
-              onOpenEstimator={(areaSqFt) => {
-                handleNavigate('estimator');
-                setEstimatorAreaSqFt(areaSqFt);
-                addToast(`Floor plan area ${areaSqFt.toFixed(0)} sq.ft is set as the building size on one floor`, 'info');
-              }}
-            />
-          ) : (
-            <FloorPlanListView
-              user={currentUser}
-              onOpenEditor={(planId) => {
-                setSelectedFloorPlanId(planId);
-                setCurrentView('floor-plan-editor');
-              }}
-              onNotify={addToast}
-              onOpenNewSiteModal={() => {
-                setSiteToEdit(null);
-                setSiteModalOpen(true);
-              }}
-            />
-          )
+          <ErrorBoundary>
+            {selectedFloorPlanId ? (
+              <FloorPlanEditorView
+                planId={selectedFloorPlanId}
+                user={currentUser}
+                onBack={() => setCurrentView('floor-plans')}
+                onBackToSite={(siteId) => {
+                  setSelectedSiteId(siteId);
+                  setCurrentView('site-detail');
+                }}
+                onNotify={addToast}
+                onOpenEstimator={(areaSqFt) => {
+                  handleNavigate('estimator');
+                  setEstimatorAreaSqFt(areaSqFt);
+                  addToast(`Floor plan area ${areaSqFt.toFixed(0)} sq.ft is set as the building size on one floor`, 'info');
+                }}
+              />
+            ) : (
+              <FloorPlanListView
+                user={currentUser}
+                onOpenEditor={(planId) => {
+                  setSelectedFloorPlanId(planId);
+                  setCurrentView('floor-plan-editor');
+                }}
+                onNotify={addToast}
+                onOpenNewSiteModal={() => {
+                  setSiteToEdit(null);
+                  setSiteModalOpen(true);
+                }}
+              />
+            )}
+          </ErrorBoundary>
         )}
-
 
         {currentView === 'estimator' && (
           <EstimatorView
@@ -850,7 +858,7 @@ export function App() {
                   <div>
                     <div className="font-bold text-sm text-slate-100">{site.name}</div>
                     <div className="text-xs text-slate-400">
-                      {site.ownerName} • {site.area || site.buildingType}
+                      {site.ownerName} â€¢ {site.area || site.buildingType}
                     </div>
                   </div>
                   <ChevronRight size={18} className="text-amber-400" />
@@ -1170,3 +1178,4 @@ export function App() {
 }
 
 export default App;
+

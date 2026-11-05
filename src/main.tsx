@@ -6,6 +6,7 @@ import './styles/ai-surfaces.css';
 import './styles/admin-portal.css';
 import './styles/planner-tools.css';
 import './styles/design-system.css';
+import './styles/erp-dashboard.css';
 import App from './App.tsx';
 
 // Register Service Worker for PWA offline capabilities

@@ -407,6 +407,235 @@ export async function generateFloorPlanPdfBlob(options: FloorPlanPdfOptions): Pr
   return new Blob([pdfBytes as any], { type: 'application/pdf' });
 }
 
+export interface BuildingEstimatePdfOptions {
+  projectName?: string;
+  estimateName?: string;
+  clientName?: string;
+  location?: string;
+  buildingType?: string;
+  structureType: string;
+  quality: string;
+  builtUpSqFt: number;
+  footprintSqFt: number;
+  floors: number;
+  plotSqFt?: number | null;
+  sandType?: string;
+  materialLines: Array<{
+    material: string;
+    quantity: number;
+    unit: string;
+    rate: number;
+    estimatedCost: number;
+  }>;
+  materialCost: number;
+  labourCost: number;
+  finishingCost: number;
+  totalCost: number;
+  costPerSqFt: number;
+  dateStr?: string;
+}
+
+export function generateBuildingEstimatePdfBlob(options: BuildingEstimatePdfOptions): Blob {
+  // A4 Portrait dimensions in points: 595.28 x 841.89
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const pdf = new MinimalPdfDocument(pageWidth, pageHeight);
+
+  const margin = 32;
+  const contentWidth = pageWidth - margin * 2;
+
+  // Safe variable extraction with fallbacks
+  const builtUpSqFt = options.builtUpSqFt ?? 0;
+  const footprintSqFt = options.footprintSqFt ?? 0;
+  const floors = options.floors ?? 1;
+  const structureType = options.structureType || 'Framed Structure (RCC)';
+  const quality = options.quality || 'Standard';
+  const materialCost = options.materialCost ?? 0;
+  const labourCost = options.labourCost ?? 0;
+  const finishingCost = options.finishingCost ?? 0;
+  const totalCost = options.totalCost ?? 0;
+  const costPerSqFt = options.costPerSqFt ?? (builtUpSqFt > 0 ? totalCost / builtUpSqFt : 0);
+  const materialLines = options.materialLines || [];
+
+  // 1. Outer Border
+  pdf.setStrokeColor(226, 232, 240); // slate-200
+  pdf.setLineWidth(1);
+  pdf.drawRect(margin, margin, contentWidth, pageHeight - margin * 2, false, true);
+
+  // 2. Header Banner
+  const headerH = 68;
+  const headerY = pageHeight - margin - headerH;
+  pdf.setFillColor(15, 23, 42); // slate-900 (Navy brand)
+  pdf.drawRect(margin, headerY, contentWidth, headerH, true, false);
+
+  // Title
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('BUILDING MISTRY - CONSTRUCTION ESTIMATE REPORT', margin + 18, headerY + 44, 13, 'F2');
+
+  pdf.setFillColor(148, 163, 184); // slate-400
+  const proj = options.projectName ? `Project: ${options.projectName} | ` : '';
+  const client = options.clientName ? `Client: ${options.clientName} | ` : '';
+  const estTitle = options.estimateName || `${structureType} (${builtUpSqFt} sq.ft)`;
+  pdf.drawText(`${proj}${client}${estTitle}`, margin + 18, headerY + 28, 8.5, 'F1');
+  const locInfo = options.location ? `Site Location: ${options.location} | ` : '';
+  pdf.drawText(`${locInfo}Rule-of-thumb architectural material & labour estimate`, margin + 18, headerY + 14, 8, 'F1');
+
+  // Date on Header Right
+  const dateStr = options.dateStr || new Date().toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText(`Date: ${dateStr}`, margin + contentWidth - 130, headerY + 42, 9, 'F2');
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText('A4 Document', margin + contentWidth - 130, headerY + 28, 8, 'F1');
+
+  // 3. Project & Area Specifications Card
+  const specH = 72;
+  const specY = headerY - specH - 14;
+  pdf.setFillColor(248, 250, 252); // slate-50
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, specY, contentWidth - 16, specH, true, true);
+
+  pdf.setFillColor(30, 41, 59); // slate-800
+  pdf.drawText('MEASUREMENTS & PROJECT SPECIFICATIONS', margin + 18, specY + 54, 8.5, 'F2');
+
+  // Spec Grid Column 1
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Built-up Area:`, margin + 18, specY + 38, 8, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`${builtUpSqFt.toLocaleString('en-IN')} sq.ft (${Math.round(builtUpSqFt * 0.092903)} sq.m)`, margin + 85, specY + 38, 8, 'F2');
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Ground Floor:`, margin + 18, specY + 22, 8, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`${footprintSqFt.toLocaleString('en-IN')} sq.ft`, margin + 85, specY + 22, 8, 'F1');
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Floors:`, margin + 18, specY + 8, 8, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`${floors} Storey(s)`, margin + 85, specY + 8, 8, 'F1');
+
+  // Spec Grid Column 2
+  const col2X = margin + 270;
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Structure:`, col2X, specY + 38, 8, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`${structureType}`, col2X + 60, specY + 38, 8, 'F2');
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Quality:`, col2X, specY + 22, 8, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`${quality} Grade`, col2X + 60, specY + 22, 8, 'F1');
+
+  if (options.plotSqFt) {
+    pdf.setFillColor(71, 85, 105);
+    pdf.drawText(`Plot Size:`, col2X, specY + 8, 8, 'F1');
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(`${options.plotSqFt.toLocaleString('en-IN')} sq.ft`, col2X + 60, specY + 8, 8, 'F1');
+  }
+
+  // 4. Material Quantities Table
+  let tableY = specY - 24;
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText('MATERIAL QUANTITIES & ESTIMATED COST', margin + 8, tableY + 6, 9.5, 'F2');
+
+  tableY -= 14;
+  // Table Header Row
+  const rowH = 18;
+  pdf.setFillColor(241, 245, 249); // slate-100
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawRect(margin + 8, tableY - rowH, contentWidth - 16, rowH, true, true);
+
+  pdf.setFillColor(51, 65, 85);
+  pdf.drawText('MATERIAL', margin + 16, tableY - 12, 8, 'F2');
+  pdf.drawText('QUANTITY', margin + 190, tableY - 12, 8, 'F2');
+  pdf.drawText('UNIT', margin + 265, tableY - 12, 8, 'F2');
+  pdf.drawText('UNIT PRICE', margin + 335, tableY - 12, 8, 'F2');
+  pdf.drawText('TOTAL COST', margin + contentWidth - 95, tableY - 12, 8, 'F2');
+
+  tableY -= rowH;
+
+  // Table Body Rows
+  pdf.setLineWidth(0.5);
+  materialLines.forEach((item, index) => {
+    const isEven = index % 2 === 0;
+    if (isEven) {
+      pdf.setFillColor(255, 255, 255);
+    } else {
+      pdf.setFillColor(248, 250, 252);
+    }
+    pdf.drawRect(margin + 8, tableY - rowH, contentWidth - 16, rowH, true, true);
+
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(item.material, margin + 16, tableY - 12, 8, 'F1');
+    pdf.drawText((item.quantity ?? 0).toLocaleString('en-IN'), margin + 190, tableY - 12, 8, 'F1');
+    pdf.drawText(item.unit || '', margin + 265, tableY - 12, 8, 'F1');
+    pdf.drawText(`Rs. ${(item.rate ?? 0).toLocaleString('en-IN')}`, margin + 335, tableY - 12, 8, 'F1');
+    pdf.drawText(`Rs. ${Math.round(item.estimatedCost ?? 0).toLocaleString('en-IN')}`, margin + contentWidth - 95, tableY - 12, 8, 'F2');
+
+    tableY -= rowH;
+  });
+
+  // 5. Cost Summary & Totals Breakdown
+  tableY -= 14;
+  const summaryBoxH = 100;
+  pdf.setFillColor(248, 250, 252);
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawRect(margin + 8, tableY - summaryBoxH, contentWidth - 16, summaryBoxH, true, true);
+
+  const sumY = tableY - 18;
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Subtotal Materials:', margin + 24, sumY, 8.5, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`Rs. ${Math.round(materialCost).toLocaleString('en-IN')}`, margin + 160, sumY, 8.5, 'F2');
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Civil Labour & Execution:', margin + 24, sumY - 16, 8.5, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`Rs. ${Math.round(labourCost).toLocaleString('en-IN')}`, margin + 160, sumY - 16, 8.5, 'F2');
+
+  if (finishingCost > 0) {
+    pdf.setFillColor(71, 85, 105);
+    pdf.drawText('Finishing & Services (Allowance):', margin + 24, sumY - 32, 8.5, 'F1');
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(`Rs. ${Math.round(finishingCost).toLocaleString('en-IN')}`, margin + 160, sumY - 32, 8.5, 'F2');
+  }
+
+  // Divider
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawLine(margin + 20, sumY - 44, margin + contentWidth - 20, sumY - 44);
+
+  // Grand Total Highlight
+  pdf.setFillColor(37, 99, 235); // Royal Blue
+  pdf.drawText('ESTIMATED GRAND TOTAL:', margin + 24, sumY - 60, 10, 'F2');
+  pdf.drawText(`Rs. ${Math.round(totalCost).toLocaleString('en-IN')}`, margin + 210, sumY - 60, 11, 'F2');
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Approx. Cost per sq.ft: Rs. ${Math.round(costPerSqFt).toLocaleString('en-IN')} / sq.ft`, margin + 24, sumY - 74, 8.5, 'F1');
+
+  // 6. Disclaimer & Footer
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(
+    'Disclaimer: Rule-of-thumb estimate for planning purposes. Actual costs depend on site drawings, soil conditions & market rates.',
+    margin + 12,
+    margin + 18,
+    6.8,
+    'F1'
+  );
+  pdf.drawText(
+    `Building Mistry | Verified Estimation Document | Generated on ${dateStr}`,
+    margin + 12,
+    margin + 8,
+    6.8,
+    'F1'
+  );
+
+  const pdfBytes = pdf.build();
+  return new Blob([pdfBytes as any], { type: 'application/pdf' });
+}
+
 /**
  * Triggers a real browser file download for any Blob or text content with genuine filename and MIME type.
  */

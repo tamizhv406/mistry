@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
 import {
   ArrowLeft,
   Building2,
@@ -27,6 +29,13 @@ import {
   Calculator,
   ShieldCheck,
   PenTool,
+  Settings,
+  Copy,
+  Archive,
+  ArrowRight,
+  CheckCircle2,
+  FolderOpen,
+  Check,
 } from 'lucide-react';
 import { useSiteData } from '../hooks/useSiteData';
 import { MaterialsTab } from './site-tabs/MaterialsTab';
@@ -85,7 +94,20 @@ interface SiteDetailViewProps {
   onOpenFloorPlans?: (siteId: string) => void;
   onNotify?: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onReturnToAdmin?: () => void;
-  initialTab?: 'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance';
+  initialTab?:
+    | 'overview'
+    | 'materials'
+    | 'labour'
+    | 'tools'
+    | 'expenses'
+    | 'payments'
+    | 'comments'
+    | 'reports'
+    | 'variance'
+    | 'tasks'
+    | 'documents'
+    | 'floor-plans'
+    | 'settings';
   initialExpenseSubSection?: 'tea' | 'pooja' | 'electricity' | 'water' | 'other';
   onTabChange?: (tab: string, sub?: string) => void;
 }
@@ -119,12 +141,29 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
 }) => {
   const data = useSiteData(siteId);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'materials' | 'labour' | 'tools' | 'expenses' | 'payments' | 'comments' | 'reports' | 'variance'
+    | 'overview'
+    | 'materials'
+    | 'labour'
+    | 'tools'
+    | 'expenses'
+    | 'payments'
+    | 'comments'
+    | 'reports'
+    | 'variance'
+    | 'tasks'
+    | 'documents'
+    | 'floor-plans'
+    | 'settings'
   >(initialTab || 'overview');
   const [labourSubTab, setLabourSubTab] = useState<'salary' | 'roster' | 'attendance' | 'advances'>('salary');
   const [expenseSubSection, setExpenseSubSection] = useState<'tea' | 'pooja' | 'electricity' | 'water' | 'other'>(
     initialExpenseSubSection || 'tea'
   );
+
+  // Live floor plans for this site
+  const siteFloorPlans = useLiveQuery(async () => {
+    return await db.floorPlans.filter(f => !f.isDeleted && f.siteId === siteId).toArray();
+  }, [siteId]) || [];
 
   React.useEffect(() => {
     if (initialTab) {
@@ -386,17 +425,19 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         <div className="section-breadcrumb-bar">
           <button className="btn btn-outline btn-sm" onClick={() => setActiveTab('overview')}>
             <ArrowLeft size={16} />
-            <span>Back to Site Dashboard</span>
+            <span>Back to Site Overview</span>
           </button>
           <div className="section-breadcrumb-title">
+            {activeTab === 'floor-plans' && 'Floor Planner & CAD Models'}
+            {(activeTab === 'tasks' || activeTab === 'variance') && 'Tasks, Milestones & Progress Variance'}
             {activeTab === 'materials' && 'Materials & Steel Rods'}
-            {activeTab === 'labour' && `Labour & Wages (${labourSubTab.toUpperCase()})`}
+            {activeTab === 'labour' && `Workers & Attendance (${labourSubTab.toUpperCase()})`}
+            {activeTab === 'expenses' && `Expenses & Utilities (${expenseSubSection.toUpperCase()})`}
             {activeTab === 'tools' && 'Tools, Machinery & Rentals'}
-            {activeTab === 'expenses' && `Daily Expenses & Bills (${expenseSubSection.toUpperCase()})`}
             {activeTab === 'payments' && 'Universal Payment Ledger & Audit Trail'}
-            {activeTab === 'comments' && 'Site Notes & Supervisor Diary'}
+            {(activeTab === 'comments' || activeTab === 'documents') && 'Documents, Site Diary & Notes'}
             {activeTab === 'reports' && 'Cost Reports & Financial Statements'}
-            {activeTab === 'variance' && 'Estimate vs Actual Variance Analysis'}
+            {activeTab === 'settings' && 'Project Configuration & Settings'}
           </div>
         </div>
       )}
@@ -405,15 +446,31 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
       <div className="tab-navigation">
         <button
           className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
+          onClick={() => { setActiveTab('overview'); onTabChange?.('overview'); }}
         >
           <TrendingUp size={17} />
           <span>Overview</span>
         </button>
 
         <button
+          className={`tab-btn ${activeTab === 'floor-plans' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('floor-plans'); onTabChange?.('floor-plans'); }}
+        >
+          <PenTool size={17} />
+          <span>Floor Planner {siteFloorPlans.length > 0 ? `(${siteFloorPlans.length})` : ''}</span>
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === 'tasks' || activeTab === 'variance' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('tasks'); onTabChange?.('tasks'); }}
+        >
+          <Scale size={17} />
+          <span>Tasks & Progress</span>
+        </button>
+
+        <button
           className={`tab-btn ${activeTab === 'materials' ? 'active' : ''}`}
-          onClick={() => setActiveTab('materials')}
+          onClick={() => { setActiveTab('materials'); onTabChange?.('materials'); }}
         >
           <Layers size={17} />
           <span>Materials ({materials.length + rodEntries.length})</span>
@@ -421,72 +478,59 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
 
         <button
           className={`tab-btn ${activeTab === 'labour' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('labour'); setLabourSubTab('salary'); }}
+          onClick={() => { setActiveTab('labour'); setLabourSubTab('salary'); onTabChange?.('labour'); }}
         >
           <Users size={17} />
-          <span>Labour & Wages ({workers.length})</span>
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'tools' ? 'active' : ''}`}
-          onClick={() => setActiveTab('tools')}
-        >
-          <Wrench size={17} />
-          <span>Tools & Rents ({tools.length})</span>
+          <span>Workers & Attendance ({workers.length})</span>
         </button>
 
         <button
           className={`tab-btn ${activeTab === 'expenses' ? 'active' : ''}`}
-          onClick={() => setActiveTab('expenses')}
+          onClick={() => { setActiveTab('expenses'); onTabChange?.('expenses'); }}
         >
           <Coffee size={17} />
-          <span>Daily Expenses & Bills</span>
+          <span>Expenses</span>
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === 'tools' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('tools'); onTabChange?.('tools'); }}
+        >
+          <Wrench size={17} />
+          <span>Tools ({tools.length})</span>
         </button>
 
         <button
           className={`tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('payments')}
+          onClick={() => { setActiveTab('payments'); onTabChange?.('payments'); }}
         >
           <Receipt size={17} />
-          <span>Payment Ledger ({payments?.length || 0})</span>
+          <span>Ledger</span>
         </button>
 
         <button
-          className={`tab-btn ${activeTab === 'comments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('comments')}
+          className={`tab-btn ${activeTab === 'comments' || activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('documents'); onTabChange?.('documents'); }}
         >
           <MessageSquare size={17} />
-          <span>Site Notes ({comments.length})</span>
+          <span>Documents ({comments.length})</span>
         </button>
 
         <button
           className={`tab-btn ${activeTab === 'reports' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reports')}
+          onClick={() => { setActiveTab('reports'); onTabChange?.('reports'); }}
         >
           <FileText size={17} />
-          <span>Cost Reports</span>
+          <span>Reports</span>
         </button>
 
         <button
-          className={`tab-btn ${activeTab === 'variance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('variance')}
+          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('settings'); onTabChange?.('settings'); }}
         >
-          <Scale size={17} />
-          <span>Estimator & Variance</span>
+          <Settings size={17} />
+          <span>Settings</span>
         </button>
-
-        {onOpenFloorPlans && (
-          <button
-            type="button"
-            className="tab-btn"
-            onClick={() => onOpenFloorPlans(site.id)}
-            id="site-tab-floor-plans"
-            title="Create & manage floor plans for this site"
-          >
-            <PenTool size={17} />
-            <span>Floor Plans</span>
-          </button>
-        )}
       </div>
 
       {/* TAB 1: OVERVIEW */}
@@ -1048,8 +1092,8 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         />
       )}
 
-      {/* TAB 6: COMMENTS */}
-      {activeTab === 'comments' && (
+      {/* TAB: DOCUMENTS & SITE NOTES */}
+      {(activeTab === 'comments' || activeTab === 'documents') && (
         <CommentsTab
           comments={comments}
           onOpenCommentModal={onOpenCommentModal}
@@ -1057,7 +1101,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         />
       )}
 
-      {/* TAB 7: REPORTS */}
+      {/* TAB: REPORTS */}
       {activeTab === 'reports' && (
         <ReportsTab
           site={site}
@@ -1077,8 +1121,8 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
         />
       )}
 
-      {/* TAB 8: ESTIMATE VS ACTUAL VARIANCE */}
-      {activeTab === 'variance' && (
+      {/* TAB: TASKS, MILESTONES & ESTIMATE VARIANCE */}
+      {(activeTab === 'variance' || activeTab === 'tasks') && (
         <EstimateVarianceTab
           site={site}
           summary={summary}
@@ -1087,6 +1131,269 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           onOpenEstimator={onOpenEstimator}
           onNotify={onNotify || (() => {})}
         />
+      )}
+
+      {/* TAB: FLOOR PLANNER */}
+      {activeTab === 'floor-plans' && (
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--border-light)', paddingBottom: '16px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <PenTool size={20} color="var(--primary)" />
+                <span>Floor Plans for {site.name}</span>
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                Architectural CAD models, 2D floor plans, wall dimensions, and 3D preview.
+              </p>
+            </div>
+
+            {onOpenFloorPlans && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => onOpenFloorPlans(site.id)}
+              >
+                <PlusCircle size={16} />
+                <span>Open Floor Planner Studio</span>
+              </button>
+            )}
+          </div>
+
+          {siteFloorPlans.length === 0 ? (
+            <div style={{ padding: '48px 20px', textAlign: 'center', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+              <PenTool size={40} style={{ color: '#94A3B8', margin: '0 auto 12px' }} />
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+                No Floor Plans Created for this Site
+              </h4>
+              <p style={{ fontSize: '0.85rem', color: '#64748B', maxWidth: '440px', margin: '0 auto 16px' }}>
+                Draw architectural walls, define rooms, place doors and windows, and inspect building dimensions in 2D and 3D.
+              </p>
+              {onOpenFloorPlans && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => onOpenFloorPlans(site.id)}
+                >
+                  <PenTool size={16} />
+                  <span>Launch Floor Plan Studio</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+              {siteFloorPlans.map(plan => (
+                <div
+                  key={plan.id}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    boxShadow: 'var(--shadow-sm)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <span className="badge badge-planning" style={{ fontSize: '0.7rem' }}>
+                        {plan.floorName || 'Ground Floor'}
+                      </span>
+                      <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>
+                        {plan.unit || 'feet'}
+                      </span>
+                    </div>
+
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '0 0 4px' }}>
+                      {plan.buildingName || site.name}
+                    </h4>
+                    <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 12px' }}>
+                      {plan.rooms?.length || 0} Rooms • {plan.walls?.length || 0} Walls • Plot: {plan.plotLength} x {plan.plotWidth} {plan.unit}
+                    </p>
+                  </div>
+
+                  {onOpenFloorPlans && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline"
+                      onClick={() => onOpenFloorPlans(site.id)}
+                      style={{ width: '100%', justifyContent: 'center', marginTop: '8px', color: '#2563EB', borderColor: '#BFDBFE' }}
+                    >
+                      <span>Open in CAD Studio</span>
+                      <ArrowRight size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: PROJECT SETTINGS */}
+      {activeTab === 'settings' && (
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--border-light)', paddingBottom: '16px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Settings size={20} color="var(--primary)" />
+                <span>Project Settings & Lifecycle</span>
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                Manage project status, workforce policies, client contacts, and safety archival.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => onEditSite(site)}
+            >
+              <Edit2 size={16} />
+              <span>Edit Project Details</span>
+            </button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+            {/* Status Configuration */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+                Project Lifecycle Status
+              </h4>
+              <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 14px' }}>
+                Switch lifecycle state between planning, active construction, hold, or completion.
+              </p>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {(['Active', 'Planning', 'On Hold', 'Completed'] as const).map(st => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={async () => {
+                      if (site.status === st) return;
+                      await db.sites.update(site.id, { status: st, updatedAt: new Date().toISOString() });
+                      onNotify?.(`Project status updated to "${st}"`, 'success');
+                    }}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      border: site.status === st ? '2px solid #2563EB' : '1px solid #CBD5E1',
+                      background: site.status === st ? '#EFF6FF' : '#FFFFFF',
+                      color: site.status === st ? '#1D4ED8' : '#475569',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {st === site.status && <Check size={14} style={{ display: 'inline', marginRight: '4px' }} />}
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Leave Policy */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+                Workforce Leave Pay Policy
+              </h4>
+              <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 14px' }}>
+                Determine whether approved Leave days are paid to registered workers on this site.
+              </p>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await db.sites.update(site.id, { leavePaid: true, updatedAt: new Date().toISOString() });
+                    onNotify?.('Leave policy set: Paid Leave (1 full day wage per approved leave)', 'info');
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    border: site.leavePaid === true ? '2px solid #16A34A' : '1px solid #CBD5E1',
+                    background: site.leavePaid === true ? '#DCFCE7' : '#FFFFFF',
+                    color: site.leavePaid === true ? '#15803D' : '#475569',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {site.leavePaid === true && <Check size={14} style={{ display: 'inline', marginRight: '4px' }} />}
+                  Paid Leave
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await db.sites.update(site.id, { leavePaid: false, updatedAt: new Date().toISOString() });
+                    onNotify?.('Leave policy set: Unpaid Leave (0 wages for leave days)', 'info');
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    border: site.leavePaid === false ? '2px solid #D97706' : '1px solid #CBD5E1',
+                    background: site.leavePaid === false ? '#FEF3C7' : '#FFFFFF',
+                    color: site.leavePaid === false ? '#B45309' : '#475569',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {site.leavePaid === false && <Check size={14} style={{ display: 'inline', marginRight: '4px' }} />}
+                  Unpaid Leave
+                </button>
+              </div>
+            </div>
+
+            {/* Project Actions: Duplicate & Archive */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+                Safe Duplication & Archival
+              </h4>
+              <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 14px' }}>
+                Clone project setup or move records safely to the Recycle Bin.
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={async () => {
+                    const newId = `site_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                    const now = new Date().toISOString();
+                    const cloned: Site = {
+                      ...site,
+                      id: newId,
+                      name: `${site.name} (Copy)`,
+                      createdAt: now,
+                      updatedAt: now,
+                      isDeleted: false,
+                      deletedAt: undefined,
+                    };
+                    await db.sites.add(cloned);
+                    onNotify?.(`Project successfully cloned as "${cloned.name}"!`, 'success');
+                    onBack();
+                  }}
+                  style={{ color: '#2563EB', borderColor: '#BFDBFE', background: '#FFFFFF' }}
+                >
+                  <Copy size={16} />
+                  <span>Duplicate Project</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => onDeleteSite(site)}
+                  style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
+                >
+                  <Trash2 size={16} />
+                  <span>Move to Recycle Bin</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
