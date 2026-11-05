@@ -20,6 +20,7 @@ import { formatINR, formatQty, parseAmount } from '../utils/money';
 import { SupplierPriceModal } from '../components/SupplierPriceModal';
 import { PriceComparisonCard } from '../components/PriceComparisonCard';
 import { Badge, CalcLine, ConfirmSheet, Empty, Field, Note, Page, Section, Segmented, Sheet } from '../components/mobile/kit';
+import { generateBuildingEstimatePdfBlob, downloadFile } from '../utils/pdfGenerator';
 
 /**
  * Building Calculator: four plain questions, then an approximate estimate.
@@ -301,18 +302,38 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
     );
   };
 
-  const exportCsv = () => {
+  const downloadPdf = () => {
     if (!result) return;
-    const csv = toCsv(estimateReportRows(input, result, { date: formatDay(todayKey()) }));
-    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `mistry-estimate-${Math.round(result.areas.builtUpSqFt)}sqft-${todayKey()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    onNotify('Estimate file downloaded', 'success');
+    const siteObj = sites.find(s => s.id === saveSiteId);
+    const pdfBlob = generateBuildingEstimatePdfBlob({
+      projectName: siteObj?.name,
+      estimateName: saveName || `${houseTypeLabel(structureType)}, ${formatQty(result.areas.builtUpSqFt)} sq.ft`,
+      buildingType,
+      structureType: houseTypeLabel(structureType) || structureType,
+      quality,
+      builtUpSqFt: result.areas.builtUpSqFt,
+      footprintSqFt: result.areas.footprintSqFt,
+      floors: result.areas.floors,
+      plotSqFt: result.areas.plotSqFt,
+      sandType: includeRiverSand ? 'River Sand (Plastering) + M-Sand' : 'Full M-Sand',
+      materialLines: result.lines.map(l => ({
+        material: l.material,
+        quantity: l.quantity,
+        unit: l.unit,
+        rate: l.rate,
+        estimatedCost: l.estimatedCost,
+      })),
+      materialCost: result.materialCost,
+      labourCost: result.labourCost,
+      finishingCost: result.finishingCost,
+      totalCost: result.total,
+      costPerSqFt: result.costPerSqFt,
+      dateStr: formatDay(todayKey()),
+    });
+
+    const filename = `Building_Estimate_${Math.round(result.areas.builtUpSqFt)}sqft_${todayKey()}.pdf`;
+    downloadFile(pdfBlob, filename);
+    onNotify('Estimate PDF downloaded successfully', 'success');
   };
 
   const areaLine = (sqFt: number) =>
@@ -596,7 +617,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
 
           <div className="m-btn-row no-print" style={{ marginTop: 14 }}>
             <button type="button" className="m-btn is-primary" onClick={openSave} disabled={unreadPrices.length > 0}><Save size={18} /> Save</button>
-            <button type="button" className="m-btn" onClick={exportCsv} disabled={unreadPrices.length > 0}><Download size={18} /> File</button>
+            <button type="button" className="m-btn" onClick={downloadPdf} disabled={unreadPrices.length > 0}><Download size={18} /> Download PDF</button>
             <button type="button" className="m-btn" onClick={() => window.print()}><Printer size={18} /> Print</button>
           </div>
 
