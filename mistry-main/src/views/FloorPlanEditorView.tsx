@@ -11065,6 +11065,73 @@ _Shared via Building Mistry App_`;
           </div>
         </div>
       )}
+
+      {/* ── Bottom Floating Essential CAD Tools: Select, Wall, Eraser ── */}
+      <div className="fp-bottom-essential-dock no-print" role="toolbar" aria-label="Floor Plan CAD Tools">
+        <button
+          type="button"
+          className={`fp-essential-btn ${activeTool === 'select' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTool('select');
+            setIsDrawingWall(false);
+            setWallStart(null);
+            setIsMeasuring(false);
+            setMeasureStart(null);
+            setMeasureCurrent(null);
+            speakTamil('தேர்வு செய்க');
+          }}
+          title="Select / Move Elements (Shortcut: V)"
+          id="fp-dock-tool-select"
+        >
+          <MousePointer2 size={17} />
+          <span>Select</span>
+          <span className="fp-essential-btn-kbd">V</span>
+        </button>
+
+        <div className="fp-essential-divider" />
+
+        <button
+          type="button"
+          className={`fp-essential-btn ${activeTool === 'wall' || activeTool === 'ai_draw' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTool('wall');
+            setSelectedElement(null);
+            setIsMeasuring(false);
+            setMeasureStart(null);
+            setMeasureCurrent(null);
+            speakTamil('சுவர் வரையவும்');
+          }}
+          title="Draw Wall (Shortcut: W)"
+          id="fp-dock-tool-wall"
+        >
+          <Pencil size={17} />
+          <span>Wall</span>
+          <span className="fp-essential-btn-kbd">W</span>
+        </button>
+
+        <div className="fp-essential-divider" />
+
+        <button
+          type="button"
+          className={`fp-essential-btn fp-essential-eraser ${activeTool === 'eraser' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTool('eraser');
+            setSelectedElement(null);
+            setIsDrawingWall(false);
+            setWallStart(null);
+            setIsMeasuring(false);
+            setMeasureStart(null);
+            setMeasureCurrent(null);
+            speakTamil('அழிக்கவும்');
+          }}
+          title="Eraser - Click any wall, door, window or room to delete (Shortcut: E)"
+          id="fp-dock-tool-eraser"
+        >
+          <Eraser size={17} />
+          <span>Eraser</span>
+          <span className="fp-essential-btn-kbd">E</span>
+        </button>
+      </div>
     </div>
 
         {/* ── Modern Right Inspector Panel (Image 2) ── */}
