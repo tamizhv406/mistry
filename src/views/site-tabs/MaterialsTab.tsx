@@ -154,11 +154,11 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
     return {
       id: mat.id,
       title: mat.materialName,
-      description: `${mat.quantity} ${mat.unit} • ${mat.supplier || 'Site Store'}`,
+      description: mat.supplier || 'Site Store',
       imageUrl: mat.imageUrl || vis.imageUrl,
       imageAlt: mat.materialName,
       fallbackCategory: (mat.category as any) || 'material',
-      badge: `${mat.category.toUpperCase()} • ${mat.quantity} ${mat.unit}`,
+      badge: mat.category.toUpperCase(),
       badgeVariant:
         mat.category === 'cement'
           ? 'danger'
@@ -166,7 +166,9 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
           ? 'warning'
           : 'primary',
       stats: [
-        { label: 'Total Amount', value: `₹${mat.totalAmount.toLocaleString('en-IN')}` },
+        { label: 'Quantity', value: `${mat.quantity.toLocaleString('en-IN')} ${mat.unit}` },
+        { label: 'Unit price', value: `₹${mat.rate.toLocaleString('en-IN')} / ${mat.unit}` },
+        { label: 'Total amount', value: `₹${mat.totalAmount.toLocaleString('en-IN')}` },
         {
           label: 'Paid Amount',
           value: `₹${mat.paidAmount.toLocaleString('en-IN')}`,
@@ -534,7 +536,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="interactive-card-grid">
               {rodCards.map(item => (
                 <InteractiveHoverCard key={item.id} item={item} />
               ))}
@@ -552,7 +554,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="interactive-card-grid">
             {materialCards.map(item => (
               <InteractiveHoverCard key={item.id} item={item} />
             ))}

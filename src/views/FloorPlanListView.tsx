@@ -2,6 +2,7 @@ import { parsePlanFile } from '../domain/planDocument';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   PenTool,
+  Pencil,
   Plus,
   Building2,
   Calendar,
@@ -24,6 +25,7 @@ import {
   ArrowUpDown,
   Filter,
   FileCheck,
+  ChevronRight,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -36,6 +38,7 @@ import {
   STARTER_TEMPLATES,
   type FloorPlanStarterTemplate,
 } from '../services/floorPlanService';
+import { BlueprintThumbnail } from '../components/floorplan/BlueprintThumbnail';
 
 interface FloorPlanListViewProps {
   user: User;
@@ -311,6 +314,118 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
           </div>
         </div>
 
+        {/* ── Planner 5D / Bond360 Hero Action Cards (New Project) ── */}
+        <div className="fp-hero-actions-container">
+          <h2 className="fp-section-title">New Project</h2>
+          <div className="fp-hero-actions-grid">
+            {/* 1. Draw */}
+            <div
+              className="fp-hero-action-card fp-action-draw"
+              onClick={() => setShowNewPlanModal(true)}
+              role="button"
+              tabIndex={0}
+              title="Start drawing a new custom floor plan"
+            >
+              <div className="fp-hero-action-icon-box" style={{ background: '#e0edff', color: '#1d4ed8' }}>
+                <Pencil size={28} />
+              </div>
+              <div className="fp-hero-action-title">Draw</div>
+              <div className="fp-hero-action-desc">Start from a blank 2D/3D architectural CAD canvas</div>
+            </div>
+
+            {/* 2. Import Floor Plan */}
+            <div
+              className="fp-hero-action-card"
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              title="Import an existing CAD JSON floor plan"
+            >
+              <span className="fp-hero-action-badge badge-red">New</span>
+              <div className="fp-hero-action-icon-box" style={{ background: '#f0fdf4', color: '#16a34a' }}>
+                <Upload size={28} />
+              </div>
+              <div className="fp-hero-action-title">Import Floor Plan</div>
+              <div className="fp-hero-action-desc">Load floor plan file with multi-floor levels</div>
+            </div>
+
+            {/* 3. Search / Browse Floor Plan */}
+            <div
+              className="fp-hero-action-card"
+              onClick={() => setShowTemplatesModal(true)}
+              role="button"
+              tabIndex={0}
+              title="Search and browse architectural starter templates"
+            >
+              <span className="fp-hero-action-badge badge-pro">PRO</span>
+              <div className="fp-hero-action-icon-box" style={{ background: '#faf5ff', color: '#9333ea' }}>
+                <LayoutTemplate size={28} />
+              </div>
+              <div className="fp-hero-action-title">Search Floor Plan</div>
+              <div className="fp-hero-action-desc">Ready-to-draw 1BHK, 2BHK, 3BHK residential layouts</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Room Templates Visual Gallery (Planner 5D Style) ── */}
+        <div className="fp-templates-preview-section">
+          <div className="fp-section-header">
+            <div className="fp-section-title-wrap">
+              <h2 className="fp-section-title">Room Templates</h2>
+              <span className="fp-badge-red">New</span>
+              <span className="fp-section-subtitle-tab">Style Templates</span>
+            </div>
+            <button
+              type="button"
+              className="fp-view-more-link"
+              onClick={() => setShowTemplatesModal(true)}
+            >
+              <span>View more</span>
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <div className="fp-templates-preview-grid">
+            {STARTER_TEMPLATES.slice(0, 3).map((tpl) => (
+              <div
+                key={tpl.id}
+                className="fp-template-preview-card"
+                onClick={() => {
+                  setSelectedTemplate(tpl);
+                  setShowTemplatesModal(true);
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="fp-template-preview-thumb">
+                  <BlueprintThumbnail
+                    walls={tpl.walls}
+                    rooms={tpl.rooms}
+                    doors={tpl.doors}
+                    windows={tpl.windows}
+                    plotLength={tpl.plotLength}
+                    plotWidth={tpl.plotWidth}
+                    unit={tpl.unit}
+                  />
+                </div>
+                <div className="fp-template-preview-info">
+                  <div>
+                    <div className="fp-template-preview-title">
+                      {tpl.bhk === '1 BHK' ? 'Condo – 1 Bedroom 5.0' : tpl.bhk === '2 BHK' ? 'Condo – 2 Bedrooms 5.0' : 'House – 3 Bedrooms 5.0'}
+                    </div>
+                    <div className="fp-template-preview-sub">
+                      {tpl.plotLength} × {tpl.plotWidth} {tpl.unit === 'feet' ? 'ft' : 'm'} • {tpl.rooms.length} rooms
+                    </div>
+                  </div>
+                  <button type="button" className="fp-template-preview-btn">
+                    Use
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Real Database Dashboard Stats Row */}
         <div className="fp-dashboard-stats">
           <div className="fp-stat-card">
@@ -542,10 +657,15 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
                               className="fp-card-thumbnail-img"
                             />
                           ) : (
-                            <div className="fp-card-thumbnail-placeholder">
-                              <Grid3x3 size={32} />
-                              <span>No Preview</span>
-                            </div>
+                            <BlueprintThumbnail
+                              walls={fp.walls}
+                              rooms={fp.rooms}
+                              doors={fp.doors}
+                              windows={fp.windows}
+                              plotLength={fp.plotLength}
+                              plotWidth={fp.plotWidth}
+                              unit={fp.unit}
+                            />
                           )}
                           <div className="fp-card-thumbnail-overlay">
                             <ExternalLink size={20} />
@@ -756,9 +876,21 @@ export const FloorPlanListView: React.FC<FloorPlanListViewProps> = ({
                       onClick={() => setSelectedTemplate(tpl)}
                       style={{
                         borderColor: isSelected ? 'var(--primary)' : undefined,
-                        background: isSelected ? 'rgba(217, 119, 6, 0.05)' : undefined,
+                        background: isSelected ? 'rgba(37, 99, 235, 0.05)' : undefined,
+                        boxShadow: isSelected ? '0 0 0 2px var(--primary)' : undefined,
                       }}
                     >
+                      <div style={{ height: 130, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-light)', marginBottom: 6 }}>
+                        <BlueprintThumbnail
+                          walls={tpl.walls}
+                          rooms={tpl.rooms}
+                          doors={tpl.doors}
+                          windows={tpl.windows}
+                          plotLength={tpl.plotLength}
+                          plotWidth={tpl.plotWidth}
+                          unit={tpl.unit}
+                        />
+                      </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span className="fp-template-bhk-tag">{tpl.bhk}</span>
                         <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>

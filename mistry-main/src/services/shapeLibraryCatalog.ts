@@ -70,8 +70,8 @@ export const SHAPE_LIBRARY_CATALOG: ShapeLibraryItem[] = [
     name: 'Interior Wall',
     category: 'Floor Plan',
     width: 8,
-    height: 0.5,
-    description: 'Interior partition wall (4.5" / 6" thickness)',
+    height: 0.375,
+    description: 'Interior partition wall (4.5" thickness)',
     entityType: 'wall',
     iconType: 'Interior Wall',
     subType: 'interior',
@@ -295,6 +295,26 @@ export const SHAPE_LIBRARY_CATALOG: ShapeLibraryItem[] = [
     iconType: 'King Bed',
   },
   {
+    id: 'furn-dressing-table',
+    name: 'Dressing Table',
+    category: 'Furniture',
+    width: 3.5,
+    height: 1.5,
+    description: 'Bedroom vanity dressing table with mirror & stool (3.5×1.5 ft)',
+    entityType: 'furniture',
+    iconType: 'Dressing Table',
+  },
+  {
+    id: 'furn-sofa-2',
+    name: '2-Seater Sofa',
+    category: 'Furniture',
+    width: 5,
+    height: 3,
+    description: '2-seater compact living room sofa (5×3 ft)',
+    entityType: 'furniture',
+    iconType: '2-Seater Sofa',
+  },
+  {
     id: 'furn-sofa',
     name: 'Sofa',
     category: 'Furniture',
@@ -494,6 +514,36 @@ export const SHAPE_LIBRARY_CATALOG: ShapeLibraryItem[] = [
     entityType: 'furniture',
     iconType: 'Bookshelf',
   },
+  {
+    id: 'furn-office-chair',
+    name: 'Office Chair',
+    category: 'Furniture',
+    width: 2,
+    height: 2,
+    description: '5-star swivel base caster office chair (2×2 ft)',
+    entityType: 'furniture',
+    iconType: 'Office Chair',
+  },
+  {
+    id: 'furn-shoe-rack',
+    name: 'Shoe Rack',
+    category: 'Furniture',
+    width: 3,
+    height: 1.2,
+    description: 'Slatted footwear shoe storage unit (3×1.2 ft)',
+    entityType: 'furniture',
+    iconType: 'Shoe Rack',
+  },
+  {
+    id: 'furn-washing-machine',
+    name: 'Washing Machine',
+    category: 'Furniture',
+    width: 2,
+    height: 2,
+    description: 'Front-load washing machine with glass porthole drum (2×2 ft)',
+    entityType: 'furniture',
+    iconType: 'Washing Machine',
+  },
 
   // ── 3. KITCHEN ──────────────────────────────────────────────
   {
@@ -597,6 +647,16 @@ export const SHAPE_LIBRARY_CATALOG: ShapeLibraryItem[] = [
     description: 'European water closet / commode with cistern (2×2.5 ft)',
     entityType: 'furniture',
     iconType: 'Toilet',
+  },
+  {
+    id: 'bath-indian-toilet',
+    name: 'Indian Toilet',
+    category: 'Bathroom',
+    width: 2.5,
+    height: 3,
+    description: 'Traditional Indian squatting pan with ribbed footrests (2.5×3 ft)',
+    entityType: 'furniture',
+    iconType: 'Indian Toilet',
   },
   {
     id: 'bath-wash-basin',
@@ -1175,7 +1235,7 @@ export function createEntityFromShape(
   switch (item.entityType) {
     case 'wall': {
       const isPerpendicular = item.name.includes('Corner');
-      const thickness = item.subType === 'interior' ? 0.5 : 0.75;
+      const thickness = item.subType === 'interior' ? 0.375 : 0.75;
       return {
         entityType: 'wall',
         payload: {

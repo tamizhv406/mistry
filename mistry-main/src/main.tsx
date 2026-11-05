@@ -7,6 +7,8 @@ import './styles/admin-portal.css';
 import './styles/planner-tools.css';
 import './styles/design-system.css';
 import './styles/erp-dashboard.css';
+import './styles/record-cards.css';
+import './styles/advanced-calculator.css';
 import App from './App.tsx';
 
 // Register Service Worker for PWA offline capabilities
@@ -37,4 +39,3 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 );
-

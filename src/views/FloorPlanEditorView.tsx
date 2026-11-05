@@ -52,7 +52,7 @@ import { FloorPlan3DPreview } from '../components/FloorPlan3DPreview';
 import { ArchitecturalSymbol } from '../components/visuals/ArchitecturalSymbols';
 import { FloorPlanShapeLibrary } from '../components/FloorPlanShapeLibrary';
 import {
-  createEntityFromShape, recordRecentShape,
+  SHAPE_LIBRARY_CATALOG, createEntityFromShape, recordRecentShape,
   saveCustomShape,
 } from '../services/shapeLibraryCatalog';
 import type { ShapeLibraryItem } from '../services/shapeLibraryCatalog';
@@ -989,7 +989,88 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     startPointerAngle: number;
   } | null>(null);
 
+  // Furniture interactive resizing and rotation state
+  const [resizingFurniture, setResizingFurniture] = useState<{
+    furnId: string;
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n';
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    startMouse: { x: number; y: number };
+    proportional: boolean;
+  } | null>(null);
+  const resizingFurnitureRef = useRef<{
+    furnId: string;
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n';
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    startMouse: { x: number; y: number };
+    proportional: boolean;
+  } | null>(null);
+
+  const [rotatingFurniture, setRotatingFurniture] = useState<{
+    furnId: string;
+    center: { x: number; y: number };
+    startAngle: number;
+    startPointerAngle: number;
+  } | null>(null);
+  const rotatingFurnitureRef = useRef<{
+    furnId: string;
+    center: { x: number; y: number };
+    startAngle: number;
+    startPointerAngle: number;
+  } | null>(null);
+
+  const [furnitureProportionalLock, setFurnitureProportionalLock] = useState<Record<string, boolean>>({});
+
   // Staircase interactive resizing state
+    // Door, Window and Column interactive resizing states
+  const [resizingDoor, setResizingDoor] = useState<{
+    doorId: string;
+    handle: 'start' | 'end';
+    startWidth: number;
+    startMouse: { x: number; y: number };
+  } | null>(null);
+  const resizingDoorRef = useRef<{
+    doorId: string;
+    handle: 'start' | 'end';
+    startWidth: number;
+    startMouse: { x: number; y: number };
+  } | null>(null);
+
+  const [resizingWindow, setResizingWindow] = useState<{
+    winId: string;
+    handle: 'start' | 'end';
+    startWidth: number;
+    startMouse: { x: number; y: number };
+  } | null>(null);
+  const resizingWindowRef = useRef<{
+    winId: string;
+    handle: 'start' | 'end';
+    startWidth: number;
+    startMouse: { x: number; y: number };
+  } | null>(null);
+
+  const [resizingColumn, setResizingColumn] = useState<{
+    colId: string;
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n';
+    startWidth: number;
+    startDepth: number;
+    startMouse: { x: number; y: number };
+  } | null>(null);
+  const resizingColumnRef = useRef<{
+    colId: string;
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n';
+    startWidth: number;
+    startDepth: number;
+    startMouse: { x: number; y: number };
+  } | null>(null);
+
+  const [showMobileObjectProperties, setShowMobileObjectProperties] = useState(false);
+
   const [resizingStairs, setResizingStairs] = useState<{
     stairId: string;
     handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n';
@@ -2901,7 +2982,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
    * the next render.
    */
   const finishWallAt = (start: { x: number; y: number }, e: React.MouseEvent<SVGSVGElement>) => {
-    const svgPos = getSvgPos(e);
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
     const world = svgToWorld(svgPos.x, svgPos.y);
     let snapPt = snapAt(world.x, world.y);
     if (e.shiftKey || isOrthoActive) {
@@ -2979,7 +3060,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         e.button === 2 ||
         (e.button === 0 && (e.altKey || isSpacePressed || activeTool === 'pan' || activeTool === 'select'))
       ) {
-        const svgPos = getSvgPos(e);
+        const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
         setIsPanning(true);
         panMovedRef.current = false;
         setPanStart({ x: svgPos.x, y: svgPos.y, panX, panY });
@@ -2988,7 +3069,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       }
       if (e.button !== 0) return;
 
-      const svgPos = getSvgPos(e);
+      const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
       const world = svgToWorld(svgPos.x, svgPos.y);
       const snapped = { x: snapToGrid(world.x), y: snapToGrid(world.y) };
 
@@ -3292,7 +3373,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<SVGSVGElement>) => {
-      const svgPos = getSvgPos(e);
+      const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
       const world = svgToWorld(svgPos.x, svgPos.y);
 
       if (resizingWall) {
@@ -3434,6 +3515,158 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           screenY: svgPos.y - 18,
         });
         return;
+      }
+
+      // ── Handle Furniture Interactive Resizing ──
+      const curFurnResize = resizingFurnitureRef.current || resizingFurniture;
+      if (curFurnResize) {
+        const furn = editorState.furniture.find(f => f.id === curFurnResize.furnId);
+        if (furn) {
+          const rotDeg = furn.rotation || 0;
+          const rotRad = (-rotDeg * Math.PI) / 180;
+          const center = {
+            x: curFurnResize.startX + curFurnResize.startWidth / 2,
+            y: curFurnResize.startY + curFurnResize.startHeight / 2,
+          };
+          const dxWorld = world.x - center.x;
+          const dyWorld = world.y - center.y;
+          const localMouseX = center.x + (dxWorld * Math.cos(rotRad) - dyWorld * Math.sin(rotRad));
+          const localMouseY = center.y + (dxWorld * Math.sin(rotRad) + dyWorld * Math.cos(rotRad));
+
+          let newWidth = curFurnResize.startWidth;
+          let newHeight = curFurnResize.startHeight;
+          let newX = curFurnResize.startX;
+          let newY = curFurnResize.startY;
+          const isFeet = unit === 'feet';
+          const minW = isFeet ? 0.5 : 0.15;
+          const minH = isFeet ? 0.5 : 0.15;
+          const maxDim = isFeet ? 60 : 18;
+
+          if (curFurnResize.handle === 'e' || curFurnResize.handle === 'se' || curFurnResize.handle === 'ne') {
+            const rawW = localMouseX - curFurnResize.startX;
+            const snappedW = snapToGridEnabled && !e.altKey ? snapToGrid(rawW) : rawW;
+            newWidth = Math.min(maxDim, Math.max(minW, snappedW));
+          }
+          if (curFurnResize.handle === 'w' || curFurnResize.handle === 'sw' || curFurnResize.handle === 'nw') {
+            const rightEdge = curFurnResize.startX + curFurnResize.startWidth;
+            const rawX = snapToGridEnabled && !e.altKey ? snapToGrid(localMouseX) : localMouseX;
+            newX = Math.min(rightEdge - minW, Math.max(rightEdge - maxDim, rawX));
+            newWidth = rightEdge - newX;
+          }
+          if (curFurnResize.handle === 's' || curFurnResize.handle === 'se' || curFurnResize.handle === 'sw') {
+            const rawH = localMouseY - curFurnResize.startY;
+            const snappedH = snapToGridEnabled && !e.altKey ? snapToGrid(rawH) : rawH;
+            newHeight = Math.min(maxDim, Math.max(minH, snappedH));
+          }
+          if (curFurnResize.handle === 'n' || curFurnResize.handle === 'ne' || curFurnResize.handle === 'nw') {
+            const bottomEdge = curFurnResize.startY + curFurnResize.startHeight;
+            const rawY = snapToGridEnabled && !e.altKey ? snapToGrid(localMouseY) : localMouseY;
+            newY = Math.min(bottomEdge - minH, Math.max(bottomEdge - maxDim, rawY));
+            newHeight = bottomEdge - newY;
+          }
+
+          const isProportional = e.shiftKey || curFurnResize.proportional;
+          if (isProportional && curFurnResize.startWidth > 0 && curFurnResize.startHeight > 0) {
+            const aspect = curFurnResize.startWidth / curFurnResize.startHeight;
+            if (curFurnResize.handle === 'e' || curFurnResize.handle === 'w') {
+              newHeight = Math.max(minH, +(newWidth / aspect).toFixed(2));
+            } else if (curFurnResize.handle === 'n' || curFurnResize.handle === 's') {
+              newWidth = Math.max(minW, +(newHeight * aspect).toFixed(2));
+            } else {
+              const scale = Math.max(newWidth / curFurnResize.startWidth, newHeight / curFurnResize.startHeight);
+              newWidth = Math.max(minW, +(curFurnResize.startWidth * scale).toFixed(2));
+              newHeight = Math.max(minH, +(curFurnResize.startHeight * scale).toFixed(2));
+              if (curFurnResize.handle === 'nw' || curFurnResize.handle === 'sw') {
+                newX = curFurnResize.startX + curFurnResize.startWidth - newWidth;
+              }
+              if (curFurnResize.handle === 'nw' || curFurnResize.handle === 'ne') {
+                newY = curFurnResize.startY + curFurnResize.startHeight - newHeight;
+              }
+            }
+          }
+
+          if (rotDeg !== 0) {
+            let pinnedLocalX = curFurnResize.startX;
+            let pinnedLocalY = curFurnResize.startY;
+            if (curFurnResize.handle === 'sw' || curFurnResize.handle === 'w' || curFurnResize.handle === 'nw') {
+              pinnedLocalX = curFurnResize.startX + curFurnResize.startWidth;
+            }
+            if (curFurnResize.handle === 'ne' || curFurnResize.handle === 'n' || curFurnResize.handle === 'nw') {
+              pinnedLocalY = curFurnResize.startY + curFurnResize.startHeight;
+            }
+            const origRotRad = (rotDeg * Math.PI) / 180;
+            const origCos = Math.cos(origRotRad);
+            const origSin = Math.sin(origRotRad);
+            const origPinnedWorldX = center.x + ((pinnedLocalX - center.x) * origCos - (pinnedLocalY - center.y) * origSin);
+            const origPinnedWorldY = center.y + ((pinnedLocalX - center.x) * origSin + (pinnedLocalY - center.y) * origCos);
+
+            const newCenter = { x: newX + newWidth / 2, y: newY + newHeight / 2 };
+            let newPinnedLocalX = newX;
+            let newPinnedLocalY = newY;
+            if (curFurnResize.handle === 'sw' || curFurnResize.handle === 'w' || curFurnResize.handle === 'nw') {
+              newPinnedLocalX = newX + newWidth;
+            }
+            if (curFurnResize.handle === 'ne' || curFurnResize.handle === 'n' || curFurnResize.handle === 'nw') {
+              newPinnedLocalY = newY + newHeight;
+            }
+            const curPinnedWorldX = newCenter.x + ((newPinnedLocalX - newCenter.x) * origCos - (newPinnedLocalY - newCenter.y) * origSin);
+            const curPinnedWorldY = newCenter.y + ((newPinnedLocalX - newCenter.x) * origSin + (newPinnedLocalY - newCenter.y) * origCos);
+
+            const shiftWorldX = origPinnedWorldX - curPinnedWorldX;
+            const shiftWorldY = origPinnedWorldY - curPinnedWorldY;
+            const unrotCos = Math.cos(-origRotRad);
+            const unrotSin = Math.sin(-origRotRad);
+            newX += (shiftWorldX * unrotCos - shiftWorldY * unrotSin);
+            newY += (shiftWorldX * unrotSin + shiftWorldY * unrotCos);
+          }
+
+          dispatch({
+            type: 'UPDATE_FURNITURE',
+            id: furn.id,
+            changes: {
+              x: +newX.toFixed(2),
+              y: +newY.toFixed(2),
+              width: +newWidth.toFixed(2),
+              height: +newHeight.toFixed(2),
+            },
+          });
+
+          setLiveLengthBadge({
+            lengthStr: `Width: ${formatDimension(newWidth, unit)} | Depth: ${formatDimension(newHeight, unit)}`,
+            alt: `Object: ${furn.label || furn.itemType}`,
+            angleDeg: 0,
+            screenX: svgPos.x + 18,
+            screenY: svgPos.y - 18,
+          });
+          return;
+        }
+      }
+
+      // ── Handle Furniture Interactive Rotation ──
+      const curFurnRotate = rotatingFurnitureRef.current || rotatingFurniture;
+      if (curFurnRotate) {
+        const furn = editorState.furniture.find(f => f.id === curFurnRotate.furnId);
+        if (furn) {
+          const currentPointerAngle = Math.atan2(world.y - curFurnRotate.center.y, world.x - curFurnRotate.center.y) * (180 / Math.PI);
+          const deltaAngle = currentPointerAngle - curFurnRotate.startPointerAngle;
+          let rawAngle = Math.round((curFurnRotate.startAngle + deltaAngle + 360) % 360);
+          if (!e.altKey) {
+            rawAngle = Math.round(rawAngle / 15) * 15 % 360;
+          }
+          dispatch({
+            type: 'UPDATE_FURNITURE',
+            id: furn.id,
+            changes: { rotation: rawAngle },
+          });
+          setLiveLengthBadge({
+            lengthStr: `Rotation: ${rawAngle}°`,
+            alt: `Snap: 15° (Hold Alt for free rotation)`,
+            angleDeg: rawAngle,
+            screenX: svgPos.x + 18,
+            screenY: svgPos.y - 18,
+          });
+          return;
+        }
       }
 
       const curStairResize = resizingStairsRef.current || resizingStairs;
@@ -4013,6 +4246,34 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       return;
     }
 
+    const curFurnResize = resizingFurnitureRef.current || resizingFurniture;
+    if (curFurnResize) {
+      if (dragStartStateRef.current !== editorState) {
+        pushHistory(editorState);
+        markUnsaved();
+      }
+      dragStartStateRef.current = null;
+      resizingFurnitureRef.current = null;
+      setResizingFurniture(null);
+      setLiveLengthBadge(null);
+      onNotify('Resized object dimensions.', 'info');
+      return;
+    }
+
+    const curFurnRotate = rotatingFurnitureRef.current || rotatingFurniture;
+    if (curFurnRotate) {
+      if (dragStartStateRef.current !== editorState) {
+        pushHistory(editorState);
+        markUnsaved();
+      }
+      dragStartStateRef.current = null;
+      rotatingFurnitureRef.current = null;
+      setRotatingFurniture(null);
+      setLiveLengthBadge(null);
+      onNotify('Rotated object.', 'info');
+      return;
+    }
+
     if (resizingRoomVertex) {
       if (dragStartStateRef.current !== editorState) {
         pushHistory(editorState);
@@ -4542,12 +4803,175 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     setSelectedElement({ type: 'stairs', id: stair.id });
   };
 
+    const beginDoorResize = (
+    e: React.SyntheticEvent,
+    door: FloorPlanDoor,
+    handle: 'start' | 'end'
+  ) => {
+    e.stopPropagation();
+    if ('preventDefault' in e) e.preventDefault();
+    if (door.locked) {
+      onNotify('This door is locked. Unlock it in Object Properties to resize.', 'info');
+      return;
+    }
+    dragStartStateRef.current = editorState;
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const worldPos = svgToWorld(svgPos.x, svgPos.y);
+    const resizeObj = {
+      doorId: door.id,
+      handle,
+      startWidth: door.width,
+      startMouse: worldPos,
+    };
+    resizingDoorRef.current = resizeObj;
+    setResizingDoor(resizeObj);
+    setSelectedElement({ type: 'door', id: door.id });
+  };
+
+  const doorHandleDownProps = (door: FloorPlanDoor, handle: 'start' | 'end') => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => beginDoorResize(e, door, handle);
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
+  const beginWindowResize = (
+    e: React.SyntheticEvent,
+    win: FloorPlanWindow,
+    handle: 'start' | 'end'
+  ) => {
+    e.stopPropagation();
+    if ('preventDefault' in e) e.preventDefault();
+    if (win.locked) {
+      onNotify('This window is locked. Unlock it in Object Properties to resize.', 'info');
+      return;
+    }
+    dragStartStateRef.current = editorState;
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const worldPos = svgToWorld(svgPos.x, svgPos.y);
+    const resizeObj = {
+      winId: win.id,
+      handle,
+      startWidth: win.width,
+      startMouse: worldPos,
+    };
+    resizingWindowRef.current = resizeObj;
+    setResizingWindow(resizeObj);
+    setSelectedElement({ type: 'window', id: win.id });
+  };
+
+  const windowHandleDownProps = (win: FloorPlanWindow, handle: 'start' | 'end') => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => beginWindowResize(e, win, handle);
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
+  const beginColumnResize = (
+    e: React.SyntheticEvent,
+    col: FloorPlanColumn,
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
+  ) => {
+    e.stopPropagation();
+    if ('preventDefault' in e) e.preventDefault();
+    if (col.locked) {
+      onNotify('This column is locked. Unlock it in Object Properties to resize.', 'info');
+      return;
+    }
+    dragStartStateRef.current = editorState;
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const worldPos = svgToWorld(svgPos.x, svgPos.y);
+    const resizeObj = {
+      colId: col.id,
+      handle,
+      startWidth: col.width,
+      startDepth: col.depth,
+      startMouse: worldPos,
+    };
+    resizingColumnRef.current = resizeObj;
+    setResizingColumn(resizeObj);
+    setSelectedElement({ type: 'column', id: col.id });
+  };
+
+  const columnHandleDownProps = (col: FloorPlanColumn, handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n') => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => beginColumnResize(e, col, handle);
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
   const stairHandleDownProps = (
     stair: FloorPlanStaircase,
     handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
   ) => {
     if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
     const down = (e: React.SyntheticEvent) => beginStairResize(e, stair, handle);
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
+  const beginFurnitureResize = (
+    e: React.SyntheticEvent,
+    furn: FloorPlanFurniture,
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
+  ) => {
+    e.stopPropagation();
+    if ('preventDefault' in e) e.preventDefault();
+    if (furn.locked) {
+      onNotify('This object is locked. Unlock it in Object Properties to resize.', 'info');
+      return;
+    }
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const worldPos = svgToWorld(svgPos.x, svgPos.y);
+    const isProp = (('shiftKey' in e && (e as any).shiftKey) || !!furnitureProportionalLock[furn.id]);
+    const resizeObj = {
+      furnId: furn.id,
+      handle,
+      startX: furn.x,
+      startY: furn.y,
+      startWidth: furn.width,
+      startHeight: furn.height,
+      startMouse: worldPos,
+      proportional: isProp,
+    };
+    resizingFurnitureRef.current = resizeObj;
+    setResizingFurniture(resizeObj);
+    setSelectedElement({ type: 'furniture', id: furn.id });
+  };
+
+  const furnitureHandleDownProps = (
+    furn: FloorPlanFurniture,
+    handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
+  ) => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => beginFurnitureResize(e, furn, handle);
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
+  const beginFurnitureRotate = (
+    e: React.SyntheticEvent,
+    furn: FloorPlanFurniture
+  ) => {
+    e.stopPropagation();
+    if ('preventDefault' in e) e.preventDefault();
+    if (furn.locked) {
+      onNotify('This object is locked. Unlock it in Object Properties to rotate.', 'info');
+      return;
+    }
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const worldPos = svgToWorld(svgPos.x, svgPos.y);
+    const center = { x: furn.x + furn.width / 2, y: furn.y + furn.height / 2 };
+    const startPointerAngle = Math.atan2(worldPos.y - center.y, worldPos.x - center.x) * (180 / Math.PI);
+    const rotObj = {
+      furnId: furn.id,
+      center,
+      startAngle: furn.rotation || 0,
+      startPointerAngle,
+    };
+    rotatingFurnitureRef.current = rotObj;
+    setRotatingFurniture(rotObj);
+    setSelectedElement({ type: 'furniture', id: furn.id });
+  };
+
+  const furnitureRotateDownProps = (furn: FloorPlanFurniture) => {
+    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => beginFurnitureRotate(e, furn);
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -4935,7 +5359,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
 
     // Dragging a selected element / wall corner, rotating wall, room vertex, room edge, room rotation, or sketching freehand.
-    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingRoomVertex || draggingRoomEdge || rotatingRoom || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
+    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingFurniture || rotatingFurniture || resizingRoomVertex || draggingRoomEdge || rotatingRoom || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
       queueMove(e.clientX, e.clientY, e.shiftKey, e.altKey);
       return;
     }
@@ -5013,7 +5437,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     flushMove();
     const input = latestInputRef.current;
 
-    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingRoomVertex || draggingRoomEdge || rotatingRoom || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
+    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingFurniture || rotatingFurniture || resizingRoomVertex || draggingRoomEdge || rotatingRoom || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
       input.handleMouseUp();
       return;
     }
@@ -6267,15 +6691,31 @@ _Shared via Building Mistry App_`;
           {/* Dimensions Toggle Button */}
           <button
             type="button"
-            className={`fp-builder-icon-btn ${showDimensions ? 'active' : ''}`}
+            className={`fp-builder-dim-toggle-btn ${showDimensions ? 'active' : ''}`}
             onClick={() => {
               setShowDimensions(d => !d);
               onNotify(`Measurements: ${!showDimensions ? 'ON' : 'OFF'}`, 'info');
+              speakTamil(!showDimensions ? 'அளவுகள் இயக்கப்பட்டது' : 'அளவுகள் முடக்கப்பட்டது');
             }}
-            title={showDimensions ? "Hide Measurements (M)" : "Show Measurements (M)"}
+            title={showDimensions ? "Hide Measurements (Shortcut: M)" : "Show Measurements (Shortcut: M)"}
             id="fp-header-dim-toggle-btn"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '5px 12px',
+              borderRadius: 8,
+              border: showDimensions ? '1.5px solid #16a34a' : '1.5px solid #cbd5e1',
+              background: showDimensions ? '#dcfce7' : '#f8fafc',
+              color: showDimensions ? '#15803d' : '#64748b',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
           >
-            <Ruler size={16} />
+            <Ruler size={14} />
+            <span>{showDimensions ? '📐 Dims: ON' : '🚫 Dims: OFF'}</span>
           </button>
 
           {/* Room Counter Button (Hidden element for tests) */}
@@ -7239,22 +7679,7 @@ _Shared via Building Mistry App_`;
               );
             })()}
 
-            {/* Quick Measurement ON/OFF Switch Pill (Mobile Only - Desktop has header & CAD bar toggles) */}
-            {isMobile && (
-              <button
-                type="button"
-                className={`fp-canvas-dim-pill ${showDimensions ? 'active' : 'inactive'}`}
-                onClick={() => {
-                  setShowDimensions(d => !d);
-                  onNotify(`Measurements: ${!showDimensions ? 'ON' : 'OFF'}`, 'info');
-                }}
-                title={showDimensions ? 'Hide all measurement and dimension lines (M)' : 'Show all measurement and dimension lines (M)'}
-                id="fp-canvas-dim-toggle-pill"
-              >
-                <Ruler size={13} />
-                <span>{showDimensions ? 'Measurements: ON' : 'Measurements: OFF'}</span>
-              </button>
-            )}
+{/* Measurements toggle cleanly positioned in bottom CAD bar and top toolbar */}
           </div>
 
           {/* CAD Floating Parallel Distance Pill & Quick Distance Adjuster */}
@@ -7771,43 +8196,71 @@ _Shared via Building Mistry App_`;
                     };
                   })();
 
-                  const cleanLabel = (() => {
-                    const lbl = (room.label || room.roomType || 'Room').trim();
-                    if (/\(\s*[\d.]+\s*(sq\.?ft|m²|sqm|sq\.?m)\s*\)/i.test(lbl)) {
-                      return lbl;
-                    }
-                    return `${lbl} (${computeRoomArea(room, unit)})`;
-                  })();
+                  const nameOnly = (room.label || room.roomType || 'Room').trim()
+                    .replace(/\s*\([\d.,\s]*(sq\.?\s*ft|m²|sqm|sq\.?\s*m)\)/gi, '').trim() || 'Room';
 
-                  const maxAllowedW = Math.max(38, rw - 8);
-                  const idealW = Math.max(48, (cleanLabel.length * 4.4 + 20) * zoom);
-                  const pillW = Math.min(idealW, maxAllowedW);
-                  const pillH = Math.min(22 * zoom, Math.max(14, rh * 0.8));
-                  const fontSize = Math.max(7, Math.min(10.5 * zoom, pillW / (cleanLabel.length * 0.58)));
+                  const hasArea = showDimensions;
+                  const areaStr = hasArea ? computeRoomArea(room, unit) : '';
+
+                  const roomW = Math.max(20, rw);
+                  const roomH = Math.max(20, rh);
+                  const isNarrow = roomW < 110 * zoom;
+
+                  const maxPillW = Math.max(28, roomW - 10 * zoom);
+                  const targetPillW = Math.min(maxPillW, Math.max(44, (isNarrow ? nameOnly.length * 6 : (nameOnly.length + areaStr.length) * 4.6 + 18) * zoom));
+                  const pillH = isNarrow && hasArea ? Math.min(32 * zoom, roomH * 0.85) : Math.min(22 * zoom, roomH * 0.75);
+                  const fontSize = Math.max(6.5, Math.min(10.5 * zoom, targetPillW / ((isNarrow ? nameOnly.length : (nameOnly.length + (hasArea ? 6 : 0))) * 0.65)));
 
                   return (
                     <g style={{ pointerEvents: 'none' }}>
                       <rect
-                        x={polyCenter.x - pillW / 2}
+                        x={polyCenter.x - targetPillW / 2}
                         y={polyCenter.y - pillH / 2}
-                        width={pillW}
+                        width={targetPillW}
                         height={pillH}
                         rx={Math.min(6 * zoom, pillH / 2)}
                         fill="rgba(255, 255, 255, 0.94)"
-                        stroke="#cbd5e1"
-                        strokeWidth={1}
+                        stroke={isSelected ? "#2563eb" : "#cbd5e1"}
+                        strokeWidth={isSelected ? 1.5 : 1}
                       />
-                      <text
-                        x={polyCenter.x}
-                        y={polyCenter.y + fontSize * 0.35}
-                        textAnchor="middle"
-                        fontSize={fontSize}
-                        fill="#0f172a"
-                        fontFamily="'Outfit', sans-serif"
-                        fontWeight="700"
-                      >
-                        {cleanLabel}
-                      </text>
+                      {isNarrow && hasArea ? (
+                        <>
+                          <text
+                            x={polyCenter.x}
+                            y={polyCenter.y - 2.5 * zoom}
+                            textAnchor="middle"
+                            fontSize={fontSize}
+                            fill="#0f172a"
+                            fontFamily="'Outfit', sans-serif"
+                            fontWeight="700"
+                          >
+                            {nameOnly}
+                          </text>
+                          <text
+                            x={polyCenter.x}
+                            y={polyCenter.y + 9 * zoom}
+                            textAnchor="middle"
+                            fontSize={Math.max(6, fontSize * 0.85)}
+                            fill="#0284c7"
+                            fontFamily="'Outfit', sans-serif"
+                            fontWeight="600"
+                          >
+                            {areaStr}
+                          </text>
+                        </>
+                      ) : (
+                        <text
+                          x={polyCenter.x}
+                          y={polyCenter.y + fontSize * 0.35}
+                          textAnchor="middle"
+                          fontSize={fontSize}
+                          fill="#0f172a"
+                          fontFamily="'Outfit', sans-serif"
+                          fontWeight="700"
+                        >
+                          {nameOnly}{hasArea ? ` (${areaStr})` : ''}
+                        </text>
+                      )}
                     </g>
                   );
                 })()}
@@ -8042,12 +8495,120 @@ _Shared via Building Mistry App_`;
                 {...elementDownProps('furniture', furn.id)}
               >
                 {isSelected && (
-                  <rect
-                    x={fx - 4 * zoom} y={fy - 4 * zoom}
-                    width={fw + 8 * zoom} height={fh + 8 * zoom}
-                    fill="none" stroke="#2563eb" strokeWidth={2 * zoom}
-                    strokeDasharray={`${4 * zoom},${2 * zoom}`}
-                  />
+                  <>
+                    {/* Active Selection Outline */}
+                    <rect
+                      x={fx - 4 * zoom} y={fy - 4 * zoom}
+                      width={fw + 8 * zoom} height={fh + 8 * zoom}
+                      fill="rgba(37, 99, 235, 0.08)" stroke="#2563eb" strokeWidth={2 * zoom}
+                      strokeDasharray={`${4 * zoom},${2 * zoom}`}
+                      rx={3 * zoom}
+                    />
+
+                    {/* Live Size & Dimension Badge above object */}
+                    {(showDimensions || !!resizingFurniture) && (
+                      <g transform={`translate(${fx + fw / 2}, ${fy - 14 * zoom})`} style={{ pointerEvents: 'none' }}>
+                        <rect
+                          x={-42 * zoom} y={-9 * zoom}
+                          width={84 * zoom} height={18 * zoom}
+                          rx={9 * zoom}
+                          fill="#0f172a" stroke="#3b82f6" strokeWidth={1}
+                        />
+                        <text
+                          x={0} y={3 * zoom}
+                          textAnchor="middle"
+                          fontSize={9 * zoom}
+                          fill="#ffffff"
+                          fontWeight="700"
+                        >
+                          {formatDimension(furn.width, unit)} × {formatDimension(furn.height, unit)}
+                        </text>
+                      </g>
+                    )}
+
+                    {!furn.locked && activeTool === 'select' && (() => {
+                      const handleR = Math.max(5, 6 * zoom);
+                      return (
+                        <g className="fp-furn-resize-handles">
+                          {/* 4 Corner Handles: Proportional / Free Scale */}
+                          {/* NW */}
+                          <g {...furnitureHandleDownProps(furn, 'nw')} style={{ cursor: 'nwse-resize' }}>
+                            <circle cx={fx} cy={fy} r={handleR + 8} fill="transparent" />
+                            <circle cx={fx} cy={fy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                            <circle cx={fx} cy={fy} r={handleR * 0.4} fill="#2563eb" />
+                          </g>
+                          {/* NE */}
+                          <g {...furnitureHandleDownProps(furn, 'ne')} style={{ cursor: 'nesw-resize' }}>
+                            <circle cx={fx + fw} cy={fy} r={handleR + 8} fill="transparent" />
+                            <circle cx={fx + fw} cy={fy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                            <circle cx={fx + fw} cy={fy} r={handleR * 0.4} fill="#2563eb" />
+                          </g>
+                          {/* SE (Primary scale handle) */}
+                          <g {...furnitureHandleDownProps(furn, 'se')} style={{ cursor: 'nwse-resize' }}>
+                            <circle cx={fx + fw} cy={fy + fh} r={handleR + 10} fill="transparent" />
+                            <circle cx={fx + fw} cy={fy + fh} r={handleR + 2} fill="#2563eb" stroke="#ffffff" strokeWidth={2.5} />
+                            <circle cx={fx + fw} cy={fy + fh} r={(handleR + 2) * 0.45} fill="#ffffff" />
+                          </g>
+                          {/* SW */}
+                          <g {...furnitureHandleDownProps(furn, 'sw')} style={{ cursor: 'nesw-resize' }}>
+                            <circle cx={fx} cy={fy + fh} r={handleR + 8} fill="transparent" />
+                            <circle cx={fx} cy={fy + fh} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                            <circle cx={fx} cy={fy + fh} r={handleR * 0.4} fill="#2563eb" />
+                          </g>
+
+                          {/* 4 Edge Midpoint Handles: Independent Width/Height */}
+                          {/* East (Width) */}
+                          <g {...furnitureHandleDownProps(furn, 'e')} style={{ cursor: 'ew-resize' }}>
+                            <circle cx={fx + fw} cy={fy + fh / 2} r={handleR + 8} fill="transparent" />
+                            <rect
+                              x={fx + fw - 4 * zoom} y={fy + fh / 2 - 8 * zoom}
+                              width={8 * zoom} height={16 * zoom} rx={3 * zoom}
+                              fill="#2563eb" stroke="#ffffff" strokeWidth={1.5}
+                            />
+                          </g>
+                          {/* South (Height/Depth) */}
+                          <g {...furnitureHandleDownProps(furn, 's')} style={{ cursor: 'ns-resize' }}>
+                            <circle cx={fx + fw / 2} cy={fy + fh} r={handleR + 8} fill="transparent" />
+                            <rect
+                              x={fx + fw / 2 - 8 * zoom} y={fy + fh - 4 * zoom}
+                              width={16 * zoom} height={8 * zoom} rx={3 * zoom}
+                              fill="#2563eb" stroke="#ffffff" strokeWidth={1.5}
+                            />
+                          </g>
+                          {/* West (Width) */}
+                          <g {...furnitureHandleDownProps(furn, 'w')} style={{ cursor: 'ew-resize' }}>
+                            <circle cx={fx} cy={fy + fh / 2} r={handleR + 8} fill="transparent" />
+                            <rect
+                              x={fx - 4 * zoom} y={fy + fh / 2 - 8 * zoom}
+                              width={8 * zoom} height={16 * zoom} rx={3 * zoom}
+                              fill="#ffffff" stroke="#2563eb" strokeWidth={2}
+                            />
+                          </g>
+                          {/* North (Height/Depth) */}
+                          <g {...furnitureHandleDownProps(furn, 'n')} style={{ cursor: 'ns-resize' }}>
+                            <circle cx={fx + fw / 2} cy={fy} r={handleR + 8} fill="transparent" />
+                            <rect
+                              x={fx + fw / 2 - 8 * zoom} y={fy - 4 * zoom}
+                              width={16 * zoom} height={8 * zoom} rx={3 * zoom}
+                              fill="#ffffff" stroke="#2563eb" strokeWidth={2}
+                            />
+                          </g>
+
+                          {/* Top Rotation Stem & Handle */}
+                          <line
+                            x1={fx + fw / 2} y1={fy}
+                            x2={fx + fw / 2} y2={fy - 22 * zoom}
+                            stroke="#2563eb" strokeWidth={1.5 * zoom}
+                          />
+                          <g {...furnitureRotateDownProps(furn)} style={{ cursor: 'grab' }}>
+                            <circle cx={fx + fw / 2} cy={fy - 22 * zoom} r={handleR + 8} fill="transparent" />
+                            <circle cx={fx + fw / 2} cy={fy - 22 * zoom} r={handleR + 1} fill="#2563eb" stroke="#ffffff" strokeWidth={2} />
+                            <circle cx={fx + fw / 2} cy={fy - 22 * zoom} r={(handleR + 1) * 0.4} fill="#ffffff" />
+                          </g>
+                        </g>
+                      );
+                    })()}
+                  </>
                 )}
                 {furn.locked && (
                   <g transform={`translate(${fx + fw - 12 * zoom}, ${fy + 2 * zoom})`}>
@@ -8083,6 +8644,28 @@ _Shared via Building Mistry App_`;
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
                 {...elementDownProps('column', col.id)}
               >
+                {isSelected && !col.locked && activeTool === 'select' && (() => {
+                  const handleR = Math.max(5, 6 * zoom);
+                  return (
+                    <g className="fp-column-resize-handles">
+                      <g {...columnHandleDownProps(col, 'e')} style={{ cursor: 'ew-resize' }}>
+                        <circle cx={cx + cw / 2} cy={cy} r={handleR + 8} fill="transparent" />
+                        <circle cx={cx + cw / 2} cy={cy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                        <circle cx={cx + cw / 2} cy={cy} r={handleR * 0.4} fill="#2563eb" />
+                      </g>
+                      <g {...columnHandleDownProps(col, 's')} style={{ cursor: 'ns-resize' }}>
+                        <circle cx={cx} cy={cy + cd / 2} r={handleR + 8} fill="transparent" />
+                        <circle cx={cx} cy={cy + cd / 2} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                        <circle cx={cx} cy={cy + cd / 2} r={handleR * 0.4} fill="#2563eb" />
+                      </g>
+                      <g {...columnHandleDownProps(col, 'se')} style={{ cursor: 'nwse-resize' }}>
+                        <circle cx={cx + cw / 2} cy={cy + cd / 2} r={handleR + 8} fill="transparent" />
+                        <circle cx={cx + cw / 2} cy={cy + cd / 2} r={handleR + 1} fill="#2563eb" stroke="#ffffff" strokeWidth={2} />
+                        <circle cx={cx + cw / 2} cy={cy + cd / 2} r={(handleR + 1) * 0.4} fill="#ffffff" />
+                      </g>
+                    </g>
+                  );
+                })()}
                 {col.shape === 'round' ? (
                   <circle
                     cx={cx} cy={cy} r={cw / 2}
@@ -8386,6 +8969,25 @@ _Shared via Building Mistry App_`;
                   </g>
                 )}
 
+                {/* Door interactive width resize handles when selected */}
+                {isSelected && !door.locked && activeTool === 'select' && (() => {
+                  const handleR = Math.max(5, 6 * zoom);
+                  return (
+                    <g className="fp-door-resize-handles">
+                      <g {...doorHandleDownProps(door, 'start')} style={{ cursor: 'ew-resize' }}>
+                        <circle cx={dx - dw / 2} cy={dy} r={handleR + 8} fill="transparent" />
+                        <circle cx={dx - dw / 2} cy={dy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                        <circle cx={dx - dw / 2} cy={dy} r={handleR * 0.4} fill="#2563eb" />
+                      </g>
+                      <g {...doorHandleDownProps(door, 'end')} style={{ cursor: 'ew-resize' }}>
+                        <circle cx={dx + dw / 2} cy={dy} r={handleR + 8} fill="transparent" />
+                        <circle cx={dx + dw / 2} cy={dy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                        <circle cx={dx + dw / 2} cy={dy} r={handleR * 0.4} fill="#2563eb" />
+                      </g>
+                    </g>
+                  );
+                })()}
+
                 {/* Door label (Kept upright regardless of wall rotation) */}
                 {zoom > 0.6 && (() => {
                   const normRot = ((door.rotation % 360) + 360) % 360;
@@ -8403,7 +9005,7 @@ _Shared via Building Mistry App_`;
                       fontWeight="600"
                       style={{ pointerEvents: 'none' }}
                     >
-                      {door.doorType} ({formatDim(door.width, unit)})
+                      {showDimensions ? `${door.doorType} (${formatDim(door.width, unit)})` : door.doorType}
                     </text>
                   );
                 })()}
@@ -8521,6 +9123,25 @@ _Shared via Building Mistry App_`;
                   </>
                 )}
 
+                {/* Window interactive width resize handles when selected */}
+                {isSelected && !win.locked && activeTool === 'select' && (() => {
+                  const handleR = Math.max(5, 6 * zoom);
+                  return (
+                    <g className="fp-window-resize-handles">
+                      <g {...windowHandleDownProps(win, 'start')} style={{ cursor: 'ew-resize' }}>
+                        <circle cx={wx - ww / 2} cy={wy} r={handleR + 8} fill="transparent" />
+                        <circle cx={wx - ww / 2} cy={wy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                        <circle cx={wx - ww / 2} cy={wy} r={handleR * 0.4} fill="#2563eb" />
+                      </g>
+                      <g {...windowHandleDownProps(win, 'end')} style={{ cursor: 'ew-resize' }}>
+                        <circle cx={wx + ww / 2} cy={wy} r={handleR + 8} fill="transparent" />
+                        <circle cx={wx + ww / 2} cy={wy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
+                        <circle cx={wx + ww / 2} cy={wy} r={handleR * 0.4} fill="#2563eb" />
+                      </g>
+                    </g>
+                  );
+                })()}
+
                 {/* Window Label (Kept upright regardless of wall rotation) */}
                 {zoom > 0.6 && (() => {
                   const normRot = ((win.rotation % 360) + 360) % 360;
@@ -8538,7 +9159,7 @@ _Shared via Building Mistry App_`;
                       fontWeight="700"
                       style={{ pointerEvents: 'none' }}
                     >
-                      W: {formatDim(win.width, unit)}
+                      {showDimensions ? `W: ${formatDim(win.width, unit)}` : (win.windowType || 'Window')}
                     </text>
                   );
                 })()}
@@ -9877,66 +10498,8 @@ _Shared via Building Mistry App_`;
         })()}
 
         {/* Priority 3: On-Canvas Floating Quick Action Bar for non-walls (doors, windows, furniture, columns, stairs) */}
-        {selectedElement && selectedElement.type !== 'wall' && selectedElement.type !== 'room' && !isDrawingWall && !isFreehandDrawing && !isPanning && activeTool === 'select' && (() => {
-          const entity = getSelectedEntity();
-          if (!entity) return null;
-          const isLocked = !!entity.locked;
-          const ex = 'x' in entity ? (entity as any).x : 0;
-          const ey = 'y' in entity ? (entity as any).y : 0;
-          const screenPos = toScreen(ex, ey);
-
-          return (
-            <div
-              className="fp-selection-quick-actions no-print"
-              style={{
-                position: 'absolute',
-                left: `${screenPos.x}px`,
-                top: `${screenPos.y - (isMobile ? 44 : 36)}px`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 60,
-              }}
-            >
-              <button
-                type="button"
-                className="fp-quick-act-btn"
-                onClick={e => { e.stopPropagation(); handleRotateSelected(); }}
-                disabled={isLocked}
-                title="Rotate 90° (R)"
-                aria-label="Rotate"
-              >
-                <RotateCw size={14} />
-              </button>
-              <button
-                type="button"
-                className="fp-quick-act-btn"
-                onClick={e => { e.stopPropagation(); handleDuplicateSelected(); }}
-                title="Duplicate (Ctrl+D)"
-                aria-label="Duplicate"
-              >
-                <Copy size={14} />
-              </button>
-              <button
-                type="button"
-                className="fp-quick-act-btn"
-                onClick={e => { e.stopPropagation(); handleToggleLockSelected(); }}
-                title={isLocked ? "Unlock (Ctrl+L)" : "Lock (Ctrl+L)"}
-                aria-label="Lock"
-              >
-                {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
-              </button>
-              <button
-                type="button"
-                className="fp-quick-act-btn danger"
-                onClick={e => { e.stopPropagation(); handleDeleteSelected(); }}
-                disabled={isLocked}
-                title="Delete (Del)"
-                aria-label="Delete"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          );
-        })()}
+        {/* On-canvas quick actions removed to keep canvas clean and usable; use Right Inspector or Mobile Sheet */
+        null}
 
         {/* ── Planner5D Bottom Property Dock ─────────── */}
         {isMobile && (showBottomDock || isMobile) && selectedElement && (() => {
@@ -10838,7 +11401,7 @@ _Shared via Building Mistry App_`;
         })()}
 
         {/* ── Planner 5D Direct Room Placement Dock when Room Tool Active ── */}
-        {showBottomDock && activeTool === 'room' && !selectedElement && (() => {
+        {isMobile && showBottomDock && activeTool === 'room' && !selectedElement && (() => {
           const isDrawingActive = isDrawingWall || isFreehandDrawing || !!resizingWall || isDragging || isPanning;
           return (
             <div
@@ -11854,17 +12417,66 @@ _Shared via Building Mistry App_`;
                       </div>
                       <div className="fp-inspector-row">
                         <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
-                        <input
-                          type="number"
-                          step="0.25"
-                          className="fp-inspector-input"
-                          value={d.width}
-                          onChange={e => {
-                            const nw = parseFloat(e.target.value) || 1;
-                            dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: nw } });
-                            markUnsaved();
-                          }}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            disabled={d.locked || d.width <= (unit === 'feet' ? 1.5 : 0.5)}
+                            onClick={() => {
+                              const step = unit === 'feet' ? 0.25 : 0.1;
+                              const nw = Math.max(unit === 'feet' ? 1.5 : 0.5, +(d.width - step).toFixed(2));
+                              dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: nw } });
+                              markUnsaved();
+                            }}
+                            style={{ width: 24, height: 24, padding: 0 }}
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            step="0.25"
+                            className="fp-inspector-input"
+                            value={d.width}
+                            disabled={d.locked}
+                            style={{ width: 68, textAlign: 'center', fontWeight: 700 }}
+                            onChange={e => {
+                              const nw = parseFloat(e.target.value) || 1;
+                              dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: nw } });
+                              markUnsaved();
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            disabled={d.locked || d.width >= (unit === 'feet' ? 12 : 3.6)}
+                            onClick={() => {
+                              const step = unit === 'feet' ? 0.25 : 0.1;
+                              const nw = Math.min(unit === 'feet' ? 12 : 3.6, +(d.width + step).toFixed(2));
+                              dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: nw } });
+                              markUnsaved();
+                            }}
+                            style={{ width: 24, height: 24, padding: 0 }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', margin: '4px 0 8px 0' }}>
+                        {[2.5, 3.0, 3.5, 4.0].map(wVal => (
+                          <button
+                            key={wVal}
+                            type="button"
+                            className={`btn btn-xs ${Math.abs(d.width - wVal) < 0.05 ? 'btn-primary' : 'btn-outline'}`}
+                            disabled={d.locked}
+                            onClick={() => {
+                              dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: wVal } });
+                              markUnsaved();
+                            }}
+                            style={{ fontSize: '0.72rem', padding: '2px 6px' }}
+                          >
+                            {wVal} {unit === 'feet' ? 'ft' : 'm'}
+                          </button>
+                        ))}
                       </div>
                       <div className="fp-inspector-row">
                         <label>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
@@ -11938,17 +12550,66 @@ _Shared via Building Mistry App_`;
                       </div>
                       <div className="fp-inspector-row">
                         <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
-                        <input
-                          type="number"
-                          step="0.25"
-                          className="fp-inspector-input"
-                          value={w.width}
-                          onChange={e => {
-                            const nw = parseFloat(e.target.value) || 1;
-                            dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: nw } });
-                            markUnsaved();
-                          }}
-                        />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            disabled={w.locked || w.width <= (unit === 'feet' ? 1.5 : 0.5)}
+                            onClick={() => {
+                              const step = unit === 'feet' ? 0.25 : 0.1;
+                              const nw = Math.max(unit === 'feet' ? 1.5 : 0.5, +(w.width - step).toFixed(2));
+                              dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: nw } });
+                              markUnsaved();
+                            }}
+                            style={{ width: 24, height: 24, padding: 0 }}
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            step="0.25"
+                            className="fp-inspector-input"
+                            value={w.width}
+                            disabled={w.locked}
+                            style={{ width: 68, textAlign: 'center', fontWeight: 700 }}
+                            onChange={e => {
+                              const nw = parseFloat(e.target.value) || 1;
+                              dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: nw } });
+                              markUnsaved();
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            disabled={w.locked || w.width >= (unit === 'feet' ? 16 : 4.8)}
+                            onClick={() => {
+                              const step = unit === 'feet' ? 0.25 : 0.1;
+                              const nw = Math.min(unit === 'feet' ? 16 : 4.8, +(w.width + step).toFixed(2));
+                              dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: nw } });
+                              markUnsaved();
+                            }}
+                            style={{ width: 24, height: 24, padding: 0 }}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', margin: '4px 0 8px 0' }}>
+                        {[3.0, 4.0, 5.0, 6.0].map(wVal => (
+                          <button
+                            key={wVal}
+                            type="button"
+                            className={`btn btn-xs ${Math.abs(w.width - wVal) < 0.05 ? 'btn-primary' : 'btn-outline'}`}
+                            disabled={w.locked}
+                            onClick={() => {
+                              dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: wVal } });
+                              markUnsaved();
+                            }}
+                            style={{ fontSize: '0.72rem', padding: '2px 6px' }}
+                          >
+                            {wVal} {unit === 'feet' ? 'ft' : 'm'}
+                          </button>
+                        ))}
                       </div>
                       <div className="fp-inspector-row">
                         <label>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
@@ -12004,83 +12665,332 @@ _Shared via Building Mistry App_`;
                 {selectedElement.type === 'furniture' && (() => {
                   const f = editorState.furniture.find(x => x.id === selectedElement.id);
                   if (!f) return null;
+                  const isFeet = unit === 'feet';
+                  const step = isFeet ? 0.25 : 0.1;
+                  const minDim = isFeet ? 0.5 : 0.15;
+                  const maxDim = isFeet ? 60 : 18;
+                  const isPropLocked = !!furnitureProportionalLock[f.id];
+
+                  // Comprehensive Catalog default lookup for reset (supports all Shape Library items)
+                  const shapeCatalogItem = (typeof SHAPE_LIBRARY_CATALOG !== 'undefined' ? SHAPE_LIBRARY_CATALOG : []).find(i =>
+                    i.name.toLowerCase() === (f.label || '').toLowerCase() ||
+                    i.name.toLowerCase() === (f.itemType || '').toLowerCase() ||
+                    i.iconType?.toLowerCase() === (f.itemType || '').toLowerCase() ||
+                    (f.label || '').toLowerCase().includes(i.name.toLowerCase()) ||
+                    (f.itemType || '').toLowerCase().includes(i.name.toLowerCase())
+                  );
+                  const catalogItem = FURNITURE_CATALOG.find(i =>
+                    i.itemType.toLowerCase() === f.itemType.toLowerCase() ||
+                    i.label.toLowerCase().includes(f.itemType.toLowerCase())
+                  );
+                  const defaultW = shapeCatalogItem ? (isFeet ? shapeCatalogItem.width : +(shapeCatalogItem.width * 0.3048).toFixed(2))
+                    : catalogItem ? (isFeet ? catalogItem.width : +(catalogItem.width * 0.3048).toFixed(2))
+                    : (isFeet ? 3 : 1);
+                  const defaultH = shapeCatalogItem ? (isFeet ? shapeCatalogItem.height : +(shapeCatalogItem.height * 0.3048).toFixed(2))
+                    : catalogItem ? (isFeet ? catalogItem.height : +(catalogItem.height * 0.3048).toFixed(2))
+                    : (isFeet ? 3 : 1);
+
+                  const handleUpdateSize = (newW: number, newH: number) => {
+                    const clampedW = Math.min(maxDim, Math.max(minDim, +newW.toFixed(2)));
+                    const clampedH = Math.min(maxDim, Math.max(minDim, +newH.toFixed(2)));
+                    dispatchWithHistory({
+                      type: 'UPDATE_FURNITURE',
+                      id: f.id,
+                      changes: { width: clampedW, height: clampedH },
+                    });
+                    markUnsaved();
+                  };
+
                   return (
-                    <div className="fp-inspector-content">
-                      <div className="fp-inspector-row">
-                        <label>Item Name</label>
+                    <div className="fp-inspector-content" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {/* Item Identification Card */}
+                      <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0284c7', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            {f.category.toUpperCase()} OBJECT
+                          </span>
+                          <span style={{ fontSize: '0.7rem', color: f.locked ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                            {f.locked ? '🔒 Locked' : '✓ Active'}
+                          </span>
+                        </div>
                         <input
                           type="text"
                           className="fp-inspector-input"
                           value={f.label || f.itemType}
+                          disabled={f.locked}
+                          placeholder="Object Name / Label"
+                          style={{ width: '100%', fontWeight: 700, fontSize: '0.85rem' }}
                           onChange={e => {
                             dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { label: e.target.value } });
                             markUnsaved();
                           }}
                         />
                       </div>
-                      <div className="fp-inspector-row">
-                        <label>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
-                        <input
-                          type="number"
-                          step="0.25"
-                          className="fp-inspector-input"
-                          value={f.width}
-                          onChange={e => {
-                            const nw = parseFloat(e.target.value) || 1;
-                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { width: nw } });
-                            markUnsaved();
-                          }}
-                        />
-                      </div>
-                      <div className="fp-inspector-row">
-                        <label>Length/Depth</label>
-                        <input
-                          type="number"
-                          step="0.25"
-                          className="fp-inspector-input"
-                          value={f.height}
-                          onChange={e => {
-                            const nh = parseFloat(e.target.value) || 1;
-                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { height: nh } });
-                            markUnsaved();
-                          }}
-                        />
-                      </div>
-                      <div className="fp-inspector-row">
-                        <label>Rotation</label>
-                        <select
-                          className="fp-inspector-input"
-                          value={f.rotation || 0}
-                          onChange={e => {
-                            dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: parseInt(e.target.value) } });
-                            markUnsaved();
-                          }}
-                        >
-                          <option value={0}>0°</option>
-                          <option value={45}>45°</option>
-                          <option value={90}>90°</option>
-                          <option value={135}>135°</option>
-                          <option value={180}>180°</option>
-                          <option value={270}>270°</option>
-                        </select>
+
+                      {/* Precise Dimensions Card */}
+                      <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            DIMENSIONS ({unit === 'feet' ? 'FT' : 'M'})
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-xs"
+                            onClick={() => {
+                              setFurnitureProportionalLock(prev => ({ ...prev, [f.id]: !prev[f.id] }));
+                              onNotify(isPropLocked ? 'Proportions unlocked (Free resize)' : 'Proportions locked (Aspect ratio kept)', 'info');
+                            }}
+                            title={isPropLocked ? "Click to unlock free proportions" : "Click to lock aspect ratio"}
+                            style={{ fontSize: '0.7rem', padding: '2px 6px', color: isPropLocked ? '#0284c7' : '#64748b' }}
+                          >
+                            {isPropLocked ? '🔗 Proportions Locked' : '🔓 Free Resize'}
+                          </button>
+                        </div>
+
+                        {/* Width Row with Steppers */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>Width</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs"
+                              disabled={f.locked || f.width <= minDim}
+                              onClick={() => {
+                                const nw = Math.max(minDim, +(f.width - step).toFixed(2));
+                                const nh = isPropLocked ? Math.max(minDim, +(f.height * (nw / f.width)).toFixed(2)) : f.height;
+                                handleUpdateSize(nw, nh);
+                              }}
+                              style={{ width: 26, height: 26, padding: 0 }}
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              step={step}
+                              min={minDim}
+                              max={maxDim}
+                              className="fp-inspector-input"
+                              disabled={f.locked}
+                              value={f.width}
+                              style={{ width: 68, textAlign: 'center', fontWeight: 700 }}
+                              onChange={e => {
+                                const nw = parseFloat(e.target.value) || minDim;
+                                const nh = isPropLocked ? Math.max(minDim, +(f.height * (nw / f.width)).toFixed(2)) : f.height;
+                                handleUpdateSize(nw, nh);
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs"
+                              disabled={f.locked || f.width >= maxDim}
+                              onClick={() => {
+                                const nw = Math.min(maxDim, +(f.width + step).toFixed(2));
+                                const nh = isPropLocked ? Math.min(maxDim, +(f.height * (nw / f.width)).toFixed(2)) : f.height;
+                                handleUpdateSize(nw, nh);
+                              }}
+                              style={{ width: 26, height: 26, padding: 0 }}
+                            >
+                              +
+                            </button>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', minWidth: 16 }}>{unit === 'feet' ? 'ft' : 'm'}</span>
+                          </div>
+                        </div>
+
+                        {/* Depth / Length Row with Steppers */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <label style={{ fontSize: '0.78rem', fontWeight: 600, color: '#334155' }}>Length / Depth</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs"
+                              disabled={f.locked || f.height <= minDim}
+                              onClick={() => {
+                                const nh = Math.max(minDim, +(f.height - step).toFixed(2));
+                                const nw = isPropLocked ? Math.max(minDim, +(f.width * (nh / f.height)).toFixed(2)) : f.width;
+                                handleUpdateSize(nw, nh);
+                              }}
+                              style={{ width: 26, height: 26, padding: 0 }}
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              step={step}
+                              min={minDim}
+                              max={maxDim}
+                              className="fp-inspector-input"
+                              disabled={f.locked}
+                              value={f.height}
+                              style={{ width: 68, textAlign: 'center', fontWeight: 700 }}
+                              onChange={e => {
+                                const nh = parseFloat(e.target.value) || minDim;
+                                const nw = isPropLocked ? Math.max(minDim, +(f.width * (nh / f.height)).toFixed(2)) : f.width;
+                                handleUpdateSize(nw, nh);
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-xs"
+                              disabled={f.locked || f.height >= maxDim}
+                              onClick={() => {
+                                const nh = Math.min(maxDim, +(f.height + step).toFixed(2));
+                                const nw = isPropLocked ? Math.min(maxDim, +(f.width * (nh / f.height)).toFixed(2)) : f.width;
+                                handleUpdateSize(nw, nh);
+                              }}
+                              style={{ width: 26, height: 26, padding: 0 }}
+                            >
+                              +
+                            </button>
+                            <span style={{ fontSize: '0.75rem', color: '#64748b', minWidth: 16 }}>{unit === 'feet' ? 'ft' : 'm'}</span>
+                          </div>
+                        </div>
+
+                        {/* Reset Size Button */}
+                        <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-xs"
+                            disabled={f.locked}
+                            onClick={() => {
+                              handleUpdateSize(defaultW, defaultH);
+                              onNotify(`Reset to standard catalog size (${defaultW} × ${defaultH} ${unit === 'feet' ? 'ft' : 'm'})`, 'info');
+                            }}
+                            title="Reset dimensions to standard catalog default"
+                            style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 4 }}
+                          >
+                            <RotateCw size={11} />
+                            <span>Reset Default Size ({defaultW}×{defaultH})</span>
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="fp-inspector-actions" style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+                      {/* Position & Placement Card */}
+                      <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
+                          POSITION (CANVAS COORDINATES)
+                        </span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: 2 }}>Pos X</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              className="fp-inspector-input"
+                              disabled={f.locked}
+                              value={f.x}
+                              style={{ width: '100%', fontSize: '0.8rem' }}
+                              onChange={e => {
+                                const nx = parseFloat(e.target.value) || 0;
+                                dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { x: +nx.toFixed(2) } });
+                                markUnsaved();
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.7rem', color: '#64748b', display: 'block', marginBottom: 2 }}>Pos Y</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              className="fp-inspector-input"
+                              disabled={f.locked}
+                              value={f.y}
+                              style={{ width: '100%', fontSize: '0.8rem' }}
+                              onChange={e => {
+                                const ny = parseFloat(e.target.value) || 0;
+                                dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { y: +ny.toFixed(2) } });
+                                markUnsaved();
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Rotation Controls Card */}
+                      <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
+                          ROTATION ANGLE ({Math.round(f.rotation || 0)}°)
+                        </span>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                          {[0, 45, 90, 180, 270].map(deg => (
+                            <button
+                              key={deg}
+                              type="button"
+                              className={`btn btn-xs ${(Math.round(f.rotation || 0) % 360) === deg ? 'btn-primary' : 'btn-outline'}`}
+                              disabled={f.locked}
+                              onClick={() => {
+                                dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: deg } });
+                                markUnsaved();
+                              }}
+                              style={{ minWidth: 40, fontWeight: 700, fontSize: '0.75rem' }}
+                            >
+                              {deg}°
+                            </button>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            disabled={f.locked}
+                            onClick={() => {
+                              const nextRot = ((Math.round(f.rotation || 0) - 15) + 360) % 360;
+                              dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: nextRot } });
+                              markUnsaved();
+                            }}
+                            title="Rotate -15°"
+                            style={{ flex: 1 }}
+                          >
+                            ↺ -15°
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-xs"
+                            disabled={f.locked}
+                            onClick={() => {
+                              const nextRot = (Math.round(f.rotation || 0) + 15) % 360;
+                              dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: nextRot } });
+                              markUnsaved();
+                            }}
+                            title="Rotate +15°"
+                            style={{ flex: 1 }}
+                          >
+                            ↻ +15°
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Quick Actions (Lock, Duplicate, Delete) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
                         <button
                           type="button"
-                          className="fp-btn-secondary"
-                          onClick={handleDuplicateSelected}
-                          style={{ flex: 1, padding: '7px 10px', background: '#f8fafc', color: '#1e293b', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                          className={`btn btn-xs ${f.locked ? 'btn-warning' : 'btn-outline'}`}
+                          onClick={handleToggleLockSelected}
+                          title={f.locked ? "Unlock element" : "Lock element to prevent movement and resizing"}
+                          style={{ fontWeight: 600, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                         >
-                          Duplicate
+                          {f.locked ? <Lock size={12} /> : <Unlock size={12} />}
+                          <span>{f.locked ? 'Unlock' : 'Lock'}</span>
                         </button>
                         <button
                           type="button"
-                          className="fp-btn-danger"
-                          onClick={handleDeleteSelected}
-                          style={{ flex: 1, padding: '7px 10px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                          className="btn btn-secondary btn-xs"
+                          onClick={handleDuplicateSelected}
+                          title="Duplicate object (Ctrl+D)"
+                          style={{ fontWeight: 600, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
                         >
-                          Delete
+                          <Copy size={12} />
+                          <span>Duplicate</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-xs"
+                          disabled={f.locked}
+                          onClick={handleDeleteSelected}
+                          title="Delete object (Del)"
+                          style={{ fontWeight: 600, fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                        >
+                          <Trash2 size={12} />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </div>

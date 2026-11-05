@@ -57,7 +57,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
 
   return (
     <Page title="Expenses" subtitle={project.site.name} onBack={onBack}>
-      <div className="m-stats is-3">
+      <div className="m-stats is-3 expenses-summary-stats">
         <Stat label="Today" value={formatINR(todayTotal)} />
         <Stat label="This month" value={formatINR(monthTotal)} />
         <Stat label="Unpaid" value={formatINR(unpaid)} tone={unpaid > 0 ? 'bad' : 'ok'} />

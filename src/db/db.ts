@@ -61,6 +61,12 @@ export class BuildingMistryDB extends Dexie {
   catalogItems!: Table<CatalogItem, string>;
   toolAssets!: Table<ToolAsset, string>;
   toolIssues!: Table<ToolIssue, string>;
+  tasks!: Table<any, string>;
+  milestones!: Table<any, string>;
+  siteDiaries!: Table<any, string>;
+  suppliers!: Table<any, string>;
+  documents!: Table<any, string>;
+  notifications!: Table<any, string>;
 
   constructor() {
     super('BuildingMistryDB');
@@ -214,13 +220,20 @@ export class BuildingMistryDB extends Dexie {
       floorPlans: 'id, userId, siteId, isDeleted, createdAt',
     });
 
-    // Version 8: stock movements, editable catalog and tool issue/return tracking.
+    // Version 8: stock movements, editable catalog, tool issue/return tracking,
+    // and project tasks, milestones, site diaries, suppliers, documents, notifications.
     // Additive only: Dexie carries every existing table and record forward untouched.
     this.version(8).stores({
       stockMovements: 'id, userId, siteId, itemKey, eventDate, isDeleted',
       catalogItems: 'id, kind, category, isDeleted',
       toolAssets: 'id, userId, siteId, isDeleted',
       toolIssues: 'id, userId, siteId, toolAssetId, isDeleted',
+      tasks: 'id, userId, siteId, isDeleted',
+      milestones: 'id, userId, siteId, isDeleted',
+      siteDiaries: 'id, userId, siteId, isDeleted',
+      suppliers: 'id, userId, isDeleted',
+      documents: 'id, userId, siteId, isDeleted',
+      notifications: 'id, userId, isDeleted',
     });
   }
 

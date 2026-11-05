@@ -813,11 +813,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             </div>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: '14px',
-          }}>
+          <div className="interactive-card-grid">
             {expenseCategoryCards.map(item => (
               <InteractiveHoverCard key={item.id} item={item} />
             ))}
@@ -829,7 +825,7 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       {subSection === 'tea' && (
         <div>
           {/* Refreshment Visual Interactive Cards (4 Categories) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+          <div className="interactive-card-grid" style={{ marginBottom: '18px' }}>
             {expenseCategoryCards.slice(0, 4).map(item => (
               <InteractiveHoverCard key={item.id} item={item} />
             ))}

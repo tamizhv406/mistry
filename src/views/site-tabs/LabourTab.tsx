@@ -310,7 +310,7 @@ export const LabourTab: React.FC<LabourTabProps> = ({
 
           {/* Render Cards or Table based on view mode */}
           {salaryViewMode === 'cards' && (
-            <div className="space-y-6 mb-8">
+            <div className="interactive-card-groups">
               {(['MISTRY', 'PERIYAAL', 'SITHAAL'] as const).map(catName => {
                 const catLedgers = workerLedgers.filter(
                   l => l.worker.category.toUpperCase() === catName
@@ -322,8 +322,8 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                 const catIcon = catName === 'MISTRY' ? '👑' : catName === 'PERIYAAL' ? '🧱' : '🧤';
 
                 return (
-                  <div key={catName} className="space-y-3">
-                    <div className="flex items-center gap-2">
+                  <div key={catName} className="interactive-card-group">
+                    <div className="interactive-card-group-title">
                       <span className="text-lg">{catIcon}</span>
                       <h5
                         className="text-sm font-bold uppercase tracking-wider"
@@ -333,16 +333,16 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                       </h5>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="interactive-card-grid">
                       {catLedgers.map(l => {
                         const vis = getWorkerVisual(l.worker.category, l.worker.imageUrl);
                         const hoverItem: InteractiveHoverItem = {
                           id: l.worker.id,
                           title: l.worker.name,
-                          description: `${l.worker.category} • ₹${l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
+                          description: `${l.worker.category} • ${l.daysWorked} days worked`,
                           imageUrl: l.worker.imageUrl || vis.imageUrl,
                           imageAlt: l.worker.name,
-                          badge: `${l.worker.category} • ₹${l.worker.dailyWage}/d`,
+                          badge: l.worker.category,
                           badgeVariant:
                             catName === 'MISTRY'
                               ? 'primary'
@@ -351,11 +351,19 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                               : 'success',
                           stats: [
                             {
+                              label: 'Daily wage',
+                              value: `₹${l.worker.dailyWage.toLocaleString('en-IN')}`,
+                            },
+                            {
+                              label: 'Days worked',
+                              value: l.daysWorked,
+                            },
+                            {
                               label: 'Gross Salary',
                               value: `₹${l.grossSalary.toLocaleString('en-IN')}`,
                             },
                             {
-                              label: 'Advance Taken',
+                              label: 'Gross advance',
                               value: `₹${l.totalRecoverableAdvance.toLocaleString('en-IN')}`,
                               color: l.totalRecoverableAdvance > 0 ? '#f87171' : '#94a3b8',
                             },
@@ -384,14 +392,14 @@ export const LabourTab: React.FC<LabourTabProps> = ({
               {workerLedgers.filter(
                 l => !['MISTRY', 'PERIYAAL', 'SITHAAL'].includes(l.worker.category.toUpperCase())
               ).length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
+                <div className="interactive-card-group">
+                  <div className="interactive-card-group-title">
                     <span className="text-lg">🛠️</span>
                     <h5 className="text-sm font-bold uppercase tracking-wider text-slate-400">
                       Other Crafts & Workers
                     </h5>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="interactive-card-grid">
                     {workerLedgers
                       .filter(
                         l =>
@@ -404,18 +412,26 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                         const hoverItem: InteractiveHoverItem = {
                           id: l.worker.id,
                           title: l.worker.name,
-                          description: `${l.worker.category} • ₹${l.worker.dailyWage}/day • ${l.daysWorked} Days Worked`,
+                          description: `${l.worker.category} • ${l.daysWorked} days worked`,
                           imageUrl: l.worker.imageUrl || vis.imageUrl,
                           imageAlt: l.worker.name,
                           badge: l.worker.category,
                           badgeVariant: 'neutral',
                           stats: [
                             {
+                              label: 'Daily wage',
+                              value: `₹${l.worker.dailyWage.toLocaleString('en-IN')}`,
+                            },
+                            {
+                              label: 'Days worked',
+                              value: l.daysWorked,
+                            },
+                            {
                               label: 'Gross Salary',
                               value: `₹${l.grossSalary.toLocaleString('en-IN')}`,
                             },
                             {
-                              label: 'Advance Taken',
+                              label: 'Gross advance',
                               value: `₹${l.totalRecoverableAdvance.toLocaleString('en-IN')}`,
                               color: l.totalRecoverableAdvance > 0 ? '#f87171' : '#94a3b8',
                             },

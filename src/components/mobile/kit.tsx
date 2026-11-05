@@ -10,9 +10,10 @@ export const Page: React.FC<{
   subtitle?: React.ReactNode;
   onBack?: () => void;
   right?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
-}> = ({ title, subtitle, onBack, right, children }) => (
-  <div className="m-page">
+}> = ({ title, subtitle, onBack, right, className, children }) => (
+  <div className={`m-page ${className ?? ''}`.trim()}>
     <header className="m-page-head">
       {onBack && (
         <button type="button" className="m-icon-btn is-bordered" onClick={onBack} aria-label="Go back">

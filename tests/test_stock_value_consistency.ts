@@ -168,3 +168,4 @@ describe('CAD Upright Label Angle Normalisation', () => {
     assert.equal(isLabelFlipped(315), false);
   });
 });
+

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowLeft, ArrowRight, BrickWall, Building2, Check, ChevronDown, ChevronRight, Download, ExternalLink, Hammer, House, Layers, Mic, MicOff,
+  ArrowLeft, ArrowRight, BrickWall, Building2, Calculator, Check, ChevronDown, ChevronRight, Download, ExternalLink, Hammer, House, Layers, Mic, MicOff,
   Mountain, Package, PaintRoller, Printer, Ruler, Save, SlidersHorizontal, Tag, Trash2, Users,
 } from 'lucide-react';
 import { db } from '../db/db';
@@ -21,6 +21,7 @@ import { SupplierPriceModal } from '../components/SupplierPriceModal';
 import { PriceComparisonCard } from '../components/PriceComparisonCard';
 import { Badge, CalcLine, ConfirmSheet, Empty, Field, Note, Page, Section, Segmented, Sheet } from '../components/mobile/kit';
 import { generateBuildingEstimatePdfBlob, downloadFile } from '../utils/pdfGenerator';
+import { AdvancedCalculatorDashboard } from '../components/calculator/AdvancedCalculatorDashboard';
 
 /**
  * Building Calculator: four plain questions, then an approximate estimate.
@@ -100,6 +101,7 @@ const floorsLabel = (n: number) => (n === 1 ? 'Ground floor only' : `Ground + ${
 const priceText = (p: EstimatePrices) => Object.fromEntries(PRICE_FIELDS.map(f => [f.field, String(p[f.field])])) as Record<keyof EstimatePrices, string>;
 
 export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuildingSqFt, onBack, onOpenSite, onNotify }) => {
+  const [calculatorMode, setCalculatorMode] = useState<'advanced' | 'whole_house'>('advanced');
   const [step, setStep] = useState(0);
   const [tried, setTried] = useState(false);   // show field errors once Next has been pressed on a step
 
@@ -359,18 +361,55 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
 
   return (
     <Page
+      className="container"
       title="Building Calculator"
       subtitle="Approximate materials and cost"
       onBack={onBack}
       right={
-        isSpeechRecognitionSupported() ? (
+        isSpeechRecognitionSupported() && calculatorMode === 'whole_house' ? (
           <button type="button" className={`m-icon-btn is-bordered no-print ${listening ? 'is-bad' : ''}`} onClick={toggleVoice} aria-label={listening ? 'Stop listening' : 'Fill by voice'} aria-pressed={listening}>
             {listening ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
         ) : undefined
       }
     >
-      <ol className="m-steps calc-steps no-print" aria-label="Steps">
+      {/* Top Segmented Mode Switcher */}
+      <div className="max-w-md mx-auto mb-6 no-print">
+        <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => setCalculatorMode('advanced')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+              calculatorMode === 'advanced'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+            }`}
+          >
+            <Calculator size={14} /> Advanced Calculator (IS)
+          </button>
+          <button
+            type="button"
+            onClick={() => setCalculatorMode('whole_house')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+              calculatorMode === 'whole_house'
+                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+            }`}
+          >
+            <House size={14} /> Whole House Quick Estimator
+          </button>
+        </div>
+      </div>
+
+      {calculatorMode === 'advanced' ? (
+        <AdvancedCalculatorDashboard
+          user={user}
+          onNotify={onNotify}
+          onSelectSite={onOpenSite}
+        />
+      ) : (
+        <>
+          <ol className="m-steps calc-steps no-print" aria-label="Steps">
         {STEPS.map((label, i) => (
           <li key={label} className={i === step ? 'is-current' : i < step ? 'is-done' : ''} aria-current={i === step ? 'step' : undefined}>
             <button type="button" onClick={() => (i < step ? goTo(i) : undefined)} disabled={i > step} aria-label={`Step ${i + 1}: ${label}`}>
@@ -739,6 +778,8 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
             )}
           </Section>
         </div>
+      )}
+      </>
       )}
 
       {/* ---------------------------------------------------------------- Save */}
