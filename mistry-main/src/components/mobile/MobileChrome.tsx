@@ -25,11 +25,12 @@ interface ChromeProps {
 
 /** Slim top bar (phone only): brand, project switcher, account. */
 export const MobileTopBar: React.FC<ChromeProps> = ({ user, currentView, sites, siteId, onSelectSite, onNavigate, onNewSite, onLogout }) => {
-  if (currentView === 'floor-plan-editor') return null;
-
   const [pickerOpen, setPickerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [query, setQuery] = useState('');
+
+  if (currentView === 'floor-plan-editor') return null;
+
   const current = sites.find(s => s.id === siteId);
   const q = query.trim().toLowerCase();
   const shown = q ? sites.filter(s => `${s.name} ${s.area} ${s.address} ${s.ownerName}`.toLowerCase().includes(q)) : sites;
@@ -108,10 +109,10 @@ export const MobileTopBar: React.FC<ChromeProps> = ({ user, currentView, sites, 
  * Home | Projects | Floor Plan | Reports | More.
  */
 export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNavigate, onOpenClassic, onLogout, canInstall, onInstall, siteId }) => {
-  if (currentView === 'floor-plan-editor') return null;
-
   const [moreOpen, setMoreOpen] = useState(false);
   const trashCount = useLiveQuery(async () => (await db.getAllTrash(user)).length, [user]) || 0;
+
+  if (currentView === 'floor-plan-editor') return null;
 
   const tabs: { view: string; label: string; icon: React.ReactNode; match: string[] }[] = [
     { view: 'dashboard', label: 'Home', icon: <Home size={22} />, match: ['dashboard'] },

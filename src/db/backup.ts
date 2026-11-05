@@ -31,6 +31,12 @@ export interface BackupData {
     catalogItems?: any[];
     toolAssets?: any[];
     toolIssues?: any[];
+    tasks?: any[];
+    milestones?: any[];
+    siteDiaries?: any[];
+    suppliers?: any[];
+    documents?: any[];
+    notifications?: any[];
   };
 }
 
@@ -84,6 +90,12 @@ export function filterBackupDataForUser(data: BackupData['data'], user: User): B
     catalogItems: filter('catalogItems', data.catalogItems),
     toolAssets: filter('toolAssets', data.toolAssets),
     toolIssues: filter('toolIssues', data.toolIssues),
+    tasks: filter('tasks', data.tasks),
+    milestones: filter('milestones', data.milestones),
+    siteDiaries: filter('siteDiaries', data.siteDiaries),
+    suppliers: filter('suppliers', data.suppliers),
+    documents: filter('documents', data.documents),
+    notifications: filter('notifications', data.notifications),
   };
 }
 
@@ -112,6 +124,12 @@ export async function exportDatabaseBackup(user: User): Promise<void> {
     catalogItems,
     toolAssets,
     toolIssues,
+    tasks,
+    milestones,
+    siteDiaries,
+    suppliers,
+    documents,
+    notifications,
   ] = await Promise.all([
     db.sites.toArray(),
     db.materials.toArray(),
@@ -136,6 +154,12 @@ export async function exportDatabaseBackup(user: User): Promise<void> {
     db.catalogItems.toArray(),
     db.toolAssets.toArray(),
     db.toolIssues.toArray(),
+    db.tasks.toArray(),
+    db.milestones.toArray(),
+    db.siteDiaries.toArray(),
+    db.suppliers.toArray(),
+    db.documents.toArray(),
+    db.notifications.toArray(),
   ]);
 
   const data = filterBackupDataForUser({
@@ -162,10 +186,16 @@ export async function exportDatabaseBackup(user: User): Promise<void> {
     catalogItems,
     toolAssets,
     toolIssues,
+    tasks,
+    milestones,
+    siteDiaries,
+    suppliers,
+    documents,
+    notifications,
   }, user);
 
   const backup: BackupData = {
-    version: 5,
+    version: 6,
     appName: 'Building Mistry',
     exportedAt: new Date().toISOString(),
     data,
@@ -189,7 +219,7 @@ export async function importDatabaseBackup(file: File): Promise<{ success: boole
     const text = await file.text();
     const backup: BackupData = JSON.parse(text);
 
-    if (!backup.appName || backup.appName !== 'Building Mistry' || !backup.data) {
+    if (!backup || typeof backup !== 'object' || !backup.appName || backup.appName !== 'Building Mistry' || !backup.data || typeof backup.data !== 'object') {
       throw new Error('Invalid backup file format. Must be an official Building Mistry backup.');
     }
 
@@ -221,6 +251,12 @@ export async function importDatabaseBackup(file: File): Promise<{ success: boole
       db.catalogItems,
       db.toolAssets,
       db.toolIssues,
+      db.tasks,
+      db.milestones,
+      db.siteDiaries,
+      db.suppliers,
+      db.documents,
+      db.notifications,
     ], async () => {
       // Clear existing records
       await Promise.all([
@@ -272,6 +308,12 @@ export async function importDatabaseBackup(file: File): Promise<{ success: boole
         ['catalogItems', db.catalogItems],
         ['toolAssets', db.toolAssets],
         ['toolIssues', db.toolIssues],
+        ['tasks', db.tasks],
+        ['milestones', db.milestones],
+        ['siteDiaries', db.siteDiaries],
+        ['suppliers', db.suppliers],
+        ['documents', db.documents],
+        ['notifications', db.notifications],
       ];
       for (const [key, table] of optional) {
         const rows = data[key];
