@@ -385,33 +385,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* 6. Material Stock Alerts */}
+          {/* 6. Material Stock Value & Alerts */}
           <div
             className="erp-kpi-card cursor-pointer"
             onClick={() => onNavigate ? onNavigate('stock') : undefined}
             title="Click to view Material Stock"
           >
             <div className="erp-kpi-header">
-              <span className="erp-kpi-title">Stock Alerts</span>
+              <span className="erp-kpi-title">Total Stock Value</span>
               <div
                 className="erp-kpi-icon-box"
                 style={{
-                  background: stats.materialStock.lowStockCount > 0 ? '#FEE2E2' : '#DCFCE7',
-                  color: stats.materialStock.lowStockCount > 0 ? '#DC2626' : '#16A34A',
+                  background: stats.materialStock.lowStockCount > 0 ? '#FEF3C7' : '#DCFCE7',
+                  color: stats.materialStock.lowStockCount > 0 ? '#D97706' : '#16A34A',
                 }}
               >
-                <AlertTriangle size={18} />
+                <Package size={18} />
               </div>
             </div>
             <div
               className="erp-kpi-value"
-              style={{ color: stats.materialStock.lowStockCount > 0 ? '#DC2626' : '#16A34A' }}
+              style={{ color: '#16A34A' }}
             >
-              {stats.materialStock.lowStockCount}
+              ₹{stats.materialStock.totalStockValue.toLocaleString('en-IN')}
             </div>
             <div className="erp-kpi-footer">
               {stats.materialStock.lowStockCount > 0 ? (
-                <span className="text-red-600 font-bold">Action required: low stock</span>
+                <span className="text-amber-600 font-bold">{stats.materialStock.lowStockCount} low-stock alerts</span>
               ) : (
                 <span className="text-emerald-600 font-medium">All levels optimal ({stats.materialStock.inStockCount} items)</span>
               )}
@@ -973,7 +973,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
-          <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--erp-border)', display: 'flex', gap: '16px', background: '#F8FAFC' }}>
+          <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--erp-border)', display: 'flex', gap: '16px', background: '#F8FAFC', flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>Total Stock Value</span>
+              <strong style={{ fontSize: '1.2rem', color: '#16A34A' }}>₹{stats.materialStock.totalStockValue.toLocaleString('en-IN')}</strong>
+            </div>
+            <div style={{ width: '1px', height: '36px', background: 'var(--erp-border)' }} />
             <div>
               <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>Total Materials</span>
               <strong style={{ fontSize: '1.2rem', color: '#111827' }}>{stats.materialStock.totalMaterialsCount} items</strong>

@@ -3,7 +3,7 @@ import { db } from '../db/db';
 import type { Site, User, BuildingEstimate, StockMovement, CatalogItem, FloorPlan } from '../db/types';
 import { getCurrentUser } from '../services/auth';
 import { calculateFinancialBalance } from '../utils/financial';
-import { buildStock, type StockItem } from '../domain/stock';
+import { buildStock, calculateStockValue, type StockItem } from '../domain/stock';
 import { todayKey, monthKeyOf, addMonths, DEFAULT_TIME_ZONE } from '../utils/datetime';
 
 export interface SiteCardSummary {
@@ -43,6 +43,8 @@ export interface AttendanceTodayStats {
 
 export interface MaterialStockStats {
   totalMaterialsCount: number;
+  totalStockValue: number;
+  pendingPurchasesValue: number;
   inStockCount: number;
   lowStockCount: number;
   negativeCount: number;
@@ -73,6 +75,8 @@ export function useOverallStats(user?: User | null) {
     const sites = rawSites.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const siteIds = sites.map(s => s.id);
+    const siteIdSet = new Set(siteIds);
+    const shouldIncludeAll = siteIds.length === 0;
     const siteMap = new Map(sites.map(s => [s.id, s.name]));
 
     const [
@@ -93,19 +97,19 @@ export function useOverallStats(user?: User | null) {
       estimates,
       floorPlans,
     ] = await Promise.all([
-      db.materials.filter(m => !m.isDeleted && siteIds.includes(m.siteId)).toArray(),
-      db.rodEntries.filter(r => !r.isDeleted && siteIds.includes(r.siteId)).toArray(),
-      db.workers.filter(w => !w.isDeleted && siteIds.includes(w.siteId)).toArray(),
-      db.attendance.filter(a => !a.isDeleted && siteIds.includes(a.siteId)).toArray(),
-      db.labourAdvances.filter(a => !a.isDeleted && siteIds.includes(a.siteId)).toArray(),
-      db.salaryPayments.filter(s => !s.isDeleted && siteIds.includes(s.siteId)).toArray(),
-      db.tools.filter(t => !t.isDeleted && siteIds.includes(t.siteId)).toArray(),
-      db.teaSnacksExpenses.filter(t => !t.isDeleted && siteIds.includes(t.siteId)).toArray(),
-      db.poojaExpenses.filter(p => !p.isDeleted && siteIds.includes(p.siteId)).toArray(),
-      db.electricityBills.filter(e => !e.isDeleted && siteIds.includes(e.siteId)).toArray(),
-      db.waterBills.filter(w => !w.isDeleted && siteIds.includes(w.siteId)).toArray(),
-      db.otherExpenses.filter(o => !o.isDeleted && siteIds.includes(o.siteId)).toArray(),
-      db.stockMovements.filter(s => !s.isDeleted && siteIds.includes(s.siteId)).toArray(),
+      db.materials.filter(m => !m.isDeleted && (shouldIncludeAll || !m.siteId || siteIdSet.has(m.siteId))).toArray(),
+      db.rodEntries.filter(r => !r.isDeleted && (shouldIncludeAll || !r.siteId || siteIdSet.has(r.siteId))).toArray(),
+      db.workers.filter(w => !w.isDeleted && (shouldIncludeAll || !w.siteId || siteIdSet.has(w.siteId))).toArray(),
+      db.attendance.filter(a => !a.isDeleted && (shouldIncludeAll || !a.siteId || siteIdSet.has(a.siteId))).toArray(),
+      db.labourAdvances.filter(a => !a.isDeleted && (shouldIncludeAll || !a.siteId || siteIdSet.has(a.siteId))).toArray(),
+      db.salaryPayments.filter(s => !s.isDeleted && (shouldIncludeAll || !s.siteId || siteIdSet.has(s.siteId))).toArray(),
+      db.tools.filter(t => !t.isDeleted && (shouldIncludeAll || !t.siteId || siteIdSet.has(t.siteId))).toArray(),
+      db.teaSnacksExpenses.filter(t => !t.isDeleted && (shouldIncludeAll || !t.siteId || siteIdSet.has(t.siteId))).toArray(),
+      db.poojaExpenses.filter(p => !p.isDeleted && (shouldIncludeAll || !p.siteId || siteIdSet.has(p.siteId))).toArray(),
+      db.electricityBills.filter(e => !e.isDeleted && (shouldIncludeAll || !e.siteId || siteIdSet.has(e.siteId))).toArray(),
+      db.waterBills.filter(w => !w.isDeleted && (shouldIncludeAll || !w.siteId || siteIdSet.has(w.siteId))).toArray(),
+      db.otherExpenses.filter(o => !o.isDeleted && (shouldIncludeAll || !o.siteId || siteIdSet.has(o.siteId))).toArray(),
+      db.stockMovements.filter(s => !s.isDeleted && (shouldIncludeAll || !s.siteId || siteIdSet.has(s.siteId))).toArray(),
       db.catalogItems.filter(c => !c.isDeleted).toArray(),
       db.estimates.filter(e => !e.isDeleted).toArray(),
       db.floorPlans.filter(f => !f.isDeleted).toArray(),
@@ -196,9 +200,12 @@ export function useOverallStats(user?: User | null) {
     const lowStockItems = stockItems.filter(s => s.isLowStock || s.isNegative);
     const inStockCount = stockItems.filter(s => s.onHand > 0).length;
     const negativeCount = stockItems.filter(s => s.isNegative).length;
+    const stockValueSummary = calculateStockValue(materials, rodEntries);
 
     const materialStock: MaterialStockStats = {
-      totalMaterialsCount: materials.length + rodEntries.length,
+      totalMaterialsCount: stockValueSummary.totalMaterialsCount,
+      totalStockValue: stockValueSummary.totalStockValue,
+      pendingPurchasesValue: stockValueSummary.pendingPurchasesValue,
       inStockCount,
       lowStockCount: lowStockItems.length,
       negativeCount,

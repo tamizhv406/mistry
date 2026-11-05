@@ -20,6 +20,7 @@ import { ProjectsView } from './views/ProjectsView';
 import { SiteDetailView } from './views/SiteDetailView';
 import { TrashView } from './views/TrashView';
 import { BackupView } from './views/BackupView';
+import { SettingsView } from './views/SettingsView';
 import { EstimatorView } from './views/EstimatorView';
 import { AdminDashboardView } from './views/AdminDashboardView';
 import { FloorPlanListView } from './views/FloorPlanListView';
@@ -71,7 +72,7 @@ import type {
 } from './db/types';
 
 type AppViewName =
-  | 'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'estimator' | 'admin'
+  | 'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'settings' | 'estimator' | 'admin'
   | 'floor-plans' | 'floor-plan-editor'
   | 'labour' | 'worker' | 'stock' | 'toolroom' | 'expenses' | 'reports';
 
@@ -804,6 +805,15 @@ export function App() {
           <BackupView
             user={currentUser}
             onBack={() => handleNavigate('dashboard')}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'settings' && (
+          <SettingsView
+            user={currentUser}
+            onBack={() => handleNavigate('dashboard')}
+            onNavigate={handleNavigate}
             onNotify={addToast}
           />
         )}

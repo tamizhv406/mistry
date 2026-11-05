@@ -7239,20 +7239,22 @@ _Shared via Building Mistry App_`;
               );
             })()}
 
-            {/* Quick Measurement ON/OFF Switch Pill */}
-            <button
-              type="button"
-              className={`fp-canvas-dim-pill ${showDimensions ? 'active' : 'inactive'}`}
-              onClick={() => {
-                setShowDimensions(d => !d);
-                onNotify(`Measurements: ${!showDimensions ? 'ON' : 'OFF'}`, 'info');
-              }}
-              title={showDimensions ? 'Hide all measurement and dimension lines (M)' : 'Show all measurement and dimension lines (M)'}
-              id="fp-canvas-dim-toggle-pill"
-            >
-              <Ruler size={13} />
-              <span>{showDimensions ? 'Measurements: ON' : 'Measurements: OFF'}</span>
-            </button>
+            {/* Quick Measurement ON/OFF Switch Pill (Mobile Only - Desktop has header & CAD bar toggles) */}
+            {isMobile && (
+              <button
+                type="button"
+                className={`fp-canvas-dim-pill ${showDimensions ? 'active' : 'inactive'}`}
+                onClick={() => {
+                  setShowDimensions(d => !d);
+                  onNotify(`Measurements: ${!showDimensions ? 'ON' : 'OFF'}`, 'info');
+                }}
+                title={showDimensions ? 'Hide all measurement and dimension lines (M)' : 'Show all measurement and dimension lines (M)'}
+                id="fp-canvas-dim-toggle-pill"
+              >
+                <Ruler size={13} />
+                <span>{showDimensions ? 'Measurements: ON' : 'Measurements: OFF'}</span>
+              </button>
+            )}
           </div>
 
           {/* CAD Floating Parallel Distance Pill & Quick Distance Adjuster */}
@@ -8384,21 +8386,27 @@ _Shared via Building Mistry App_`;
                   </g>
                 )}
 
-                {/* Door label */}
-                {zoom > 0.6 && (
-                  <text
-                    x={dx}
-                    y={dy - wallThickPx / 2 - 6 * zoom}
-                    textAnchor="middle"
-                    fontSize={Math.max(7, 9 * zoom)}
-                    fill={viewMode === 'blueprint' ? '#93c5fd' : '#64748b'}
-                    fontFamily="'Outfit', sans-serif"
-                    fontWeight="600"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    {door.doorType} ({formatDim(door.width, unit)})
-                  </text>
-                )}
+                {/* Door label (Kept upright regardless of wall rotation) */}
+                {zoom > 0.6 && (() => {
+                  const normRot = ((door.rotation % 360) + 360) % 360;
+                  const isFlipped = normRot > 90 && normRot <= 270;
+                  const labelY = dy - wallThickPx / 2 - 6 * zoom;
+                  return (
+                    <text
+                      x={dx}
+                      y={labelY}
+                      transform={isFlipped ? `rotate(180, ${dx}, ${labelY})` : undefined}
+                      textAnchor="middle"
+                      fontSize={Math.max(7, 9 * zoom)}
+                      fill={viewMode === 'blueprint' ? '#93c5fd' : '#64748b'}
+                      fontFamily="'Outfit', sans-serif"
+                      fontWeight="600"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      {door.doorType} ({formatDim(door.width, unit)})
+                    </text>
+                  );
+                })()}
               </g>
             );
           })}
@@ -8513,21 +8521,27 @@ _Shared via Building Mistry App_`;
                   </>
                 )}
 
-                {/* Window Label */}
-                {zoom > 0.6 && (
-                  <text
-                    x={wx}
-                    y={wy + wallThickPx / 2 + 10 * zoom}
-                    textAnchor="middle"
-                    fontSize={Math.max(7, 9 * zoom)}
-                    fill={viewMode === 'blueprint' ? '#93c5fd' : '#0284c7'}
-                    fontFamily="'Outfit', sans-serif"
-                    fontWeight="700"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    W: {formatDim(win.width, unit)}
-                  </text>
-                )}
+                {/* Window Label (Kept upright regardless of wall rotation) */}
+                {zoom > 0.6 && (() => {
+                  const normRot = ((win.rotation % 360) + 360) % 360;
+                  const isFlipped = normRot > 90 && normRot <= 270;
+                  const labelY = wy + wallThickPx / 2 + 10 * zoom;
+                  return (
+                    <text
+                      x={wx}
+                      y={labelY}
+                      transform={isFlipped ? `rotate(180, ${wx}, ${labelY})` : undefined}
+                      textAnchor="middle"
+                      fontSize={Math.max(7, 9 * zoom)}
+                      fill={viewMode === 'blueprint' ? '#93c5fd' : '#0284c7'}
+                      fontFamily="'Outfit', sans-serif"
+                      fontWeight="700"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      W: {formatDim(win.width, unit)}
+                    </text>
+                  );
+                })()}
               </g>
             );
           })}

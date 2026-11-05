@@ -167,7 +167,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           id: 'settings',
           label: 'Settings',
           icon: <Settings size={20} />,
-          view: 'backup',
+          view: 'settings',
         },
       ];
 
@@ -195,7 +195,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       ];
 
   const isItemActive = (item: SidebarItem): boolean => {
-    if (item.id === 'settings' && currentView === 'backup') return false; // keep Backup distinct from Settings
     if (item.view === currentView) return true;
     if (item.view === 'dashboard' && currentView === 'dashboard') return true;
     if (item.view === 'my-sites' && currentView === 'my-sites') return true;

@@ -258,7 +258,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       </div>
 
       {/* 4 Real Data KPI Cards for Projects Dashboard */}
-      <div className="erp-kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="erp-kpi-grid">
         {/* Total Projects */}
         <div className="erp-kpi-card">
           <div className="erp-kpi-header">
@@ -519,14 +519,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         </div>
       ) : viewMode === 'grid' ? (
         /* 4. Modern Responsive Project Cards: Desktop 3-col, Tablet 2-col, Mobile 1-col */
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: '20px',
-          }}
-          className="projects-responsive-grid"
-        >
+        <div className="projects-responsive-grid">
           {filteredAndSortedProjects.map(summary => {
             const { site, totalExpense, totalPaid, balance, budget, progressPercentage, workerCount, materialCount } = summary;
             const statusClass = `status-${site.status.toLowerCase().replace(/\s+/g, '')}`;
@@ -659,22 +652,22 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </div>
 
                   {/* Financial Ribbon (Budget, Expenses, Balance Due) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: '#F8FAFC', padding: '10px', borderRadius: '10px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                    <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', background: '#F8FAFC', padding: '10px', borderRadius: '10px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
                       <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', fontWeight: 600 }}>Budget</span>
-                      <strong style={{ fontSize: '0.84rem', color: '#111827', fontFamily: 'var(--font-heading)' }}>
+                      <strong style={{ fontSize: '0.84rem', color: '#111827', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         {budget ? `₹${budget.toLocaleString('en-IN')}` : 'Unset'}
                       </strong>
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
                       <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', fontWeight: 600 }}>Spent</span>
-                      <strong style={{ fontSize: '0.84rem', color: '#2563EB', fontFamily: 'var(--font-heading)' }}>
+                      <strong style={{ fontSize: '0.84rem', color: '#2563EB', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         ₹{totalExpense.toLocaleString('en-IN')}
                       </strong>
                     </div>
-                    <div>
+                    <div style={{ minWidth: 0, overflow: 'hidden' }}>
                       <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', fontWeight: 600 }}>Balance Due</span>
-                      <strong style={{ fontSize: '0.84rem', color: balance > 0 ? '#DC2626' : '#16A34A', fontFamily: 'var(--font-heading)' }}>
+                      <strong style={{ fontSize: '0.84rem', color: balance > 0 ? '#DC2626' : '#16A34A', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         ₹{balance.toLocaleString('en-IN')}
                       </strong>
                     </div>

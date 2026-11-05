@@ -370,3 +370,60 @@ export function findDuplicateMovement(
     sameQty(convertStockQuantity(m.category, m.unit, m.quantity).quantity, candidateQuantity)
   );
 }
+
+export interface StockValueSummary {
+  totalStockValue: number;
+  pendingPurchasesValue: number;
+  totalMaterialsCount: number;
+}
+
+/**
+ * Canonical single source of truth for total material stock value calculation.
+ * Computes exact inventory value handling item quantity, rate/unitPrice, totalAmount fallback,
+ * pending supplier balances, and filters out deleted records.
+ */
+export function calculateStockValue(
+  materials: Material[] = [],
+  rodEntries: RodEntry[] = []
+): StockValueSummary {
+  let totalStockValue = 0;
+  let pendingPurchasesValue = 0;
+  let count = 0;
+
+  for (const m of materials) {
+    if (m.isDeleted) continue;
+    count++;
+    const qty = Number(m.quantity) || 0;
+    const rate = Number(m.rate ?? (m as any).unitPrice ?? 0);
+    const amount = Number(m.totalAmount);
+    const itemVal = !isNaN(amount) && amount > 0 ? amount : Math.max(0, qty * rate);
+    totalStockValue += itemVal;
+
+    const balance = Number(m.balance) || 0;
+    if (balance > 0) {
+      pendingPurchasesValue += balance;
+    }
+  }
+
+  for (const r of rodEntries) {
+    if (r.isDeleted) continue;
+    count++;
+    const weight = Number(r.weightKg) || 0;
+    const price = Number(r.ratePerKg ?? (r as any).pricePerKg ?? 0);
+    const amount = Number(r.totalAmount);
+    const itemVal = !isNaN(amount) && amount > 0 ? amount : Math.max(0, weight * price);
+    totalStockValue += itemVal;
+
+    const balance = Number(r.balance) || 0;
+    if (balance > 0) {
+      pendingPurchasesValue += balance;
+    }
+  }
+
+  return {
+    totalStockValue: Math.round(totalStockValue * 100) / 100,
+    pendingPurchasesValue: Math.round(pendingPurchasesValue * 100) / 100,
+    totalMaterialsCount: count,
+  };
+}
+

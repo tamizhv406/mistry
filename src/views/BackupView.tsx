@@ -9,12 +9,17 @@ import {
   Trash2,
   CheckCircle2,
   AlertTriangle,
+  Cloud,
+  CloudOff,
+  Clock,
+  RefreshCw,
 } from 'lucide-react';
 import { exportDatabaseBackup, importDatabaseBackup } from '../db/backup';
 import { loadDemoData } from '../db/seedData';
 import { db } from '../db/db';
 import type { User } from '../db/types';
 import { AccountPanel } from '../components/mobile/AccountPanel';
+import { getStorageSafetyStatus, recordBackupSuccess } from '../utils/backupStatus';
 
 interface BackupViewProps {
   user: User | null;
@@ -27,6 +32,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
   const [loadingImport, setLoadingImport] = useState(false);
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [clearingDemo, setClearingDemo] = useState(false);
+  const [safetyStatus, setSafetyStatus] = useState(() => getStorageSafetyStatus());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -37,7 +43,9 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
     setLoadingExport(true);
     try {
       await exportDatabaseBackup(user);
-      onNotify('Backup of records available to your account (.json) downloaded to your computer.', 'success');
+      const newTime = recordBackupSuccess();
+      setSafetyStatus(prev => ({ ...prev, lastBackupFormatted: newTime }));
+      onNotify('Complete JSON backup downloaded safely to your computer.', 'success');
     } catch (err: any) {
       onNotify('Backup export failed: ' + err.message, 'error');
     } finally {
@@ -107,6 +115,58 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
       </div>
 
       <AccountPanel onNotify={onNotify} />
+
+      {/* Transparent System Status Ribbon */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '12px',
+        marginBottom: '20px',
+      }}>
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: '#ecfdf5', color: '#059669', padding: '8px', borderRadius: '8px' }}>
+            <HardDrive size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Local Storage</span>
+            <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>IndexedDB (Active)</strong>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: safetyStatus.isCloudActive ? '#eff6ff' : '#fef2f2', color: safetyStatus.isCloudActive ? '#2563eb' : '#dc2626', padding: '8px', borderRadius: '8px' }}>
+            {safetyStatus.isCloudActive ? <Cloud size={20} /> : <CloudOff size={20} />}
+          </div>
+          <div>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Cloud Sync</span>
+            <strong style={{ fontSize: '0.85rem', color: safetyStatus.isCloudActive ? '#2563eb' : '#b91c1c' }}>
+              {safetyStatus.isCloudActive ? 'Enabled & Active' : 'Offline / Disabled'}
+            </strong>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: '#f8fafc', color: '#475569', padding: '8px', borderRadius: '8px' }}>
+            <Database size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Cloud Backend</span>
+            <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+              {safetyStatus.isCloudConfigured ? 'Supabase Configured' : 'Not Configured (Local)'}
+            </strong>
+          </div>
+        </div>
+
+        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: '#fef3c7', color: '#d97706', padding: '8px', borderRadius: '8px' }}>
+            <Clock size={20} />
+          </div>
+          <div>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Last Backup Time</span>
+            <strong style={{ fontSize: '0.82rem', color: '#0f172a' }}>{safetyStatus.lastBackupFormatted}</strong>
+          </div>
+        </div>
+      </div>
 
       {/* Safety Info Card */}
       <div style={{

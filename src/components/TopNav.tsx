@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Wifi,
   WifiOff,
+  FileCode,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -63,8 +64,10 @@ export const TopNav: React.FC<TopNavProps> = ({
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
 
@@ -190,6 +193,7 @@ export const TopNav: React.FC<TopNavProps> = ({
     reports: 'Financial & Operational Reports',
     estimator: 'Building Cost Calculator',
     backup: 'Backup & Data Management',
+    settings: 'Application Settings & Preferences',
     admin: 'Administrator Control Center',
     trash: 'Recycle Bin & Safe Recovery',
   };
@@ -389,6 +393,20 @@ export const TopNav: React.FC<TopNavProps> = ({
 
       {/* Right: Notifications, Help, User Profile */}
       <div className="erp-top-nav-right">
+        {/* Mobile Search Toggle (< 900px) */}
+        <button
+          type="button"
+          className="erp-icon-btn erp-mobile-search-btn"
+          onClick={() => {
+            setIsMobileSearchOpen(true);
+            setTimeout(() => mobileSearchInputRef.current?.focus(), 80);
+          }}
+          title="Search"
+          aria-label="Search records"
+        >
+          <Search size={18} />
+        </button>
+
         {/* Help Button */}
         <div className="relative">
           <button
@@ -441,9 +459,9 @@ export const TopNav: React.FC<TopNavProps> = ({
                   </div>
 
                   <div className="erp-help-section">
-                    <h4>Offline-First Guarantee</h4>
+                    <h4>Data Safety & Offline-First Storage</h4>
                     <p className="text-xs text-slate-500">
-                      Every transaction is saved to your local high-performance browser database immediately and works 100% offline. When internet is connected, records sync automatically to the cloud.
+                      All your projects, attendance ledgers, materials and expense records are stored securely on this device inside your browser's private database (IndexedDB). It works 100% offline without needing internet. When Supabase cloud backend is configured, records sync to the cloud. You can also export a complete JSON backup at any time from Backup & Data.
                     </p>
                   </div>
                 </div>
@@ -630,6 +648,162 @@ export const TopNav: React.FC<TopNavProps> = ({
           )}
         </div>
       </div>
+
+      {/* Mobile Search Modal Dialog (< 900px) */}
+      {isMobileSearchOpen && (
+        <div className="erp-help-modal-overlay" onClick={() => setIsMobileSearchOpen(false)}>
+          <div
+            className="erp-mobile-search-dialog"
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Global search"
+          >
+            <div className="erp-mobile-search-header">
+              <Search size={18} className="text-slate-400" />
+              <input
+                ref={mobileSearchInputRef}
+                type="text"
+                className="erp-mobile-search-input"
+                placeholder="Search projects, workers, materials, plans..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              <button
+                type="button"
+                className="erp-mobile-search-close"
+                onClick={() => setIsMobileSearchOpen(false)}
+                aria-label="Close search"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="erp-mobile-search-results">
+              {!searchQuery.trim() ? (
+                <div className="erp-search-empty">
+                  <Search size={24} className="text-slate-400 mb-2" />
+                  <p className="text-sm font-semibold text-slate-700">Type to search anything</p>
+                  <span className="text-xs text-slate-400">Search projects, workers, inventory and floor plans in real time.</span>
+                </div>
+              ) : !hasSearchResults ? (
+                <div className="erp-search-empty">
+                  <p className="text-sm font-semibold text-slate-700">No matching records found for "{searchQuery}"</p>
+                  <span className="text-xs text-slate-400">Check spelling or try a shorter name.</span>
+                </div>
+              ) : (
+                <div className="erp-search-groups p-2">
+                  {matchingSites.length > 0 && (
+                    <div className="erp-search-group">
+                      <span className="erp-group-title">
+                        <Building2 size={13} /> Sites ({matchingSites.length})
+                      </span>
+                      {matchingSites.map(s => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className="erp-search-item"
+                          onClick={() => {
+                            onNavigate('site-detail', s.id);
+                            setIsMobileSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                        >
+                          <div className="erp-item-main">
+                            <strong className="erp-item-title">{s.name}</strong>
+                            <span className="erp-item-sub">{s.area || s.address}</span>
+                          </div>
+                          <span className={`erp-badge-status status-${s.status.toLowerCase().replace(/\s+/g, '')}`}>
+                            {s.status}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchingWorkers.length > 0 && (
+                    <div className="erp-search-group">
+                      <span className="erp-group-title">
+                        <Users size={13} /> Workforce ({matchingWorkers.length})
+                      </span>
+                      {matchingWorkers.map(w => (
+                        <button
+                          key={w.id}
+                          type="button"
+                          className="erp-search-item"
+                          onClick={() => {
+                            onNavigate('labour', w.siteId);
+                            setIsMobileSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                        >
+                          <div className="erp-item-main">
+                            <strong className="erp-item-title">{w.name}</strong>
+                            <span className="erp-item-sub">{w.category} • ₹{w.dailyWage}/day</span>
+                          </div>
+                          <span className="erp-item-action">View Labour</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchingMaterials.length > 0 && (
+                    <div className="erp-search-group">
+                      <span className="erp-group-title">
+                        <Layers size={13} /> Inventory ({matchingMaterials.length})
+                      </span>
+                      {matchingMaterials.map(m => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          className="erp-search-item"
+                          onClick={() => {
+                            onNavigate('stock', m.siteId);
+                            setIsMobileSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                        >
+                          <div className="erp-item-main">
+                            <strong className="erp-item-title">{m.materialName || m.category}</strong>
+                            <span className="erp-item-sub">{m.quantity} {m.unit}</span>
+                          </div>
+                          <span className="erp-item-price">₹{Number(m.totalAmount || 0).toLocaleString('en-IN')}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {matchingPlans.length > 0 && (
+                    <div className="erp-search-group">
+                      <span className="erp-group-title">
+                        <FileCode size={13} /> Plans ({matchingPlans.length})
+                      </span>
+                      {matchingPlans.map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="erp-search-item"
+                          onClick={() => {
+                            onNavigate('floor-plans', p.id);
+                            setIsMobileSearchOpen(false);
+                            setSearchQuery('');
+                          }}
+                        >
+                          <div className="erp-item-main">
+                            <strong className="erp-item-title">{p.buildingName || 'Floor Plan'}</strong>
+                            <span className="erp-item-sub">{p.floors?.length || 1} floor(s)</span>
+                          </div>
+                          <span className="erp-item-action">Open Plan</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

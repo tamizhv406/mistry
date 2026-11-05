@@ -26,7 +26,7 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { Material, MaterialCategory, RodEntry, Site, StockMovement, User } from '../db/types';
-import { buildStock, stockItemKey, type StockItem, type StockLine } from '../domain/stock';
+import { buildStock, calculateStockValue, stockItemKey, type StockItem, type StockLine } from '../domain/stock';
 import { MATERIAL_GROUPS, materialGroupId } from '../domain/catalog';
 import { formatDay, todayKey } from '../utils/datetime';
 import { formatINR, formatQty, roundMoney } from '../utils/money';
@@ -104,20 +104,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
   // Compute Analytics Metrics
   const metrics = useMemo(() => {
-    let totalPurchasedVal = 0;
-    let pendingPurchasesVal = 0;
+    const stockVal = calculateStockValue(materials, rodEntries);
     let lowStockCount = 0;
     let outOfStockCount = 0;
-
-    materials.forEach(m => {
-      totalPurchasedVal += m.totalAmount || 0;
-      if (m.balance > 0) pendingPurchasesVal += m.balance;
-    });
-
-    rodEntries.forEach(r => {
-      totalPurchasedVal += r.totalAmount || 0;
-      if (r.balance > 0) pendingPurchasesVal += r.balance;
-    });
 
     stockItems.forEach(s => {
       if (s.onHand <= 0) {
@@ -130,8 +119,8 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
     return {
       totalMaterialsCount: stockItems.length,
-      totalStockValue: totalPurchasedVal,
-      pendingPurchasesValue: pendingPurchasesVal,
+      totalStockValue: stockVal.totalStockValue,
+      pendingPurchasesValue: stockVal.pendingPurchasesValue,
       lowStockCount,
       outOfStockCount,
     };
