@@ -25,6 +25,8 @@ import { AdminDashboardView } from './views/AdminDashboardView';
 import { FloorPlanListView } from './views/FloorPlanListView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FloorPlanEditorView } from './views/FloorPlanEditorView';
+import { MaterialsView } from './views/MaterialsView';
+import { AttendanceSalaryView } from './views/AttendanceSalaryView';
 import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { checkPasswordRecoveryUrl, isSupabaseConfigured, supabase } from './services/supabase';
@@ -659,20 +661,12 @@ export function App() {
           />
         )}
 
-        {currentView === 'labour' && selectedSiteId && (
-          <LabourView
+        {currentView === 'labour' && currentUser && (
+          <AttendanceSalaryView
             user={currentUser}
-            siteId={selectedSiteId}
-            onBack={() => handleNavigate('dashboard')}
-            onOpenWorker={id => {
-              setSelectedWorkerId(id);
-              setCurrentView('worker');
-              window.scrollTo(0, 0);
-            }}
-            onAddWorker={() => {
-              setWorkerToEdit(null);
-              setWorkerModalOpen(true);
-            }}
+            sites={userSites}
+            initialSiteId={selectedSiteId}
+            onNavigateSiteDetail={(sId, tab) => handleNavigate('site-detail', sId, tab)}
             onNotify={addToast}
           />
         )}
@@ -694,16 +688,12 @@ export function App() {
           />
         )}
 
-        {currentView === 'stock' && selectedSiteId && (
-          <StockView
+        {currentView === 'stock' && currentUser && (
+          <MaterialsView
             user={currentUser}
-            siteId={selectedSiteId}
-            onBack={() => handleNavigate('dashboard')}
-            onOpenSteelPurchase={() => {
-              setRodToEdit(null);
-              setRodModalOpen(true);
-            }}
-            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'materials')}
+            sites={userSites}
+            initialSiteId={selectedSiteId}
+            onNavigateSiteDetail={(sId, tab) => handleNavigate('site-detail', sId, tab)}
             onNotify={addToast}
           />
         )}
