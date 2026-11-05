@@ -1,0 +1,257 @@
+/* ================================================================
+   Mistry design system: slate on a light background.
+   Loaded after every other stylesheet, so these rules win.
+
+   Background  #F8FAFC      Cards  #FFFFFF, 1px #E2E8F0
+   Primary     #0F172A      (actions and main text)
+   Walls       #1E293B      Rooms  rgba(248, 250, 252, 0.85)
+   Selection   #2563EB      Warnings stay amber, errors red.
+   ================================================================ */
+
+:root {
+  --ds-bg: #f8fafc;
+  --ds-card: #ffffff;
+  --ds-line: #e2e8f0;
+  --ds-line-strong: #cbd5e1;
+  --ds-ink: #0f172a;
+  --ds-ink-2: #334155;
+  --ds-ink-3: #64748b;
+  --ds-primary: #0f172a;
+  --ds-primary-hover: #1e293b;
+  --ds-select: #2563eb;
+}
+
+html, body { background: var(--ds-bg); color: var(--ds-ink); }
+
+/* ---- Floor planner, phone: one flat bar docked at the bottom ---------------------------- */
+@media (max-width: 768px) {
+  .fp-editor-root {
+    --fp-bar-h: 60px;
+    --fp-above-bar: calc(var(--fp-bar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+  }
+  .fp-editor-root .fp-mobile-toolbar {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 0 env(safe-area-inset-bottom, 0px);
+    background: var(--ds-card);
+    border-top: 1px solid var(--ds-line);
+    box-shadow: 0 -1px 0 rgba(15, 23, 42, 0.02);
+    pointer-events: auto;
+  }
+  .fp-editor-root .fp-mobile-tool-pill {
+    height: var(--fp-bar-h);
+    padding: 5px 4px;
+    gap: 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .fp-editor-root .fp-mobile-tool-btn {
+    height: 50px;
+    min-height: 50px;
+    min-width: 0;
+    border-radius: 10px;
+    color: var(--ds-ink-3);
+  }
+  .fp-editor-root .fp-mobile-tool-btn.active {
+    background: var(--ds-primary);
+    color: #ffffff;
+  }
+  .fp-editor-root .fp-mobile-tool-btn.active svg { color: #ffffff; }
+  .fp-editor-root .fp-mobile-tool-label { font-size: 0.66rem; letter-spacing: 0; }
+  .fp-editor-root .fp-mobile-tool-fab { display: none; }
+
+  /* The selection bar: always one row that fits the screen; extra actions scroll sideways. */
+  .fp-editor-root .fp-bottom-property-dock.fp-dock-minimized {
+    right: 10px;
+    max-width: none;
+    overflow: hidden;
+    background: var(--ds-card);
+    border: 1px solid var(--ds-line);
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+  }
+  .fp-editor-root .fp-dock-mini-badge { flex: 0 1 auto; max-width: 30%; }
+  .fp-editor-root .fp-dock-mini-type { color: var(--ds-ink); }
+  .fp-editor-root .fp-dock-mini-actions {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .fp-editor-root .fp-dock-mini-actions::-webkit-scrollbar { display: none; }
+  .fp-editor-root .fp-dock-mini-btn { flex: 0 0 auto; }
+}
+
+/* ---- Floor planner, every size ---------------------------------------------------------- */
+.fp-editor-root .fp-fab-ai {
+  width: auto;
+  min-width: 44px;
+  height: 40px;
+  padding: 0 12px 0 10px;
+  gap: 6px;
+  border-radius: 999px;
+  background: var(--ds-primary);
+  color: #ffffff;
+  border: 0;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  display: inline-flex;
+  align-items: center;
+}
+.fp-editor-root .fp-fab-ai svg { color: #ffffff; }
+.fp-fab-ai-label { font: 800 0.8rem/1 var(--font-body, system-ui); letter-spacing: 0.3px; }
+
+.fp-editor-root .fp-dock-mini-btn {
+  border: 1px solid var(--ds-line);
+  background: var(--ds-card);
+  color: var(--ds-ink-2);
+}
+.fp-editor-root .fp-dock-mini-btn:hover:not(:disabled) { border-color: var(--ds-line-strong); color: var(--ds-ink); }
+.fp-editor-root .fp-dock-mini-btn.danger { color: #b91c1c; }
+
+/* The notice after an edit ("Split into …  Undo"): plain card, slate Undo. */
+.fp-sketch-chip {
+  background: var(--ds-card);
+  border: 1px solid var(--ds-line);
+  color: var(--ds-ink);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+}
+.fp-sketch-chip button {
+  color: var(--ds-ink);
+  border-color: var(--ds-line-strong);
+}
+
+/* ---- Building Calculator: large, plain choices ----------------------------------------------- */
+.calc-steps { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.calc-question { display: flex; align-items: flex-start; gap: 8px; line-height: 1.3; color: var(--ds-ink); }
+.calc-question svg { flex-shrink: 0; margin-top: 2px; color: var(--ds-ink-2); }
+.calc-help { margin: -4px 0 12px; color: var(--ds-ink-3); font-size: 0.92rem; line-height: 1.45; }
+.calc-big-input { font-size: 1.35rem !important; font-weight: 700; min-height: 54px; }
+.calc-presets { margin-top: 10px; flex-wrap: wrap; overflow: visible; }
+
+.calc-choices { display: grid; gap: 10px; }
+.calc-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 88px;
+  padding: 14px;
+  text-align: left;
+  background: var(--ds-card);
+  border: 1px solid var(--ds-line);
+  border-radius: 14px;
+  color: var(--ds-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.calc-choice:hover { border-color: var(--ds-line-strong); }
+.calc-choice.is-picked { border: 2px solid var(--ds-primary); padding: 13px; background: #f8fafc; }
+.calc-choice-icon {
+  width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: #f1f5f9; color: var(--ds-ink);
+}
+.calc-choice.is-picked .calc-choice-icon { background: var(--ds-primary); color: #ffffff; }
+.calc-choice-text { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.calc-choice-title { font-weight: 800; font-size: 1rem; }
+.calc-choice-detail { color: var(--ds-ink-3); font-size: 0.86rem; line-height: 1.4; }
+.calc-choice-mark {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--ds-line-strong);
+  display: grid; place-items: center; color: #ffffff;
+}
+.calc-choice.is-picked .calc-choice-mark { background: var(--ds-primary); border-color: var(--ds-primary); }
+
+.calc-floor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+.calc-floor {
+  min-height: 84px;
+  padding: 10px 6px;
+  display: grid; place-items: center; gap: 2px;
+  background: var(--ds-card);
+  border: 1px solid var(--ds-line);
+  border-radius: 14px;
+  color: var(--ds-ink);
+  cursor: pointer;
+}
+.calc-floor.is-picked { background: var(--ds-primary); border-color: var(--ds-primary); color: #ffffff; }
+.calc-floor-num { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+.calc-floor-label { font-size: 0.78rem; font-weight: 600; opacity: 0.85; }
+
+.calc-toggle {
+  width: 100%;
+  min-height: 44px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: transparent; border: 0; padding: 0;
+  font: 700 0.95rem/1.3 var(--font-body, system-ui); color: var(--ds-ink); text-align: left; cursor: pointer;
+}
+.calc-toggle > span { display: inline-flex; align-items: center; gap: 8px; }
+.calc-toggle svg.is-open { transform: rotate(180deg); }
+
+.calc-hero-note {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.calc-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.calc-summary span {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--ds-card); border: 1px solid var(--ds-line);
+  font-size: 0.82rem; font-weight: 600; color: var(--ds-ink-2);
+}
+.calc-excluded { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.calc-excluded li {
+  padding: 5px 10px; border-radius: 999px;
+  background: #f1f5f9; color: var(--ds-ink-2);
+  font-size: 0.85rem; font-weight: 600;
+}
+.calc-nav .m-btn { flex: 1; }
+
+/* ---- App navigation (phone): one flat, compact bar along the bottom edge -------------------- */
+@media (max-width: 768px) {
+  :root { --m-nav-h: 60px; }
+  .m-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(60px + var(--m-safe-b));
+    padding: 4px 4px var(--m-safe-b);
+    background: var(--ds-card);
+    border: 0;
+    border-top: 1px solid var(--ds-line);
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+.m-nav-btn {
+  height: 52px;
+  border-radius: 10px;
+  color: var(--ds-ink-3);
+  font-size: 0.7rem;
+}
+.m-nav-btn[aria-current='page'] {
+  background: transparent;
+  color: var(--ds-ink);
+  font-weight: 800;
+}
+.m-nav-btn[aria-current='page']::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 28%;
+  right: 28%;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--ds-primary);
+}

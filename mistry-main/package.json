@@ -1,0 +1,40 @@
+{
+  "name": "mistry",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node --max-old-space-size=4096 ./node_modules/typescript/bin/tsc -b && node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build",
+    "test": "tsx tests/test_domain_logic.ts && tsx tests/test_records_service.ts && tsx tests/test_floor_plan_core.ts && tsx tests/test_floor_plan_sketch.ts && tsx tests/test_floor_plan_measure.ts && tsx tests/test_floor_plan_persistence.ts && tsx tests/test_cloud_sync.ts && tsx tests/test_mistry_core.ts && tsx tests/test_pwa_mobile.ts && tsx tests/test_admin_recovery.ts && tsx tests/test_backup_access.ts && tsx tests/test_audit_fixes.ts && tsx tests/test_floor_plan_modal.ts && tsx tests/test_floor_plan_cad_suite.ts && node tests/test_planner5d_room_dimensions.js && tsx tests/test_ai_copilot_geometry.ts && tsx tests/test_ai_sketch_understanding.ts && tsx tests/test_ai_assistant_suite.ts && tsx tests/test_cad_wall_openings_and_canvas.ts && tsx tests/test_auth_recovery_and_ai_cad.ts && tsx tests/test_mobile_cad_redesign.ts && tsx tests/test_professional_cad_suite.ts && tsx tests/test_stock_rules.ts && tsx tests/test_estimate_wizard.ts && tsx tests/test_plan_editing.ts && tsx tests/test_plan_commands.ts && tsx tests/test_ai_plan_spec.ts && tsx tests/test_ai_plan_assistant.ts && tsx tests/test_floor_plan_professional_suite.ts && tsx tests/test_floor_plan_shape_library.ts && tsx tests/test_cad_parallel_wall_guide.ts && tsx tests/test_pdf_export_suite.ts && tsx tests/test_wall_editing_resizing_rotation.ts && tsx tests/test_cad_polygon_room_editing.ts && tsx tests/test_wall_editing_toolbar_layout.ts && tsx tests/test_independent_wall_movement.ts && tsx tests/test_wall_dimension_spacing.ts && tsx tests/test_bottom_status_and_cad_palette.ts && tsx tests/test_erp_phase1_audit_and_schema.ts && tsx tests/test_erp_phase2_and_3_features.ts && tsx tests/test_erp_phase4_to_8.ts",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist --dotfiles"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@supabase/supabase-js": "^2.116.0",
+    "dexie": "^4.4.6",
+    "dexie-react-hooks": "^4.4.0",
+    "lucide-react": "^1.45.0",
+    "motion": "^13.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "three": "^0.177.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.177.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "fake-indexeddb": "^6.2.5",
+    "gh-pages": "^6.3.0",
+    "oxlint": "^1.81.0",
+    "tsx": "^4.23.13",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  }
+}

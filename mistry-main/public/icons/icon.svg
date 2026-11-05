@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="50%" stop-color="#090d16" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#f59e0b" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)"/>
+  <rect x="8" y="8" width="496" height="496" rx="102" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.4"/>
+
+  <!-- Construction Geometric Motif -->
+  <g filter="url(#glow)">
+    <!-- Central Construction Tower / Structure -->
+    <path d="M 256,70 L 390,145 L 390,300 L 256,380 L 122,300 L 122,145 Z" fill="url(#shieldGrad)" stroke="url(#goldGrad)" stroke-width="8"/>
+    
+    <!-- Floor Levels -->
+    <line x1="140" y1="190" x2="372" y2="190" stroke="url(#goldGrad)" stroke-width="5" stroke-opacity="0.8"/>
+    <line x1="140" y1="245" x2="372" y2="245" stroke="url(#goldGrad)" stroke-width="5" stroke-opacity="0.8"/>
+    <line x1="155" y1="300" x2="357" y2="300" stroke="url(#goldGrad)" stroke-width="5" stroke-opacity="0.8"/>
+
+    <!-- Pillar Columns -->
+    <line x1="200" y1="145" x2="200" y2="345" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.6"/>
+    <line x1="256" y1="70" x2="256" y2="380" stroke="url(#goldGrad)" stroke-width="6"/>
+    <line x1="312" y1="145" x2="312" y2="345" stroke="url(#goldGrad)" stroke-width="4" stroke-opacity="0.6"/>
+
+    <!-- Trowel & Hammer Emblems in Center -->
+    <circle cx="256" cy="245" r="44" fill="#0f172a" stroke="url(#accentGrad)" stroke-width="5"/>
+    <!-- M Logo for Mistry -->
+    <path d="M 234,265 L 234,228 L 256,248 L 278,228 L 278,265" fill="none" stroke="url(#accentGrad)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Base Brick Foundation Blocks -->
+  <g fill="url(#goldGrad)" opacity="0.9">
+    <rect x="156" y="398" width="56" height="22" rx="4"/>
+    <rect x="220" y="398" width="72" height="22" rx="4"/>
+    <rect x="300" y="398" width="56" height="22" rx="4"/>
+
+    <rect x="186" y="426" width="66" height="20" rx="4"/>
+    <rect x="260" y="426" width="66" height="20" rx="4"/>
+  </g>
+
+  <!-- Typography -->
+  <text x="256" y="478" font-family="'Outfit', system-ui, -apple-system, sans-serif" font-size="28" font-weight="900" fill="#f59e0b" text-anchor="middle" letter-spacing="4">MISTRY</text>
+</svg>

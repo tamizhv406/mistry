@@ -1,0 +1,46 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+scratch/
+floor-plan-creator-application/
+building-mistry-floorplanner-updated*/
+
+
+# Android signing and local build settings (never commit)
+android/keystore.properties
+android/local.properties
+*.jks
+*.keystore
+.env
+.env.*
+!.env.example
+
+# Vercel CLI link to the hosting project (local to this computer)
+.vercel
+
+# Other people's projects downloaded for reference; not part of this app
+.github/workflows/Home_View-main/
+.github/workflows/PlaceIt-master/
+
+.vercel
