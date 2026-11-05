@@ -2122,6 +2122,21 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
 }
 
+.app-shell-main-immersive {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.app-shell-main-immersive .app-shell-content {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .app-shell-content { flex: 1; }
 
 /* Mobile header */
@@ -7399,7 +7414,7 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  z-index: 35;
+  z-index: 20;
   pointer-events: auto;
 }
 
@@ -9934,10 +9949,10 @@ button.fp-mobile-zoom-text {
 /* ── Floating Bottom CAD Essential Tools Dock: Select, Wall, Eraser ── */
 .fp-bottom-essential-dock {
   position: absolute;
-  bottom: 22px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 50;
+  z-index: 99;
   display: flex;
   align-items: center;
   gap: 4px;

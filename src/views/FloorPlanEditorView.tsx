@@ -3983,8 +3983,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
 
     if (resizingWall) {
-      if (dragStartStateRef.current !== editorState) {
-        pushHistory(editorState);
+      const normalised = normaliseFloor(editorState, unit, () => uid('room'));
+      const finalState = normalised.state;
+      if (normalised.roomsAdded.length > 0 || normalised.roomsRemoved.length > 0 || normalised.openingsRemoved > 0) {
+        dispatch({ type: 'SET_STATE', payload: finalState });
+      }
+      if (dragStartStateRef.current !== finalState) {
+        pushHistory(finalState);
         markUnsaved();
       }
       dragStartStateRef.current = null;
@@ -4052,8 +4057,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
     dragCandidateRef.current = null;
     if (isDragging && selectedElement) {
-      if (dragStartStateRef.current !== editorState) {
-        pushHistory(editorState);
+      let finalState = editorState;
+      if (selectedElement.type === 'wall') {
+        const normalised = normaliseFloor(editorState, unit, () => uid('room'));
+        finalState = normalised.state;
+        if (normalised.roomsAdded.length > 0 || normalised.roomsRemoved.length > 0 || normalised.openingsRemoved > 0) {
+          dispatch({ type: 'SET_STATE', payload: finalState });
+        }
+      }
+      if (dragStartStateRef.current !== finalState) {
+        pushHistory(finalState);
         markUnsaved();
       }
       dragStartStateRef.current = null;
@@ -7735,30 +7748,67 @@ _Shared via Building Mistry App_`;
                   </g>
                 )}
 
-                {/* 3. Center Label Pill matching Planner 5D Screenshot: "Room (24.980 m2)" */}
-                <g style={{ pointerEvents: 'none' }}>
-                  <rect
-                    x={rx + rw / 2 - Math.max(52, (room.label.length * 4.2 + 28) * zoom)}
-                    y={ry + rh / 2 - 11 * zoom}
-                    width={Math.max(104, (room.label.length * 8.4 + 56) * zoom)}
-                    height={22 * zoom}
-                    rx={6 * zoom}
-                    fill="rgba(255, 255, 255, 0.94)"
-                    stroke="#cbd5e1"
-                    strokeWidth={1}
-                  />
-                  <text
-                    x={rx + rw / 2}
-                    y={ry + rh / 2 + 4 * zoom}
-                    textAnchor="middle"
-                    fontSize={Math.max(8.5, 10.5 * zoom)}
-                    fill="#0f172a"
-                    fontFamily="'Outfit', sans-serif"
-                    fontWeight="700"
-                  >
-                    {room.label} ({computeRoomArea(room, unit)})
-                  </text>
-                </g>
+                {/* 3. Center Label Pill: Centered in room polygon without label collisions */}
+                {(() => {
+                  const polyCenter = (() => {
+                    if (room.polygonPoints && room.polygonPoints.length >= 3) {
+                      let sumX = 0, sumY = 0;
+                      for (const p of room.polygonPoints) {
+                        sumX += p.x;
+                        sumY += p.y;
+                      }
+                      const n = room.polygonPoints.length;
+                      return {
+                        x: (sumX / n) * GRID_SIZE_PX * zoom + panX,
+                        y: (sumY / n) * GRID_SIZE_PX * zoom + panY,
+                      };
+                    }
+                    return {
+                      x: rx + rw / 2,
+                      y: ry + rh / 2,
+                    };
+                  })();
+
+                  const cleanLabel = (() => {
+                    const lbl = (room.label || room.roomType || 'Room').trim();
+                    if (/\(\s*[\d.]+\s*(sq\.?ft|m²|sqm|sq\.?m)\s*\)/i.test(lbl)) {
+                      return lbl;
+                    }
+                    return `${lbl} (${computeRoomArea(room, unit)})`;
+                  })();
+
+                  const maxAllowedW = Math.max(38, rw - 8);
+                  const idealW = Math.max(48, (cleanLabel.length * 4.4 + 20) * zoom);
+                  const pillW = Math.min(idealW, maxAllowedW);
+                  const pillH = Math.min(22 * zoom, Math.max(14, rh * 0.8));
+                  const fontSize = Math.max(7, Math.min(10.5 * zoom, pillW / (cleanLabel.length * 0.58)));
+
+                  return (
+                    <g style={{ pointerEvents: 'none' }}>
+                      <rect
+                        x={polyCenter.x - pillW / 2}
+                        y={polyCenter.y - pillH / 2}
+                        width={pillW}
+                        height={pillH}
+                        rx={Math.min(6 * zoom, pillH / 2)}
+                        fill="rgba(255, 255, 255, 0.94)"
+                        stroke="#cbd5e1"
+                        strokeWidth={1}
+                      />
+                      <text
+                        x={polyCenter.x}
+                        y={polyCenter.y + fontSize * 0.35}
+                        textAnchor="middle"
+                        fontSize={fontSize}
+                        fill="#0f172a"
+                        fontFamily="'Outfit', sans-serif"
+                        fontWeight="700"
+                      >
+                        {cleanLabel}
+                      </text>
+                    </g>
+                  );
+                })()}
 
                 {/* Clear size inside a wall-enclosed room (green): the space between the inner
                     wall faces. Wall lengths are the red lines outside the walls. */}

@@ -110,15 +110,17 @@ export const AppShell: React.FC<AppShellProps> = ({
       )}
 
       {/* Main Content Area */}
-      <div className="app-shell-main">
-        {/* Top Navigation Bar */}
-        <TopNav
+      <div className={`app-shell-main ${currentView === 'floor-plan-editor' ? 'app-shell-main-immersive' : ''}`}>
+        {/* Top Navigation Bar - Hidden in Floor Plan Editor */}
+        {currentView !== 'floor-plan-editor' && (
+          <TopNav
           user={user}
           currentView={currentView}
           onNavigate={onNavigate}
           onLogout={onLogout}
           onToggleSidebarMobile={() => setMobileDrawerOpen(prev => !prev)}
-        />
+          />
+        )}
 
         {/* Network Status Banners */}
         {!isOnline && (
