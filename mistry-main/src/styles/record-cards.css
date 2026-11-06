@@ -276,3 +276,157 @@
     transition: none;
   }
 }
+
+/* ── Light & Minimalist Compact Theme for 'Tea & Snacks' Dashboard Cards ── */
+.tea-snacks-card,
+.interactive-card.tea-snacks-card,
+.tea-snacks-section .interactive-card,
+.tea-snacks-card-grid .interactive-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  gap: 8px !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05), 0 4px 10px rgba(15, 23, 42, 0.03) !important;
+  transition: all 0.16s ease !important;
+}
+
+.tea-snacks-card:hover,
+.interactive-card.tea-snacks-card:hover,
+.tea-snacks-section .interactive-card:hover,
+.tea-snacks-card-grid .interactive-card:hover {
+  background: #ffffff !important;
+  border-color: #f59e0b !important;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+  transform: translateY(-2px) !important;
+}
+
+.tea-snacks-card .interactive-card-heading,
+.interactive-card.tea-snacks-card .interactive-card-heading,
+.tea-snacks-section .interactive-card .interactive-card-heading,
+.tea-snacks-card-grid .interactive-card .interactive-card-heading {
+  grid-template-columns: 52px minmax(0, 1fr) 26px !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+.tea-snacks-card .interactive-card-image,
+.interactive-card.tea-snacks-card .interactive-card-image,
+.tea-snacks-section .interactive-card .interactive-card-image,
+.tea-snacks-card-grid .interactive-card .interactive-card-image {
+  width: 52px !important;
+  height: 52px !important;
+  border-radius: 8px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+}
+
+.tea-snacks-card .interactive-card-heading-copy,
+.interactive-card.tea-snacks-card .interactive-card-heading-copy,
+.tea-snacks-section .interactive-card .interactive-card-heading-copy,
+.tea-snacks-card-grid .interactive-card .interactive-card-heading-copy {
+  gap: 2px !important;
+}
+
+.tea-snacks-card .interactive-card-title,
+.interactive-card.tea-snacks-card .interactive-card-title,
+.tea-snacks-section .interactive-card .interactive-card-title,
+.tea-snacks-card-grid .interactive-card .interactive-card-title {
+  color: #0f172a !important;
+  font-size: 0.88rem !important;
+  font-weight: 750 !important;
+}
+
+.tea-snacks-card .interactive-card-description,
+.interactive-card.tea-snacks-card .interactive-card-description,
+.tea-snacks-section .interactive-card .interactive-card-description,
+.tea-snacks-card-grid .interactive-card .interactive-card-description {
+  color: #64748b !important;
+  font-size: 0.74rem !important;
+  line-height: 1.3 !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 1 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+}
+
+.tea-snacks-card .interactive-card-icon,
+.interactive-card.tea-snacks-card .interactive-card-icon,
+.tea-snacks-section .interactive-card .interactive-card-icon,
+.tea-snacks-card-grid .interactive-card .interactive-card-icon {
+  width: 24px !important;
+  height: 24px !important;
+  flex: 0 0 24px !important;
+  background: #fff7ed !important;
+  border: 1px solid #fed7aa !important;
+  color: #ea580c !important;
+  border-radius: 6px !important;
+}
+
+.tea-snacks-card .interactive-card-arrow,
+.interactive-card.tea-snacks-card .interactive-card-arrow,
+.tea-snacks-section .interactive-card .interactive-card-arrow,
+.tea-snacks-card-grid .interactive-card .interactive-card-arrow {
+  width: 26px !important;
+  height: 26px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #ea580c !important;
+  border-radius: 6px !important;
+}
+
+.tea-snacks-card .interactive-card-body,
+.interactive-card.tea-snacks-card .interactive-card-body,
+.tea-snacks-section .interactive-card .interactive-card-body,
+.tea-snacks-card-grid .interactive-card .interactive-card-body {
+  gap: 6px !important;
+}
+
+.tea-snacks-card .interactive-card-stats,
+.interactive-card.tea-snacks-card .interactive-card-stats,
+.tea-snacks-section .interactive-card .interactive-card-stats,
+.tea-snacks-card-grid .interactive-card .interactive-card-stats {
+  gap: 6px !important;
+}
+
+.tea-snacks-card .interactive-card-stat,
+.interactive-card.tea-snacks-card .interactive-card-stat,
+.tea-snacks-section .interactive-card .interactive-card-stat,
+.tea-snacks-card-grid .interactive-card .interactive-card-stat {
+  padding: 4px 6px !important;
+  background: #f8fafc !important;
+  border: 1px solid #f1f5f9 !important;
+  border-radius: 6px !important;
+}
+
+.tea-snacks-card .interactive-card-stat-label,
+.interactive-card.tea-snacks-card .interactive-card-stat-label,
+.tea-snacks-section .interactive-card .interactive-card-stat-label,
+.tea-snacks-card-grid .interactive-card .interactive-card-stat-label {
+  color: #64748b !important;
+  font-size: 0.62rem !important;
+  font-weight: 600 !important;
+}
+
+.tea-snacks-card .interactive-card-stat-value,
+.interactive-card.tea-snacks-card .interactive-card-stat-value,
+.tea-snacks-section .interactive-card .interactive-card-stat-value,
+.tea-snacks-card-grid .interactive-card .interactive-card-stat-value {
+  color: #0f172a !important;
+  font-size: 0.76rem !important;
+  font-weight: 800 !important;
+}
+
+.tea-snacks-card .interactive-card-action,
+.interactive-card.tea-snacks-card .interactive-card-action,
+.tea-snacks-section .interactive-card .interactive-card-action,
+.tea-snacks-card-grid .interactive-card .interactive-card-action {
+  min-height: 24px !important;
+  padding-top: 4px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  color: #d97706 !important;
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+}
+

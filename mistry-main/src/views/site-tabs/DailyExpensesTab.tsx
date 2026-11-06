@@ -813,13 +813,13 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
             </div>
           </div>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: '14px',
-          }}>
+          <div className="interactive-card-grid">
             {expenseCategoryCards.map(item => (
-              <InteractiveHoverCard key={item.id} item={item} />
+              <InteractiveHoverCard
+                key={item.id}
+                item={item}
+                className={['cat-tea', 'cat-snacks', 'cat-juice', 'cat-other-food'].includes(item.id) ? 'tea-snacks-card' : ''}
+              />
             ))}
           </div>
         </div>
@@ -827,11 +827,11 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
 
       {/* 1. TEA & SNACKS SUBSECTION */}
       {subSection === 'tea' && (
-        <div>
-          {/* Refreshment Visual Interactive Cards (4 Categories) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '18px' }}>
+        <div className="tea-snacks-section">
+          {/* Refreshment Visual Interactive Cards (4 Categories - Light Minimalist Compact Theme) */}
+          <div className="interactive-card-grid tea-snacks-card-grid" style={{ marginBottom: '18px' }}>
             {expenseCategoryCards.slice(0, 4).map(item => (
-              <InteractiveHoverCard key={item.id} item={item} />
+              <InteractiveHoverCard key={item.id} item={item} className="tea-snacks-card" />
             ))}
           </div>
 

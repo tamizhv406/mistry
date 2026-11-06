@@ -427,25 +427,20 @@ export interface PaymentTransaction {
   updatedAt: string;
 }
 
-export type UserRole =
-  | 'SUPER_ADMIN'
-  | 'MISTRY_USER'
-  | 'MISTRY'
-  | 'SUB_ADMIN'
-  | 'ADMIN'
-  | 'HOUSE_OWNER'
-  | 'PROJECT_MANAGER'
-  | 'SITE_ENGINEER'
-  | 'SUPERVISOR'
-  | 'ACCOUNTANT'
-  | 'CLIENT';
+export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN' | 'HOUSE_OWNER';
 
 export function isAdminRole(role?: string): boolean {
-  return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN' || role === 'ADMIN';
+  return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN';
 }
 
 export function isSuperAdminRole(role?: string): boolean {
   return role === 'SUPER_ADMIN';
+}
+
+export interface UserSecurityQuestions {
+  nameAnswer: string; // What is your name?
+  cityAnswer: string; // Which city are you in?
+  friendAnswer: string; // Who is your friend?
 }
 
 export interface User {
@@ -456,6 +451,7 @@ export interface User {
   phoneNormalized?: string;
   email: string;
   passwordHash: string;
+  securityQuestions?: UserSecurityQuestions;
   role: UserRole;
   permissions?: Record<string, { read: boolean; write: boolean }>;
   isActive: boolean;
@@ -470,9 +466,6 @@ export interface User {
 const RECORD_PERMISSION_SCOPE: Record<string, string> = {
   sites: 'projects',
   siteComments: 'projects',
-  tasks: 'projects',
-  milestones: 'projects',
-  siteDiaries: 'projects',
   workers: 'labour',
   attendance: 'labour',
   salaryPayments: 'payroll',
@@ -481,7 +474,6 @@ const RECORD_PERMISSION_SCOPE: Record<string, string> = {
   rodEntries: 'materials',
   stockMovements: 'materials',
   catalogItems: 'materials',
-  suppliers: 'materials',
   tools: 'expenses',
   toolAssets: 'expenses',
   toolIssues: 'expenses',
@@ -494,8 +486,6 @@ const RECORD_PERMISSION_SCOPE: Record<string, string> = {
   floorPlans: 'floor_plans',
   estimates: 'estimates',
   materialPrices: 'estimates',
-  documents: 'documents',
-  notifications: 'notifications',
   users: 'users',
 };
 
@@ -508,29 +498,13 @@ export function userCanAccessRecord(
 ): boolean {
   if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') return true;
   if (ownerId === user.id) return true;
-  if (user.role === 'HOUSE_OWNER' || user.role === 'CLIENT') {
+  if (user.role === 'HOUSE_OWNER') {
     if (access === 'read') {
-      return [
-        'sites',
-        'siteComments',
-        'floorPlans',
-        'estimates',
-        'materials',
-        'teaSnacksExpenses',
-        'poojaExpenses',
-        'electricityBills',
-        'waterBills',
-        'otherExpenses',
-        'tasks',
-        'milestones',
-        'siteDiaries',
-        'documents',
-        'notifications',
-      ].includes(table);
+      return ['sites', 'siteComments', 'floorPlans', 'estimates', 'materials', 'teaSnacksExpenses', 'poojaExpenses', 'electricityBills', 'waterBills', 'otherExpenses'].includes(table);
     }
     return ['floorPlans', 'estimates', 'siteComments'].includes(table) && ownerId === user.id;
   }
-  if (user.role === 'SUB_ADMIN' || user.role === 'PROJECT_MANAGER' || user.role === 'SITE_ENGINEER' || user.role === 'SUPERVISOR' || user.role === 'ACCOUNTANT') {
+  if (user.role === 'SUB_ADMIN') {
     const scope = RECORD_PERMISSION_SCOPE[table];
     const permission = scope ? user.permissions?.[scope] : undefined;
     return access === 'write' ? permission?.write === true : permission?.read === true || permission?.write === true;
@@ -1069,148 +1043,6 @@ export interface ToolIssue {
   updatedAt: string;
 }
 
-// ==================== ERP UPGRADE MASTER ENTITIES ====================
-
-export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
-export type TaskStatus = 'Pending' | 'In Progress' | 'Completed' | 'Blocked';
-
-export interface TaskRecord {
-  id: string;
-  userId: string;
-  siteId: string;
-  title: string;
-  description?: string;
-  assignedWorkerId?: string;
-  assignedWorkerName?: string;
-  assignedUserId?: string;
-  assignedUserName?: string;
-  startDate?: string;
-  dueDate: string;
-  priority: TaskPriority;
-  status: TaskStatus;
-  progressPercent: number; // 0 to 100
-  completionNotes?: string;
-  milestoneId?: string;
-  milestoneName?: string;
-  isDeleted: boolean;
-  deletedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type MilestoneStatus = 'Pending' | 'In Progress' | 'Completed';
-
-export interface MilestoneRecord {
-  id: string;
-  userId: string;
-  siteId: string;
-  title: string;
-  description?: string;
-  targetDate: string;
-  completedDate?: string;
-  status: MilestoneStatus;
-  orderIndex: number;
-  isDeleted: boolean;
-  deletedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SiteDiaryRecord {
-  id: string;
-  userId: string;
-  siteId: string;
-  date: string; // YYYY-MM-DD
-  workCompleted: string;
-  workersPresentCount: number;
-  materialsUsed?: string;
-  equipmentUsed?: string;
-  siteIssuesAndDelays?: string;
-  engineerRemarks?: string;
-  supervisorNotes?: string;
-  dailyProgressPercent?: number; // 0 to 100
-  weather?: string;
-  photos?: Array<{
-    id: string;
-    caption: string;
-    photoType: 'before' | 'after' | 'progress';
-    url: string;
-  }>;
-  isDeleted: boolean;
-  deletedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SupplierRecord {
-  id: string;
-  userId: string;
-  name: string;
-  contactPerson?: string;
-  phone: string;
-  email?: string;
-  address?: string;
-  gstin?: string;
-  materialsSupplied: string[]; // e.g. ['Cement', 'Steel', 'Sand']
-  notes?: string;
-  isDeleted: boolean;
-  deletedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type DocumentCategory =
-  | 'Architectural Drawing'
-  | 'Structural Drawing'
-  | 'Agreement'
-  | 'Approval'
-  | 'Quotation'
-  | 'Bill / Invoice'
-  | 'Site Photograph'
-  | 'Report'
-  | 'Other';
-
-export interface ProjectDocument {
-  id: string;
-  userId: string;
-  siteId: string;
-  title: string;
-  category: DocumentCategory;
-  fileName: string;
-  fileType: string;
-  fileSize?: number;
-  fileData?: string; // Data URL or URL
-  version: number;
-  description?: string;
-  uploadedBy?: string;
-  isSharedWithClient: boolean;
-  isDeleted: boolean;
-  deletedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type NotificationType =
-  | 'low_stock'
-  | 'pending_salary'
-  | 'overdue_task'
-  | 'project_deadline'
-  | 'pending_payment'
-  | 'site_diary'
-  | 'general';
-
-export interface AppNotification {
-  id: string;
-  userId: string;
-  siteId?: string;
-  title: string;
-  message: string;
-  type: NotificationType;
-  link?: string;
-  isRead: boolean;
-  createdAt: string;
-}
-
 // ============================================================
 
 export type EntityTable =
@@ -1235,13 +1067,7 @@ export type EntityTable =
   | 'stockMovements'
   | 'catalogItems'
   | 'toolAssets'
-  | 'toolIssues'
-  | 'tasks'
-  | 'milestones'
-  | 'siteDiaries'
-  | 'suppliers'
-  | 'documents'
-  | 'notifications';
+  | 'toolIssues';
 
 export interface TrashRecord {
   id: string;

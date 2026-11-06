@@ -437,6 +437,12 @@ export function isSuperAdminRole(role?: string): boolean {
   return role === 'SUPER_ADMIN';
 }
 
+export interface UserSecurityQuestions {
+  nameAnswer: string; // What is your name?
+  cityAnswer: string; // Which city are you in?
+  friendAnswer: string; // Who is your friend?
+}
+
 export interface User {
   id: string;
   username: string;
@@ -445,6 +451,7 @@ export interface User {
   phoneNormalized?: string;
   email: string;
   passwordHash: string;
+  securityQuestions?: UserSecurityQuestions;
   role: UserRole;
   permissions?: Record<string, { read: boolean; write: boolean }>;
   isActive: boolean;
