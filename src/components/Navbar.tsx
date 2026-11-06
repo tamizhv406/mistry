@@ -192,7 +192,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>Add Site</span>
             </button>
 
-            {/* User Profile Badge & Logout */}
+            {/* User Profile Badge & Logout / Sign In */}
             {user && (
               <div
                 style={{
@@ -208,7 +208,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
-                    backgroundColor: isAdmin(user) ? '#6366f1' : '#f59e0b',
+                    backgroundColor: (user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
+                      ? '#475569'
+                      : isAdmin(user)
+                      ? '#6366f1'
+                      : '#0284c7',
                     color: '#ffffff',
                     fontWeight: 800,
                     fontSize: '0.88rem',
@@ -219,7 +223,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }}
                   title={user.fullName || user.username}
                 >
-                  {user.fullName ? user.fullName[0].toUpperCase() : 'U'}
+                  {(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
+                    ? '🛠'
+                    : user.fullName
+                    ? user.fullName[0].toUpperCase()
+                    : 'U'}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
                   <span
@@ -230,41 +238,72 @@ export const Navbar: React.FC<NavbarProps> = ({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {user.fullName || user.username}
+                    {(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
+                      ? 'Building Mistry Builder (Local)'
+                      : user.fullName || user.mobile || user.username}
                   </span>
                   <span
                     style={{
                       fontSize: '0.7rem',
-                      color: isSuperAdmin(user)
+                      color: (user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
+                        ? '#94a3b8'
+                        : isSuperAdmin(user)
                         ? '#fde047'
                         : user.role === 'SUB_ADMIN'
                         ? '#c4b5fd'
-                        : '#94a3b8',
-                      fontWeight: isAdmin(user) ? 700 : 500,
+                        : '#38bdf8',
+                      fontWeight: 600,
                     }}
                   >
-                    {isSuperAdmin(user)
+                    {(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
+                      ? '📱 Offline IndexedDB Cache'
+                      : isSuperAdmin(user)
                       ? '👑 Super Admin'
-                      : user.role === 'SUB_ADMIN'
-                      ? '🛡️ Sub-Admin'
+                      : user.role === 'contractor'
+                      ? '🔨 Contractor'
+                      : user.role === 'engineer'
+                      ? '📐 Engineer'
                       : user.role}
                   </span>
                 </div>
-                {onLogout && (
+                {(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user') ? (
                   <button
-                    className="btn btn-sm btn-outline"
-                    onClick={onLogout}
-                    title="Sign out of Building Mistry"
+                    className="btn btn-sm"
+                    onClick={() => onNavigate('login')}
+                    title="Sign in with Phone OTP or Google to sync with Supabase Cloud"
                     style={{
-                      color: '#ef4444',
-                      borderColor: '#475569',
-                      padding: '4px 8px',
-                      marginLeft: '4px',
+                      backgroundColor: '#0284c7',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '5px 10px',
+                      marginLeft: '6px',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
                     }}
                   >
-                    <LogOut size={14} />
-                    <span>Logout</span>
+                    <span>☁ Cloud Sign In</span>
                   </button>
+                ) : (
+                  onLogout && (
+                    <button
+                      className="btn btn-sm btn-outline"
+                      onClick={onLogout}
+                      title="Sign out of Building Mistry"
+                      style={{
+                        color: '#ef4444',
+                        borderColor: '#475569',
+                        padding: '4px 8px',
+                        marginLeft: '4px',
+                      }}
+                    >
+                      <LogOut size={14} />
+                      <span>Sign Out</span>
+                    </button>
+                  )
                 )}
               </div>
             )}

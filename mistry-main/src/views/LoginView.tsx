@@ -14,8 +14,19 @@ import {
   HelpCircle,
   ArrowLeft,
   Sparkles,
+  Smartphone,
+  Phone,
 } from 'lucide-react';
-import { loginUser, registerUser, resendConfirmationEmail, setCurrentUser } from '../services/auth';
+import {
+  loginUser,
+  registerUser,
+  resendConfirmationEmail,
+  setCurrentUser,
+  sendPhoneOtp,
+  verifyPhoneOtp,
+  signInWithGoogle,
+} from '../services/auth';
+import { performFullSync } from '../services/cloudSyncService';
 import { requestEmailPasswordReset } from '../services/emailRecoveryService';
 import { db } from '../db/db';
 import type { User as UserType } from '../db/types';
@@ -34,6 +45,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
+
+  // Phone OTP login states
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpRole, setOtpRole] = useState<'contractor' | 'engineer'>('contractor');
+  const [otpFullName, setOtpFullName] = useState('');
 
   // Registration fields
   const [regFullName, setRegFullName] = useState('');
@@ -115,6 +134,60 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       setError('Super Admin login error: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Google OAuth Sign In
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError('');
+    const res = await signInWithGoogle();
+    if (!res.success) {
+      setError(res.error || 'Failed to initialize Google Sign In');
+      setLoading(false);
+    }
+  };
+
+  // Send Phone OTP
+  const handleSendPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanDigits = phone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      setError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    const res = await sendPhoneOtp(phone);
+    setLoading(false);
+    if (res.success) {
+      setOtpSent(true);
+      setSuccessMessage(`OTP sent to +91 ${cleanDigits.slice(-10)}. Please enter the 6-digit code below.`);
+    } else {
+      setError(res.error || 'Failed to send OTP to mobile. Please check number or continue with Google.');
+    }
+  };
+
+  // Verify Phone OTP
+  const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanOtp = otp.trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
+      setError('Please enter the 6-digit verification code.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    const res = await verifyPhoneOtp(phone, cleanOtp, otpRole, otpFullName);
+    setLoading(false);
+    if (res.success && res.user) {
+      onLoginSuccess(res.user);
+    } else {
+      setError(res.error || 'Invalid OTP code. Please try again or request a new code.');
     }
   };
 
@@ -574,190 +647,551 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         {/* 1. LOGIN FORM                                                */}
         {/* ══════════════════════════════════════════════════════════════ */}
         {mode === 'login' && (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label htmlFor="login-identifier" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
-                Email ID
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Mail
-                  size={18}
-                  style={{
-                    position: 'absolute',
-                    left: '14px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#94a3b8',
-                  }}
-                />
-                <input
-                  id="login-identifier"
-                  name="email"
-                  type="email"
-                  placeholder="Enter your email ID (e.g. user@example.com)"
-                  value={identifier}
-                  onChange={e => setIdentifier(e.target.value)}
-                  autoComplete="username"
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px 11px 42px',
-                    borderRadius: '10px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.9rem',
-                    color: '#0f172a',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    transition: 'border-color 0.15s ease',
-                  }}
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label htmlFor="login-password" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
-                Password
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Lock
-                  size={18}
-                  style={{
-                    position: 'absolute',
-                    left: '14px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#94a3b8',
-                  }}
-                />
-                <input
-                  id="login-password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  style={{
-                    width: '100%',
-                    padding: '11px 42px 11px 42px',
-                    borderRadius: '10px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '0.9rem',
-                    color: '#0f172a',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    transition: 'border-color 0.15s ease',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    color: '#64748b',
-                    cursor: 'pointer',
-                    padding: '4px',
-                  }}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
-            {/* Remember Me & Forget Password Link */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '8px',
-                fontSize: '0.84rem',
-                marginTop: '2px',
-              }}
-            >
-              <label
-                htmlFor="login-remember"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  cursor: 'pointer',
-                  color: '#475569',
-                  userSelect: 'none',
-                  fontWeight: 500,
-                }}
-              >
-                <input
-                  id="login-remember"
-                  name="remember"
-                  type="checkbox"
-                  checked={remember}
-                  onChange={e => setRemember(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#f59e0b', cursor: 'pointer' }}
-                />
-                <span>Remember me</span>
-              </label>
-
-              <button
-                type="button"
-                id="link-forget-password"
-                onClick={() => {
-                  setForgotEmail(identifier);
-                  switchMode('forget_password');
-                }}
-                style={{
-                  color: '#d97706',
-                  fontWeight: 700,
-                  fontSize: '0.84rem',
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'pointer',
-                  padding: '2px 0',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: '3px',
-                }}
-              >
-                Forget Password
-              </button>
-            </div>
-
-            {/* Sign In Submit Button */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Continue with Google Button */}
             <button
-              type="submit"
+              type="button"
+              onClick={handleGoogleSignIn}
               disabled={loading}
-              id="btn-login-submit"
+              id="btn-google-signin"
               style={{
                 width: '100%',
-                padding: '12px 18px',
+                padding: '11px 16px',
                 borderRadius: '10px',
-                border: 'none',
-                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                color: '#ffffff',
-                fontSize: '0.94rem',
+                border: '1.5px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                color: '#1e293b',
+                fontSize: '0.92rem',
                 fontWeight: 700,
                 cursor: loading ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 12px rgba(15, 23, 42, 0.18)',
-                marginTop: '4px',
+                gap: '10px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 transition: 'all 0.15s ease',
               }}
             >
-              <span>{loading ? 'Signing in...' : 'Sign In'}</span>
-              <ArrowRight size={18} />
+              <svg width="18" height="18" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span>Continue with Google</span>
             </button>
 
+            {/* Divider */}
+            <div style={{ display: 'flex', alignItems: 'center', margin: '2px 0', gap: '12px' }}>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+              <span style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>
+                or choose sign in method
+              </span>
+              <div style={{ flex: 1, height: '1px', backgroundColor: '#e2e8f0' }} />
+            </div>
+
+            {/* Login Method Tabs */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setLoginMethod('phone')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  backgroundColor: loginMethod === 'phone' ? '#ffffff' : 'transparent',
+                  color: loginMethod === 'phone' ? '#0f172a' : '#64748b',
+                  boxShadow: loginMethod === 'phone' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                <Smartphone size={16} />
+                <span>Phone OTP</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMethod('email')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  backgroundColor: loginMethod === 'email' ? '#ffffff' : 'transparent',
+                  color: loginMethod === 'email' ? '#0f172a' : '#64748b',
+                  boxShadow: loginMethod === 'email' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                }}
+              >
+                <Mail size={16} />
+                <span>Email ID</span>
+              </button>
+            </div>
+
+            {loginMethod === 'phone' ? (
+              !otpSent ? (
+                <form onSubmit={handleSendPhoneOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label htmlFor="login-phone" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                      Mobile Phone Number
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '0 12px',
+                          backgroundColor: '#f8fafc',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          fontSize: '0.9rem',
+                          color: '#334155',
+                        }}
+                      >
+                        <span>🇮🇳 +91</span>
+                      </div>
+                      <input
+                        id="login-phone"
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="10-digit mobile number"
+                        value={phone}
+                        onChange={e => setPhone(e.target.value)}
+                        maxLength={15}
+                        style={{
+                          flex: 1,
+                          padding: '11px 14px',
+                          borderRadius: '10px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.92rem',
+                          color: '#0f172a',
+                          outline: 'none',
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                    <span style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '4px', display: 'block' }}>
+                      We will send a 6-digit verification code via SMS.
+                    </span>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                      Select Your Role
+                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setOtpRole('contractor')}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: otpRole === 'contractor' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                          backgroundColor: otpRole === 'contractor' ? '#f0f9ff' : '#ffffff',
+                          color: otpRole === 'contractor' ? '#0284c7' : '#475569',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span>🔨 Contractor / Mastri</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOtpRole('engineer')}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: otpRole === 'engineer' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                          backgroundColor: otpRole === 'engineer' ? '#f0f9ff' : '#ffffff',
+                          color: otpRole === 'engineer' ? '#0284c7' : '#475569',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <span>📐 Engineer / Architect</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    id="btn-send-otp"
+                    style={{
+                      width: '100%',
+                      padding: '12px 18px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      color: '#ffffff',
+                      fontSize: '0.94rem',
+                      fontWeight: 700,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
+                      marginTop: '4px',
+                    }}
+                  >
+                    <span>{loading ? 'Sending OTP...' : 'Send Verification OTP'}</span>
+                    <ArrowRight size={18} />
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyPhoneOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div
+                    style={{
+                      backgroundColor: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '0.82rem',
+                    }}
+                  >
+                    <span style={{ color: '#0369a1', fontWeight: 600 }}>
+                      Code sent to +91 {phone.replace(/\D/g, '').slice(-10)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setOtpSent(false)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#0284c7',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label htmlFor="login-otp-code" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                      Enter 6-Digit OTP Code
+                    </label>
+                    <input
+                      id="login-otp-code"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="• • • • • •"
+                      value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      maxLength={6}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        border: '2px solid #0284c7',
+                        fontSize: '1.25rem',
+                        fontWeight: 800,
+                        letterSpacing: '8px',
+                        textAlign: 'center',
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label htmlFor="login-otp-name" style={{ fontWeight: 700, fontSize: '0.8rem', color: '#64748b', marginBottom: '4px', display: 'block' }}>
+                      Your Full Name (Optional)
+                    </label>
+                    <input
+                      id="login-otp-name"
+                      type="text"
+                      placeholder="e.g. Ramesh Kumar"
+                      value={otpFullName}
+                      onChange={e => setOtpFullName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 14px',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.88rem',
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    id="btn-verify-otp"
+                    style={{
+                      width: '100%',
+                      padding: '12px 18px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: '#ffffff',
+                      fontSize: '0.94rem',
+                      fontWeight: 700,
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
+                      marginTop: '4px',
+                    }}
+                  >
+                    <span>{loading ? 'Verifying OTP...' : 'Verify OTP & Open Dashboard'}</span>
+                    <CheckCircle2 size={18} />
+                  </button>
+
+                  <div style={{ textAlign: 'center', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={handleSendPhoneOtp}
+                      disabled={loading}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Didn't receive code? Resend OTP
+                    </button>
+                  </div>
+                </form>
+              )
+            ) : (
+              <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="login-identifier" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                    Email ID
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail
+                      size={18}
+                      style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: '#94a3b8',
+                      }}
+                    />
+                    <input
+                      id="login-identifier"
+                      name="email"
+                      type="email"
+                      placeholder="Enter your email ID (e.g. user@example.com)"
+                      value={identifier}
+                      onChange={e => setIdentifier(e.target.value)}
+                      autoComplete="username"
+                      style={{
+                        width: '100%',
+                        padding: '11px 14px 11px 42px',
+                        borderRadius: '10px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.9rem',
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.15s ease',
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="login-password" style={{ fontWeight: 700, fontSize: '0.84rem', color: '#334155', marginBottom: '6px', display: 'block' }}>
+                    Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Lock
+                      size={18}
+                      style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: '#94a3b8',
+                      }}
+                    />
+                    <input
+                      id="login-password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      style={{
+                        width: '100%',
+                        padding: '11px 42px 11px 42px',
+                        borderRadius: '10px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.9rem',
+                        color: '#0f172a',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.15s ease',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        padding: '4px',
+                      }}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember Me & Forget Password Link */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                    fontSize: '0.84rem',
+                    marginTop: '2px',
+                  }}
+                >
+                  <label
+                    htmlFor="login-remember"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      color: '#475569',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <input
+                      id="login-remember"
+                      name="remember"
+                      type="checkbox"
+                      checked={remember}
+                      onChange={e => setRemember(e.target.checked)}
+                      style={{ width: '16px', height: '16px', accentColor: '#f59e0b', cursor: 'pointer' }}
+                    />
+                    <span>Remember me</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    id="link-forget-password"
+                    onClick={() => {
+                      setForgotEmail(identifier);
+                      switchMode('forget_password');
+                    }}
+                    style={{
+                      color: '#d97706',
+                      fontWeight: 700,
+                      fontSize: '0.84rem',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '2px 0',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '3px',
+                    }}
+                  >
+                    Forget Password
+                  </button>
+                </div>
+
+                {/* Sign In Submit Button */}
+                <button
+                  type="submit"
+                  disabled={loading}
+                  id="btn-login-submit"
+                  style={{
+                    width: '100%',
+                    padding: '12px 18px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    color: '#ffffff',
+                    fontSize: '0.94rem',
+                    fontWeight: 700,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.18)',
+                    marginTop: '4px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{loading ? 'Signing in...' : 'Sign In'}</span>
+                  <ArrowRight size={18} />
+                </button>
+              </form>
+            )}
+
             {/* Create New Account Link */}
-            <div style={{ textAlign: 'center', marginTop: '8px' }}>
+            <div style={{ textAlign: 'center', marginTop: '4px' }}>
               <span style={{ fontSize: '0.86rem', color: '#64748b', marginRight: '6px' }}>Don't have an account?</span>
               <button
                 type="button"
@@ -784,7 +1218,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               style={{
                 borderTop: '1px solid #f1f5f9',
                 paddingTop: '14px',
-                marginTop: '8px',
+                marginTop: '4px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -796,7 +1230,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <ShieldCheck size={14} color="#6366f1" />
               <span>Super Admin Portal: Sign in with registered administrator credentials above</span>
             </div>
-          </form>
+          </div>
         )}
 
         {/* ══════════════════════════════════════════════════════════════ */}

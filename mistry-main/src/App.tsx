@@ -50,6 +50,8 @@ import { CommentModal } from './components/CommentModal';
 
 import { useSiteData } from './hooks/useSiteData';
 import { getCurrentUser, logoutUser, initAuth, isAdmin, getLocalWorkspaceUser } from './services/auth';
+import { resolveAuthenticatedUser } from './services/cloudAuth';
+import { performFullSync } from './services/cloudSyncService';
 
 import type {
   Site,
@@ -159,11 +161,22 @@ export function App() {
 
     let authSub: { unsubscribe: () => void } | null = null;
     if (isSupabaseConfigured() && supabase) {
-      const { data } = supabase.auth.onAuthStateChange((event) => {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
           setIsRecoveryModalOpen(true);
         }
-        if (event === 'SIGNED_OUT') setCurrentUser(getLocalWorkspaceUser());
+        if (event === 'SIGNED_IN' && session?.user) {
+          try {
+            const user = await resolveAuthenticatedUser(session.user);
+            setCurrentUser(user);
+            performFullSync(user.id).catch(() => {});
+          } catch {
+            // Retain local session
+          }
+        }
+        if (event === 'SIGNED_OUT') {
+          setCurrentUser(getLocalWorkspaceUser());
+        }
       });
       authSub = data?.subscription || null;
     }

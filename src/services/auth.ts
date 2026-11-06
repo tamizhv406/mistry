@@ -4,6 +4,7 @@ import { normalizeIndianPhone, validatePasswordStrength } from './otpService';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { InactiveAccountError, resolveAuthenticatedUser, resolveOfflineWorkspaceUser } from './cloudAuth';
 import { getAuthorizedRecords, getMemberProfiles } from './adminData';
+import { performFullSync } from './cloudSyncService';
 
 const SESSION_KEY = 'building_mistry_auth_user';
 
@@ -395,6 +396,111 @@ export async function logoutUser(): Promise<void> {
   }
   const localUser = getLocalWorkspaceUser();
   setCurrentUser(localUser);
+}
+
+/**
+ * Initiates Phone OTP login via Supabase SMS
+ */
+export async function sendPhoneOtp(phone: string): Promise<{ success: boolean; error?: string }> {
+  if (!supabase || !isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase is not configured or in offline mode.' };
+  }
+  let formattedPhone = phone.trim();
+  const digits = formattedPhone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    formattedPhone = `+91${digits}`;
+  } else if (!formattedPhone.startsWith('+')) {
+    formattedPhone = `+${digits}`;
+  }
+
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: formattedPhone,
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to send OTP' };
+  }
+}
+
+/**
+ * Verifies SMS OTP and signs in user
+ */
+export async function verifyPhoneOtp(
+  phone: string,
+  token: string,
+  role: 'contractor' | 'engineer' = 'contractor',
+  fullName?: string
+): Promise<{ success: boolean; user?: User; error?: string }> {
+  if (!supabase || !isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase is not configured or in offline mode.' };
+  }
+  let formattedPhone = phone.trim();
+  const digits = formattedPhone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    formattedPhone = `+91${digits}`;
+  } else if (!formattedPhone.startsWith('+')) {
+    formattedPhone = `+${digits}`;
+  }
+
+  try {
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone: formattedPhone,
+      token: token.trim(),
+      type: 'sms',
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    if (!data.user) {
+      return { success: false, error: 'Failed to verify phone OTP.' };
+    }
+
+    // Upsert profile in Supabase
+    try {
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        full_name: fullName || data.user.user_metadata?.full_name || formattedPhone,
+        phone: formattedPhone,
+        role,
+      });
+    } catch {
+      // Trigger or table may handle
+    }
+
+    const resolvedUser = await resolveAuthenticatedUser(data.user);
+    setCurrentUser(resolvedUser);
+    performFullSync(resolvedUser.id).catch(() => {});
+    return { success: true, user: resolvedUser };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'OTP verification failed' };
+  }
+}
+
+/**
+ * Initiates Google OAuth Sign In via Supabase
+ */
+export async function signInWithGoogle(): Promise<{ success: boolean; error?: string }> {
+  if (!supabase || !isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase is not configured or in offline mode.' };
+  }
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+      },
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to initialize Google Sign In' };
+  }
 }
 
 export interface AdminUserListItem extends Omit<User, 'passwordHash'> {

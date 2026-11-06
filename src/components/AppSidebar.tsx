@@ -330,53 +330,92 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       )}
 
       {/* User Profile Section */}
-      {user && (
-        <div className="sidebar-user">
-          <div className="sidebar-user-inner">
-            <div
-              className="sidebar-user-avatar"
-              style={{
-                backgroundColor: isSuperAdmin(user)
-                  ? '#f59e0b'
-                  : user.role === 'SUB_ADMIN'
-                  ? '#6366f1'
-                  : '#2563eb',
-              }}
-            >
-              {isSuperAdmin(user)
-                ? '👑'
-                : user.fullName
-                ? user.fullName[0].toUpperCase()
-                : 'U'}
-            </div>
-            {!collapsed && (
-              <div className="sidebar-user-info">
-                <span className="sidebar-user-name">
-                  {user.fullName || user.username}
-                </span>
-                <span
-                  className="sidebar-user-role"
-                  style={{
-                    color: isSuperAdmin(user)
-                      ? '#fbbf24'
-                      : user.role === 'SUB_ADMIN'
-                      ? '#a78bfa'
-                      : '#94a3b8',
-                  }}
-                >
-                  {isSuperAdmin(user)
-                    ? 'Master Admin'
+      {user && (() => {
+        const isLocalUser = Boolean(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user');
+        return (
+          <div className="sidebar-user">
+            <div className="sidebar-user-inner">
+              <div
+                className="sidebar-user-avatar"
+                style={{
+                  backgroundColor: isLocalUser
+                    ? '#475569'
+                    : isSuperAdmin(user)
+                    ? '#f59e0b'
                     : user.role === 'SUB_ADMIN'
-                    ? 'Sub-Admin'
-                    : user.role}
-                </span>
+                    ? '#6366f1'
+                    : '#0284c7',
+                }}
+              >
+                {isLocalUser
+                  ? '🛠'
+                  : isSuperAdmin(user)
+                  ? '👑'
+                  : user.fullName
+                  ? user.fullName[0].toUpperCase()
+                  : 'U'}
               </div>
-            )}
-            {!collapsed && (
-              user.id === 'local-builder-user' ? (
+              {!collapsed && (
+                <div className="sidebar-user-info">
+                  <span className="sidebar-user-name">
+                    {isLocalUser ? 'Building Mistry Builder (Local)' : user.fullName || user.mobile || user.username}
+                  </span>
+                  <span
+                    className="sidebar-user-role"
+                    style={{
+                      color: isLocalUser
+                        ? '#94a3b8'
+                        : isSuperAdmin(user)
+                        ? '#fbbf24'
+                        : user.role === 'SUB_ADMIN'
+                        ? '#a78bfa'
+                        : '#38bdf8',
+                    }}
+                  >
+                    {isLocalUser
+                      ? '📱 Offline IndexedDB'
+                      : isSuperAdmin(user)
+                      ? 'Master Admin'
+                      : user.role === 'SUB_ADMIN'
+                      ? 'Sub-Admin'
+                      : user.role === 'contractor'
+                      ? '🔨 Contractor'
+                      : user.role === 'engineer'
+                      ? '📐 Engineer'
+                      : user.role}
+                  </span>
+                </div>
+              )}
+              {!collapsed && (
+                isLocalUser ? (
+                  <button
+                    type="button"
+                    className="sidebar-logout-btn"
+                    onClick={() => onNavigate('login')}
+                    title="Connect Supabase Cloud / Sign in"
+                    aria-label="Connect Supabase Cloud"
+                    style={{ color: '#38bdf8' }}
+                  >
+                    <LogIn size={16} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="sidebar-logout-btn"
+                    onClick={onLogout}
+                    title="Sign out of Building Mistry"
+                    aria-label="Sign out of Building Mistry"
+                  >
+                    <LogOut size={16} />
+                  </button>
+                )
+              )}
+            </div>
+            {collapsed && (
+              isLocalUser ? (
                 <button
                   type="button"
-                  className="sidebar-logout-btn"
+                  className="sidebar-logout-btn sidebar-logout-btn--collapsed"
                   onClick={() => onNavigate('login')}
                   title="Connect Supabase Cloud / Sign in"
                   aria-label="Connect Supabase Cloud"
@@ -387,42 +426,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               ) : (
                 <button
                   type="button"
-                  className="sidebar-logout-btn"
+                  className="sidebar-logout-btn sidebar-logout-btn--collapsed"
                   onClick={onLogout}
                   title="Sign out"
-                  aria-label="Sign out of Building Mistry"
+                  aria-label="Sign out"
                 >
                   <LogOut size={16} />
                 </button>
               )
             )}
           </div>
-          {collapsed && (
-            user.id === 'local-builder-user' ? (
-              <button
-                type="button"
-                className="sidebar-logout-btn sidebar-logout-btn--collapsed"
-                onClick={() => onNavigate('login')}
-                title="Connect Supabase Cloud / Sign in"
-                aria-label="Connect Supabase Cloud"
-                style={{ color: '#38bdf8' }}
-              >
-                <LogIn size={16} />
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="sidebar-logout-btn sidebar-logout-btn--collapsed"
-                onClick={onLogout}
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut size={16} />
-              </button>
-            )
-          )}
-        </div>
-      )}
+        );
+      })()}
     </aside>
   );
 };

@@ -1,42 +1,6 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
-// Read public client environment variables (Vite-prefixed)
-const supabaseUrl = (
-  typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_URL
-)?.trim() || '';
-
-const supabaseAnonKey = (
-  typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPABASE_ANON_KEY
-)?.trim() || '';
-
-export const isSupabaseConfigured = (): boolean => {
-  return Boolean(
-    supabaseUrl &&
-    supabaseAnonKey &&
-    supabaseUrl.startsWith('http') &&
-    supabaseAnonKey.length > 10
-  );
-};
-
-// Safe singleton client instance
-let supabaseInstance: SupabaseClient | null = null;
-
-if (isSupabaseConfigured()) {
-  try {
-    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    });
-  } catch (err) {
-    console.warn('[Supabase] Initialization failed, continuing in offline Dexie mode:', err);
-    supabaseInstance = null;
-  }
-}
-
-export const supabase = supabaseInstance;
+export { supabase, isSupabaseConfigured };
 
 /**
  * Checks if the current URL contains a Supabase password recovery token or hash

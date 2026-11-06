@@ -17,6 +17,15 @@ const rootLinks: Plugin = {
 export default defineConfig({
   base: servedFromRoot ? '/' : './',
   plugins: [react(), ...(servedFromRoot ? [rootLinks] : [])],
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+  define: {
+    'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://kfnbabbknhzbjhxcozan.supabase.co'
+    ),
+    'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_hOOf94GN9Z4UuGAnQ30BSg_KiijLvuQ'
+    ),
+  },
   build: {
     minify: 'esbuild',
     chunkSizeWarningLimit: 2500,

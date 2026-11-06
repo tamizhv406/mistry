@@ -118,13 +118,30 @@ export async function resolveAuthenticatedUser(authUser: AuthUser, remember = tr
     );
 
     if (isUnmigratedOrNew) {
+      // Check if profiles table has user profile
+      let profName = '';
+      let profPhone = '';
+      try {
+        const { data: profData } = await supabase
+          .from('profiles')
+          .select('id, full_name, phone, role')
+          .eq('id', authUser.id)
+          .single();
+        if (profData) {
+          profName = profData.full_name || '';
+          profPhone = profData.phone || '';
+        }
+      } catch {
+        // Fall back to user_metadata
+      }
+
       const isSuper = isConfiguredSuperAdmin(authUser.email) || authUser.user_metadata?.role === 'SUPER_ADMIN';
       const fallbackMember: MemberProfile = {
         user_id: authUser.id,
         email: authUser.email || '',
-        username: String(authUser.user_metadata?.username || authUser.email?.split('@')[0] || 'User'),
-        full_name: String(authUser.user_metadata?.full_name || ''),
-        mobile: String(authUser.user_metadata?.mobile || ''),
+        username: String(profName || authUser.user_metadata?.full_name || authUser.phone || authUser.email?.split('@')[0] || 'Builder'),
+        full_name: String(profName || authUser.user_metadata?.full_name || authUser.phone || ''),
+        mobile: String(profPhone || authUser.phone || authUser.user_metadata?.phone || ''),
         role: isSuper ? 'SUPER_ADMIN' : 'USER',
         is_active: true,
         permissions: {},

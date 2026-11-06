@@ -54,10 +54,14 @@ export interface Site {
   name: string;
   ownerName: string;
   ownerPhone: string;
+  clientName?: string; // Cloud sync alias for ownerName
+  clientPhone?: string; // Cloud sync alias for ownerPhone
   address: string;
+  location?: string; // Cloud sync alias for address
   area: string;
   district?: string;
   buildingType: string;
+  budget?: number;
   startDate: string;
   expectedCompletionDate: string;
   expectedCompletion?: string; // Target completion alias
@@ -89,6 +93,7 @@ export interface Material {
   quantity: number;
   unit: string;
   rate: number;
+  pricePerUnit?: number; // Cloud sync alias for rate
   totalAmount: number;
   paidAmount: number;
   balance: number;
@@ -186,6 +191,7 @@ export interface AttendanceRecord {
   overtimeHours?: number;
   dayMultiplier: number; // 1 for present, 0.5 for half day, 0 for absent/leave, 1.5 for overtime
   dailyWageSnapshot?: number; // Wage on the day it was marked, so later wage changes don't rewrite history
+  wageEarned?: number; // Cloud sync calculated wage amount
   createdBy?: string;
   updatedBy?: string;
   editHistory?: AttendanceEdit[];
@@ -434,7 +440,7 @@ export interface PaymentTransaction {
   updatedAt: string;
 }
 
-export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN' | 'HOUSE_OWNER';
+export type UserRole = 'SUPER_ADMIN' | 'MISTRY_USER' | 'MISTRY' | 'SUB_ADMIN' | 'ADMIN' | 'HOUSE_OWNER' | 'contractor' | 'engineer';
 
 export function isAdminRole(role?: string): boolean {
   return role === 'SUPER_ADMIN' || role === 'SUB_ADMIN';
