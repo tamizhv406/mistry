@@ -18,7 +18,8 @@ export default defineConfig({
   base: servedFromRoot ? '/' : './',
   plugins: [react(), ...(servedFromRoot ? [rootLinks] : [])],
   build: {
-    chunkSizeWarningLimit: 1600,
+    minify: 'esbuild',
+    chunkSizeWarningLimit: 2500,
     rollupOptions: {
       output: {
         manualChunks(id) {

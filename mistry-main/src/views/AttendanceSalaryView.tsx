@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Users,
   Search,
@@ -82,6 +82,52 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   const [advanceToEdit, setAdvanceToEdit] = useState<LabourAdvance | null>(null);
   const [isSalaryModalOpen, setIsSalaryModalOpen] = useState<boolean>(false);
   const [salaryToEdit, setSalaryToEdit] = useState<SalaryPayment | null>(null);
+  const [selectedWorkerForAction, setSelectedWorkerForAction] = useState<string | null>(null);
+  const [lastPaidWorkerId, setLastPaidWorkerId] = useState<string | null>(null);
+
+  const handlePaymentSuccess = (msg: string, workerId?: string) => {
+    onNotify(msg, 'success');
+    if (workerId) {
+      setLastPaidWorkerId(workerId);
+      setSelectedWorkerForAction(workerId); // Preserves selection without requiring manual re-selection!
+    }
+  };
+
+  // Custom Back Navigation Listener for Mobile App
+  useEffect(() => {
+    const handleBackEvent = (e: Event) => {
+      if (isSalaryModalOpen) {
+        e.preventDefault();
+        setIsSalaryModalOpen(false);
+        setSalaryToEdit(null);
+        return;
+      }
+      if (isAdvanceModalOpen) {
+        e.preventDefault();
+        setIsAdvanceModalOpen(false);
+        setAdvanceToEdit(null);
+        return;
+      }
+      if (isAttendanceModalOpen) {
+        e.preventDefault();
+        setIsAttendanceModalOpen(false);
+        return;
+      }
+      if (isWorkerModalOpen) {
+        e.preventDefault();
+        setIsWorkerModalOpen(false);
+        setWorkerToEdit(null);
+        return;
+      }
+      if (selectedWorkerForAction) {
+        e.preventDefault();
+        setSelectedWorkerForAction(null);
+        return;
+      }
+    };
+    window.addEventListener('mistry:back', handleBackEvent);
+    return () => window.removeEventListener('mistry:back', handleBackEvent);
+  }, [isSalaryModalOpen, isAdvanceModalOpen, isAttendanceModalOpen, isWorkerModalOpen, selectedWorkerForAction]);
 
   // Query project and active workers
   const activeSite = sites.find(s => s.id === selectedSiteId) || sites[0];
@@ -200,7 +246,80 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto', color: '#0F172A' }}>
+    <div
+      className="attendance-page-container"
+      style={{
+        padding: '24px',
+        maxWidth: '1440px',
+        margin: '0 auto',
+        color: '#0F172A',
+        boxSizing: 'border-box',
+        width: '100%',
+        overflowX: 'hidden',
+      }}
+    >
+      <style>{`
+        .attendance-page-container {
+          max-width: 100vw;
+          box-sizing: border-box;
+          overflow-x: hidden;
+        }
+        @media (max-width: 768px) {
+          .attendance-page-container {
+            padding: 12px 8px !important;
+          }
+          .attendance-desktop-table {
+            display: none !important;
+          }
+          .attendance-mobile-cards {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          .attendance-mobile-roster {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            gap: 10px !important;
+          }
+          .attendance-worker-card,
+          .salary-mobile-card {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            word-break: break-word !important;
+          }
+          .attendance-kpi-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 8px !important;
+          }
+        }
+        @media (min-width: 769px) {
+          .attendance-desktop-table {
+            display: block !important;
+          }
+          .attendance-mobile-cards {
+            display: none !important;
+          }
+          .attendance-mobile-roster {
+            display: none !important;
+          }
+        }
+        .attendance-desktop-table {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .attendance-quick-cycle-cluster {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+      `}</style>
       {/* Top Header & Actions */}
       <div
         style={{
@@ -336,10 +455,11 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
 
       {/* KPI Cards */}
       <div
+        className="attendance-kpi-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '12px',
           marginBottom: '24px',
         }}
       >
@@ -997,7 +1117,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -1024,11 +1144,27 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     const workerAdvances = advances.filter(a => a.workerId === w.id);
                     const workerPayments = salaryPayments.filter(s => s.workerId === w.id);
                     const ledger = buildWorkerLedger(w, workerAttendance, workerAdvances, workerPayments, policy);
+                    const isSelected = selectedWorkerForAction === w.id;
+                    const isRecentlyUpdated = lastPaidWorkerId === w.id;
 
                     return (
-                      <tr key={w.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                      <tr
+                        key={w.id}
+                        id={`salary-table-row-${w.id}`}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          backgroundColor: isRecentlyUpdated ? '#F0FDF4' : isSelected ? '#EFF6FF' : undefined,
+                        }}
+                      >
                         <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
-                          <div>{w.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {w.name}
+                            {isRecentlyUpdated && (
+                              <span style={{ fontSize: '0.68rem', background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                ✓ Payment Updated
+                              </span>
+                            )}
+                          </div>
                           <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
                             {w.category} · {formatINR(w.dailyWage)}/day
                           </div>
@@ -1053,7 +1189,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                             <button
+                              id={`salary-pay-btn-${w.id}`}
                               onClick={() => {
+                                setSelectedWorkerForAction(w.id);
                                 setSalaryToEdit(null);
                                 setIsSalaryModalOpen(true);
                               }}
@@ -1071,7 +1209,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                               Pay Wage
                             </button>
                             <button
+                              id={`salary-advance-btn-${w.id}`}
                               onClick={() => {
+                                setSelectedWorkerForAction(w.id);
                                 setAdvanceToEdit(null);
                                 setIsAdvanceModalOpen(true);
                               }}
@@ -1097,6 +1237,126 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card View (<= 768px - Requirement 4) */}
+          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+            {workers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B' }}>
+                No worker salary records available
+              </div>
+            ) : (
+              workers.map(w => {
+                const workerAttendance = attendance.filter(a => a.workerId === w.id);
+                const workerAdvances = advances.filter(a => a.workerId === w.id);
+                const workerPayments = salaryPayments.filter(s => s.workerId === w.id);
+                const ledger = buildWorkerLedger(w, workerAttendance, workerAdvances, workerPayments, policy);
+                const isSelected = selectedWorkerForAction === w.id;
+                const isRecentlyUpdated = lastPaidWorkerId === w.id;
+
+                return (
+                  <div
+                    key={w.id}
+                    id={`salary-mobile-card-${w.id}`}
+                    className={`salary-mobile-card ${isSelected ? 'selected' : ''}`}
+                    style={{
+                      background: isRecentlyUpdated ? '#F0FDF4' : isSelected ? '#EFF6FF' : '#FFFFFF',
+                      border: isRecentlyUpdated ? '1.5px solid #16A34A' : isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '14px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '6px' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.95rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {w.name}
+                          {isRecentlyUpdated && (
+                            <span style={{ fontSize: '0.68rem', background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                              ✓ Payment Updated
+                            </span>
+                          )}
+                        </strong>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                          {w.category} · {formatINR(w.dailyWage)}/day · {ledger.workedDayEquivalents} days
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Pending Due
+                        </span>
+                        <strong style={{ fontSize: '1rem', color: ledger.pending > 0 ? '#DC2626' : '#16A34A' }}>
+                          {formatINR(ledger.pending)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: '#F8FAFC', padding: '8px', borderRadius: '8px', textAlign: 'center', fontSize: '0.75rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Earned</span>
+                        <strong style={{ color: '#0F172A' }}>{formatINR(ledger.earned)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Advances</span>
+                        <strong style={{ color: '#D97706' }}>{formatINR(ledger.recoverableAdvances)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Paid</span>
+                        <strong style={{ color: '#16A34A' }}>{formatINR(ledger.salaryPaid)}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <button
+                        type="button"
+                        id={`mobile-pay-wage-${w.id}`}
+                        onClick={() => {
+                          setSelectedWorkerForAction(w.id);
+                          setSalaryToEdit(null);
+                          setIsSalaryModalOpen(true);
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: '1px solid #16A34A',
+                          backgroundColor: '#F0FDF4',
+                          color: '#15803D',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Pay Wage
+                      </button>
+                      <button
+                        type="button"
+                        id={`mobile-pay-advance-${w.id}`}
+                        onClick={() => {
+                          setSelectedWorkerForAction(w.id);
+                          setAdvanceToEdit(null);
+                          setIsAdvanceModalOpen(true);
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: '1px solid #D97706',
+                          backgroundColor: '#FEF3C7',
+                          color: '#B45309',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Advance
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
 
@@ -1111,7 +1371,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -1162,6 +1422,59 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Advances Cards (<= 768px - Requirement 4) */}
+          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+            {advances.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B' }}>
+                No advances logged for this site
+              </div>
+            ) : (
+              advances.map(a => {
+                const w = workers.find(work => work.id === a.workerId);
+                return (
+                  <div
+                    key={a.id}
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.92rem', color: '#0F172A' }}>{w?.name || 'Worker'}</strong>
+                        <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block' }}>{formatDay(a.date)}</span>
+                      </div>
+                      <span style={{ fontSize: '1rem', fontWeight: 800, color: '#DC2626' }}>
+                        {formatINR(a.amount)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          backgroundColor: a.advanceType === 'Non-Recoverable' ? '#EFF6FF' : '#FEF3C7',
+                          color: a.advanceType === 'Non-Recoverable' ? '#1D4ED8' : '#92400E',
+                        }}
+                      >
+                        {a.advanceType || 'Recoverable'}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: '#475569' }}>{a.reason || 'Weekly advance'}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
       )}
 
@@ -1176,7 +1489,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -1223,6 +1536,56 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Roster Cards (<= 768px - Requirement 4) */}
+          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+            {workers.map(w => (
+              <div
+                key={w.id}
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: '0.92rem', color: '#0F172A', display: 'block' }}>{w.name}</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                    {w.category} · Phone: {w.phone || '—'}
+                  </span>
+                  <span style={{ fontSize: '0.78rem', color: '#2563EB', fontWeight: 700, display: 'block', marginTop: '2px' }}>
+                    {formatINR(w.dailyWage)} / day
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkerToEdit(w);
+                    setIsWorkerModalOpen(true);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#F8FAFC',
+                    color: '#334155',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit Profile
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1250,8 +1613,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
         siteId={selectedSiteId}
         workers={workers}
         advanceToEdit={advanceToEdit}
+        initialWorkerId={selectedWorkerForAction}
         onClose={() => setIsAdvanceModalOpen(false)}
-        onSuccess={msg => onNotify(msg, 'success')}
+        onSuccess={handlePaymentSuccess}
       />
 
       {/* Salary Modal */}
@@ -1263,8 +1627,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
         advances={advances}
         pastPayments={salaryPayments}
         paymentToEdit={salaryToEdit}
+        initialWorkerId={selectedWorkerForAction}
         onClose={() => setIsSalaryModalOpen(false)}
-        onSuccess={msg => onNotify(msg, 'success')}
+        onSuccess={handlePaymentSuccess}
       />
     </div>
   );

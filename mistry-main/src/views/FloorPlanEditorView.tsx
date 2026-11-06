@@ -662,6 +662,63 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const [furnitureCategory, setFurnitureCategory] = useState<string>('all');
   const [selectedFurnitureToPlace, setSelectedFurnitureToPlace] = useState<FurnitureCatalogItem | null>(null);
 
+  // Multi-Selection State for Furniture Bounding Box & Group Manipulation
+  const [selectedFurnitureIds, setSelectedFurnitureIds] = useState<string[]>([]);
+  const [selectionBox, setSelectionBox] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const dragGroupFurnitureSnapshotsRef = useRef<FloorPlanFurniture[] | null>(null);
+
+  // Group Bounding Box for multi-selected furniture items
+  const groupBounds = useMemo(() => {
+    if (selectedFurnitureIds.length <= 1) return null;
+    const items = editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id));
+    if (items.length <= 1) return null;
+    const minX = Math.min(...items.map(f => f.x));
+    const minY = Math.min(...items.map(f => f.y));
+    const maxX = Math.max(...items.map(f => f.x + f.width));
+    const maxY = Math.max(...items.map(f => f.y + f.height));
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: +(maxX - minX).toFixed(2),
+      height: +(maxY - minY).toFixed(2),
+      centerX: +((minX + maxX) / 2).toFixed(2),
+      centerY: +((minY + maxY) / 2).toFixed(2),
+    };
+  }, [selectedFurnitureIds, editorState.furniture]);
+
+  const [scalingGroup, setScalingGroup] = useState<{
+    initialBounds: { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number; centerX: number; centerY: number };
+    items: FloorPlanFurniture[];
+    startSvgPos: { x: number; y: number };
+    startDist: number;
+  } | null>(null);
+
+  const beginGroupFurnitureScale = (e: React.SyntheticEvent, bounds: any) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+    elementHitRef.current = true;
+    dragStartStateRef.current = editorState;
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const groupItems = editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id));
+    const startDist = Math.hypot(
+      svgPos.x - (bounds.centerX * GRID_SIZE_PX * zoom + panX),
+      svgPos.y - (bounds.centerY * GRID_SIZE_PX * zoom + panY)
+    );
+    setScalingGroup({
+      initialBounds: bounds,
+      items: JSON.parse(JSON.stringify(groupItems)),
+      startSvgPos: svgPos,
+      startDist: Math.max(10, startDist),
+    });
+  };
+
+  const groupScaleHandleProps = (bounds: any) => {
+    const down = (e: React.SyntheticEvent) => beginGroupFurnitureScale(e, bounds);
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
+  };
+
   const [showEstimationModal, setShowEstimationModal] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showVersionModal, setShowVersionModal] = useState(false);
@@ -901,6 +958,105 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+
+  // Custom Mobile Back Navigation Handler
+  useEffect(() => {
+    const handleBackEvent = (e: Event) => {
+      // Close open modals, drawers and overlays in order of depth
+      if (showFurnitureModal) {
+        e.preventDefault();
+        setShowFurnitureModal(false);
+        return;
+      }
+      if (show3D) {
+        e.preventDefault();
+        setShow3D(false);
+        return;
+      }
+      if (isLeftDrawerOpen) {
+        e.preventDefault();
+        setIsLeftDrawerOpen(false);
+        return;
+      }
+      if (showMobileMoreTools) {
+        e.preventDefault();
+        setShowMobileMoreTools(false);
+        return;
+      }
+      if (showMobileDetails) {
+        e.preventDefault();
+        setShowMobileDetails(false);
+        return;
+      }
+      if (showMobileProperties) {
+        e.preventDefault();
+        setShowMobileProperties(false);
+        return;
+      }
+      if (showMobileShapes) {
+        e.preventDefault();
+        setShowMobileShapes(false);
+        return;
+      }
+      if (showMobileMenu) {
+        e.preventDefault();
+        setShowMobileMenu(false);
+        return;
+      }
+      if (showSettingsModal) {
+        e.preventDefault();
+        setShowSettingsModal(false);
+        return;
+      }
+      if (showBgImageModal) {
+        e.preventDefault();
+        setShowBgImageModal(false);
+        return;
+      }
+      if (showRoomScheduleModal) {
+        e.preventDefault();
+        setShowRoomScheduleModal(false);
+        return;
+      }
+      if (showHelpSheet) {
+        e.preventDefault();
+        setShowHelpSheet(false);
+        return;
+      }
+      if (isShapeLibraryOpen) {
+        e.preventDefault();
+        setIsShapeLibraryOpen(false);
+        return;
+      }
+      if (isMistryAiOpen) {
+        e.preventDefault();
+        setIsMistryAiOpen(false);
+        return;
+      }
+      if (floorDialog) {
+        e.preventDefault();
+        setFloorDialog(null);
+        return;
+      }
+      if (selectedFurnitureIds.length > 0 || selectedElement) {
+        e.preventDefault();
+        setSelectedFurnitureIds([]);
+        setSelectedElement(null);
+        return;
+      }
+      // If nothing is open or selected, navigate to previous screen
+      e.preventDefault();
+      onBack();
+    };
+
+    window.addEventListener('mistry:back', handleBackEvent);
+    return () => window.removeEventListener('mistry:back', handleBackEvent);
+  }, [
+    showFurnitureModal, show3D, isLeftDrawerOpen, showMobileMoreTools,
+    showMobileDetails, showMobileProperties, showMobileShapes, showMobileMenu,
+    showSettingsModal, showBgImageModal, showRoomScheduleModal, showHelpSheet,
+    isShapeLibraryOpen, isMistryAiOpen, floorDialog, selectedFurnitureIds, selectedElement, onBack
+  ]);
 
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -3205,11 +3361,10 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       // 3. Spacebar held + left click
       // 4. Alt + left click
       // 5. Active tool is 'pan'
-      // 6. Active tool is 'select' and clicking empty background
       if (
         e.button === 1 ||
         e.button === 2 ||
-        (e.button === 0 && (e.altKey || isSpacePressed || activeTool === 'pan' || activeTool === 'select'))
+        (e.button === 0 && (e.altKey || isSpacePressed || activeTool === 'pan'))
       ) {
         const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
         setIsPanning(true);
@@ -3222,6 +3377,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
       const world = svgToWorld(svgPos.x, svgPos.y);
+
+      if (activeTool === 'select') {
+        // Start multi-selection bounding box on canvas background
+        setSelectionBox({ x1: world.x, y1: world.y, x2: world.x, y2: world.y });
+        dragStartStateRef.current = editorState;
+        return;
+      }
+
       const snapped = { x: snapToGrid(world.x), y: snapToGrid(world.y) };
 
       // The wall under the pointer: within a finger's reach on screen, whatever the zoom.
@@ -3506,8 +3669,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           onNotify(`Tape Measurement: ${formatLength(dist, unit)} at ${Math.round(angle)}°`, 'info');
         }
         return;
-      } else if (activeTool === 'select') {
-        setSelectedElement(null);
       }
     },
     [
@@ -4079,6 +4240,31 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         return;
       }
 
+      if (scalingGroup) {
+        const curDist = Math.hypot(
+          svgPos.x - (scalingGroup.initialBounds.centerX * GRID_SIZE_PX * zoom + panX),
+          svgPos.y - (scalingGroup.initialBounds.centerY * GRID_SIZE_PX * zoom + panY)
+        );
+        const scaleRatio = Math.max(0.2, Math.min(5.0, curDist / scalingGroup.startDist));
+        scalingGroup.items.forEach(item => {
+          const newW = Math.max(0.5, +(item.width * scaleRatio).toFixed(2));
+          const newH = Math.max(0.5, +(item.height * scaleRatio).toFixed(2));
+          const newX = +(scalingGroup.initialBounds.centerX + (item.x - scalingGroup.initialBounds.centerX) * scaleRatio).toFixed(2);
+          const newY = +(scalingGroup.initialBounds.centerY + (item.y - scalingGroup.initialBounds.centerY) * scaleRatio).toFixed(2);
+          dispatch({
+            type: 'UPDATE_FURNITURE',
+            id: item.id,
+            changes: { width: newW, height: newH, x: newX, y: newY },
+          });
+        });
+        return;
+      }
+
+      if (selectionBox) {
+        setSelectionBox(prev => prev ? { ...prev, x2: world.x, y2: world.y } : null);
+        return;
+      }
+
       if (isPanning && panStart) {
         const dx = svgPos.x - panStart.x;
         const dy = svgPos.y - panStart.y;
@@ -4279,6 +4465,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             },
           });
         } else if (type === 'furniture') {
+          if (dragGroupFurnitureSnapshotsRef.current && dragGroupFurnitureSnapshotsRef.current.length > 1) {
+            dragGroupFurnitureSnapshotsRef.current.forEach(fSnap => {
+              dispatch({
+                type: 'UPDATE_FURNITURE',
+                id: fSnap.id,
+                changes: {
+                  x: +(snapToGridEnabled ? snapToGrid(fSnap.x + snappedDx) : fSnap.x + snappedDx).toFixed(2),
+                  y: +(snapToGridEnabled ? snapToGrid(fSnap.y + snappedDy) : fSnap.y + snappedDy).toFixed(2),
+                },
+              });
+            });
+            return;
+          }
           const snap = dragElementSnapshot as FloorPlanFurniture;
           const name = (snap.itemType || '').toLowerCase();
           if (name.includes('tv') || name.includes('ac')) {
@@ -4294,8 +4493,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           dispatch({
             type: 'UPDATE_FURNITURE', id,
             changes: {
-              x: snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx,
-              y: snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy,
+              x: +(snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx).toFixed(2),
+              y: +(snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy).toFixed(2),
             },
           });
         } else if (type === 'annotation') {
@@ -4459,6 +4658,42 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setLiveLengthBadge(null);
       return;
     }
+    if (scalingGroup) {
+      if (dragStartStateRef.current !== editorState) {
+        pushHistory(editorState);
+        markUnsaved();
+      }
+      setScalingGroup(null);
+      dragStartStateRef.current = null;
+      return;
+    }
+
+    if (selectionBox) {
+      const minX = Math.min(selectionBox.x1, selectionBox.x2);
+      const maxX = Math.max(selectionBox.x1, selectionBox.x2);
+      const minY = Math.min(selectionBox.y1, selectionBox.y2);
+      const maxY = Math.max(selectionBox.y1, selectionBox.y2);
+      if (maxX - minX > 0.5 || maxY - minY > 0.5) {
+        const matched = editorState.furniture.filter(f => {
+          const fx2 = f.x + f.width;
+          const fy2 = f.y + f.height;
+          return fx2 >= minX && f.x <= maxX && fy2 >= minY && f.y <= maxY;
+        });
+        if (matched.length > 0) {
+          const ids = matched.map(f => f.id);
+          setSelectedFurnitureIds(ids);
+          setSelectedElement({ type: 'furniture', id: ids[0] });
+          onNotify(`${ids.length} furniture items selected. Grouped elements will move and scale together.`, 'info');
+        } else {
+          setSelectedFurnitureIds([]);
+          setSelectedElement(null);
+        }
+      }
+      setSelectionBox(null);
+      dragStartStateRef.current = null;
+      return;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       setPanStart(null);
@@ -4657,7 +4892,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       }
       // On a touch screen a drag that happens to start on a wall or room must not move it.
       // The first tap selects; only an element that is already selected can be dragged.
-      if ((e as React.PointerEvent).pointerType === 'touch' && selectedElement?.id !== id) {
+      // EXCEPTION: furniture elements support direct drag-to-move on touch gestures.
+      if ((e as React.PointerEvent).pointerType === 'touch' && type !== 'furniture' && selectedElement?.id !== id) {
         pendingSelectRef.current = { type, id } as SelectedElement;
         return;
       }
@@ -4666,6 +4902,28 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       elementHitRef.current = true;
       e.stopPropagation();
       setSelectedElement({ type, id });
+
+      if (type === 'furniture') {
+        const isShift = (e as React.MouseEvent).shiftKey;
+        if (isShift) {
+          setSelectedFurnitureIds(prev => {
+            const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+            const group = editorState.furniture.filter(f => next.includes(f.id));
+            dragGroupFurnitureSnapshotsRef.current = JSON.parse(JSON.stringify(group));
+            return next;
+          });
+        } else if (!selectedFurnitureIds.includes(id)) {
+          setSelectedFurnitureIds([id]);
+          const currentItem = editorState.furniture.find(f => f.id === id);
+          dragGroupFurnitureSnapshotsRef.current = currentItem ? [JSON.parse(JSON.stringify(currentItem))] : null;
+        } else {
+          const group = editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id));
+          dragGroupFurnitureSnapshotsRef.current = JSON.parse(JSON.stringify(group));
+        }
+      } else {
+        setSelectedFurnitureIds([]);
+        dragGroupFurnitureSnapshotsRef.current = null;
+      }
       const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
       dragStartStateRef.current = editorState;
 
@@ -5457,8 +5715,34 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (activeTool === 'ai_draw') handleMouseDown(fakeMouse(e.clientX, e.clientY));
     } else if (pointersRef.current.size === 2) {
       cancelSingleGesture();
+      setSelectionBox(null);
       const base = pendingViewRef.current || { panX, panY, zoom };
       const p = pinchPoints();
+
+      // Check if furniture is selected to activate touch gesture pinch-to-scale
+      const activeFurnitureSnapshots = selectedFurnitureIds.length > 0
+        ? editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id))
+        : (selectedElement?.type === 'furniture'
+          ? [editorState.furniture.find(f => f.id === selectedElement.id)!].filter(Boolean)
+          : []);
+
+      if (activeFurnitureSnapshots.length > 0) {
+        dragStartStateRef.current = editorState;
+        const minX = Math.min(...activeFurnitureSnapshots.map(f => f.x));
+        const minY = Math.min(...activeFurnitureSnapshots.map(f => f.y));
+        const maxX = Math.max(...activeFurnitureSnapshots.map(f => f.x + f.width));
+        const maxY = Math.max(...activeFurnitureSnapshots.map(f => f.y + f.height));
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        Object.assign(g, {
+          kind: 'furniturePinch',
+          startDist: p.dist,
+          groupCenter: { x: centerX, y: centerY },
+          furnitureItems: JSON.parse(JSON.stringify(activeFurnitureSnapshots)),
+        });
+        return;
+      }
+
       Object.assign(g, {
         kind: 'pinch', startDist: p.dist, startZoom: base.zoom,
         // The plan point between the fingers; it stays between them while pinching.
@@ -5484,6 +5768,24 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (!pointersRef.current.has(e.pointerId)) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gestureRef.current;
+
+    if ((g as any).kind === 'furniturePinch') {
+      if (pointersRef.current.size < 2) return;
+      const p = pinchPoints();
+      const scaleRatio = Math.max(0.2, Math.min(5.0, p.dist / (g as any).startDist));
+      ((g as any).furnitureItems as FloorPlanFurniture[]).forEach(item => {
+        const newW = Math.max(0.5, +(item.width * scaleRatio).toFixed(2));
+        const newH = Math.max(0.5, +(item.height * scaleRatio).toFixed(2));
+        const newX = +((g as any).groupCenter.x + (item.x - (g as any).groupCenter.x) * scaleRatio).toFixed(2);
+        const newY = +((g as any).groupCenter.y + (item.y - (g as any).groupCenter.y) * scaleRatio).toFixed(2);
+        dispatch({
+          type: 'UPDATE_FURNITURE',
+          id: item.id,
+          changes: { width: newW, height: newH, x: newX, y: newY },
+        });
+      });
+      return;
+    }
 
     if (g.kind === 'pinch') {
       if (pointersRef.current.size < 2) return;
@@ -5563,6 +5865,36 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     pointersRef.current.delete(e.pointerId);
     lastTapRef.current = { time: Date.now(), x: e.clientX, y: e.clientY };
     const g = gestureRef.current;
+
+    if ((g as any).kind === 'furniturePinch') {
+      if (pointersRef.current.size < 2) return;
+      const p = pinchPoints();
+      const scaleRatio = Math.max(0.2, Math.min(5.0, p.dist / (g as any).startDist));
+      ((g as any).furnitureItems as FloorPlanFurniture[]).forEach(item => {
+        const newW = Math.max(0.5, +(item.width * scaleRatio).toFixed(2));
+        const newH = Math.max(0.5, +(item.height * scaleRatio).toFixed(2));
+        const newX = +((g as any).groupCenter.x + (item.x - (g as any).groupCenter.x) * scaleRatio).toFixed(2);
+        const newY = +((g as any).groupCenter.y + (item.y - (g as any).groupCenter.y) * scaleRatio).toFixed(2);
+        dispatch({
+          type: 'UPDATE_FURNITURE',
+          id: item.id,
+          changes: { width: newW, height: newH, x: newX, y: newY },
+        });
+      });
+      return;
+    }
+
+    if ((g as any).kind === 'furniturePinch') {
+      if (pointersRef.current.size === 0) {
+        g.kind = 'none';
+        if (dragStartStateRef.current !== editorState) {
+          pushHistory(editorState);
+          markUnsaved();
+        }
+        dragStartStateRef.current = null;
+      }
+      return;
+    }
 
     if (g.kind === 'pinch') {
       // The finger left on the screen after a pinch does nothing until the screen is clear.
@@ -9473,7 +9805,8 @@ _Shared via Building Mistry App_`;
             const fy = furn.y * GRID_SIZE_PX * zoom + panY;
             const fw = furn.width * GRID_SIZE_PX * zoom;
             const fh = furn.height * GRID_SIZE_PX * zoom;
-            const isSelected = selectedElement?.id === furn.id;
+            const isSelected = selectedElement?.id === furn.id || selectedFurnitureIds.includes(furn.id);
+            const isMultiSelected = selectedFurnitureIds.length > 1 && selectedFurnitureIds.includes(furn.id);
             return (
               <g
                 key={furn.id}
@@ -9492,8 +9825,8 @@ _Shared via Building Mistry App_`;
                       rx={3 * zoom}
                     />
 
-                    {/* Live Size & Dimension Badge above object */}
-                    {(showDimensions || !!resizingFurniture) && (
+                    {/* Live Size & Dimension Badge above object (for single selection) */}
+                    {!isMultiSelected && (showDimensions || !!resizingFurniture) && (
                       <g transform={`translate(${fx + fw / 2}, ${fy - 14 * zoom})`} style={{ pointerEvents: 'none' }}>
                         <rect
                           x={-42 * zoom} y={-9 * zoom}
@@ -9513,7 +9846,7 @@ _Shared via Building Mistry App_`;
                       </g>
                     )}
 
-                    {!furn.locked && activeTool === 'select' && (() => {
+                    {!furn.locked && activeTool === 'select' && !isMultiSelected && (() => {
                       const handleR = Math.max(5, 6 * zoom);
                       return (
                         <g className="fp-furn-resize-handles">
@@ -9616,6 +9949,95 @@ _Shared via Building Mistry App_`;
               </g>
             );
           })}
+
+          {/* Marquee Bounding Box for Multi-Selection */}
+          {selectionBox && (
+            <rect
+              id="fp-selection-marquee"
+              x={Math.min(selectionBox.x1, selectionBox.x2) * GRID_SIZE_PX * zoom + panX}
+              y={Math.min(selectionBox.y1, selectionBox.y2) * GRID_SIZE_PX * zoom + panY}
+              width={Math.abs(selectionBox.x2 - selectionBox.x1) * GRID_SIZE_PX * zoom}
+              height={Math.abs(selectionBox.y2 - selectionBox.y1) * GRID_SIZE_PX * zoom}
+              fill="rgba(59, 130, 246, 0.15)"
+              stroke="#2563eb"
+              strokeWidth={1.5}
+              strokeDasharray="4 2"
+              pointerEvents="none"
+            />
+          )}
+
+          {/* Group Multi-Selection Bounds & Proportional Scale Handle */}
+          {groupBounds && (
+            <g id="fp-furniture-multi-select-group" className="fp-group-selection-overlay">
+              <rect
+                x={groupBounds.minX * GRID_SIZE_PX * zoom + panX - 6 * zoom}
+                y={groupBounds.minY * GRID_SIZE_PX * zoom + panY - 6 * zoom}
+                width={groupBounds.width * GRID_SIZE_PX * zoom + 12 * zoom}
+                height={groupBounds.height * GRID_SIZE_PX * zoom + 12 * zoom}
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth={2}
+                strokeDasharray="6 3"
+                rx={4}
+                pointerEvents="none"
+              />
+              {/* Group Size / Count Badge */}
+              <g
+                transform={`translate(${(groupBounds.minX + groupBounds.width / 2) * GRID_SIZE_PX * zoom + panX}, ${groupBounds.minY * GRID_SIZE_PX * zoom + panY - 14 * zoom})`}
+                style={{ pointerEvents: 'none' }}
+              >
+                <rect
+                  x={-65 * zoom}
+                  y={-10 * zoom}
+                  width={130 * zoom}
+                  height={20 * zoom}
+                  rx={10 * zoom}
+                  fill="#1e293b"
+                  stroke="#3b82f6"
+                  strokeWidth={1}
+                />
+                <text
+                  x={0}
+                  y={4 * zoom}
+                  textAnchor="middle"
+                  fontSize={10 * zoom}
+                  fill="#ffffff"
+                  fontWeight="bold"
+                >
+                  {selectedFurnitureIds.length} items grouped ({formatDimension(groupBounds.width, unit)} × {formatDimension(groupBounds.height, unit)})
+                </text>
+              </g>
+              {/* Corner Scale Handle for Group Multi-Selection */}
+              {activeTool === 'select' && (
+                <g
+                  id="fp-group-scale-handle"
+                  {...groupScaleHandleProps(groupBounds)}
+                  style={{ cursor: 'nwse-resize' }}
+                >
+                  <circle
+                    cx={(groupBounds.minX + groupBounds.width) * GRID_SIZE_PX * zoom + panX + 6 * zoom}
+                    cy={(groupBounds.minY + groupBounds.height) * GRID_SIZE_PX * zoom + panY + 6 * zoom}
+                    r={Math.max(12, 14 * zoom)}
+                    fill="transparent"
+                  />
+                  <circle
+                    cx={(groupBounds.minX + groupBounds.width) * GRID_SIZE_PX * zoom + panX + 6 * zoom}
+                    cy={(groupBounds.minY + groupBounds.height) * GRID_SIZE_PX * zoom + panY + 6 * zoom}
+                    r={Math.max(7, 8 * zoom)}
+                    fill="#2563eb"
+                    stroke="#ffffff"
+                    strokeWidth={2.5}
+                  />
+                  <circle
+                    cx={(groupBounds.minX + groupBounds.width) * GRID_SIZE_PX * zoom + panX + 6 * zoom}
+                    cy={(groupBounds.minY + groupBounds.height) * GRID_SIZE_PX * zoom + panY + 6 * zoom}
+                    r={Math.max(3, 3.5 * zoom)}
+                    fill="#ffffff"
+                  />
+                </g>
+              )}
+            </g>
+          )}
 
           {/* ── Columns / Pillars ────────────────────── */}
           {editorState.columns.map(col => {

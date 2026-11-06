@@ -12,8 +12,9 @@ interface AdvanceModalProps {
   siteId: string;
   workers: LabourWorker[];
   advanceToEdit?: LabourAdvance | null;
+  initialWorkerId?: string | null;
   onClose: () => void;
-  onSuccess: (message: string) => void;
+  onSuccess: (message: string, workerId?: string) => void;
 }
 
 export const AdvanceModal: React.FC<AdvanceModalProps> = ({
@@ -21,6 +22,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
   siteId,
   workers,
   advanceToEdit,
+  initialWorkerId,
   onClose,
   onSuccess,
 }) => {
@@ -45,7 +47,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       setReason(advanceToEdit.reason || '');
       setNotes(advanceToEdit.notes || '');
     } else {
-      setWorkerId(workers[0]?.id || '');
+      setWorkerId(initialWorkerId || workers[0]?.id || '');
       setDate(todayKey());
       setAmount('');
       // As required: "Never automatically assume an advance is recoverable" -> Require explicit selection
@@ -56,7 +58,7 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       setError('');
       setIsSubmitting(false);
     }
-  }, [advanceToEdit, isOpen, workers]);
+  }, [advanceToEdit, isOpen, workers, initialWorkerId]);
 
   if (!isOpen) return null;
 
@@ -115,7 +117,8 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
       onSuccess(
         advanceToEdit
           ? `Advance record updated (${advanceType})`
-          : `${advanceType} Advance of ₹${numAmount.toLocaleString('en-IN')} paid to ${selectedWorker?.name || 'worker'}`
+          : `${advanceType} Advance of ₹${numAmount.toLocaleString('en-IN')} paid to ${selectedWorker?.name || 'worker'}`,
+        workerId
       );
       onClose();
     } catch (err: any) {

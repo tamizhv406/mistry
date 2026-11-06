@@ -327,11 +327,157 @@ export function App() {
     addToast('Signed out of cloud account. Switched to Local Builder mode.', 'info');
   };
 
+  // ── Custom Mobile Back Navigation & History Stack (Requirement 3) ──
+  const currentViewRef = React.useRef(currentView);
+  React.useEffect(() => {
+    currentViewRef.current = currentView;
+  }, [currentView]);
+
+  const viewHistoryRef = React.useRef<Array<{ view: AppViewName; siteId?: string | null; tab?: string; subTab?: string }>>([]);
+
+  const isAnyModalOpen =
+    isAuthModalOpen ||
+    isRecoveryModalOpen ||
+    isSitePickerOpen ||
+    siteModalOpen ||
+    matModalOpen ||
+    rodModalOpen ||
+    workerModalOpen ||
+    attendanceModalOpen ||
+    advanceModalOpen ||
+    salaryModalOpen ||
+    toolModalOpen ||
+    teaModalOpen ||
+    poojaModalOpen ||
+    electricityModalOpen ||
+    waterModalOpen ||
+    otherModalOpen ||
+    commentModalOpen ||
+    confirmModalState.isOpen;
+
+  const modalOpenRef = React.useRef(isAnyModalOpen);
+  React.useEffect(() => {
+    modalOpenRef.current = isAnyModalOpen;
+    if (isAnyModalOpen && typeof window !== 'undefined' && window.history) {
+      window.history.pushState({ appState: 'modal' }, '');
+    }
+  }, [isAnyModalOpen]);
+
+  const closeAllModals = React.useCallback(() => {
+    setIsAuthModalOpen(false);
+    setIsRecoveryModalOpen(false);
+    setIsSitePickerOpen(false);
+    setSiteModalOpen(false);
+    setMatModalOpen(false);
+    setRodModalOpen(false);
+    setWorkerModalOpen(false);
+    setAttendanceModalOpen(false);
+    setAdvanceModalOpen(false);
+    setSalaryModalOpen(false);
+    setToolModalOpen(false);
+    setTeaModalOpen(false);
+    setPoojaModalOpen(false);
+    setElectricityModalOpen(false);
+    setWaterModalOpen(false);
+    setOtherModalOpen(false);
+    setCommentModalOpen(false);
+    setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const lastBackPressRef = React.useRef(0);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.history.state) {
+      window.history.replaceState({ appState: 'root', view: 'dashboard' }, '');
+    }
+
+    const handlePopState = (_e: PopStateEvent) => {
+      // 0. Dispatch custom 'mistry:back' event to let any active child modal, sheet, or overlay handle it first
+      const backEvt = new CustomEvent('mistry:back', { cancelable: true });
+      window.dispatchEvent(backEvt);
+      if (backEvt.defaultPrevented) {
+        window.history.pushState({ appState: 'view', view: currentViewRef.current }, '');
+        return;
+      }
+
+      // 1. If any top-level app modal or overlay is open, close it instead of navigating away
+      if (modalOpenRef.current) {
+        closeAllModals();
+        return;
+      }
+
+      // 2. If view history stack has previous screens, navigate back to previous screen
+      if (viewHistoryRef.current.length > 0) {
+        const prev = viewHistoryRef.current.pop();
+        if (prev) {
+          if (prev.siteId) setSelectedSiteId(prev.siteId);
+          if (prev.tab) setCurrentSiteTab(prev.tab as any);
+          if (prev.subTab) setCurrentExpenseSubSection(prev.subTab as any);
+          setCurrentView(prev.view);
+          return;
+        }
+      }
+
+      // 3. If currently not on dashboard, return to dashboard
+      if (currentViewRef.current !== 'dashboard') {
+        setCurrentView('dashboard');
+        window.history.pushState({ appState: 'root', view: 'dashboard' }, '');
+        return;
+      }
+
+      // 4. If already on dashboard (root), prevent accidental app exit; require double tap to exit
+      const now = Date.now();
+      if (now - lastBackPressRef.current < 2000) {
+        // Double tap confirmed - allow normal browser/OS handling
+        return;
+      }
+      lastBackPressRef.current = now;
+      window.history.pushState({ appState: 'root', view: 'dashboard' }, '');
+      addToast('Tap back again to exit application', 'info');
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    // Capacitor native Android back button hook
+    let capListener: any = null;
+    try {
+      const cap = (window as any).Capacitor;
+      if (cap?.Plugins?.App?.addListener) {
+        capListener = cap.Plugins.App.addListener('backButton', () => {
+          handlePopState(new PopStateEvent('popstate', { state: window.history.state }));
+        });
+      }
+    } catch {
+      // not in Capacitor shell
+    }
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (capListener && typeof capListener.remove === 'function') {
+        capListener.remove();
+      }
+    };
+  }, [closeAllModals]);
+
   // Navigation Helper with deep tab and sub-tab support
   const handleNavigate = (view: string, siteId?: string, tab?: string, subTab?: string) => {
     if (view === 'login' || view === 'auth') {
       setIsAuthModalOpen(true);
       return;
+    }
+
+    const targetView = (PROJECT_VIEWS.includes(view as AppViewName) ? view : view) as AppViewName;
+    if (currentView !== targetView) {
+      viewHistoryRef.current.push({
+        view: currentView,
+        siteId: selectedSiteId,
+        tab: currentSiteTab,
+        subTab: currentExpenseSubSection,
+      });
+      if (typeof window !== 'undefined' && window.history) {
+        window.history.pushState({ appState: 'view', view: targetView }, '');
+      }
     }
     if (view === 'site-detail' && siteId) {
       setSelectedSiteId(siteId);
@@ -543,6 +689,10 @@ export function App() {
         {currentView === 'dashboard' && (
           <DashboardView
             onlySites={false}
+            selectedSiteId={selectedSiteId}
+            onSelectSite={siteId => {
+              if (siteId) setSelectedSiteId(siteId);
+            }}
             onOpenSite={siteId => {
               setSelectedSiteId(siteId);
               handleNavigate('site-detail', siteId);

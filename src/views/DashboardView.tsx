@@ -57,6 +57,8 @@ interface DashboardViewProps {
   onNavigate?: (view: string, siteId?: string, tab?: string, subTab?: string) => void;
   onOpenMaterialModal?: (category?: MaterialCategory) => void;
   onOpenExpenseModal?: (type?: string) => void;
+  selectedSiteId?: string | null;
+  onSelectSite?: (siteId: string | null) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -70,8 +72,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
   onOpenMaterialModal,
   onOpenExpenseModal,
+  selectedSiteId,
+  onSelectSite,
 }) => {
-  const stats = useOverallStats(user);
+  const [selectedSiteFilterId, setSelectedSiteFilterId] = useState<string | null>(() => selectedSiteId || null);
+
+  React.useEffect(() => {
+    if (selectedSiteId !== undefined) {
+      setSelectedSiteFilterId(selectedSiteId);
+    }
+  }, [selectedSiteId]);
+
+  const stats = useOverallStats(user, selectedSiteFilterId);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [selectedContractor, setSelectedContractor] = useState<string>('All');
@@ -421,6 +433,118 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* 7 & 8. Main 2-Column Section: Project Portfolio & Financials */}
+      {/* Site Selection Filter Bar (Requirement 6) */}
+      <div
+        className="erp-site-selection-bar"
+        id="dashboard-site-selection-bar"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          background: selectedSiteFilterId ? '#EFF6FF' : '#FFFFFF',
+          padding: '14px 18px',
+          borderRadius: '12px',
+          border: selectedSiteFilterId ? '1.5px solid #3B82F6' : '1px solid var(--erp-border)',
+          marginBottom: '20px',
+          boxShadow: 'var(--erp-shadow-sm)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Building2 size={18} color="#2563EB" />
+            <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1E293B' }}>
+              Select Site to Filter Dashboard:
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              id="dashboard-site-pill-all"
+              onClick={() => {
+                setSelectedSiteFilterId(null);
+                if (onSelectSite) onSelectSite(null);
+              }}
+              style={{
+                borderRadius: '20px',
+                fontSize: '0.78rem',
+                padding: '5px 14px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                backgroundColor: !selectedSiteFilterId ? '#2563EB' : '#FFFFFF',
+                color: !selectedSiteFilterId ? '#FFFFFF' : '#475569',
+                border: !selectedSiteFilterId ? 'none' : '1px solid #CBD5E1',
+                boxShadow: !selectedSiteFilterId ? '0 2px 4px rgba(37,99,235,0.2)' : 'none',
+              }}
+            >
+              All Projects ({stats.totalSites})
+            </button>
+
+            {stats.siteSummaries.map(({ site }) => {
+              const isSelected = selectedSiteFilterId === site.id;
+              return (
+                <button
+                  key={site.id}
+                  type="button"
+                  id={`dashboard-site-pill-${site.id}`}
+                  onClick={() => {
+                    const next = isSelected ? null : site.id;
+                    setSelectedSiteFilterId(next);
+                    if (onSelectSite) onSelectSite(next);
+                  }}
+                  style={{
+                    borderRadius: '20px',
+                    fontSize: '0.78rem',
+                    padding: '5px 14px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    backgroundColor: isSelected ? '#1D4ED8' : '#FFFFFF',
+                    color: isSelected ? '#FFFFFF' : '#334155',
+                    border: isSelected ? 'none' : '1px solid #CBD5E1',
+                    boxShadow: isSelected ? '0 2px 4px rgba(29,78,216,0.25)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <span>{site.name}</span>
+                  {isSelected && <span style={{ fontSize: '0.7rem' }}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {selectedSiteFilterId && stats.filteredSiteName && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '0.8rem', color: '#1E40AF', fontWeight: 700 }}>
+              Showing Site Data: <strong>{stats.filteredSiteName}</strong>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedSiteFilterId(null);
+                if (onSelectSite) onSelectSite(null);
+              }}
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #BFDBFE',
+                borderRadius: '8px',
+                padding: '4px 10px',
+                fontSize: '0.75rem',
+                color: '#2563EB',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Clear Filter
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="erp-main-grid">
         {/* Left Column: Project Overview (Section 7) */}
         <div className="erp-section-card">
@@ -595,8 +719,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <tbody>
                   {filteredSummaries.map(({ site, totalExpense, totalPaid, balance, budget, progressPercentage }) => {
                     const statusClass = `status-${site.status.toLowerCase().replace(/\s+/g, '')}`;
+                    const isSelected = selectedSiteFilterId === site.id;
                     return (
-                      <tr key={site.id} onClick={() => onOpenSite(site.id)} style={{ cursor: 'pointer' }}>
+                      <tr
+                        key={site.id}
+                        id={`dashboard-project-row-${site.id}`}
+                        onClick={() => {
+                          const next = isSelected ? null : site.id;
+                          setSelectedSiteFilterId(next);
+                          if (onSelectSite) onSelectSite(next);
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          backgroundColor: isSelected ? '#EFF6FF' : undefined,
+                          borderLeft: isSelected ? '4px solid #2563EB' : undefined,
+                        }}
+                      >
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div
@@ -604,7 +742,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 width: '36px',
                                 height: '36px',
                                 borderRadius: '8px',
-                                background: '#EFF6FF',
+                                background: isSelected ? '#DBEAFE' : '#EFF6FF',
                                 color: '#2563EB',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -617,8 +755,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               {site.name[0].toUpperCase()}
                             </div>
                             <div style={{ minWidth: 0 }}>
-                              <strong style={{ display: 'block', fontSize: '0.88rem', color: '#111827' }}>
+                              <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', color: '#111827' }}>
                                 {site.name}
+                                {isSelected && (
+                                  <span style={{ fontSize: '0.68rem', backgroundColor: '#2563EB', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                    Active Filter
+                                  </span>
+                                )}
                               </strong>
                               <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
                                 {site.area || site.address || site.buildingType} • Owner: {site.ownerName}
@@ -669,7 +812,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }} onClick={e => e.stopPropagation()}>
-                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
                             <button
                               type="button"
                               className="btn btn-sm"
@@ -709,25 +852,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
               {filteredSummaries.map(({ site, totalExpense, totalPaid, balance, budget, progressPercentage }) => {
                 const statusClass = `status-${site.status.toLowerCase().replace(/\s+/g, '')}`;
+                const isSelected = selectedSiteFilterId === site.id;
                 return (
                   <div
                     key={site.id}
-                    onClick={() => onOpenSite(site.id)}
+                    id={`dashboard-project-card-${site.id}`}
+                    onClick={() => {
+                      const next = isSelected ? null : site.id;
+                      setSelectedSiteFilterId(next);
+                      if (onSelectSite) onSelectSite(next);
+                    }}
                     style={{
-                      background: '#FFFFFF',
-                      border: '1px solid var(--erp-border)',
+                      background: isSelected ? '#EFF6FF' : '#FFFFFF',
+                      border: isSelected ? '2px solid #2563EB' : '1px solid var(--erp-border)',
                       borderRadius: '12px',
                       padding: '16px',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      boxShadow: 'var(--erp-shadow-sm)',
+                      boxShadow: isSelected ? '0 4px 12px rgba(37,99,235,0.15)' : 'var(--erp-shadow-sm)',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--erp-shadow-md)'}
-                    onMouseLeave={e => e.currentTarget.style.boxShadow = 'var(--erp-shadow-sm)'}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = isSelected ? '0 6px 16px rgba(37,99,235,0.2)' : 'var(--erp-shadow-md)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = isSelected ? '0 4px 12px rgba(37,99,235,0.15)' : 'var(--erp-shadow-sm)'}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                      <span className={`status-badge ${statusClass}`}>{site.status}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span className={`status-badge ${statusClass}`}>{site.status}</span>
+                        {isSelected && (
+                          <span style={{ fontSize: '0.68rem', backgroundColor: '#2563EB', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                            Active Filter
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          title="Open Project Page"
+                          onClick={() => onOpenSite(site.id)}
+                          style={{ padding: '2px 8px', height: '26px', borderRadius: '6px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#2563EB', fontWeight: 700, fontSize: '0.72rem' }}
+                        >
+                          Open
+                        </button>
                         <button type="button" onClick={() => onEditSite(site)} style={{ border: 'none', background: 'none', color: '#64748B', cursor: 'pointer', padding: '4px' }}>
                           <Edit2 size={14} />
                         </button>
@@ -754,7 +919,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: '#F8FAFC', padding: '8px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: isSelected ? '#DBEAFE' : '#F8FAFC', padding: '8px', borderRadius: '8px', textAlign: 'center' }}>
                       <div>
                         <span style={{ fontSize: '0.65rem', color: '#64748B', display: 'block' }}>Spent</span>
                         <strong style={{ fontSize: '0.78rem', color: '#111827' }}>₹{totalExpense.toLocaleString('en-IN')}</strong>
@@ -776,13 +941,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Right Column: Financial Analytics (Section 8 & 12) */}
-        <div className="erp-section-card">
+        <div className="erp-section-card" id="dashboard-financial-analytics-card">
           <div className="erp-section-header">
             <div className="erp-section-title-wrap">
               <Wallet size={20} className="erp-section-icon" />
               <div>
-                <h3 className="erp-section-title">Financial Analytics</h3>
-                <p className="erp-section-subtitle">Real project expenditures, settled cash, and budget metrics</p>
+                <h3 className="erp-section-title">
+                  Financial Analytics {selectedSiteFilterId && stats.filteredSiteName ? `• ${stats.filteredSiteName}` : ''}
+                </h3>
+                <p className="erp-section-subtitle">
+                  {selectedSiteFilterId && stats.filteredSiteName
+                    ? `Expenditures, settled cash, and budget metrics for ${stats.filteredSiteName}`
+                    : 'Real project expenditures, settled cash, and budget metrics'}
+                </p>
               </div>
             </div>
           </div>
@@ -792,7 +963,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="erp-fin-box">
               <span className="erp-fin-label">Total Spent</span>
               <span className="erp-fin-amount">₹{stats.overallExpense.toLocaleString('en-IN')}</span>
-              <span style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>Across {stats.totalSites} projects</span>
+              <span style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
+                {selectedSiteFilterId && stats.filteredSiteName ? `Site: ${stats.filteredSiteName}` : `Across ${stats.totalSites} projects`}
+              </span>
             </div>
 
             <div className="erp-fin-box">
@@ -887,13 +1060,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 9 & 10. Attendance Overview & Material Inventory Dual Grid */}
       <div className="erp-dual-grid">
         {/* Section 9: Attendance Overview */}
-        <div className="erp-section-card">
+        <div className="erp-section-card" id="dashboard-workforce-attendance-card">
           <div className="erp-section-header">
             <div className="erp-section-title-wrap">
               <Users size={20} className="erp-section-icon" />
               <div>
-                <h3 className="erp-section-title">Workforce & Daily Attendance</h3>
-                <p className="erp-section-subtitle">Real-time attendance tracking for {formattedDate}</p>
+                <h3 className="erp-section-title">
+                  Workforce & Daily Attendance {selectedSiteFilterId && stats.filteredSiteName ? `• ${stats.filteredSiteName}` : ''}
+                </h3>
+                <p className="erp-section-subtitle">
+                  {selectedSiteFilterId && stats.filteredSiteName
+                    ? `Real-time attendance tracking for ${stats.filteredSiteName} (${stats.attendanceToday.totalWorkers} workers)`
+                    : `Real-time attendance tracking for ${formattedDate}`}
+                </p>
               </div>
             </div>
 
@@ -952,13 +1131,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Section 10: Material Management Overview */}
-        <div className="erp-section-card">
+        <div className="erp-section-card" id="dashboard-materials-inventory-card">
           <div className="erp-section-header">
             <div className="erp-section-title-wrap">
               <Layers size={20} className="erp-section-icon" />
               <div>
-                <h3 className="erp-section-title">Materials & Inventory Alerts</h3>
-                <p className="erp-section-subtitle">Real-time stock balances and threshold notifications</p>
+                <h3 className="erp-section-title">
+                  Materials & Inventory Alerts {selectedSiteFilterId && stats.filteredSiteName ? `• ${stats.filteredSiteName}` : ''}
+                </h3>
+                <p className="erp-section-subtitle">
+                  {selectedSiteFilterId && stats.filteredSiteName
+                    ? `Real-time stock balances and threshold notifications for ${stats.filteredSiteName}`
+                    : 'Real-time stock balances and threshold notifications'}
+                </p>
               </div>
             </div>
 
@@ -1057,13 +1242,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* 11. Recent Activities Feed */}
       {stats.recentActivities.length > 0 && (
-        <div className="erp-section-card">
+        <div className="erp-section-card" id="dashboard-recent-activities-card">
           <div className="erp-section-header">
             <div className="erp-section-title-wrap">
               <TrendingUp size={20} className="erp-section-icon" />
               <div>
-                <h3 className="erp-section-title">Recent Construction Activities & Audit Trail</h3>
-                <p className="erp-section-subtitle">Real-time transaction feed across all active sites</p>
+                <h3 className="erp-section-title">
+                  Recent Construction Activities & Audit Trail {selectedSiteFilterId && stats.filteredSiteName ? `• ${stats.filteredSiteName}` : ''}
+                </h3>
+                <p className="erp-section-subtitle">
+                  {selectedSiteFilterId && stats.filteredSiteName
+                    ? `Real-time transaction feed for ${stats.filteredSiteName}`
+                    : 'Real-time transaction feed across all active sites'}
+                </p>
               </div>
             </div>
           </div>

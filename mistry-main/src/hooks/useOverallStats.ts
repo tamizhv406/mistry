@@ -66,7 +66,7 @@ export interface CategoryExpenseItem {
   color: string;
 }
 
-export function useOverallStats(user?: User | null) {
+export function useOverallStats(user?: User | null, selectedSiteId?: string | null) {
   return useLiveQuery(async () => {
     const effectiveUser = user || getCurrentUser();
     const rawSites = effectiveUser
@@ -80,22 +80,22 @@ export function useOverallStats(user?: User | null) {
     const siteMap = new Map(sites.map(s => [s.id, s.name]));
 
     const [
-      materials,
-      rodEntries,
-      workers,
-      attendance,
-      advances,
-      salaryPayments,
-      tools,
-      teaSnacks,
-      pooja,
-      electricity,
-      water,
-      otherExpenses,
-      stockMovements,
+      allMaterials,
+      allRodEntries,
+      allWorkers,
+      allAttendance,
+      allAdvances,
+      allSalaryPayments,
+      allTools,
+      allTeaSnacks,
+      allPooja,
+      allElectricity,
+      allWater,
+      allOtherExpenses,
+      allStockMovements,
       catalogItems,
-      estimates,
-      floorPlans,
+      allEstimates,
+      allFloorPlans,
     ] = await Promise.all([
       db.materials.filter(m => !m.isDeleted && (shouldIncludeAll || !m.siteId || siteIdSet.has(m.siteId))).toArray(),
       db.rodEntries.filter(r => !r.isDeleted && (shouldIncludeAll || !r.siteId || siteIdSet.has(r.siteId))).toArray(),
@@ -114,6 +114,25 @@ export function useOverallStats(user?: User | null) {
       db.estimates.filter(e => !e.isDeleted).toArray(),
       db.floorPlans.filter(f => !f.isDeleted).toArray(),
     ]);
+
+    const isSiteFiltered = !!selectedSiteId && selectedSiteId !== 'all';
+    const siteMatches = (recordSiteId?: string) => !isSiteFiltered || recordSiteId === selectedSiteId;
+
+    const materials = isSiteFiltered ? allMaterials.filter(m => siteMatches(m.siteId)) : allMaterials;
+    const rodEntries = isSiteFiltered ? allRodEntries.filter(r => siteMatches(r.siteId)) : allRodEntries;
+    const workers = isSiteFiltered ? allWorkers.filter(w => siteMatches(w.siteId)) : allWorkers;
+    const attendance = isSiteFiltered ? allAttendance.filter(a => siteMatches(a.siteId)) : allAttendance;
+    const advances = isSiteFiltered ? allAdvances.filter(a => siteMatches(a.siteId)) : allAdvances;
+    const salaryPayments = isSiteFiltered ? allSalaryPayments.filter(s => siteMatches(s.siteId)) : allSalaryPayments;
+    const tools = isSiteFiltered ? allTools.filter(t => siteMatches(t.siteId)) : allTools;
+    const teaSnacks = isSiteFiltered ? allTeaSnacks.filter(t => siteMatches(t.siteId)) : allTeaSnacks;
+    const pooja = isSiteFiltered ? allPooja.filter(p => siteMatches(p.siteId)) : allPooja;
+    const electricity = isSiteFiltered ? allElectricity.filter(e => siteMatches(e.siteId)) : allElectricity;
+    const water = isSiteFiltered ? allWater.filter(w => siteMatches(w.siteId)) : allWater;
+    const otherExpenses = isSiteFiltered ? allOtherExpenses.filter(o => siteMatches(o.siteId)) : allOtherExpenses;
+    const stockMovements = isSiteFiltered ? allStockMovements.filter(s => siteMatches(s.siteId)) : allStockMovements;
+    const estimates = isSiteFiltered ? allEstimates.filter(e => siteMatches(e.siteId)) : allEstimates;
+    const floorPlans = isSiteFiltered ? allFloorPlans.filter(f => siteMatches(f.siteId)) : allFloorPlans;
 
     // Worker wage mapping
     const workerWageMap = new Map(workers.map(w => [w.id, Number(w.dailyWage) || 0]));
@@ -308,8 +327,8 @@ export function useOverallStats(user?: User | null) {
 
     // Per-site calculations
     const siteSummaries: SiteCardSummary[] = sites.map(site => {
-      const sMat = materials.filter(m => m.siteId === site.id);
-      const sRods = rodEntries.filter(r => r.siteId === site.id);
+      const sMat = allMaterials.filter(m => m.siteId === site.id);
+      const sRods = allRodEntries.filter(r => r.siteId === site.id);
       const matExp =
         sMat.reduce((acc, m) => acc + (Number(m.totalAmount) || 0), 0) +
         sRods.reduce((acc, r) => acc + (Number(r.totalAmount) || 0), 0);
@@ -317,36 +336,36 @@ export function useOverallStats(user?: User | null) {
         sMat.reduce((acc, m) => acc + (Number(m.paidAmount) || 0), 0) +
         sRods.reduce((acc, r) => acc + (Number(r.paidAmount) || 0), 0);
 
-      const sAtt = attendance.filter(a => a.siteId === site.id);
+      const sAtt = allAttendance.filter(a => a.siteId === site.id);
       let labGross = 0;
       sAtt.forEach(att => {
         const wage = workerWageMap.get(att.workerId) || 0;
         labGross += wage * (Number(att.dayMultiplier) || 0);
       });
-      const sAdv = advances.filter(a => a.siteId === site.id).reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
-      const sSal = salaryPayments.filter(s => s.siteId === site.id).reduce((acc, s) => acc + (Number(s.paidAmount) || 0), 0);
+      const sAdv = allAdvances.filter(a => a.siteId === site.id).reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
+      const sSal = allSalaryPayments.filter(s => s.siteId === site.id).reduce((acc, s) => acc + (Number(s.paidAmount) || 0), 0);
 
-      const sTools = tools.filter(t => t.siteId === site.id);
+      const sTools = allTools.filter(t => t.siteId === site.id);
       const toolsExp = sTools.reduce((acc, t) => acc + (Number(t.cost) || 0), 0);
       const toolsPd = sTools.reduce((acc, t) => acc + (Number(t.paidAmount) || 0), 0);
 
-      const sTea = teaSnacks.filter(t => t.siteId === site.id);
+      const sTea = allTeaSnacks.filter(t => t.siteId === site.id);
       const teaExp = sTea.reduce((acc, t) => acc + (Number(t.totalAmount) || 0), 0);
       const teaPd = sTea.reduce((acc, t) => acc + (Number(t.paidAmount) || 0), 0);
 
-      const sPooja = pooja.filter(p => p.siteId === site.id);
+      const sPooja = allPooja.filter(p => p.siteId === site.id);
       const poojaExp = sPooja.reduce((acc, p) => acc + (Number(p.totalAmount) || 0), 0);
       const poojaPd = sPooja.reduce((acc, p) => acc + (Number(p.paidAmount) || 0), 0);
 
-      const sElec = electricity.filter(e => e.siteId === site.id);
+      const sElec = allElectricity.filter(e => e.siteId === site.id);
       const elecExp = sElec.reduce((acc, e) => acc + (Number(e.billAmount) || 0), 0);
       const elecPd = sElec.reduce((acc, e) => acc + (Number(e.paidAmount) || 0), 0);
 
-      const sWater = water.filter(w => w.siteId === site.id);
+      const sWater = allWater.filter(w => w.siteId === site.id);
       const waterExp = sWater.reduce((acc, w) => acc + (Number(w.billAmount) || 0), 0);
       const waterPd = sWater.reduce((acc, w) => acc + (Number(w.paidAmount) || 0), 0);
 
-      const sOther = otherExpenses.filter(o => o.siteId === site.id);
+      const sOther = allOtherExpenses.filter(o => o.siteId === site.id);
       const otherExp = sOther.reduce((acc, o) => acc + (Number(o.amount) || 0), 0);
       const otherPd = sOther.reduce((acc, o) => acc + (Number(o.paidAmount) || 0), 0);
 
@@ -384,7 +403,7 @@ export function useOverallStats(user?: User | null) {
         progressPercentage = 25;
       }
 
-      const sWorkers = workers.filter(w => w.siteId === site.id);
+      const sWorkers = allWorkers.filter(w => w.siteId === site.id);
 
       return {
         site,
@@ -480,7 +499,8 @@ export function useOverallStats(user?: User | null) {
       });
     });
 
-    sites.forEach(s => {
+    const activitySites = isSiteFiltered ? sites.filter(s => s.id === selectedSiteId) : sites;
+    activitySites.forEach(s => {
       activities.push({
         id: `site-create-${s.id}`,
         type: 'project',
@@ -541,6 +561,9 @@ export function useOverallStats(user?: User | null) {
 
       siteSummaries,
       recentActivities,
+      allSites: sites,
+      filteredSiteId: isSiteFiltered ? (selectedSiteId || null) : null,
+      filteredSiteName: isSiteFiltered && selectedSiteId ? (siteMap.get(selectedSiteId) || 'Selected Site') : null,
     };
   });
 }

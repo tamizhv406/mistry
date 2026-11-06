@@ -17,8 +17,9 @@ interface SalaryPaymentModalProps {
   advances: LabourAdvance[];
   pastPayments: SalaryPayment[];
   paymentToEdit?: SalaryPayment | null;
+  initialWorkerId?: string | null;
   onClose: () => void;
-  onSuccess: (message: string) => void;
+  onSuccess: (message: string, workerId?: string) => void;
 }
 
 export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
@@ -29,6 +30,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
   advances,
   pastPayments,
   paymentToEdit,
+  initialWorkerId,
   onClose,
   onSuccess,
 }) => {
@@ -50,7 +52,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       setPaymentMode(paymentToEdit.paymentMode || 'Cash');
       setPeriodNotes(paymentToEdit.notes || '');
     } else {
-      setWorkerId(workers[0]?.id || '');
+      setWorkerId(initialWorkerId || workers[0]?.id || '');
       setDate(todayKey());
       setPaidAmount('0'); // Default: Paid Amount = 0
       setPaymentMode('Cash');
@@ -58,7 +60,7 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       setError('');
       setIsSubmitting(false);
     }
-  }, [paymentToEdit, isOpen, workers]);
+  }, [paymentToEdit, isOpen, workers, initialWorkerId]);
 
   const site = useLiveQuery(() => db.sites.get(siteId), [siteId]);
 
@@ -138,7 +140,8 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
       onSuccess(
         paymentToEdit
           ? 'Salary payment record updated'
-          : `Salary of ₹${numPaid.toLocaleString('en-IN')} recorded for ${selectedWorker?.name}`
+          : `Salary of ₹${numPaid.toLocaleString('en-IN')} recorded for ${selectedWorker?.name}`,
+        workerId
       );
       onClose();
     } catch (err: any) {
