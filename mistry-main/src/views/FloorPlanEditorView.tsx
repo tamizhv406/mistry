@@ -185,7 +185,7 @@ const WINDOW_TYPES: WindowType[] = [
 interface FurnitureCatalogItem {
   itemType: string;
   label: string;
-  category: 'bedroom' | 'living' | 'dining' | 'kitchen' | 'bathroom' | 'utility' | 'outdoor';
+  category: 'bedroom' | 'living' | 'dining' | 'kitchen' | 'bathroom' | 'utility' | 'outdoor' | 'structural';
   width: number; // in feet
   height: number; // in feet
 }
@@ -194,19 +194,26 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
   // Bedroom
   { itemType: 'Single Bed', label: 'Single Bed (3×6.5 ft)', category: 'bedroom', width: 3, height: 6.5 },
   { itemType: 'Double Bed', label: 'Double Bed (5×6.5 ft)', category: 'bedroom', width: 5, height: 6.5 },
+  { itemType: 'Queen Bed', label: 'Queen Bed (5.5×6.5 ft)', category: 'bedroom', width: 5.5, height: 6.5 },
   { itemType: 'King Bed', label: 'King Bed (6×6.5 ft)', category: 'bedroom', width: 6, height: 6.5 },
   { itemType: 'Wardrobe', label: 'Wardrobe (4×2 ft)', category: 'bedroom', width: 4, height: 2 },
+  { itemType: 'Dressing Table', label: 'Dressing Table (3.5×1.5 ft)', category: 'bedroom', width: 3.5, height: 1.5 },
+  { itemType: 'Nightstand', label: 'Bedside Nightstand (1.5×1.5 ft)', category: 'bedroom', width: 1.5, height: 1.5 },
 
   // Living
   { itemType: '1-Seater Sofa', label: 'Armchair (3×3 ft)', category: 'living', width: 3, height: 3 },
   { itemType: '2-Seater Sofa', label: '2-Seater Sofa (5×3 ft)', category: 'living', width: 5, height: 3 },
   { itemType: '3-Seater Sofa', label: '3-Seater Sofa (7×3 ft)', category: 'living', width: 7, height: 3 },
+  { itemType: 'L-shaped Sofa', label: 'L-Shaped Sectional Sofa (7×6 ft)', category: 'living', width: 7, height: 6 },
   { itemType: 'Coffee Table', label: 'Coffee Table (3.5×2 ft)', category: 'living', width: 3.5, height: 2 },
   { itemType: 'TV Unit', label: 'TV Console (4.5×1.5 ft)', category: 'living', width: 4.5, height: 1.5 },
+  { itemType: 'Bookshelf', label: 'Bookshelf / Display (3.5×1.2 ft)', category: 'living', width: 3.5, height: 1.2 },
+  { itemType: 'Shoe Rack', label: 'Shoe Rack / Foyer Cabinet (3×1.2 ft)', category: 'living', width: 3, height: 1.2 },
 
   // Dining & Study
   { itemType: 'Dining Table 4', label: 'Dining Table 4-Seat (3.5×3.5 ft)', category: 'dining', width: 3.5, height: 3.5 },
   { itemType: 'Dining Table 6', label: 'Dining Table 6-Seat (5.5×3.5 ft)', category: 'dining', width: 5.5, height: 3.5 },
+  { itemType: 'Dining Table 8', label: 'Dining Table 8-Seat (7×3.5 ft)', category: 'dining', width: 7, height: 3.5 },
   { itemType: 'Study Desk', label: 'Study / Work Desk (4×2 ft)', category: 'dining', width: 4, height: 2 },
   { itemType: 'Office Chair', label: 'Desk Chair (2×2 ft)', category: 'dining', width: 2, height: 2 },
 
@@ -215,15 +222,24 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
   { itemType: 'Kitchen Sink', label: 'Kitchen Sink (3×2 ft)', category: 'kitchen', width: 3, height: 2 },
   { itemType: 'Gas Stove / Cooktop', label: 'Gas Stove / Hob (2.5×2 ft)', category: 'kitchen', width: 2.5, height: 2 },
   { itemType: 'Refrigerator', label: 'Refrigerator (2.5×2.5 ft)', category: 'kitchen', width: 2.5, height: 2.5 },
+  { itemType: 'Kitchen Island', label: 'Kitchen Island (5×3 ft)', category: 'kitchen', width: 5, height: 3 },
+  { itemType: 'Breakfast Counter', label: 'Breakfast Bar (5×1.8 ft)', category: 'kitchen', width: 5, height: 1.8 },
 
-  // Bathroom
+  // Bathroom & Sanitary
   { itemType: 'WC / Toilet', label: 'Commode / WC (2×2.5 ft)', category: 'bathroom', width: 2, height: 2.5 },
+  { itemType: 'Indian Toilet', label: 'Squatting Pan / Orissa Pan (2×2.5 ft)', category: 'bathroom', width: 2, height: 2.5 },
   { itemType: 'Wash Basin', label: 'Wash Basin (2×1.5 ft)', category: 'bathroom', width: 2, height: 1.5 },
+  { itemType: 'Bathroom Vanity', label: 'Vanity Counter (3×1.8 ft)', category: 'bathroom', width: 3, height: 1.8 },
   { itemType: 'Shower Cubicle', label: 'Shower Enclosure (3×3 ft)', category: 'bathroom', width: 3, height: 3 },
   { itemType: 'Bathtub', label: 'Bathtub (5×2.5 ft)', category: 'bathroom', width: 5, height: 2.5 },
 
-  // Utility & Outdoor
+  // Utility, Electrical, Structural & Outdoor
   { itemType: 'Washing Machine', label: 'Washing Machine (2×2 ft)', category: 'utility', width: 2, height: 2 },
+  { itemType: 'Split AC', label: 'Split AC Indoor Unit (3×0.8 ft)', category: 'utility', width: 3, height: 0.8 },
+  { itemType: 'Ceiling Fan', label: 'Ceiling Fan (3×3 ft)', category: 'utility', width: 3, height: 3 },
+  { itemType: 'Distribution Board', label: 'Electrical DB Panel (2×0.8 ft)', category: 'utility', width: 2, height: 0.8 },
+  { itemType: 'Column', label: 'Structural Pillar (1.5×1.5 ft)', category: 'structural', width: 1.5, height: 1.5 },
+  { itemType: 'Plant', label: 'Indoor Planter (2×2 ft)', category: 'outdoor', width: 2, height: 2 },
   { itemType: 'Car Parking', label: 'Car Parking Bay (16×8 ft)', category: 'outdoor', width: 8, height: 16 },
 ];
 
@@ -231,26 +247,42 @@ export const simplifyFurnitureLabel = (itemType: string): string => {
   const map: Record<string, string> = {
     'Single Bed': 'Single Bed',
     'Double Bed': 'Double Bed',
+    'Queen Bed': 'Queen Bed',
     'King Bed': 'King Bed',
     'Wardrobe': 'Wardrobe',
+    'Dressing Table': 'Vanity Mirror',
+    'Nightstand': 'Nightstand',
     '1-Seater Sofa': 'Sofa (1-Seat)',
     '2-Seater Sofa': 'Sofa (2-Seat)',
     '3-Seater Sofa': 'Sofa (3-Seat)',
+    'L-shaped Sofa': 'L-Sofa',
     'Coffee Table': 'Coffee Table',
     'TV Unit': 'TV Console',
+    'Bookshelf': 'Bookshelf',
+    'Shoe Rack': 'Shoe Rack',
     'Dining Table 4': 'Dining (4P)',
     'Dining Table 6': 'Dining (6P)',
+    'Dining Table 8': 'Dining (8P)',
     'Study Desk': 'Study Desk',
     'Office Chair': 'Desk Chair',
     'Kitchen Counter': 'Countertop',
     'Kitchen Sink': 'Sink',
     'Gas Stove / Cooktop': 'Gas Stove',
     'Refrigerator': 'Fridge',
+    'Kitchen Island': 'Island',
+    'Breakfast Counter': 'Breakfast Bar',
     'WC / Toilet': 'Commode / WC',
+    'Indian Toilet': 'Orissa Pan',
     'Wash Basin': 'Wash Basin',
+    'Bathroom Vanity': 'Vanity',
     'Shower Cubicle': 'Shower',
     'Bathtub': 'Bathtub',
     'Washing Machine': 'Washer',
+    'Split AC': 'Split AC',
+    'Ceiling Fan': 'Fan',
+    'Distribution Board': 'DB Panel',
+    'Column': 'Pillar',
+    'Plant': 'Planter',
     'Car Parking': 'Car Bay',
   };
   return map[itemType] || itemType;
@@ -6646,7 +6678,7 @@ _Shared via Building Mistry App_`;
 
   // Measurement text: a fixed, readable size on screen at any zoom, scaled by the user's
   // text-size setting. It is drawn from the wall's real length on every render.
-  const dimFontPx = (isMobile ? 12 : 11.5) * dimTextScale;
+  const dimFontPx = (isMobile ? 13.5 : 11.5) * dimTextScale;
   const dimColor = viewMode === 'blueprint' ? '#fca5a5' : '#dc2626';
   const dimLabelsTappable = activeTool === 'select' || activeTool === 'pan';
   const toScreen = (x: number, y: number) => ({ x: x * GRID_SIZE_PX * zoom + panX, y: y * GRID_SIZE_PX * zoom + panY });
@@ -7781,6 +7813,52 @@ _Shared via Building Mistry App_`;
                     {accordionSections.structure && (
                       <div className="fp-wireframe-grid">
                         <div
+                          className={`fp-wireframe-card ${activeTool === 'wall' && wallThickness >= (unit === 'feet' ? 0.5 : 0.18) ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveTool('wall');
+                            setWallThickness(unit === 'feet' ? 0.75 : 0.23);
+                            setSelectedElement(null);
+                            if (isMobile) setIsLeftDrawerOpen(false);
+                            speakTamil('வெளிப்புற சுவர் வரையவும்');
+                          }}
+                          title={`Outer Layer Wall (${unit === 'feet' ? '9"' : '230 mm'})`}
+                          id="fp-drawer-outer-wall"
+                        >
+                          <span className="fp-wireframe-lbl">OUTER WALL (9″)</span>
+                          <div className="fp-wireframe-preview">
+                            <svg viewBox="0 0 80 44" className="fp-card-svg">
+                              <rect x="8" y="12" width="64" height="20" rx="2" fill="#0f172a" stroke="#2563eb" strokeWidth="2" />
+                              <line x1="8" y1="12" x2="72" y2="12" stroke="#f59e0b" strokeWidth="2" />
+                              <circle cx="8" cy="22" r="3" fill="#f59e0b" />
+                              <circle cx="72" cy="22" r="3" fill="#f59e0b" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`fp-wireframe-card ${activeTool === 'wall' && wallThickness < (unit === 'feet' ? 0.5 : 0.18) ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveTool('wall');
+                            setWallThickness(unit === 'feet' ? 0.375 : 0.115);
+                            setSelectedElement(null);
+                            if (isMobile) setIsLeftDrawerOpen(false);
+                            speakTamil('உட்புற சுவர் வரையவும்');
+                          }}
+                          title={`Interior Wall (${unit === 'feet' ? '4.5"' : '115 mm'})`}
+                          id="fp-drawer-interior-wall"
+                        >
+                          <span className="fp-wireframe-lbl">INTERIOR WALL (4.5″)</span>
+                          <div className="fp-wireframe-preview">
+                            <svg viewBox="0 0 80 44" className="fp-card-svg">
+                              <rect x="8" y="16" width="64" height="12" rx="2" fill="#f8fafc" stroke="#2563eb" strokeWidth="1.5" />
+                              <line x1="8" y1="22" x2="72" y2="22" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3,2" />
+                              <circle cx="8" cy="22" r="2.5" fill="#2563eb" />
+                              <circle cx="72" cy="22" r="2.5" fill="#2563eb" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div
                           className={`fp-wireframe-card ${activeTool === 'wall' ? 'active' : ''}`}
                           onClick={() => { setActiveTool('wall'); setSelectedElement(null); }}
                           title="Draw straight architectural wall"
@@ -7912,6 +7990,93 @@ _Shared via Building Mistry App_`;
                               <line x1="12" y1="26" x2="68" y2="26" stroke="#38bdf8" strokeWidth="1.5" />
                               <rect x="10" y="16" width="4" height="12" fill="#0369a1" />
                               <rect x="66" y="16" width="4" height="12" fill="#0369a1" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`fp-wireframe-card ${activeTool === 'window' && selectedWindowType === 'Bay Window' ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveTool('window');
+                            setSelectedWindowType('Bay Window');
+                            setSelectedElement(null);
+                            if (isMobile) setIsLeftDrawerOpen(false);
+                            onNotify('Bay Window selected. Tap on a wall to place.', 'info');
+                          }}
+                          title="Place Bay Window (6×5 ft)"
+                          id="fp-drawer-bay-window"
+                        >
+                          <span className="fp-wireframe-lbl">BAY WINDOW</span>
+                          <div className="fp-wireframe-preview">
+                            <svg viewBox="0 0 80 44" className="fp-card-svg">
+                              <polygon points="12,32 24,14 56,14 68,32 58,32 50,20 30,20 22,32" fill="#e0f2fe" stroke="#0284c7" strokeWidth="1.5" />
+                              <line x1="24" y1="14" x2="56" y2="14" stroke="#0369a1" strokeWidth="2" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`fp-wireframe-card ${activeTool === 'window' && selectedWindowType === 'Corner Window' ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveTool('window');
+                            setSelectedWindowType('Corner Window');
+                            setSelectedElement(null);
+                            if (isMobile) setIsLeftDrawerOpen(false);
+                            onNotify('Corner Window selected. Tap on a wall corner to place.', 'info');
+                          }}
+                          title="Place Corner Window (4×4 ft)"
+                          id="fp-drawer-corner-window"
+                        >
+                          <span className="fp-wireframe-lbl">CORNER WINDOW</span>
+                          <div className="fp-wireframe-preview">
+                            <svg viewBox="0 0 80 44" className="fp-card-svg">
+                              <path d="M 20 36 L 20 12 L 60 12" fill="none" stroke="#475569" strokeWidth="2.5" />
+                              <path d="M 28 36 L 28 20 L 60 20" fill="none" stroke="#0284c7" strokeWidth="1.8" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`fp-wireframe-card ${activeTool === 'window' && selectedWindowType === 'Fixed Window' ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveTool('window');
+                            setSelectedWindowType('Fixed Window');
+                            setSelectedElement(null);
+                            if (isMobile) setIsLeftDrawerOpen(false);
+                            onNotify('French / Fixed Window selected. Tap on a wall to place.', 'info');
+                          }}
+                          title="Place French / Fixed Window (6×6 ft)"
+                          id="fp-drawer-french-window"
+                        >
+                          <span className="fp-wireframe-lbl">FRENCH WINDOW</span>
+                          <div className="fp-wireframe-preview">
+                            <svg viewBox="0 0 80 44" className="fp-card-svg">
+                              <rect x="10" y="10" width="60" height="24" fill="#f0f9ff" stroke="#0284c7" strokeWidth="1.8" />
+                              <line x1="30" y1="10" x2="30" y2="34" stroke="#0284c7" strokeWidth="1.2" />
+                              <line x1="50" y1="10" x2="50" y2="34" stroke="#0284c7" strokeWidth="1.2" />
+                              <line x1="10" y1="22" x2="70" y2="22" stroke="#38bdf8" strokeWidth="1.5" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`fp-wireframe-card ${activeTool === 'window' && selectedWindowType === 'Ventilator' ? 'active' : ''}`}
+                          onClick={() => {
+                            setActiveTool('window');
+                            setSelectedWindowType('Ventilator');
+                            setSelectedElement(null);
+                            if (isMobile) setIsLeftDrawerOpen(false);
+                            onNotify('Toilet Louvered Ventilator selected. Tap on a wall to place.', 'info');
+                          }}
+                          title="Place Bathroom Louvered Ventilator (2×1.5 ft)"
+                          id="fp-drawer-ventilator-window"
+                        >
+                          <span className="fp-wireframe-lbl">VENTILATOR</span>
+                          <div className="fp-wireframe-preview">
+                            <svg viewBox="0 0 80 44" className="fp-card-svg">
+                              <rect x="14" y="12" width="52" height="20" fill="#f0f9ff" stroke="#0284c7" strokeWidth="1.5" />
+                              <line x1="14" y1="18" x2="66" y2="18" stroke="#38bdf8" strokeWidth="1.2" />
+                              <line x1="14" y1="26" x2="66" y2="26" stroke="#38bdf8" strokeWidth="1.2" />
                             </svg>
                           </div>
                         </div>
@@ -9011,9 +9176,9 @@ _Shared via Building Mistry App_`;
                   // room for it (always when selected); the clear area alone for other shapes.
                   const size = isBox ? `Inside ${formatDimension(inner.width, unit)} × ${formatDimension(inner.height, unit)}` : `Inside ${formatAreaShort(inner.area, unit)}`;
                   const full = isBox ? `${size} · ${formatAreaShort(inner.area, unit)}` : size;
-                  const roomFor = (text: string) => iw > text.length * dimFontPx * 0.56 + 12 && ih > 74;
-                  const label = isSelected || roomFor(full) ? full : size;
-                  if (!isSelected && !roomFor(label)) return null;
+                  const roomFor = (text: string) => iw > text.length * (isMobile ? 6.5 : dimFontPx * 0.56) && ih > (isMobile ? 32 : 74);
+                  const label = isSelected || roomFor(full) ? full : (roomFor(size) ? size : (isMobile && ih > 22 ? size : ''));
+                  if (!isSelected && !label) return null;
                   return (
                     <g style={{ pointerEvents: 'none' }} className="fp-room-inside">
                       {isSelected && (
@@ -9824,6 +9989,71 @@ _Shared via Building Mistry App_`;
                       />
                     ))}
                   </>
+                ) : winType.includes('Bay') ? (
+                  <>
+                    {/* Bay window angled projection */}
+                    <path
+                      d={`M ${wx - ww / 2} ${wy} L ${wx - ww / 3} ${wy - wallThickPx * 0.8} L ${wx + ww / 3} ${wy - wallThickPx * 0.8} L ${wx + ww / 2} ${wy}`}
+                      fill="none"
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
+                      strokeWidth={2 * zoom}
+                    />
+                    <line
+                      x1={wx - ww / 3}
+                      y1={wy - wallThickPx * 0.8}
+                      x2={wx + ww / 3}
+                      y2={wy - wallThickPx * 0.8}
+                      stroke={isSelected ? '#2563eb' : '#38bdf8'}
+                      strokeWidth={2.5 * zoom}
+                    />
+                  </>
+                ) : winType.includes('Corner') ? (
+                  <>
+                    {/* Corner window return indicator */}
+                    <line
+                      x1={wx - ww / 2 + 2 * zoom}
+                      y1={wy}
+                      x2={wx + ww / 2 - 2 * zoom}
+                      y2={wy}
+                      stroke={isSelected ? '#1d4ed8' : '#38bdf8'}
+                      strokeWidth={2 * zoom}
+                    />
+                    <line
+                      x1={wx + ww / 2 - 2 * zoom}
+                      y1={wy}
+                      x2={wx + ww / 2 - 2 * zoom}
+                      y2={wy - wallThickPx * 0.7}
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
+                      strokeWidth={2 * zoom}
+                    />
+                  </>
+                ) : winType.includes('Fixed') || winType.includes('French') ? (
+                  <>
+                    <line
+                      x1={wx - ww / 2 + 2 * zoom}
+                      y1={wy}
+                      x2={wx + ww / 2 - 2 * zoom}
+                      y2={wy}
+                      stroke={isSelected ? '#1d4ed8' : '#38bdf8'}
+                      strokeWidth={2.5 * zoom}
+                    />
+                    <line
+                      x1={wx - ww / 4}
+                      y1={wy - wallThickPx / 2}
+                      x2={wx - ww / 4}
+                      y2={wy + wallThickPx / 2}
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
+                      strokeWidth={1.5 * zoom}
+                    />
+                    <line
+                      x1={wx + ww / 4}
+                      y1={wy - wallThickPx / 2}
+                      x2={wx + ww / 4}
+                      y2={wy + wallThickPx / 2}
+                      stroke={isSelected ? '#1d4ed8' : '#0284c7'}
+                      strokeWidth={1.5 * zoom}
+                    />
+                  </>
                 ) : winType.includes('Double') || winType.includes('Large') ? (
                   <>
                     <line
@@ -10114,7 +10344,7 @@ _Shared via Building Mistry App_`;
               const p2 = toScreen(wall.x2, wall.y2);
               const onScreen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
               // Too small on screen to dimension legibly: zoom in, or select the wall.
-              if (onScreen < 30 && !isSelected) continue;
+              if (onScreen < (isMobile ? 14 : 26) && !isSelected) continue;
               const halfThick = Math.max(3, (wall.thickness || 0.75) * GRID_SIZE_PX * zoom) / 2;
               const dragging = dimDrag?.wallId === wall.id;
               const extraOut = (dragging ? dimDrag!.offset : wall.dimensionOffset || 0) * GRID_SIZE_PX * zoom;
@@ -10130,6 +10360,8 @@ _Shared via Building Mistry App_`;
                 userOffset: extraOut,
                 userShift: slide,
                 isSelected,
+                wallThickness: wall.thickness || 0.75,
+                isExterior: (wall.thickness || 0.75) >= 0.5,
               });
             }
 
@@ -10174,22 +10406,33 @@ _Shared via Building Mistry App_`;
                           y={label.y - labelHeight / 2}
                           width={labelLength}
                           height={labelHeight}
-                          rx={4}
+                          rx={isMobile ? 6 : 4}
                           fill="#ffffff"
-                          stroke={isSelected || dragging ? '#dc2626' : 'rgba(220, 38, 38, 0.45)'}
-                          strokeWidth={isSelected || dragging ? 1.6 : 1}
+                          stroke={isSelected || dragging ? '#dc2626' : isMobile ? '#b91c1c' : 'rgba(220, 38, 38, 0.45)'}
+                          strokeWidth={isSelected || dragging ? 2 : isMobile ? 1.5 : 1}
+                          style={isMobile ? { filter: 'drop-shadow(0 2px 4px rgba(15, 23, 42, 0.18))' } : undefined}
                         />
                         <text
                           x={label.x}
                           y={label.y + dimFontPx * 0.36}
                           textAnchor="middle"
                           fontSize={dimFontPx}
-                          fill="#b91c1c"
-                          fontFamily="'Outfit', sans-serif"
-                          fontWeight="700"
-                          style={{ userSelect: 'none' }}
+                          fill="#991b1b"
+                          fontFamily="'Outfit', system-ui, -apple-system, sans-serif"
+                          fontWeight={isMobile ? '800' : '700'}
+                          style={{ userSelect: 'none', letterSpacing: '-0.01em' }}
                         >
                           {item.text}
+                          {isMobile && item.wallThickness && (
+                            <tspan
+                              fill="#475569"
+                              fontSize={Math.max(9.5, dimFontPx * 0.74)}
+                              fontWeight="650"
+                              dx="3"
+                            >
+                              ({item.wallThickness < 0.5 ? (unit === 'feet' ? '4.5″' : '115mm') : (unit === 'feet' ? '9″' : '230mm')})
+                            </tspan>
+                          )}
                         </text>
                       </g>
                     </g>
@@ -10978,6 +11221,8 @@ _Shared via Building Mistry App_`;
                 <span className="fp-start-option-desc">Pick 1 BHK, 2 BHK, 3 BHK, or Duplex layout</span>
               </button>
 
+       
+... [truncated for diff preview]
               <button
                 type="button"
                 className="fp-start-option-btn"

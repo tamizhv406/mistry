@@ -390,6 +390,8 @@ export interface WallDimItem {
   userOffset?: number;
   userShift?: number;
   isSelected?: boolean;
+  wallThickness?: number;
+  isExterior?: boolean;
 }
 
 export interface WallDimConfig {
@@ -434,8 +436,9 @@ export function computeWallDimensionLayouts(
     const unitDir: Pt = onScreen > 1e-4
       ? { x: (item.p2.x - item.p1.x) / onScreen, y: (item.p2.y - item.p1.y) / onScreen }
       : { x: 1, y: 0 };
-    const labelLength = item.text.length * dimFontPx * 0.6 + 14;
-    const labelHeight = dimFontPx + 8;
+    const extraChars = (isMobile && item.wallThickness) ? 7 : 0;
+    const labelLength = (item.text.length + extraChars) * dimFontPx * 0.6 + (isMobile ? 18 : 14);
+    const labelHeight = dimFontPx + (isMobile ? 10 : 8);
     const baseOffset = item.halfThickness + baseMargin + labelHeight / 2 + (item.userOffset || 0);
 
     return {

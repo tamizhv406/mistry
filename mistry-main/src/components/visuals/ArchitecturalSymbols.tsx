@@ -194,6 +194,54 @@ export const ArchitecturalSymbol: React.FC<ArchitecturalSymbolProps> = ({
         </svg>
       );
 
+    case 'Bay Window':
+      return (
+        <svg width={width} height={height} viewBox="0 0 120 50" className={className}>
+          {/* Angled bay projection beyond wall line */}
+          <polygon points="10,35 25,12 95,12 110,35 98,35 88,18 32,18 22,35" fill={fillColor} stroke={strokeColor} strokeWidth="2" />
+          {/* 3 Glazing lines */}
+          <line x1="25" y1="12" x2="95" y2="12" stroke={accentColor} strokeWidth="2.5" />
+          <line x1="10" y1="35" x2="25" y2="12" stroke={accentColor} strokeWidth="2" />
+          <line x1="110" y1="35" x2="95" y2="12" stroke={accentColor} strokeWidth="2" />
+          {/* Sill projection */}
+          <line x1="6" y1="38" x2="114" y2="38" stroke={detailColor} strokeWidth="1.5" />
+        </svg>
+      );
+
+    case 'Corner Window':
+      return (
+        <svg width={width} height={height} viewBox="0 0 60 60" className={className}>
+          <path d="M 10 50 L 10 10 L 50 10" fill="none" stroke={strokeColor} strokeWidth="3" />
+          <path d="M 18 50 L 18 18 L 50 18" fill="none" stroke={accentColor} strokeWidth="2" />
+          <circle cx="10" cy="10" r="3" fill="#0284c7" />
+          <line x1="6" y1="50" x2="22" y2="50" stroke={detailColor} strokeWidth="1.5" />
+          <line x1="50" y1="6" x2="50" y2="22" stroke={detailColor} strokeWidth="1.5" />
+        </svg>
+      );
+
+    case 'Fixed Window':
+    case 'French Window':
+      return (
+        <svg width={width} height={height} viewBox="0 0 110 40" className={className}>
+          <rect x="4" y="10" width="102" height="20" fill={fillColor} stroke={strokeColor} strokeWidth="2" rx="1" />
+          <line x1="4" y1="20" x2="106" y2="20" stroke={accentColor} strokeWidth="2.5" />
+          <line x1="28" y1="10" x2="28" y2="30" stroke={strokeColor} strokeWidth="1.5" />
+          <line x1="55" y1="10" x2="55" y2="30" stroke={strokeColor} strokeWidth="1.5" />
+          <line x1="82" y1="10" x2="82" y2="30" stroke={strokeColor} strokeWidth="1.5" />
+          <line x1="1" y1="7" x2="109" y2="7" stroke={detailColor} strokeWidth="1.5" />
+        </svg>
+      );
+
+    case 'Kitchen Window':
+      return (
+        <svg width={width} height={height} viewBox="0 0 80 40" className={className}>
+          <rect x="4" y="10" width="72" height="20" fill={fillColor} stroke={strokeColor} strokeWidth="2" rx="1" />
+          <line x1="4" y1="20" x2="76" y2="20" stroke={accentColor} strokeWidth="2.5" />
+          <line x1="40" y1="10" x2="40" y2="30" stroke={strokeColor} strokeWidth="1.5" />
+          <line x1="1" y1="7" x2="79" y2="7" stroke={detailColor} strokeWidth="1.5" />
+        </svg>
+      );
+
     case 'Opening':
       return (
         <svg width={width} height={height} viewBox="0 0 90 40" className={className}>
