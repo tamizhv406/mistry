@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { loginUser, registerUser, resendConfirmationEmail, setCurrentUser } from '../services/auth';
+import { requestEmailPasswordReset } from '../services/emailRecoveryService';
 import { db } from '../db/db';
 import type { User as UserType } from '../db/types';
 
@@ -273,6 +274,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       return;
     }
 
+    // Check 24-hour lockout status after 3 failed attempts
+    const lockoutKey = 'mistry_recovery_lockout_' + cleanEmail;
+    const storedLockout = localStorage.getItem(lockoutKey);
+    if (storedLockout) {
+      try {
+        const { attempts, lockedUntil } = JSON.parse(storedLockout);
+        if (lockedUntil && Date.now() < lockedUntil) {
+          const remainingHours = Math.ceil((lockedUntil - Date.now()) / (1000 * 60 * 60));
+          setError(`Account recovery is temporarily locked due to 3 consecutive failed verification attempts. Please try again after ${remainingHours} hour(s) or use verified email recovery.`);
+          return;
+        }
+      } catch {}
+    }
+
     const nameAns = forgotSecName.trim().toLowerCase();
     const cityAns = forgotSecCity.trim().toLowerCase();
     const friendAns = forgotSecFriend.trim().toLowerCase();
@@ -308,7 +323,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       }
 
       if (!storedSec) {
-        setError('No security questions registered for this email ID. Please contact support.');
+        setError('No security questions registered for this email ID. Please contact support or use email reset.');
         setLoading(false);
         return;
       }
@@ -320,15 +335,55 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
       if (matchesQ1 && matchesQ2 && matchesQ3) {
         // Verification succeeded! Allow password reset.
+        localStorage.removeItem(lockoutKey);
         setVerifiedEmail(cleanEmail);
         setSuccessMessage('Security verification passed! Please set your new password below.');
         setMode('reset_password');
       } else {
-        // Verification failed! Deny the request.
-        setError('Security verification failed: Incorrect answers to security questions. Password reset request denied.');
+        // Verification failed! Enforce temporary lockout after 3 consecutive failures
+        let currentAttempts = 0;
+        if (storedLockout) {
+          try {
+            const parsed = JSON.parse(storedLockout);
+            currentAttempts = parsed.attempts || 0;
+          } catch {}
+        }
+        currentAttempts += 1;
+        if (currentAttempts >= 3) {
+          const lockedUntil = Date.now() + 24 * 60 * 60 * 1000; // 24-hour lockout
+          localStorage.setItem(lockoutKey, JSON.stringify({ attempts: currentAttempts, lockedUntil }));
+          setError('Security verification failed: 3 consecutive incorrect attempts. Account recovery has been locked for 24 hours to protect your account.');
+        } else {
+          localStorage.setItem(lockoutKey, JSON.stringify({ attempts: currentAttempts, lockedUntil: 0 }));
+          setError(`Security verification failed: Incorrect answers to security questions (Attempt ${currentAttempts} of 3). After 3 failed attempts, account recovery will be locked for 24 hours.`);
+        }
       }
     } catch (err: any) {
       setError('Verification error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3B. EMAIL PASSWORD RESET LINK HANDLER (Alternative secure recovery)
+  const handleSendEmailReset = async () => {
+    const cleanEmail = forgotEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setError('Please enter your email ID above first to receive the reset link.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const res = await requestEmailPasswordReset(cleanEmail);
+      if (res.success) {
+        setSuccessMessage(res.message);
+      } else {
+        setError(res.error || res.message);
+      }
+    } catch (err: any) {
+      setError('Could not send reset email: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -458,11 +513,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </h2>
           <p style={{ fontSize: '0.86rem', color: '#64748b', margin: 0, fontWeight: 500 }}>
             {mode === 'login'
-              ? 'Construction Site & Expense ERP'
+              ? 'Plan Better. Build Smarter. • Architectural Planning & Construction Platform'
               : mode === 'register'
               ? 'Create New Account with Security Verification'
               : mode === 'forget_password'
-              ? 'Security Question Verification System'
+              ? 'Security Question Verification & Account Recovery'
               : 'Set New Password'}
           </p>
         </div>
@@ -1193,6 +1248,36 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             >
               <span>{loading ? 'Verifying Answers...' : 'Verify Security Answers & Reset Password'}</span>
               <KeyRound size={17} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
+              <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+              <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600 }}>OR</span>
+              <div style={{ flex: 1, height: '1px', background: '#e2e8f0' }} />
+            </div>
+
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleSendEmailReset}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#334155',
+                fontSize: '0.86rem',
+                fontWeight: 650,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+            >
+              <Mail size={16} color="#2563eb" />
+              <span>Send Secure Reset Link via Email (Recommended)</span>
             </button>
 
             <div style={{ textAlign: 'center', marginTop: '6px' }}>

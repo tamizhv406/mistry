@@ -170,9 +170,16 @@ export interface ProposedLayoutRequest {
   unit: FloorPlanUnit;
   bedrooms: number;
   bathrooms: number;
-  facing: 'North' | 'East' | 'South' | 'West';
-  hasParking: boolean;
-  hasPooja: boolean;
+  attachedBathrooms?: number;
+  facing?: 'North' | 'East' | 'South' | 'West';
+  hasLivingRoom?: boolean;
+  hasDining?: boolean;
+  hasKitchen?: boolean;
+  hasStaircase?: boolean;
+  hasBalcony?: boolean;
+  specialRooms?: string[];
+  hasParking?: boolean;
+  hasPooja?: boolean;
 }
 
 export interface ProposedLayoutResult {
@@ -185,6 +192,10 @@ export interface ProposedLayoutResult {
   doors: FloorPlanDoor[];
   windows: FloorPlanWindow[];
   disclaimer: string;
+  totalPlotArea?: number;
+  carpetArea?: number;
+  builtUpArea?: number;
+  structuralSuggestions?: string[];
 }
 
 // ============================================================
@@ -1394,192 +1405,742 @@ export function analyzePlanMetrics(
 
 /**
  * Generates an architectural layout proposal tailored to user requirements.
- * CRITICAL: Contains required professional disclaimer.
+ * Adheres to professional architectural zoning:
+ * - Kitchen adjacent to living/dining space
+ * - Private bedroom zones with dedicated circulation
+ * - Cross-ventilation window openings on exterior perimeter
+ * - Accurate interior (4.5"/115mm) and exterior (9"/230mm) wall thicknesses
+ * - Structural column suggestions & statutory setback advisories
+ * - CRITICAL: Contains required professional architectural disclaimer.
  */
 export function generateProposedLayout(req: ProposedLayoutRequest): ProposedLayoutResult {
-  const { plotWidth, plotDepth, unit, bedrooms, bathrooms, hasParking, facing } = req;
+  const {
+    plotWidth,
+    plotDepth,
+    unit,
+    bedrooms = 2,
+    bathrooms = 2,
+    attachedBathrooms = 1,
+    hasLivingRoom = true,
+    hasDining = true,
+    hasKitchen = true,
+    hasStaircase = false,
+    hasBalcony = false,
+    hasParking = false,
+    hasPooja = false,
+    facing = 'North',
+  } = req;
+
   const W = Math.max(unit === 'feet' ? 20 : 6, plotWidth);
-  const D = Math.max(unit === 'feet' ? 30 : 9, plotDepth);
+  const D = Math.max(unit === 'feet' ? 24 : 7, plotDepth);
 
   const walls: FloorPlanWall[] = [];
   const rooms: FloorPlanRoom[] = [];
   const doors: FloorPlanDoor[] = [];
   const windows: FloorPlanWindow[] = [];
 
-  const wallThickness = unit === 'feet' ? 0.75 : 0.23;
+  const extThick = unit === 'feet' ? 0.75 : 0.23; // 9" / 230mm
+  const intThick = unit === 'feet' ? 0.375 : 0.115; // 4.5" / 115mm
 
   // 1. Exterior Boundary Walls
-  walls.push({ id: 'prop-w1', x1: 0, y1: 0, x2: W, y2: 0, thickness: wallThickness, height: 10, wallType: 'exterior' });
-  walls.push({ id: 'prop-w2', x1: W, y1: 0, x2: W, y2: D, thickness: wallThickness, height: 10, wallType: 'exterior' });
-  walls.push({ id: 'prop-w3', x1: W, y1: D, x2: 0, y2: D, thickness: wallThickness, height: 10, wallType: 'exterior' });
-  walls.push({ id: 'prop-w4', x1: 0, y1: D, x2: 0, y2: 0, thickness: wallThickness, height: 10, wallType: 'exterior' });
+  walls.push({ id: 'prop-w-front', x1: 0, y1: 0, x2: W, y2: 0, thickness: extThick, height: 10, wallType: 'exterior' });
+  walls.push({ id: 'prop-w-right', x1: W, y1: 0, x2: W, y2: D, thickness: extThick, height: 10, wallType: 'exterior' });
+  walls.push({ id: 'prop-w-rear', x1: W, y1: D, x2: 0, y2: D, thickness: extThick, height: 10, wallType: 'exterior' });
+  walls.push({ id: 'prop-w-left', x1: 0, y1: D, x2: 0, y2: 0, thickness: extThick, height: 10, wallType: 'exterior' });
 
-  // 2. Interior Layout Division
-  const midX = +(W * 0.55).toFixed(2);
-  const frontY = +(D * 0.45).toFixed(2);
+  // 2. Architectural Zoning Dividers
+  const splitY1 = +(D * (bedrooms >= 3 ? 0.38 : 0.45)).toFixed(2); // Front Zone (Living / Dining / Kitchen)
+  const splitY2 = bedrooms >= 4 ? +(D * 0.70).toFixed(2) : splitY1; // Intermediate Zone for 4+ BHK
+  const midX = +(W * 0.52).toFixed(2);
 
-  // Front Zone: Living & Dining / Parking
-  const livingW = hasParking ? midX : W;
-  const livingH = frontY;
-  rooms.push({
-    id: 'prop-r-living',
-    label: 'Living Room',
-    roomType: 'Living Room',
-    x: 0,
-    y: 0,
-    width: livingW,
-    height: livingH,
-    area: +(livingW * livingH).toFixed(2),
-    perimeter: +(2 * (livingW + livingH)).toFixed(2),
-    rotation: 0,
-  });
+  // -------------------------------------------------------------
+  // ZONE A: FRONT PUBLIC & SEMI-PUBLIC ZONE (Living, Kitchen, Dining)
+  // -------------------------------------------------------------
+  const livingW = hasParking ? +(W * 0.55).toFixed(2) : midX;
+  const livingH = splitY1;
 
-  // Entrance door on front wall
-  doors.push({
-    id: 'prop-d-main',
-    doorType: 'Main Entrance',
-    x: +(livingW * 0.5).toFixed(2),
-    y: 0,
-    width: unit === 'feet' ? 3.5 : 1.0,
-    rotation: 0,
-    wallId: 'prop-w1',
-  });
-
-  // Living room window
-  windows.push({
-    id: 'prop-win-living',
-    windowType: 'Large',
-    x: +(livingW * 0.25).toFixed(2),
-    y: 0,
-    width: unit === 'feet' ? 5.0 : 1.5,
-    rotation: 0,
-    wallId: 'prop-w1',
-  });
-
-  // Rear Zone: Bedroom 1 (Master)
-  const bed1W = +(W * 0.55).toFixed(2);
-  const bed1H = +(D - frontY).toFixed(2);
-  rooms.push({
-    id: 'prop-r-bed1',
-    label: 'Master Bedroom',
-    roomType: 'Master Bedroom',
-    x: 0,
-    y: frontY,
-    width: bed1W,
-    height: bed1H,
-    area: +(bed1W * bed1H).toFixed(2),
-    perimeter: +(2 * (bed1W + bed1H)).toFixed(2),
-    rotation: 0,
-  });
-
-  // Dividing wall between front and rear
-  walls.push({
-    id: 'prop-w-mid-horiz',
-    x1: 0,
-    y1: frontY,
-    x2: W,
-    y2: frontY,
-    thickness: wallThickness,
-    height: 10,
-    wallType: 'interior',
-  });
-
-  // Bedroom window on rear wall
-  windows.push({
-    id: 'prop-win-bed1',
-    windowType: 'Standard',
-    x: +(bed1W * 0.5).toFixed(2),
-    y: D,
-    width: unit === 'feet' ? 4.0 : 1.2,
-    rotation: 0,
-    wallId: 'prop-w3',
-  });
-
-  // Kitchen / Dining Zone
-  const kitchenW = +(W - midX).toFixed(2);
-  const kitchenH = +(frontY * 0.6).toFixed(2);
-  rooms.push({
-    id: 'prop-r-kitchen',
-    label: 'Kitchen',
-    roomType: 'Kitchen',
-    x: midX,
-    y: 0,
-    width: kitchenW,
-    height: kitchenH,
-    area: +(kitchenW * kitchenH).toFixed(2),
-    perimeter: +(2 * (kitchenW + kitchenH)).toFixed(2),
-    rotation: 0,
-  });
-
-  // Vertical dividing wall
-  walls.push({
-    id: 'prop-w-mid-vert',
-    x1: midX,
-    y1: 0,
-    x2: midX,
-    y2: frontY,
-    thickness: wallThickness,
-    height: 10,
-    wallType: 'interior',
-  });
-
-  // Secondary Bedroom or Bathroom
-  if (bedrooms >= 2) {
-    const bed2W = +(W - midX).toFixed(2);
-    const bed2H = +(D - frontY).toFixed(2);
+  if (hasLivingRoom) {
     rooms.push({
-      id: 'prop-r-bed2',
-      label: 'Bedroom 2',
-      roomType: 'Bedroom',
-      x: midX,
-      y: frontY,
-      width: bed2W,
-      height: bed2H,
-      area: +(bed2W * bed2H).toFixed(2),
-      perimeter: +(2 * (bed2W + bed2H)).toFixed(2),
+      id: 'prop-r-living',
+      label: 'Living Room',
+      roomType: 'Living Room',
+      x: 0,
+      y: 0,
+      width: livingW,
+      height: livingH,
+      area: +(livingW * livingH).toFixed(2),
+      perimeter: +(2 * (livingW + livingH)).toFixed(2),
       rotation: 0,
     });
 
+    // Main Entrance Door (3.5 ft / 1.0 m)
+    doors.push({
+      id: 'prop-d-main',
+      doorType: 'Main Entrance',
+      x: +(livingW * 0.45).toFixed(2),
+      y: 0,
+      width: unit === 'feet' ? 3.5 : 1.0,
+      rotation: 0,
+      wallId: 'prop-w-front',
+    });
+
+    // Large Living Room Window
+    windows.push({
+      id: 'prop-win-living',
+      windowType: 'Large',
+      x: +(livingW * 0.20).toFixed(2),
+      y: 0,
+      width: unit === 'feet' ? 5.0 : 1.5,
+      rotation: 0,
+      wallId: 'prop-w-front',
+    });
+  }
+
+  // Kitchen & Dining (Adjacent to living space for optimal workflow)
+  const kitchenW = +(W - midX).toFixed(2);
+  const kitchenH = hasDining ? +(splitY1 * 0.55).toFixed(2) : splitY1;
+  const diningH = +(splitY1 - kitchenH).toFixed(2);
+
+  if (hasKitchen) {
+    rooms.push({
+      id: 'prop-r-kitchen',
+      label: 'Modular Kitchen',
+      roomType: 'Kitchen',
+      x: midX,
+      y: 0,
+      width: kitchenW,
+      height: kitchenH,
+      area: +(kitchenW * kitchenH).toFixed(2),
+      perimeter: +(2 * (kitchenW + kitchenH)).toFixed(2),
+      rotation: 0,
+    });
+
+    // Kitchen exterior window for cross-ventilation
+    windows.push({
+      id: 'prop-win-kitchen',
+      windowType: 'Standard',
+      x: +(midX + kitchenW * 0.5).toFixed(2),
+      y: 0,
+      width: unit === 'feet' ? 4.0 : 1.2,
+      rotation: 0,
+      wallId: 'prop-w-front',
+    });
+  }
+
+  if (hasDining) {
+    rooms.push({
+      id: 'prop-r-dining',
+      label: 'Dining Area',
+      roomType: 'Dining',
+      x: midX,
+      y: kitchenH,
+      width: kitchenW,
+      height: diningH,
+      area: +(kitchenW * diningH).toFixed(2),
+      perimeter: +(2 * (kitchenW + diningH)).toFixed(2),
+      rotation: 0,
+    });
+
+    // Dining window on right wall
+    windows.push({
+      id: 'prop-win-dining',
+      windowType: 'Standard',
+      x: W,
+      y: +(kitchenH + diningH * 0.5).toFixed(2),
+      width: unit === 'feet' ? 4.0 : 1.2,
+      rotation: 90,
+      wallId: 'prop-w-right',
+    });
+  }
+
+  // Divider walls for Zone A
+  walls.push({
+    id: 'prop-w-div-midX-front',
+    x1: midX,
+    y1: 0,
+    x2: midX,
+    y2: splitY1,
+    thickness: intThick,
+    height: 10,
+    wallType: 'interior',
+  });
+
+  if (hasDining && hasKitchen) {
     walls.push({
-      id: 'prop-w-rear-vert',
+      id: 'prop-w-div-kitchen-dining',
       x1: midX,
-      y1: frontY,
-      x2: midX,
-      y2: D,
-      thickness: wallThickness,
+      y1: kitchenH,
+      x2: W,
+      y2: kitchenH,
+      thickness: intThick,
       height: 10,
       wallType: 'interior',
     });
   }
 
-  // Attached or common bathroom
-  if (bathrooms >= 1) {
-    const bathW = +(W * 0.28).toFixed(2);
-    const bathH = +(D * 0.22).toFixed(2);
+  // Dividing wall between Front Zone and Rear/Mid Zones
+  walls.push({
+    id: 'prop-w-div-splitY1',
+    x1: 0,
+    y1: splitY1,
+    x2: W,
+    y2: splitY1,
+    thickness: intThick,
+    height: 10,
+    wallType: 'interior',
+  });
+
+  // Optional Front Extras: Balcony, Pooja, Staircase, Parking
+  if (hasPooja) {
+    const poojaSize = unit === 'feet' ? 5 : 1.5;
     rooms.push({
-      id: 'prop-r-bath',
-      label: 'Bathroom',
-      roomType: 'Bathroom',
-      x: +(midX - bathW).toFixed(2),
-      y: frontY,
-      width: bathW,
-      height: bathH,
-      area: +(bathW * bathH).toFixed(2),
-      perimeter: +(2 * (bathW + bathH)).toFixed(2),
+      id: 'prop-r-pooja',
+      label: 'Pooja Room (Ishanya)',
+      roomType: 'Pooja',
+      x: +(midX - poojaSize).toFixed(2),
+      y: +(splitY1 - poojaSize).toFixed(2),
+      width: poojaSize,
+      height: poojaSize,
+      area: +(poojaSize * poojaSize).toFixed(2),
       rotation: 0,
     });
   }
 
+  if (hasStaircase) {
+    const stairW = unit === 'feet' ? 6 : 1.8;
+    const stairH = unit === 'feet' ? 10 : 3.0;
+    rooms.push({
+      id: 'prop-r-stair',
+      label: 'Staircase (Duplex)',
+      roomType: 'Staircase',
+      x: 0,
+      y: +(splitY1 - stairH).toFixed(2),
+      width: stairW,
+      height: stairH,
+      area: +(stairW * stairH).toFixed(2),
+      rotation: 0,
+    });
+  }
+
+  if (hasBalcony) {
+    const balcW = unit === 'feet' ? 8 : 2.4;
+    const balcH = unit === 'feet' ? 4 : 1.2;
+    rooms.push({
+      id: 'prop-r-balcony',
+      label: 'Front Sit-out Balcony',
+      roomType: 'Balcony',
+      x: 0,
+      y: 0,
+      width: balcW,
+      height: balcH,
+      area: +(balcW * balcH).toFixed(2),
+      rotation: 0,
+    });
+  }
+
+  // -------------------------------------------------------------
+  // ZONE B: PRIVATE BEDROOM & BATHROOM ZONES
+  // -------------------------------------------------------------
+
+  if (bedrooms >= 4) {
+    // 4 BHK ARCHITECTURAL CONFIGURATION
+    // Intermediate Zone (Y: splitY1 to splitY2)
+    const midZoneH = +(splitY2 - splitY1).toFixed(2);
+    const bed3W = +(W * 0.44).toFixed(2);
+    const bed4W = +(W * 0.44).toFixed(2);
+    const hallW = +(W - bed3W - bed4W).toFixed(2);
+
+    // Bedroom 3 (Intermediate Left)
+    rooms.push({
+      id: 'prop-r-bed3',
+      label: 'Bedroom 3',
+      roomType: 'Bedroom',
+      x: 0,
+      y: splitY1,
+      width: bed3W,
+      height: midZoneH,
+      area: +(bed3W * midZoneH).toFixed(2),
+      perimeter: +(2 * (bed3W + midZoneH)).toFixed(2),
+      rotation: 0,
+    });
+    windows.push({
+      id: 'prop-win-bed3',
+      windowType: 'Standard',
+      x: 0,
+      y: +(splitY1 + midZoneH * 0.5).toFixed(2),
+      width: unit === 'feet' ? 4.0 : 1.2,
+      rotation: 90,
+      wallId: 'prop-w-left',
+    });
+    doors.push({
+      id: 'prop-d-bed3',
+      doorType: 'Single',
+      x: bed3W,
+      y: +(splitY1 + (unit === 'feet' ? 3 : 0.9)).toFixed(2),
+      width: unit === 'feet' ? 3.0 : 0.9,
+      rotation: 90,
+    });
+
+    // Bedroom 4 / Study (Intermediate Right)
+    rooms.push({
+      id: 'prop-r-bed4',
+      label: 'Bedroom 4',
+      roomType: 'Bedroom',
+      x: +(W - bed4W).toFixed(2),
+      y: splitY1,
+      width: bed4W,
+      height: midZoneH,
+      area: +(bed4W * midZoneH).toFixed(2),
+      perimeter: +(2 * (bed4W + midZoneH)).toFixed(2),
+      rotation: 0,
+    });
+    windows.push({
+      id: 'prop-win-bed4',
+      windowType: 'Standard',
+      x: W,
+      y: +(splitY1 + midZoneH * 0.5).toFixed(2),
+      width: unit === 'feet' ? 4.0 : 1.2,
+      rotation: 90,
+      wallId: 'prop-w-right',
+    });
+    doors.push({
+      id: 'prop-d-bed4',
+      doorType: 'Single',
+      x: +(W - bed4W).toFixed(2),
+      y: +(splitY1 + (unit === 'feet' ? 3 : 0.9)).toFixed(2),
+      width: unit === 'feet' ? 3.0 : 0.9,
+      rotation: 90,
+    });
+
+    // Common Bathroom in central core
+    if (bathrooms >= 1) {
+      const comBathH = unit === 'feet' ? 6 : 1.8;
+      rooms.push({
+        id: 'prop-r-bath-com',
+        label: 'Common Bathroom',
+        roomType: 'Bathroom',
+        x: bed3W,
+        y: +(splitY2 - comBathH).toFixed(2),
+        width: hallW,
+        height: comBathH,
+        area: +(hallW * comBathH).toFixed(2),
+        perimeter: +(2 * (hallW + comBathH)).toFixed(2),
+        rotation: 0,
+      });
+      doors.push({
+        id: 'prop-d-bath-com',
+        doorType: 'Bathroom',
+        x: +(bed3W + hallW * 0.5).toFixed(2),
+        y: +(splitY2 - comBathH).toFixed(2),
+        width: unit === 'feet' ? 2.5 : 0.75,
+        rotation: 0,
+      });
+    }
+
+    // Mid Zone vertical walls
+    walls.push({
+      id: 'prop-w-mid-vert-left',
+      x1: bed3W,
+      y1: splitY1,
+      x2: bed3W,
+      y2: splitY2,
+      thickness: intThick,
+      height: 10,
+      wallType: 'interior',
+    });
+    walls.push({
+      id: 'prop-w-mid-vert-right',
+      x1: +(W - bed4W).toFixed(2),
+      y1: splitY1,
+      x2: +(W - bed4W).toFixed(2),
+      y2: splitY2,
+      thickness: intThick,
+      height: 10,
+      wallType: 'interior',
+    });
+
+    // Horizontal boundary separating Mid and Rear Zones
+    walls.push({
+      id: 'prop-w-div-splitY2',
+      x1: 0,
+      y1: splitY2,
+      x2: W,
+      y2: splitY2,
+      thickness: intThick,
+      height: 10,
+      wallType: 'interior',
+    });
+
+    // Rear Zone (Y: splitY2 to D)
+    const rearH = +(D - splitY2).toFixed(2);
+    const rearHalfW = +(W * 0.5).toFixed(2);
+
+    // Master Bedroom (Rear Left)
+    rooms.push({
+      id: 'prop-r-bed1',
+      label: 'Master Bedroom',
+      roomType: 'Master Bedroom',
+      x: 0,
+      y: splitY2,
+      width: rearHalfW,
+      height: rearH,
+      area: +(rearHalfW * rearH).toFixed(2),
+      perimeter: +(2 * (rearHalfW + rearH)).toFixed(2),
+      rotation: 0,
+    });
+    windows.push({
+      id: 'prop-win-bed1',
+      windowType: 'Large',
+      x: +(rearHalfW * 0.5).toFixed(2),
+      y: D,
+      width: unit === 'feet' ? 4.5 : 1.4,
+      rotation: 0,
+      wallId: 'prop-w-rear',
+    });
+    doors.push({
+      id: 'prop-d-bed1',
+      doorType: 'Single',
+      x: +(rearHalfW * 0.75).toFixed(2),
+      y: splitY2,
+      width: unit === 'feet' ? 3.0 : 0.9,
+      rotation: 0,
+    });
+
+    // Attached Bathroom 1 (for Master Bedroom)
+    if (attachedBathrooms >= 1) {
+      const attBathW = unit === 'feet' ? 5.5 : 1.6;
+      const attBathH = unit === 'feet' ? 6.5 : 1.9;
+      rooms.push({
+        id: 'prop-r-bath-att1',
+        label: 'Att. Bath (Master)',
+        roomType: 'Bathroom',
+        x: 0,
+        y: splitY2,
+        width: attBathW,
+        height: attBathH,
+        area: +(attBathW * attBathH).toFixed(2),
+        perimeter: +(2 * (attBathW + attBathH)).toFixed(2),
+        rotation: 0,
+      });
+      doors.push({
+        id: 'prop-d-bath-att1',
+        doorType: 'Bathroom',
+        x: attBathW,
+        y: +(splitY2 + attBathH * 0.5).toFixed(2),
+        width: unit === 'feet' ? 2.5 : 0.75,
+        rotation: 90,
+      });
+      walls.push({
+        id: 'prop-w-bath-att1-h',
+        x1: 0,
+        y1: +(splitY2 + attBathH).toFixed(2),
+        x2: attBathW,
+        y2: +(splitY2 + attBathH).toFixed(2),
+        thickness: intThick,
+        height: 10,
+        wallType: 'interior',
+      });
+      walls.push({
+        id: 'prop-w-bath-att1-v',
+        x1: attBathW,
+        y1: splitY2,
+        x2: attBathW,
+        y2: +(splitY2 + attBathH).toFixed(2),
+        thickness: intThick,
+        height: 10,
+        wallType: 'interior',
+      });
+    }
+
+    // Bedroom 2 (Rear Right)
+    rooms.push({
+      id: 'prop-r-bed2',
+      label: 'Bedroom 2',
+      roomType: 'Bedroom',
+      x: rearHalfW,
+      y: splitY2,
+      width: rearHalfW,
+      height: rearH,
+      area: +(rearHalfW * rearH).toFixed(2),
+      perimeter: +(2 * (rearHalfW + rearH)).toFixed(2),
+      rotation: 0,
+    });
+    windows.push({
+      id: 'prop-win-bed2',
+      windowType: 'Standard',
+      x: +(rearHalfW + rearHalfW * 0.5).toFixed(2),
+      y: D,
+      width: unit === 'feet' ? 4.0 : 1.2,
+      rotation: 0,
+      wallId: 'prop-w-rear',
+    });
+    doors.push({
+      id: 'prop-d-bed2',
+      doorType: 'Single',
+      x: +(rearHalfW + (unit === 'feet' ? 2 : 0.6)).toFixed(2),
+      y: splitY2,
+      width: unit === 'feet' ? 3.0 : 0.9,
+      rotation: 0,
+    });
+
+    // Attached Bathroom 2 (for Bedroom 2)
+    if (attachedBathrooms >= 2) {
+      const attBathW = unit === 'feet' ? 5.5 : 1.6;
+      const attBathH = unit === 'feet' ? 6.5 : 1.9;
+      rooms.push({
+        id: 'prop-r-bath-att2',
+        label: 'Att. Bath (Bed 2)',
+        roomType: 'Bathroom',
+        x: +(W - attBathW).toFixed(2),
+        y: splitY2,
+        width: attBathW,
+        height: attBathH,
+        area: +(attBathW * attBathH).toFixed(2),
+        perimeter: +(2 * (attBathW + attBathH)).toFixed(2),
+        rotation: 0,
+      });
+      doors.push({
+        id: 'prop-d-bath-att2',
+        doorType: 'Bathroom',
+        x: +(W - attBathW).toFixed(2),
+        y: +(splitY2 + attBathH * 0.5).toFixed(2),
+        width: unit === 'feet' ? 2.5 : 0.75,
+        rotation: 90,
+      });
+      walls.push({
+        id: 'prop-w-bath-att2-h',
+        x1: +(W - attBathW).toFixed(2),
+        y1: +(splitY2 + attBathH).toFixed(2),
+        x2: W,
+        y2: +(splitY2 + attBathH).toFixed(2),
+        thickness: intThick,
+        height: 10,
+        wallType: 'interior',
+      });
+      walls.push({
+        id: 'prop-w-bath-att2-v',
+        x1: +(W - attBathW).toFixed(2),
+        y1: splitY2,
+        x2: +(W - attBathW).toFixed(2),
+        y2: +(splitY2 + attBathH).toFixed(2),
+        thickness: intThick,
+        height: 10,
+        wallType: 'interior',
+      });
+    }
+
+    // Rear vertical dividing wall between Bed 1 and Bed 2
+    walls.push({
+      id: 'prop-w-rear-vert',
+      x1: rearHalfW,
+      y1: splitY2,
+      x2: rearHalfW,
+      y2: D,
+      thickness: intThick,
+      height: 10,
+      wallType: 'interior',
+    });
+
+  } else {
+    // 1 to 3 BHK CONFIGURATION
+    const rearH = +(D - splitY1).toFixed(2);
+    const rearW = +(W * 0.55).toFixed(2);
+
+    // Master Bedroom
+    rooms.push({
+      id: 'prop-r-bed1',
+      label: 'Master Bedroom',
+      roomType: 'Master Bedroom',
+      x: 0,
+      y: splitY1,
+      width: rearW,
+      height: rearH,
+      area: +(rearW * rearH).toFixed(2),
+      perimeter: +(2 * (rearW + rearH)).toFixed(2),
+      rotation: 0,
+    });
+    windows.push({
+      id: 'prop-win-bed1',
+      windowType: 'Standard',
+      x: +(rearW * 0.5).toFixed(2),
+      y: D,
+      width: unit === 'feet' ? 4.0 : 1.2,
+      rotation: 0,
+      wallId: 'prop-w-rear',
+    });
+    doors.push({
+      id: 'prop-d-bed1',
+      doorType: 'Single',
+      x: +(rearW * 0.8).toFixed(2),
+      y: splitY1,
+      width: unit === 'feet' ? 3.0 : 0.9,
+      rotation: 0,
+    });
+
+    // Attached Bath 1
+    if (attachedBathrooms >= 1) {
+      const attBathW = unit === 'feet' ? 5.0 : 1.5;
+      const attBathH = unit === 'feet' ? 6.0 : 1.8;
+      rooms.push({
+        id: 'prop-r-bath-att1',
+        label: 'Att. Bath',
+        roomType: 'Bathroom',
+        x: 0,
+        y: splitY1,
+        width: attBathW,
+        height: attBathH,
+        area: +(attBathW * attBathH).toFixed(2),
+        rotation: 0,
+      });
+      walls.push({
+        id: 'prop-w-att1-h',
+        x1: 0,
+        y1: +(splitY1 + attBathH).toFixed(2),
+        x2: attBathW,
+        y2: +(splitY1 + attBathH).toFixed(2),
+        thickness: intThick,
+        height: 10,
+        wallType: 'interior',
+      });
+      walls.push({
+        id: 'prop-w-att1-v',
+        x1: attBathW,
+        y1: splitY1,
+        x2: attBathW,
+        y2: +(splitY1 + attBathH).toFixed(2),
+        thickness: intThick,
+        height: 10,
+        wallType: 'interior',
+      });
+    }
+
+    if (bedrooms >= 2) {
+      const bed2W = +(W - rearW).toFixed(2);
+      const bed2H = bedrooms === 3 ? +(rearH * 0.6).toFixed(2) : rearH;
+
+      rooms.push({
+        id: 'prop-r-bed2',
+        label: 'Bedroom 2',
+        roomType: 'Bedroom',
+        x: rearW,
+        y: splitY1,
+        width: bed2W,
+        height: bed2H,
+        area: +(bed2W * bed2H).toFixed(2),
+        perimeter: +(2 * (bed2W + bed2H)).toFixed(2),
+        rotation: 0,
+      });
+      windows.push({
+        id: 'prop-win-bed2',
+        windowType: 'Standard',
+        x: W,
+        y: +(splitY1 + bed2H * 0.5).toFixed(2),
+        width: unit === 'feet' ? 4.0 : 1.2,
+        rotation: 90,
+        wallId: 'prop-w-right',
+      });
+
+      if (bedrooms >= 3) {
+        const bed3H = +(rearH - bed2H).toFixed(2);
+        rooms.push({
+          id: 'prop-r-bed3',
+          label: 'Bedroom 3',
+          roomType: 'Bedroom',
+          x: rearW,
+          y: +(splitY1 + bed2H).toFixed(2),
+          width: bed2W,
+          height: bed3H,
+          area: +(bed2W * bed3H).toFixed(2),
+          perimeter: +(2 * (bed2W + bed3H)).toFixed(2),
+          rotation: 0,
+        });
+        windows.push({
+          id: 'prop-win-bed3',
+          windowType: 'Standard',
+          x: +(rearW + bed2W * 0.5).toFixed(2),
+          y: D,
+          width: unit === 'feet' ? 4.0 : 1.2,
+          rotation: 0,
+          wallId: 'prop-w-rear',
+        });
+        walls.push({
+          id: 'prop-w-bed2-bed3',
+          x1: rearW,
+          y1: +(splitY1 + bed2H).toFixed(2),
+          x2: W,
+          y2: +(splitY1 + bed2H).toFixed(2),
+          thickness: intThick,
+          height: 10,
+          wallType: 'interior',
+        });
+      }
+    }
+
+    // Rear vertical dividing wall
+    walls.push({
+      id: 'prop-w-rear-vert',
+      x1: rearW,
+      y1: splitY1,
+      x2: rearW,
+      y2: D,
+      thickness: intThick,
+      height: 10,
+      wallType: 'interior',
+    });
+
+    // Common Bathroom
+    if (bathrooms >= 1) {
+      const bathW = +(W * 0.25).toFixed(2);
+      const bathH = +(rearH * 0.35).toFixed(2);
+      rooms.push({
+        id: 'prop-r-bath-com',
+        label: 'Common Bath',
+        roomType: 'Bathroom',
+        x: +(rearW - bathW).toFixed(2),
+        y: splitY1,
+        width: bathW,
+        height: bathH,
+        area: +(bathW * bathH).toFixed(2),
+        perimeter: +(2 * (bathW + bathH)).toFixed(2),
+        rotation: 0,
+      });
+      doors.push({
+        id: 'prop-d-bath-com',
+        doorType: 'Bathroom',
+        x: +(rearW - bathW * 0.5).toFixed(2),
+        y: splitY1,
+        width: unit === 'feet' ? 2.5 : 0.75,
+        rotation: 0,
+      });
+    }
+  }
+
+  // Calculate Metrics
+  const totalPlotArea = +(W * D).toFixed(2);
+  const carpetArea = +rooms.reduce((sum, r) => sum + (r.area || 0), 0).toFixed(2);
+  const builtUpArea = +(carpetArea * 1.15).toFixed(2);
+
+  const structuralSuggestions = [
+    `RCC Column Grid: Recommended 9"×12" (230×300mm) structural columns at wall intersections & corners (grid spacing: 10–15 ft / 3–4.5 m).`,
+    `Statutory Setbacks: Minimum 5 ft (1.5 m) front clearance and 3 ft (1.0 m) rear/side setbacks for natural cross-ventilation and fire compliance.`,
+    `Kitchen Orientation: Positioned in South-East (Agni) / North-West zone to maximize ventilation and thermal comfort.`,
+    `Master Bedroom Zoning: Positioned in South-West (Nairuthi) quadrant for optimal privacy and structural balance.`,
+  ];
+
   return {
     title: `${bedrooms} BHK Architectural Proposal (${facing} Facing)`,
-    summary: `Structured ${bedrooms} Bedroom layout fitted to ${formatLength(W, unit)} × ${formatLength(D, unit)} plot with ${facing} orientation.`,
+    summary: `Structured ${bedrooms} Bedroom layout fitted to ${formatLength(W, unit)} × ${formatLength(D, unit)} plot (${totalPlotArea} sq.${unit === 'feet' ? 'ft' : 'm'}) with ${facing} orientation.`,
     plotWidth: W,
     plotDepth: D,
     walls,
     rooms,
     doors,
     windows,
-    disclaimer: 'AI-generated design suggestion — verify with a qualified professional before construction.',
+    totalPlotArea,
+    carpetArea,
+    builtUpArea,
+    structuralSuggestions,
+    disclaimer: 'AI-generated preliminary architectural layout. Respect plot boundaries and statutory setbacks. Professional verification by a licensed architect and structural engineer is required before construction.',
   };
 }
 

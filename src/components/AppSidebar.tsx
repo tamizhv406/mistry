@@ -232,7 +232,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         {!collapsed && (
           <div className="sidebar-brand-text">
             <span className="sidebar-brand-name">Building Mistry</span>
-            <span className="sidebar-brand-sub">Construction ERP</span>
+            <span className="sidebar-brand-sub">Plan Better. Build Smarter.</span>
           </div>
         )}
       </div>

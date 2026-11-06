@@ -44,3 +44,4 @@ android/local.properties
 .github/workflows/PlaceIt-master/
 
 .vercel
+.env*
