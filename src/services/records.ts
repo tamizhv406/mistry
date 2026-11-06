@@ -707,7 +707,7 @@ export async function recordExpense(user: User, siteId: string, input: ExpenseIn
   const fin = calculateFinancialBalance(amount, paidAmount);
   const now = nowIso();
   const base = {
-    userId: site.userId || user.id, siteId, payee, notes, createdBy: user.id,
+    userId: site.userId || user.id, siteId, projectId: siteId, payee, notes, createdBy: user.id,
     paidAmount: fin.paidAmount, balance: fin.balanceDue, extraPaid: fin.extraPaid,
     isDeleted: false, createdAt: now, updatedAt: now,
   };

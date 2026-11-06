@@ -60,6 +60,8 @@ export interface Site {
   buildingType: string;
   startDate: string;
   expectedCompletionDate: string;
+  expectedCompletion?: string; // Target completion alias
+  targetDate?: string; // Target completion alias
   status: SiteStatus;
   notes?: string;
   // Pay policy for approved Leave days. Unset means the owner has not decided yet:
@@ -270,6 +272,7 @@ export interface TeaSnacksExpense {
   updatedBy?: string;
   payee?: string;
   siteId: string;
+  projectId?: string; // Project ID alias
   date: string;
   teaExpense: number;
   snacksExpense: number;
@@ -297,6 +300,7 @@ export interface PoojaExpense {
   updatedBy?: string;
   payee?: string;
   siteId: string;
+  projectId?: string; // Project ID alias
   date: string;
   poojaName: string;
   materialsExpense: number;
@@ -324,6 +328,7 @@ export interface ElectricityBill {
   updatedBy?: string;
   payee?: string;
   siteId: string;
+  projectId?: string; // Project ID alias
   month: string;
   meterNumber?: string;
   billAmount: number;
@@ -349,6 +354,7 @@ export interface WaterBill {
   updatedBy?: string;
   payee?: string;
   siteId: string;
+  projectId?: string; // Project ID alias
   date: string;
   supplier: string;
   quantityLoads?: string;
@@ -390,6 +396,7 @@ export interface OtherExpense {
   updatedBy?: string;
   payee?: string;
   siteId: string;
+  projectId?: string; // Project ID alias
   date: string;
   category: OtherExpenseCategory;
   description: string;

@@ -1079,3 +1079,24 @@ export class BuildingMistryDB extends Dexie {
 }
 
 export const db = new BuildingMistryDB();
+
+/**
+ * Strictly monotonic, collision-free auto-incrementing Project/Site ID generator.
+ * Scans existing records to find the highest existing numeric suffix and increments by 1.
+ * Formats as: SITE-001, SITE-002, SITE-180, etc.
+ */
+export async function getNextSiteId(): Promise<string> {
+  const allSites = await db.sites.toArray();
+  let maxNum = 0;
+  for (const s of allSites) {
+    const m = (s.id || '').match(/SITE[-_]?(\d+)/i);
+    if (m) {
+      const num = parseInt(m[1], 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+  }
+  const nextNum = maxNum + 1;
+  return `SITE-${nextNum.toString().padStart(3, '0')}`;
+}

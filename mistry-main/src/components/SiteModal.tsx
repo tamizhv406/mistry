@@ -1,7 +1,7 @@
 import { todayKey } from '../utils/datetime';
 import React, { useState, useEffect } from 'react';
 import { X, Building2, Save, Mic, MicOff, Sparkles, CheckCircle2 } from 'lucide-react';
-import { db } from '../db/db';
+import { db, getNextSiteId } from '../db/db';
 import type { Site, SiteStatus } from '../db/types';
 import { getCurrentUser } from '../services/auth';
 import {
@@ -137,7 +137,7 @@ export const SiteModal: React.FC<SiteModalProps> = ({
     setError('');
 
     const now = new Date().toISOString();
-    const siteId = siteToEdit ? siteToEdit.id : `site-${Date.now()}`;
+    const siteId = siteToEdit ? siteToEdit.id : await getNextSiteId();
     const targetUserId = siteToEdit?.userId || currentUser?.id || 'user-admin-default';
 
     const siteData: Site = {
@@ -152,6 +152,8 @@ export const SiteModal: React.FC<SiteModalProps> = ({
       buildingType: buildingType.trim(),
       startDate: startDate || todayKey(),
       expectedCompletionDate: expectedCompletionDate || '',
+      expectedCompletion: expectedCompletionDate || '',
+      targetDate: expectedCompletionDate || '',
       status,
       notes: notes.trim(),
       imageUrl: imageUrl || undefined,

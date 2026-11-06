@@ -29,7 +29,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useOverallStats, type SiteCardSummary } from '../hooks/useOverallStats';
-import { db } from '../db/db';
+import { db, getNextSiteId } from '../db/db';
 import { isAdmin } from '../services/auth';
 import type { Site, User, SiteStatus } from '../db/types';
 import { formatDay, todayKey, monthKeyOf, DEFAULT_TIME_ZONE } from '../utils/datetime';
@@ -82,7 +82,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     setIsDuplicating(site.id);
 
     try {
-      const newId = `site_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const newId = await getNextSiteId();
       const now = new Date().toISOString();
 
       const duplicatedSite: Site = {
@@ -523,7 +523,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           {filteredAndSortedProjects.map(summary => {
             const { site, totalExpense, totalPaid, balance, budget, progressPercentage, workerCount, materialCount } = summary;
             const statusClass = `status-${site.status.toLowerCase().replace(/\s+/g, '')}`;
-            const shortId = site.id.startsWith('site_') ? site.id.slice(5, 13).toUpperCase() : site.id.slice(0, 8).toUpperCase();
+            const displayId = site.id.toUpperCase();
 
             return (
               <div
@@ -590,7 +590,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                       letterSpacing: '0.04em',
                     }}
                   >
-                    ID #{shortId}
+                    #{displayId}
                   </div>
                 </div>
 
@@ -810,12 +810,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 {filteredAndSortedProjects.map(summary => {
                   const { site, totalExpense, totalPaid, balance, budget, progressPercentage } = summary;
                   const statusClass = `status-${site.status.toLowerCase().replace(/\s+/g, '')}`;
-                  const shortId = site.id.startsWith('site_') ? site.id.slice(5, 11).toUpperCase() : site.id.slice(0, 6).toUpperCase();
+                  const displayId = site.id.toUpperCase();
 
                   return (
                     <tr key={site.id} onClick={() => onOpenSite(site.id)} style={{ cursor: 'pointer' }}>
                       <td style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 700 }}>
-                        #{shortId}
+                        #{displayId}
                       </td>
                       <td>
                         <strong style={{ fontSize: '0.88rem', color: '#111827', display: 'block' }}>{site.name}</strong>

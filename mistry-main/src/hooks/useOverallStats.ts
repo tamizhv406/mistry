@@ -231,14 +231,36 @@ export function useOverallStats(user?: User | null, selectedSiteId?: string | nu
       lowStockItems,
     };
 
-    // Attendance Today calculations (Asia/Kolkata timezone)
+    // Attendance Today calculations (Asia/Kolkata timezone & UTC ISO date)
     const today = todayKey(DEFAULT_TIME_ZONE);
-    const todaysAttendance = attendance.filter(a => a.date === today);
-    const present = todaysAttendance.filter(a => a.status === 'present').length;
-    const halfDay = todaysAttendance.filter(a => a.status === 'half_day').length;
-    const leave = todaysAttendance.filter(a => a.status === 'leave').length;
-    const absent = todaysAttendance.filter(a => a.status === 'absent').length;
-    const overtime = todaysAttendance.filter(a => a.status === 'overtime').length;
+    const todayIso = new Date().toISOString().split('T')[0];
+    const todaysAttendance = attendance.filter(a => a.date === today || a.date === todayIso);
+    
+    // Active attendees: P (Full Day), OT (Overtime), 1/2 (Half Day)
+    const activePresentAttendees = todaysAttendance.filter(a => {
+      const st = String(a.status || '').toLowerCase();
+      return st === 'present' || st === 'overtime' || st === 'half_day' ||
+             st === 'p' || st === 'ot' || st === '1/2' ||
+             a.dayMultiplier > 0;
+    }).length;
+
+    const present = activePresentAttendees;
+    const halfDay = todaysAttendance.filter(a => {
+      const st = String(a.status || '').toLowerCase();
+      return st === 'half_day' || st === '1/2' || a.dayMultiplier === 0.5;
+    }).length;
+    const leave = todaysAttendance.filter(a => {
+      const st = String(a.status || '').toLowerCase();
+      return st === 'leave' || st === 'l';
+    }).length;
+    const absent = todaysAttendance.filter(a => {
+      const st = String(a.status || '').toLowerCase();
+      return st === 'absent' || st === 'a';
+    }).length;
+    const overtime = todaysAttendance.filter(a => {
+      const st = String(a.status || '').toLowerCase();
+      return st === 'overtime' || st === 'ot' || a.dayMultiplier === 1.5;
+    }).length;
 
     const markedWorkerIds = new Set(todaysAttendance.map(a => a.workerId));
     const totalWorkers = workers.length;
@@ -372,38 +394,39 @@ export function useOverallStats(user?: User | null, selectedSiteId?: string | nu
       const totalExpense = matExp + labGross + toolsExp + teaExp + poojaExp + elecExp + waterExp + otherExp;
       const totalPaid = matPd + sAdv + sSal + toolsPd + teaPd + poojaPd + elecPd + waterPd + otherPd;
       const siteFin = calculateFinancialBalance(totalExpense, totalPaid);
+      const sWorkers = allWorkers.filter(w => w.siteId === site.id);
 
       const siteEstimate = siteEstimateMap.get(site.id);
       const budget = siteEstimate ? Number(siteEstimate.totalEstimatedCost) : undefined;
 
-      // Progress percentage
+      // Progress percentage - default 0% for brand new projects
       let progressPercentage = 0;
       if (site.status === 'Completed') {
         progressPercentage = 100;
       } else if (site.status === 'Planning') {
-        progressPercentage = 10;
-      } else if (budget && budget > 0) {
+        progressPercentage = 0;
+      } else if (budget && budget > 0 && totalExpense > 0) {
         progressPercentage = Math.min(95, Math.round((totalExpense / budget) * 100));
       } else if (site.status === 'Active') {
-        // Calculate based on start and expected completion dates if available
-        if (site.startDate && site.expectedCompletionDate) {
-          const start = new Date(site.startDate).getTime();
-          const end = new Date(site.expectedCompletionDate).getTime();
+        // Brand new projects with no recorded expenses, materials, or milestones start strictly at 0%
+        if (totalExpense <= 0 && sMat.length === 0 && sWorkers.length === 0) {
+          progressPercentage = 0;
+        } else {
+          // Calculate based on start and expected completion dates if available
+          const start = site.startDate ? new Date(site.startDate).getTime() : 0;
+          const endStr = site.expectedCompletionDate || site.expectedCompletion || site.targetDate;
+          const end = endStr ? new Date(endStr).getTime() : 0;
           const now = Date.now();
-          if (end > start) {
+          if (start > 0 && end > start && now >= start && totalExpense > 0) {
             const elapsed = Math.max(0, Math.min(1, (now - start) / (end - start)));
             progressPercentage = Math.round(elapsed * 90);
           } else {
-            progressPercentage = 45;
+            progressPercentage = 0;
           }
-        } else {
-          progressPercentage = 40;
         }
-      } else if (site.status === 'On Hold') {
-        progressPercentage = 25;
+      } else {
+        progressPercentage = 0;
       }
-
-      const sWorkers = allWorkers.filter(w => w.siteId === site.id);
 
       return {
         site,

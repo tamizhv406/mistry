@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2, Wallet } from 'lucide-react';
-import type { User } from '../../db/types';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/db';
+import type { User, Site } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
 import { flattenExpenses, groupTotals, sumBy, type ExpenseRow } from '../../domain/expenses';
 import { correctExpense, EXPENSE_KINDS, recordExpense, removeExpense, type ExpenseKind, type ExpenseTable } from '../../services/records';
@@ -19,7 +21,9 @@ interface ExpensesViewProps {
 }
 
 export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack, onOpenLedger, onNotify }) => {
-  const project = useProject(siteId);
+  const sites = useLiveQuery(() => db.sites.filter(s => !s.isDeleted).toArray(), []) || [];
+  const [currentSiteId, setCurrentSiteId] = useState<string>('all');
+  const project = useProject(currentSiteId !== 'all' ? currentSiteId : undefined);
   const today = todayKey();
   const [range, setRange] = useState<RangeKey>('month');
   const [from, setFrom] = useState(addDays(today, -30));
@@ -29,10 +33,38 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<ExpenseRow | null>(null);
 
-  const all = useMemo(() => (project ? flattenExpenses(project) : []), [project]);
+  const allSitesExpenses = useLiveQuery(async () => {
+    if (currentSiteId !== 'all') return null;
+    const activeSites = await db.sites.filter(s => !s.isDeleted).toArray();
+    const siteIds = new Set(activeSites.map(s => s.id));
+    const live = <T extends { isDeleted: boolean; siteId: string }>(rows: T[]) => rows.filter(r => !r.isDeleted && siteIds.has(r.siteId));
+    const [tea, pooja, ele, wat, oth] = await Promise.all([
+      db.teaSnacksExpenses.toArray(),
+      db.poojaExpenses.toArray(),
+      db.electricityBills.toArray(),
+      db.waterBills.toArray(),
+      db.otherExpenses.toArray(),
+    ]);
+    return flattenExpenses({
+      teaSnacks: live(tea),
+      poojas: live(pooja),
+      electricity: live(ele),
+      water: live(wat),
+      otherExpenses: live(oth),
+    });
+  }, [currentSiteId]);
 
-  if (project === undefined) return <Page title="Expenses" onBack={onBack}><Loading rows={5} /></Page>;
-  if (project === null) return <Page title="Expenses" onBack={onBack}><div className="m-card"><Empty icon={<Wallet size={26} />} title="Project not found" /></div></Page>;
+  const all = useMemo(() => {
+    if (currentSiteId === 'all') {
+      return allSitesExpenses || [];
+    }
+    return project ? flattenExpenses(project) : [];
+  }, [currentSiteId, allSitesExpenses, project]);
+
+  const selectedSite = sites.find(s => s.id === currentSiteId);
+  const pageTitle = currentSiteId === 'all'
+    ? 'Expenses - All Sites'
+    : `Expenses - ${selectedSite?.name || 'Project'}`;
 
   const bounds: [string | undefined, string | undefined] =
     range === 'today' ? [today, today]
@@ -56,7 +88,39 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
   const openRow = open ? all.find(e => e.id === open.id && e.table === open.table) : undefined;
 
   return (
-    <Page title="Expenses" subtitle={project.site.name} onBack={onBack}>
+    <Page title={pageTitle} subtitle={currentSiteId === 'all' ? 'All Sites (Consolidated)' : selectedSite?.name} onBack={onBack}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', padding: '8px 12px', borderRadius: 8, border: '1px solid #E2E8F0' }}>
+          <label htmlFor="expenses-site-selector" style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+            Site:
+          </label>
+          <select
+            id="expenses-site-selector"
+            className="expenses-site-select"
+            value={currentSiteId}
+            onChange={e => setCurrentSiteId(e.target.value)}
+            style={{
+              flex: 1,
+              height: '36px',
+              borderRadius: '6px',
+              border: '1px solid #CBD5E1',
+              padding: '0 8px',
+              background: '#FFFFFF',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: '#1E293B',
+            }}
+          >
+            <option value="all">All Sites</option>
+            {sites.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       <div className="m-stats is-3 expenses-summary-stats">
         <Stat label="Today" value={formatINR(todayTotal)} />
         <Stat label="This month" value={formatINR(monthTotal)} />
@@ -134,12 +198,20 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
       <button type="button" className="m-fab no-print" onClick={() => setAdding(true)}><Plus size={22} /> Add expense</button>
       <div style={{ height: 72 }} aria-hidden="true" />
 
-      {adding && <AddExpenseSheet user={user} siteId={siteId} onClose={() => setAdding(false)} onNotify={onNotify} />}
+      {adding && (
+        <AddExpenseSheet
+          user={user}
+          sites={sites}
+          defaultSiteId={currentSiteId !== 'all' ? currentSiteId : (sites[0]?.id || siteId)}
+          onClose={() => setAdding(false)}
+          onNotify={onNotify}
+        />
+      )}
       {openRow && (
         <ExpenseDetailSheet
           row={openRow}
           user={user}
-          siteId={siteId}
+          siteId={currentSiteId !== 'all' ? currentSiteId : siteId}
           onClose={() => setOpen(null)}
           onOpenLedger={onOpenLedger}
           onNotify={onNotify}
@@ -153,10 +225,12 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
 
 const AddExpenseSheet: React.FC<{
   user: User;
-  siteId: string;
+  sites: Site[];
+  defaultSiteId: string;
   onClose: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
-}> = ({ user, siteId, onClose, onNotify }) => {
+}> = ({ user, sites, defaultSiteId, onClose, onNotify }) => {
+  const [selectedSiteId, setSelectedSiteId] = useState(defaultSiteId);
   const [kind, setKind] = useState<ExpenseKind>('tea');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayKey());
@@ -173,10 +247,11 @@ const AddExpenseSheet: React.FC<{
 
   const submit = async (allowDuplicate: boolean) => {
     if (busy) return;
+    if (!selectedSiteId) return setError('Please select a project/site.');
     if (Number.isNaN(value) || value <= 0) return setError('Enter an amount greater than ₹0.');
     setBusy(true);
     setError('');
-    const res = await recordExpense(user, siteId, { kind, amount: value, date, payee, description, paid: paid === 'paid', paymentMode, allowDuplicate });
+    const res = await recordExpense(user, selectedSiteId, { kind, amount: value, date, payee, description, paid: paid === 'paid', paymentMode, allowDuplicate });
     setBusy(false);
     if (res.ok) {
       onNotify(`${label} expense of ${formatINR(value)} recorded`, 'success');
@@ -202,6 +277,33 @@ const AddExpenseSheet: React.FC<{
         }
       >
         {error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{error}</Note></div>}
+
+        <Field label="Project / Site">
+          <select
+            name="projectId"
+            id="expense-project-select"
+            value={selectedSiteId}
+            onChange={e => setSelectedSiteId(e.target.value)}
+            style={{
+              width: '100%',
+              height: '42px',
+              borderRadius: '8px',
+              border: '1px solid #CBD5E1',
+              padding: '0 10px',
+              background: '#FFFFFF',
+              fontSize: '0.88rem',
+              fontWeight: 600,
+              color: '#1E293B',
+            }}
+          >
+            {sites.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
         <Field label="Category">
           <Chips label="Category" value={kind} onChange={setKind} options={EXPENSE_KINDS.map(k => ({ value: k.kind, label: k.label }))} />
         </Field>

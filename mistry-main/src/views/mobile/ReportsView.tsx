@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { BarChart3, Download, Printer } from 'lucide-react';
-import { useProject } from '../../hooks/useProject';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/db';
+import type { Site, MaterialCategory } from '../../db/types';
+import { useProject, type ProjectData } from '../../hooks/useProject';
 import { buildProjectReport, toCsv, type ReportRange } from '../../domain/reports';
 import { MATERIAL_CATEGORY_LABEL } from '../../domain/catalog';
-import type { MaterialCategory } from '../../db/types';
 import { addDays, addMonths, daysInMonth, formatDateTime, formatDay, formatMonth, monthKeyOf, todayKey } from '../../utils/datetime';
 import { formatINR, formatQty } from '../../utils/money';
 import { CalcLine, Chips, Empty, Field, Loading, Page, Stat } from '../../components/mobile/kit';
@@ -14,7 +16,7 @@ type RangeKey = 'month' | 'last' | 'all' | 'custom';
 function downloadCsv(filename: string, csv: string): boolean {
   try {
     // The byte-order mark makes Excel read ₹ and other non-ASCII text correctly.
-    const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' });
+    const blob = new Blob(['\ufeff', csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -56,7 +58,84 @@ interface ReportsViewProps {
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ siteId, onBack, onNotify }) => {
-  const project = useProject(siteId);
+  const sites = useLiveQuery(() => db.sites.filter(s => !s.isDeleted).toArray(), []) || [];
+  const [selectedSiteId, setSelectedSiteId] = useState<string>('all');
+
+  const singleProject = useProject(selectedSiteId !== 'all' ? selectedSiteId : undefined);
+
+  const consolidatedProject = useLiveQuery(async (): Promise<ProjectData | null> => {
+    if (selectedSiteId !== 'all') return null;
+    const activeSites = await db.sites.filter(s => !s.isDeleted).toArray();
+    const siteIds = new Set(activeSites.map(s => s.id));
+    const live = <T extends { isDeleted: boolean; siteId?: string }>(rows: T[]) =>
+      rows.filter(r => !r.isDeleted && (!r.siteId || siteIds.has(r.siteId)));
+
+    const [
+      workers, attendance, advances, salaryPayments, materials, rodEntries,
+      stockMovements, toolAssets, toolIssues, toolCosts, teaSnacks, poojas,
+      electricity, water, otherExpenses, payments, activity,
+    ] = await Promise.all([
+      db.workers.filter(r => !r.isDeleted && (!r.siteId || siteIds.has(r.siteId))).toArray(),
+      db.attendance.filter(r => !r.isDeleted && (!r.siteId || siteIds.has(r.siteId))).toArray(),
+      db.labourAdvances.toArray().then(live),
+      db.salaryPayments.toArray().then(live),
+      db.materials.toArray().then(live),
+      db.rodEntries.toArray().then(live),
+      db.stockMovements.toArray().then(rows => rows.filter(r => !r.siteId || siteIds.has(r.siteId))),
+      db.toolAssets.toArray().then(live),
+      db.toolIssues.toArray().then(live),
+      db.tools.toArray().then(live),
+      db.teaSnacksExpenses.toArray().then(live),
+      db.poojaExpenses.toArray().then(live),
+      db.electricityBills.toArray().then(live),
+      db.waterBills.toArray().then(live),
+      db.otherExpenses.toArray().then(live),
+      db.payments.toArray().then(live),
+      db.activityLogs.toArray(),
+    ]);
+
+    const dummySite: Site = {
+      id: 'all',
+      userId: 'system',
+      name: 'All Sites (Consolidated)',
+      ownerName: 'Consolidated',
+      ownerPhone: '',
+      area: 'All',
+      startDate: '',
+      expectedCompletionDate: '',
+      address: '',
+      buildingType: 'Mixed',
+      status: 'Active',
+      isDeleted: false,
+      leavePaid: true,
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    return {
+      site: dummySite,
+      workers,
+      attendance,
+      advances,
+      salaryPayments,
+      materials,
+      rodEntries,
+      stockMovements,
+      toolAssets,
+      toolIssues,
+      toolCosts,
+      teaSnacks,
+      poojas,
+      electricity,
+      water,
+      otherExpenses,
+      payments,
+      activity,
+    };
+  }, [selectedSiteId]);
+
+  const project = selectedSiteId === 'all' ? consolidatedProject : singleProject;
+
   const today = todayKey();
   const [rangeKey, setRangeKey] = useState<RangeKey>('month');
   const [from, setFrom] = useState(addDays(today, -30));
@@ -77,6 +156,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ siteId, onBack, onNoti
     () => (project ? buildProjectReport(project, range, { leavePaid: project.site.leavePaid }, today) : null),
     [project, range, today]
   );
+
+  const selectedSite = sites.find(s => s.id === selectedSiteId);
+  const selectedSiteName = selectedSiteId === 'all'
+    ? 'All Sites (Consolidated)'
+    : (selectedSite?.name || 'Project');
 
   if (project === undefined) return <Page title="Reports" onBack={onBack}><Loading rows={5} /></Page>;
   if (project === null || !report) {
@@ -103,7 +187,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ siteId, onBack, onNoti
   return (
     <Page
       title="Reports"
-      subtitle={<>{project.site.name} · {rangeLabel}</>}
+      subtitle={<>{selectedSiteName} · {rangeLabel}</>}
       onBack={onBack}
       right={
         <button type="button" className="m-icon-btn is-bordered no-print" onClick={() => window.print()} aria-label="Print or save as PDF">
@@ -111,7 +195,37 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ siteId, onBack, onNoti
         </button>
       }
     >
-      <div className="no-print">
+      <div className="no-print" style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', padding: '8px 12px', borderRadius: 8, border: '1px solid #E2E8F0', marginBottom: 12 }}>
+          <label htmlFor="reports-site-filter" style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+            Site:
+          </label>
+          <select
+            id="reports-site-filter"
+            className="reports-site-select"
+            value={selectedSiteId}
+            onChange={e => setSelectedSiteId(e.target.value)}
+            style={{
+              flex: 1,
+              height: '36px',
+              borderRadius: '6px',
+              border: '1px solid #CBD5E1',
+              padding: '0 8px',
+              background: '#FFFFFF',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: '#1E293B',
+            }}
+          >
+            <option value="all">All Sites (Consolidated)</option>
+            {sites.map(s => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <Chips
           label="Report period"
           value={rangeKey}
@@ -249,39 +363,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ siteId, onBack, onNoti
                   <tbody>
                     {report.labour.map(l => (
                       <tr key={l.workerId}>
-                        <td>{l.name}</td><td className="num">{l.counts.present}</td><td className="num">{l.counts.half_day}</td><td className="num">{l.counts.leave}</td>
-                        <td className="num">{l.counts.absent}</td><td className="num">{l.counts.overtime}</td><td className="num">{formatQty(l.days)}</td><td className="num"><strong>{formatINR(l.earned)}</strong></td>
+                        <td style={{ whiteSpace: 'normal', minWidth: 120 }}>{l.name}<span className="is-muted" style={{ display: 'block', fontSize: '0.78rem' }}>{l.category}</span></td>
+                        <td className="num">{l.counts.present || '—'}</td><td className="num">{l.counts.half_day || '—'}</td><td className="num">{l.counts.leave || '—'}</td>
+                        <td className="num">{l.counts.absent || '—'}</td><td className="num">{l.counts.overtime || '—'}</td><td className="num">{l.days}</td>
+                        <td className="num"><strong>{formatINR(l.earned)}</strong></td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot><tr><td>Total</td><td colSpan={5} /><td className="num">{formatQty(report.labour.reduce((s, l) => s + l.days, 0))}</td><td className="num">{formatINR(report.labourTotals.earned)}</td></tr></tfoot>
+                  <tfoot><tr><td>Total</td><td colSpan={5} /><td className="num">{report.labour.reduce((s, l) => s + l.days, 0)}</td><td className="num">{formatINR(spend.labour)}</td></tr></tfoot>
                 </table>
               </div>
             )}
-          </ReportCard>
-
-          <ReportCard
-            title="Advances and pending salary (as of today)"
-            note="Pending = all wages earned − all salary paid − advances to be deducted. Paid ahead is shown separately and is not subtracted from what other workers are owed."
-            onExport={() => exportCsv('salary_position', ['Worker', 'Wages earned (all time)', 'Salary paid (all time)', 'Advances to deduct', 'Pending', 'Paid ahead'], report.labour.map(l => [l.name, l.earnedAllTime, l.paidAllTime, l.advancesAllTime, l.pending, l.overpaid]))}
-          >
-            {report.labour.length === 0 ? <span className="is-muted">No workers in this project.</span> : (
-              <div className="m-table-wrap">
-                <table className="m-table">
-                  <thead><tr><th>Worker</th><th className="num">Earned</th><th className="num">Paid</th><th className="num">Advances</th><th className="num">Pending</th></tr></thead>
-                  <tbody>
-                    {report.labour.map(l => (
-                      <tr key={l.workerId}>
-                        <td>{l.name}</td><td className="num">{formatINR(l.earnedAllTime)}</td><td className="num">{formatINR(l.paidAllTime)}</td><td className="num">{formatINR(l.advancesAllTime)}</td>
-                        <td className="num"><strong className={l.pending > 0 ? 'is-bad' : ''}>{l.pending > 0 ? formatINR(l.pending) : l.overpaid > 0 ? `${formatINR(l.overpaid)} ahead` : '₹0'}</strong></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot><tr><td>Total pending</td><td colSpan={3} /><td className="num">{formatINR(report.labourTotals.pending)}</td></tr></tfoot>
-                </table>
-              </div>
-            )}
-            {report.labourTotals.nonRecoverable > 0 && <p className="m-calc-note">Gifts (not deducted from salary): {formatINR(report.labourTotals.nonRecoverable)}.</p>}
           </ReportCard>
 
           <ReportCard
@@ -312,13 +404,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ siteId, onBack, onNoti
               </div>
             )}
           </ReportCard>
-
-          <p className="m-calc-note" style={{ marginTop: 16 }}>
-            Report for {project.site.name}, {rangeLabel}. Prepared {formatDateTime(new Date())} (India time). Figures come from the records entered in this app.
-          </p>
-          <button type="button" className="m-btn is-block no-print" style={{ marginTop: 10 }} onClick={() => window.print()}>
-            <Printer size={20} /> Print or save as PDF
-          </button>
         </>
       )}
     </Page>

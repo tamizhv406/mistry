@@ -859,18 +859,18 @@ export function App() {
           />
         )}
 
-        {currentView === 'expenses' && selectedSiteId && (
+        {currentView === 'expenses' && (
           <ExpensesView
             user={currentUser}
-            siteId={selectedSiteId}
+            siteId={selectedSiteId || ''}
             onBack={() => handleNavigate('dashboard')}
-            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'expenses')}
+            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId || '', 'expenses')}
             onNotify={addToast}
           />
         )}
 
-        {currentView === 'reports' && selectedSiteId && (
-          <ReportsView siteId={selectedSiteId} onBack={() => handleNavigate('dashboard')} onNotify={addToast} />
+        {currentView === 'reports' && (
+          <ReportsView siteId={selectedSiteId || ''} onBack={() => handleNavigate('dashboard')} onNotify={addToast} />
         )}
 
         {currentView === 'floor-plans' && currentUser && (

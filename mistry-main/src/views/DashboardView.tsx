@@ -46,6 +46,19 @@ import { calculateFinancialBalance } from '../utils/financial';
 import { SafeImage } from '../components/ui/SafeImage';
 import { formatDay, todayKey, DEFAULT_TIME_ZONE } from '../utils/datetime';
 
+const formatTargetDate = (dateVal?: string | null): string => {
+  if (!dateVal) return 'Target unset';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return 'Target unset';
+    const month = d.toLocaleDateString('en-US', { month: 'short' });
+    const year = d.getFullYear();
+    return `Target: ${month} ${year}`;
+  } catch {
+    return 'Target unset';
+  }
+};
+
 interface DashboardViewProps {
   onOpenSite: (siteId: string) => void;
   onOpenNewSiteModal: () => void;
@@ -779,7 +792,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             {site.startDate ? formatDay(site.startDate) : 'Start date unset'}
                           </span>
                           <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
-                            {site.expectedCompletionDate ? `Target: ${formatDay(site.expectedCompletionDate)}` : 'Target unset'}
+                            {formatTargetDate(site.expectedCompletionDate || site.expectedCompletion || site.targetDate)}
                           </span>
                         </td>
                         <td>
@@ -905,8 +918,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#111827', margin: '0 0 4px' }}>
                       {site.name}
                     </h4>
-                    <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 12px' }}>
+                    <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 4px' }}>
                       {site.area || site.address || site.buildingType} • {site.ownerName}
+                    </p>
+                    <p style={{ fontSize: '0.72rem', color: '#64748B', margin: '0 0 10px' }}>
+                      {formatTargetDate(site.expectedCompletionDate || site.expectedCompletion || site.targetDate)}
                     </p>
 
                     <div style={{ marginBottom: '12px' }}>
