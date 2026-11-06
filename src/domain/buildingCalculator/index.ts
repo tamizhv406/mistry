@@ -16,4 +16,5 @@ export * from './plasterCalculations';
 export * from './flooringCalculations';
 export * from './sandCalculations';
 export * from './boq';
+export * from './multiTierEstimator';
 

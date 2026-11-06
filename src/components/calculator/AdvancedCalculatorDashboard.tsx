@@ -25,9 +25,11 @@ import { SandCalculatorPanel } from './SandCalculatorPanel';
 import { MaterialRatesPanel } from './MaterialRatesPanel';
 import { BoqProjectEstimatePanel } from './BoqProjectEstimatePanel';
 import { SavedCalculationsPanel } from './SavedCalculationsPanel';
+import { MultiTierEstimatorPanel } from './MultiTierEstimatorPanel';
 import { db } from '../../db/db';
 
 export type ExtendedCalculatorModule =
+  | 'turnkey'
   | 'wall'
   | 'rcc'
   | 'beam_column'
@@ -53,7 +55,7 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
   onNotify,
   onSelectSite,
 }) => {
-  const [activeModule, setActiveModule] = useState<ExtendedCalculatorModule>('wall');
+  const [activeModule, setActiveModule] = useState<ExtendedCalculatorModule>('turnkey');
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
 
@@ -153,6 +155,7 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
     category: 'Structural' | 'Finishing' | 'Procurement';
     badge?: string;
   }[] = [
+    { id: 'turnkey', label: 'Turnkey Estimator', sublabel: 'Multi-Tier BOQ', icon: <Building2 size={16} />, category: 'Structural', badge: 'Tier' },
     { id: 'wall', label: 'Wall & Masonry', sublabel: 'Brick & AAC', icon: <BrickWall size={16} />, category: 'Structural' },
     { id: 'rcc', label: 'RCC', sublabel: 'Mix M20 / M25', icon: <Layers size={16} />, category: 'Structural' },
     { id: 'beam_column', label: 'Beams & Columns', sublabel: 'Concrete & BBS', icon: <GitCommit size={16} />, category: 'Structural' },
@@ -287,6 +290,15 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
 
       {/* ── Active Module Workspace ── */}
       <div>
+        {activeModule === 'turnkey' && (
+          <MultiTierEstimatorPanel
+            user={user}
+            sites={sites}
+            currentSiteId={selectedSiteId}
+            onNotify={onNotify}
+          />
+        )}
+
         {activeModule === 'wall' && (
           <WallCalculatorPanel
             rates={rates}

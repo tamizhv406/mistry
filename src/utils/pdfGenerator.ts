@@ -1,5 +1,6 @@
 import type { FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanUnit, FloorPlanLevel } from '../db/types';
 import { formatLength, formatArea } from '../services/geometryEngine';
+import type { MultiTierEstimateResult } from '../domain/buildingCalculator/multiTierEstimator';
 
 export interface FloorPlanPdfOptions {
   plan: FloorPlan;
@@ -629,6 +630,254 @@ export function generateBuildingEstimatePdfBlob(options: BuildingEstimatePdfOpti
     margin + 12,
     margin + 8,
     6.8,
+    'F1'
+  );
+
+  const pdfBytes = pdf.build();
+  return new Blob([pdfBytes as any], { type: 'application/pdf' });
+}
+
+export interface TurnkeyQuotationPdfOptions {
+  estimate: MultiTierEstimateResult;
+  siteName?: string;
+  clientName?: string;
+  clientPhone?: string;
+  location?: string;
+  preparedBy?: string;
+  quotationRef?: string;
+}
+
+/**
+ * Generate a commercial client quotation PDF with itemized BOQ (Section A & B)
+ * and milestone payment terms on standard A4 format.
+ */
+export function generateTurnkeyQuotationPdfBlob(options: TurnkeyQuotationPdfOptions): Blob {
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const pdf = new MinimalPdfDocument(pageWidth, pageHeight);
+
+  const margin = 26;
+  const contentWidth = pageWidth - margin * 2;
+  const { estimate } = options;
+
+  const siteName = options.siteName || 'Turnkey Villa Project';
+  const clientName = options.clientName || 'Valued Client';
+  const quoteRef = options.quotationRef || `BM-QT-${Math.floor(1000 + Math.random() * 9000)}`;
+  const dateStr = new Date().toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // 1. Outer Border
+  pdf.setStrokeColor(203, 213, 225); // slate-300
+  pdf.setLineWidth(1);
+  pdf.drawRect(margin, margin, contentWidth, pageHeight - margin * 2, false, true);
+
+  // 2. Header Banner
+  const headerH = 56;
+  const headerY = pageHeight - margin - headerH;
+  pdf.setFillColor(15, 23, 42); // slate-900 (Navy)
+  pdf.drawRect(margin, headerY, contentWidth, headerH, true, false);
+
+  // Title
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('BUILDING MISTRY QUOTATION', margin + 14, headerY + 36, 13, 'F2');
+  pdf.setFillColor(203, 213, 225);
+  pdf.drawText(`Commercial Turnkey Estimation Sheet | Ref: ${quoteRef}`, margin + 14, headerY + 22, 8, 'F1');
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(`IS 456 & IS 1200 Standards Compliant | Verified Quantity Survey`, margin + 14, headerY + 10, 7.5, 'F1');
+
+  // Header Right info
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText(`Date: ${dateStr}`, margin + contentWidth - 140, headerY + 36, 8.5, 'F2');
+  pdf.setFillColor(56, 189, 248); // sky-400
+  pdf.drawText(`Package: ${estimate.specification.name}`, margin + contentWidth - 140, headerY + 22, 8.5, 'F2');
+  pdf.setFillColor(203, 213, 225);
+  pdf.drawText(`${estimate.builtUpArea.toLocaleString('en-IN')} sq.ft Built-Up`, margin + contentWidth - 140, headerY + 10, 8, 'F1');
+
+  // 3. Client & Project Details Bar
+  const metaH = 34;
+  const metaY = headerY - metaH - 6;
+  pdf.setFillColor(248, 250, 252); // slate-50
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 6, metaY, contentWidth - 12, metaH, true, true);
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('PROJECT NAME:', margin + 12, metaY + 21, 7, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(siteName.substring(0, 32), margin + 12, metaY + 9, 8.5, 'F2');
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('CLIENT / OWNER:', margin + 180, metaY + 21, 7, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(clientName.substring(0, 26), margin + 180, metaY + 9, 8.5, 'F2');
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('RATE / SQ.FT:', margin + 340, metaY + 21, 7, 'F1');
+  pdf.setFillColor(37, 99, 235); // Blue
+  pdf.drawText(`Rs. ${estimate.costPerSqFt.toLocaleString('en-IN')} / sq.ft`, margin + 340, metaY + 9, 9, 'F2');
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('ESTIMATED TOTAL:', margin + 440, metaY + 21, 7, 'F1');
+  pdf.setFillColor(16, 185, 129); // Emerald
+  pdf.drawText(`Rs. ${estimate.grandTotal.toLocaleString('en-IN')}`, margin + 440, metaY + 9, 9.5, 'F2');
+
+  let curY = metaY - 14;
+
+  // Helper for drawing Section Table
+  const drawSectionTable = (
+    title: string,
+    subtitle: string,
+    items: typeof estimate.sectionAItems,
+    accentColor: [number, number, number]
+  ) => {
+    // Section Header
+    pdf.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+    pdf.drawRect(margin + 6, curY - 14, contentWidth - 12, 14, true, false);
+    pdf.setFillColor(255, 255, 255);
+    pdf.drawText(title, margin + 12, curY - 10, 8, 'F2');
+    pdf.setFillColor(226, 232, 240);
+    pdf.drawText(subtitle, margin + 210, curY - 10, 7, 'F1');
+    curY -= 14;
+
+    // Table Header Row
+    pdf.setFillColor(241, 245, 249); // slate-100
+    pdf.drawRect(margin + 6, curY - 13, contentWidth - 12, 13, true, false);
+    pdf.setFillColor(71, 85, 105);
+    pdf.drawText('Item Description & Specification', margin + 12, curY - 9, 7, 'F2');
+    pdf.drawText('Qty', margin + 310, curY - 9, 7, 'F2');
+    pdf.drawText('Unit', margin + 355, curY - 9, 7, 'F2');
+    pdf.drawText('Rate (Rs)', margin + 410, curY - 9, 7, 'F2');
+    pdf.drawText('Amount (Rs)', margin + 475, curY - 9, 7, 'F2');
+    curY -= 13;
+
+    // Rows
+    items.forEach((item, idx) => {
+      if (idx % 2 === 1) {
+        pdf.setFillColor(248, 250, 252);
+        pdf.drawRect(margin + 6, curY - 12, contentWidth - 12, 12, true, false);
+      }
+      pdf.setFillColor(15, 23, 42);
+      pdf.drawText(item.name.substring(0, 38), margin + 12, curY - 9, 7, 'F1');
+      pdf.setFillColor(100, 116, 139);
+      pdf.drawText(item.quantity.toLocaleString('en-IN'), margin + 310, curY - 9, 7, 'F1');
+      pdf.drawText(item.unit, margin + 355, curY - 9, 7, 'F1');
+      pdf.drawText(item.unitRate.toLocaleString('en-IN'), margin + 410, curY - 9, 7, 'F1');
+      pdf.setFillColor(15, 23, 42);
+      pdf.drawText(item.amount.toLocaleString('en-IN'), margin + 475, curY - 9, 7, 'F2');
+      curY -= 12;
+    });
+
+    curY -= 6;
+  };
+
+  // Draw Section A: Core Civil Structure
+  drawSectionTable(
+    'SECTION A: CORE CIVIL STRUCTURE (GREY STRUCTURE)',
+    'Substructure, Columns, Beams, Slab Casting, Masonry & Civil Labour',
+    estimate.sectionAItems,
+    [30, 41, 59] // slate-800
+  );
+
+  // Draw Section B: Turnkey Finishing & MEP
+  drawSectionTable(
+    'SECTION B: TURNKEY FINISHING & MEP (ARCHITECTURAL PACKAGE)',
+    'Flooring, Wall Dado, Painting, Doors, Windows, Plumbing & Electrical',
+    estimate.sectionBItems,
+    [79, 70, 229] // indigo-600
+  );
+
+  // 4. Milestone Payment Terms Table
+  pdf.setFillColor(16, 185, 129); // Emerald
+  pdf.drawRect(margin + 6, curY - 14, contentWidth - 12, 14, true, false);
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('STANDARD MILESTONE PAYMENT SCHEDULE (CONTRACT TERMS)', margin + 12, curY - 10, 8, 'F2');
+  pdf.setFillColor(209, 250, 229);
+  pdf.drawText('Payable stage-wise upon site verification of deliverables', margin + 300, curY - 10, 7, 'F1');
+  curY -= 14;
+
+  pdf.setFillColor(241, 245, 249);
+  pdf.drawRect(margin + 6, curY - 12, contentWidth - 12, 12, true, false);
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Stage & Deliverables', margin + 12, curY - 9, 7, 'F2');
+  pdf.drawText('Share (%)', margin + 375, curY - 9, 7, 'F2');
+  pdf.drawText('Stage Amount (Rs)', margin + 450, curY - 9, 7, 'F2');
+  curY -= 12;
+
+  estimate.milestones.forEach((m, idx) => {
+    if (idx % 2 === 1) {
+      pdf.setFillColor(248, 250, 252);
+      pdf.drawRect(margin + 6, curY - 12, contentWidth - 12, 12, true, false);
+    }
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(`${idx + 1}. ${m.stage}`, margin + 12, curY - 9, 7, 'F2');
+    pdf.setFillColor(100, 116, 139);
+    pdf.drawText(`${m.percentage}%`, margin + 380, curY - 9, 7, 'F1');
+    pdf.setFillColor(16, 185, 129);
+    pdf.drawText(`Rs. ${m.amount.toLocaleString('en-IN')}`, margin + 450, curY - 9, 7, 'F2');
+    curY -= 12;
+  });
+
+  curY -= 8;
+
+  // 5. Grand KPI Summary Card
+  const sumH = 46;
+  pdf.setFillColor(241, 245, 249);
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawRect(margin + 6, curY - sumH, contentWidth - 12, sumH, true, true);
+
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText(`Core Structure: Rs. ${estimate.totalCivilStructureCost.toLocaleString('en-IN')} (${estimate.categoryPercentages.structure}%)`, margin + 14, curY - 14, 7.5, 'F1');
+  pdf.drawText(`Finishing & Joinery: Rs. ${estimate.totalFinishingCost.toLocaleString('en-IN')} (${estimate.categoryPercentages.finishing}%)`, margin + 14, curY - 26, 7.5, 'F1');
+  pdf.drawText(`Civil Labour Subtotal: Rs. ${estimate.labourSubtotal.toLocaleString('en-IN')}`, margin + 14, curY - 38, 7.5, 'F1');
+
+  pdf.drawText(`MEP & Plumbing: Rs. ${estimate.totalMepCost.toLocaleString('en-IN')} (${estimate.categoryPercentages.mep}%)`, margin + 220, curY - 14, 7.5, 'F1');
+  pdf.drawText(`Material Subtotal: Rs. ${estimate.materialSubtotal.toLocaleString('en-IN')}`, margin + 220, curY - 26, 7.5, 'F1');
+  pdf.drawText(`Built-up Area: ${estimate.builtUpArea.toLocaleString('en-IN')} sq.ft`, margin + 220, curY - 38, 7.5, 'F1');
+
+  // Divider
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawLine(margin + 360, curY - 8, margin + 360, curY - sumH + 8);
+
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawText('TOTAL QUOTATION VALUE', margin + 372, curY - 15, 8, 'F1');
+  pdf.setFillColor(16, 185, 129);
+  pdf.drawText(`Rs. ${estimate.grandTotal.toLocaleString('en-IN')}`, margin + 372, curY - 31, 13, 'F2');
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText(`@ Rs. ${estimate.costPerSqFt.toLocaleString('en-IN')} / sq.ft`, margin + 372, curY - 42, 7.5, 'F1');
+
+  curY -= sumH + 8;
+
+  // 6. Signatures and Authorizations
+  const sigH = 34;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 6, curY - sigH, contentWidth - 12, sigH, true, true);
+
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText('Prepared By / Authorized Contractor:', margin + 14, curY - 12, 7, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(options.preparedBy || 'Building Mistry Construction Co.', margin + 14, curY - 24, 7.5, 'F2');
+
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText('Client Acceptance & Signature:', margin + contentWidth - 180, curY - 12, 7, 'F1');
+  pdf.drawLine(margin + contentWidth - 180, curY - 26, margin + contentWidth - 20, curY - 26);
+
+  // 7. Footer
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(
+    'Note: Quotation valid for 30 days from date of issue. Cement & steel price variances will be adjusted based on market bills.',
+    margin + 12,
+    margin + 12,
+    6.5,
+    'F1'
+  );
+  pdf.drawText(
+    `Building Mistry ERP | Verified Civil Engineering Estimates | ${quoteRef}`,
+    margin + 12,
+    margin + 4,
+    6.5,
     'F1'
   );
 
