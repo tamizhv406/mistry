@@ -11,6 +11,9 @@ import {
   Download,
   Info,
   TrendingUp,
+  Printer,
+  FileSpreadsheet,
+  PieChart,
 } from 'lucide-react';
 import type { CalculationCostSummary } from '../../domain/buildingCalculator/types';
 
@@ -75,6 +78,7 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
   const totalCost = Math.max(1, costs.overallTotalCost);
   const materialTotalCost = costs.totalMaterialBaseCost + costs.totalTransportCost + costs.totalTaxCost;
 
+  // Colors for donut chart & table
   const categoryColors: Record<TakeoffMaterialItem['category'], { bg: string; fill: string; dot: string; text: string }> = {
     cement: { bg: 'bg-amber-100', fill: '#f59e0b', dot: 'bg-amber-500', text: 'text-amber-800' },
     sand: { bg: 'bg-teal-100', fill: '#14b8a6', dot: 'bg-teal-500', text: 'text-teal-800' },
@@ -84,6 +88,69 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
     tile: { bg: 'bg-cyan-100', fill: '#06b6d4', dot: 'bg-cyan-500', text: 'text-cyan-800' },
     labour: { bg: 'bg-emerald-100', fill: '#10b981', dot: 'bg-emerald-500', text: 'text-emerald-800' },
     other: { bg: 'bg-slate-100', fill: '#64748b', dot: 'bg-slate-500', text: 'text-slate-800' },
+  };
+
+  // Build segments for the circular Donut Chart matching Image 4 (MYDESIGNERPLUS) & Image 5 (ARCHITECHTURES)
+  const chartItems = [
+    ...materials.map((m) => ({
+      id: m.id,
+      name: m.name,
+      amount: m.subtotal,
+      color: categoryColors[m.category]?.fill || '#64748b',
+    })),
+    ...(costs.labourCost > 0
+      ? [
+          {
+            id: 'site_labour',
+            name: 'Site Labour Allowance',
+            amount: costs.labourCost,
+            color: '#10b981',
+          },
+        ]
+      : []),
+  ].filter((item) => item.amount > 0);
+
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius; // ~238.76
+  let currentOffset = 0;
+  const donutSegments = chartItems.map((item) => {
+    const percentage = (item.amount / totalCost) * 100;
+    const strokeLength = (percentage / 100) * circumference;
+    const strokeGap = circumference - strokeLength;
+    const strokeDashoffset = -currentOffset;
+    currentOffset += strokeLength;
+
+    return {
+      ...item,
+      percentage: Math.round(percentage * 10) / 10,
+      strokeDasharray: `${strokeLength} ${strokeGap}`,
+      strokeDashoffset,
+    };
+  });
+
+  const handleExportCSV = () => {
+    const headers = ['Component / Material', 'Category', 'Quantity', 'Unit', 'Unit Rate (INR)', 'Total Amount (INR)'];
+    const rows = materials.map((m) => [
+      `"${m.name}"`,
+      m.category,
+      typeof m.quantity === 'number' ? m.quantity : `"${m.quantity}"`,
+      m.unit,
+      m.rate,
+      m.subtotal,
+    ]);
+    if (costs.labourCost > 0) {
+      rows.push(['"Site Labour Allowance"', 'labour', '1', 'Job', String(costs.labourCost), String(costs.labourCost)]);
+    }
+    rows.push(['"GRAND TOTAL ESTIMATE"', '', '', '', '', String(costs.overallTotalCost)]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${calculationName.replace(/\s+/g, '_')}_takeoff.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -150,25 +217,45 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
       {/* ── 2. Materials & Cost Schedule Table (Quantity Takeoff) ── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
         {/* Table Title Bar */}
-        <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
           <div>
             <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
               <Package size={14} className="text-indigo-600" />
               Materials &amp; Cost Breakdown
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={onSave}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              isSaved
-                ? 'bg-emerald-600 text-white shadow-2xs'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs'
-            }`}
-          >
-            {isSaved ? <Check size={14} /> : <Save size={14} />}
-            <span>{isSaved ? 'Saved to Project' : 'Save Calculation'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              title="Print or Save as PDF"
+            >
+              <Printer size={13} />
+              <span>PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+              title="Download CSV"
+            >
+              <FileSpreadsheet size={13} />
+              <span>CSV</span>
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                isSaved
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs'
+              }`}
+            >
+              {isSaved ? <Check size={14} /> : <Save size={14} />}
+              <span>{isSaved ? 'Saved to Project' : 'Save Calculation'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Schedule Table */}
@@ -266,57 +353,56 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
           </table>
         </div>
 
-        {/* ── 3. Visual Cost Distribution Bar ── */}
-        <div className="p-3.5 bg-slate-50/60 dark:bg-slate-800/40 border-t border-slate-200 dark:border-slate-800">
-          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-2">
-            <span>Cost Distribution</span>
-            <span>Total: {formatINR(costs.overallTotalCost)}</span>
+        {/* ── 3. Visual Cost Breakdown (Donut Chart matching Image 4 & Image 5) ── */}
+        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 mb-3">
+            <span className="flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+              <PieChart size={14} className="text-indigo-600" /> Cost Breakdown
+            </span>
+            <span className="font-mono text-slate-500">Total: {formatINR(costs.overallTotalCost)}</span>
           </div>
 
-          {/* Segmented bar */}
-          <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-200 dark:bg-slate-700 gap-0.5">
-            {materials.map((m) => {
-              const color = categoryColors[m.category] || categoryColors.other;
-              const pct = (m.subtotal / totalCost) * 100;
-              if (pct < 0.5) return null;
-              return (
-                <div
-                  key={m.id}
-                  style={{ width: `${pct}%`, backgroundColor: color.fill }}
-                  title={`${m.name}: ${formatINR(m.subtotal)} (${Math.round(pct)}%)`}
+          {/* Circular SVG Donut Chart */}
+          <div className="relative w-36 h-36 mx-auto my-3">
+            <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+              <circle cx="50" cy="50" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="12" />
+              {donutSegments.map((seg) => (
+                <circle
+                  key={seg.id}
+                  cx="50"
+                  cy="50"
+                  r={radius}
+                  fill="none"
+                  stroke={seg.color}
+                  strokeWidth="12"
+                  strokeDasharray={seg.strokeDasharray}
+                  strokeDashoffset={seg.strokeDashoffset}
+                  strokeLinecap="round"
                 />
-              );
-            })}
-            {costs.labourCost > 0 && (
-              <div
-                style={{ width: `${(costs.labourCost / totalCost) * 100}%`, backgroundColor: '#10b981' }}
-                title={`Labour: ${formatINR(costs.labourCost)} (${Math.round((costs.labourCost / totalCost) * 100)}%)`}
-              />
-            )}
+              ))}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Total</span>
+              <span className="text-xs font-extrabold font-mono text-slate-900 dark:text-slate-100">
+                {formatINR(costs.overallTotalCost)}
+              </span>
+            </div>
           </div>
 
-          {/* Legend Chips */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2.5 text-[11px] text-slate-600 dark:text-slate-400">
-            {materials.map((m) => {
-              const color = categoryColors[m.category] || categoryColors.other;
-              const pct = Math.round((m.subtotal / totalCost) * 100);
-              return (
-                <div key={m.id} className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${color.dot}`} />
-                  <span className="font-medium text-slate-700 dark:text-slate-300">{m.name}</span>
-                  <span className="text-slate-400 font-mono">({pct}%)</span>
+          {/* Breakdown Legend matching Image 4 */}
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 pt-2">
+            {donutSegments.map((seg) => (
+              <div key={seg.id} className="py-1.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">{seg.name}</span>
                 </div>
-              );
-            })}
-            {costs.labourCost > 0 && (
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="font-medium text-slate-700 dark:text-slate-300">Labour</span>
-                <span className="text-slate-400 font-mono">
-                  ({Math.round((costs.labourCost / totalCost) * 100)}%)
-                </span>
+                <div className="flex items-center gap-2 font-mono">
+                  <span className="font-bold text-slate-900 dark:text-slate-100">{formatINR(seg.amount)}</span>
+                  <span className="text-[11px] text-slate-400 min-w-[36px] text-right">{seg.percentage}%</span>
+                </div>
               </div>
-            )}
+            ))}
           </div>
         </div>
 

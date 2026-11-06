@@ -1545,12 +1545,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     speakTamil('திட்டம் சேமிக்கப்பட்டது');
   }, [saveNow]);
 
-  // Autosave shortly after the last change.
+  // Autosave shortly after the last change (500ms debounced).
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (saveStatus === 'unsaved' && plan && !saveConflict) {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
-      autoSaveTimer.current = setTimeout(() => { void saveNow(false); }, 1500);
+      autoSaveTimer.current = setTimeout(() => { void saveNow(false); }, 500);
     }
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   }, [editorState, floorLevels, saveStatus, saveNow, plan, saveConflict]);

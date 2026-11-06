@@ -20,6 +20,28 @@ svg {
   flex-shrink: 0;
 }
 
+/* Ensure inputs inside calculator do not inherit index.css forced 44px min-height */
+.space-y-6 input[type="text"],
+.space-y-6 input[type="number"],
+.space-y-4 input[type="text"],
+.space-y-4 input[type="number"],
+.space-y-3 input[type="text"],
+.space-y-3 input[type="number"],
+.space-y-2 input[type="text"],
+.space-y-2 input[type="number"] {
+  min-height: unset !important;
+  font-size: 13px !important;
+  padding: 6px 10px !important;
+  box-sizing: border-box !important;
+}
+
+/* Ensure CAD Ribbon tabs never wrap onto multiple lines */
+.scrollbar-none button {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  min-width: max-content !important;
+}
+
 /* ── Layout & Display ── */
 .flex { display: flex; }
 .inline-flex { display: inline-flex; }
