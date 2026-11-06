@@ -17,6 +17,21 @@ const rootLinks: Plugin = {
 export default defineConfig({
   base: servedFromRoot ? '/' : './',
   plugins: [react(), ...(servedFromRoot ? [rootLinks] : [])],
+  build: {
+    chunkSizeWarningLimit: 1600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('three')) return 'vendor-three';
+            if (id.includes('react') || id.includes('lucide') || id.includes('motion')) return 'vendor-framework';
+            if (id.includes('dexie') || id.includes('supabase')) return 'vendor-db';
+            return 'vendor-deps';
+          }
+        },
+      },
+    },
+  },
   css: {
     postcss: {},
   },

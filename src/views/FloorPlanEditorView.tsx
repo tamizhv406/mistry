@@ -8206,6 +8206,22 @@ _Shared via Building Mistry App_`;
             <span className="fp-fab-ai-label">AI</span>
           </button>
 
+          {/* Furniture / CAD Symbols: Dedicated floating button on mobile screens */}
+          <button
+            type="button"
+            className="fp-fab-furniture fp-mobile-furniture-toggle no-print"
+            onClick={() => {
+              setShowFurnitureModal(true);
+              speakTamil('மரச்சாமான்கள்');
+            }}
+            title="Furniture & Symbols Library (மரச்சாமான்கள்)"
+            aria-label="Open Furniture and Symbols"
+            id="fp-mobile-furniture-toggle"
+          >
+            <Armchair size={18} />
+            <span className="fp-fab-furniture-label">Furniture</span>
+          </button>
+
           {/* Sketch result that needs a decision: a large correction is shown on the canvas
               (dashed) and is only added when the user accepts it. */}
           {sketchProposal && (
@@ -14504,6 +14520,22 @@ _Shared via Building Mistry App_`;
         >
           <Square size={20} />
           <span className="fp-mobile-tool-label">Room</span>
+        </button>
+
+        {/* Dedicated Furniture / Symbols Mobile Toggle */}
+        <button
+          type="button"
+          className={`fp-mobile-tool-btn fp-mobile-tool-furniture ${activeTool === 'furniture' || showFurnitureModal ? 'active' : ''}`}
+          onClick={() => {
+            setShowFurnitureModal(true);
+            speakTamil('மரச்சாமான்கள்');
+          }}
+          title="Furniture & Symbols (மரச்சாமான்கள்)"
+          id="fp-mobile-tool-furniture"
+          aria-label="Furniture & Symbols"
+        >
+          <Armchair size={20} />
+          <span className="fp-mobile-tool-label">Furniture</span>
         </button>
 
         <button

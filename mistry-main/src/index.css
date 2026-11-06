@@ -5189,6 +5189,154 @@ input:focus, select:focus, textarea:focus {
   color: #64748b;
 }
 
+/* Furniture Mobile Floating Button & Dedicated Toggle Media Queries */
+@media (max-width: 768px) {
+  .fp-fab-furniture,
+  .fp-mobile-furniture-toggle {
+    position: absolute !important;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 12px !important;
+    z-index: 28 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    height: 40px !important;
+    padding: 0 14px !important;
+    border-radius: 20px !important;
+    background: #0f172a !important;
+    color: #ffffff !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.35) !important;
+    cursor: pointer !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    touch-action: manipulation !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
+    pointer-events: auto !important;
+  }
+
+  .fp-fab-furniture:active,
+  .fp-mobile-furniture-toggle:active {
+    transform: scale(0.94) !important;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.3) !important;
+  }
+
+  .fp-fab-furniture svg,
+  .fp-mobile-furniture-toggle svg {
+    color: #f59e0b !important;
+    flex-shrink: 0 !important;
+  }
+
+  .fp-fab-furniture-label {
+    display: inline-block !important;
+    letter-spacing: 0.2px !important;
+    font-weight: 700 !important;
+  }
+
+  .fp-mobile-tool-btn.fp-mobile-tool-furniture {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 54px !important;
+    min-height: 52px !important;
+  }
+
+  .fp-mobile-tool-btn.fp-mobile-tool-furniture svg {
+    color: #d97706 !important;
+  }
+
+  .fp-mobile-tool-btn.fp-mobile-tool-furniture.active,
+  .fp-mobile-tool-btn.fp-mobile-tool-furniture:hover {
+    background: #eff6ff !important;
+    border-color: #3b82f6 !important;
+  }
+
+  .fp-mobile-tool-btn.fp-mobile-tool-furniture.active svg {
+    color: #2563eb !important;
+  }
+
+  .fp-editor-root[data-gesture] .fp-fab-furniture,
+  .fp-editor-root[data-gesture] .fp-mobile-furniture-toggle {
+    opacity: 0.35 !important;
+    pointer-events: none !important;
+  }
+
+  .fp-furniture-modal {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+
+  .fp-furniture-dialog {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 84vh !important;
+    border-radius: 20px 20px 0 0 !important;
+    border-bottom: none !important;
+    box-shadow: 0 -10px 40px rgba(15, 23, 42, 0.25) !important;
+    animation: fp-sheet-up 0.22s ease-out !important;
+  }
+
+  .fp-furniture-header {
+    padding: 14px 18px !important;
+  }
+
+  .fp-furniture-categories {
+    padding: 10px 16px !important;
+    gap: 6px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .fp-furniture-grid {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)) !important;
+    gap: 8px !important;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px)) 16px !important;
+  }
+
+  .fp-furniture-item-card {
+    padding: 10px 6px !important;
+    min-height: 48px !important;
+  }
+
+  .fp-furniture-icon-box {
+    width: 52px !important;
+    height: 52px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .fp-fab-furniture,
+  .fp-mobile-furniture-toggle {
+    height: 38px !important;
+    padding: 0 11px !important;
+    font-size: 0.74rem !important;
+    left: 10px !important;
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+    border-radius: 19px !important;
+  }
+
+  .fp-furniture-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .fp-furniture-name {
+    font-size: 0.68rem !important;
+  }
+
+  .fp-furniture-dims {
+    font-size: 0.62rem !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .fp-fab-furniture,
+  .fp-mobile-furniture-toggle {
+    display: none !important;
+  }
+}
+
 /* Material Estimation Modal */
 .fp-calc-modal {
   position: fixed;
