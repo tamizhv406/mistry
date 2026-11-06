@@ -342,6 +342,8 @@ export function App() {
       setCurrentView('trash');
     } else if (view === 'backup') {
       setCurrentView('backup');
+    } else if (view === 'settings') {
+      setCurrentView('settings');
     } else if (view === 'my-sites') {
       setCurrentView('my-sites');
     } else if (view === 'estimator') {

@@ -382,6 +382,11 @@ export class UnifiedStorageService {
     return localStore.get<StorageSite>('sites');
   }
 
+  async getSite(id: string): Promise<StorageSite | null> {
+    const sites = await this.getSites();
+    return sites.find(s => s.id === id) || null;
+  }
+
   async saveSite(data: Partial<StorageSite>): Promise<StorageSite> {
     const val = validateSite(data);
     if (!val.valid) {

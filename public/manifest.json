@@ -1,13 +1,13 @@
 {
-  "name": "Building Mistry",
-  "short_name": "Mistry",
-  "description": "Building Mistry - Complete Construction Site, Material, Labour, Tools and Expense Management for Mistries & Civil Contractors",
+  "name": "Building Mistry — Construction ERP",
+  "short_name": "Mistry ERP",
+  "description": "Building Mistry — Complete Construction Site, Material, Labour, Tools, CAD Floor Planner and Estimation ERP for Civil Contractors",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f8fafc",
-  "theme_color": "#ffffff",
-  "orientation": "portrait-primary",
+  "theme_color": "#0f172a",
+  "orientation": "any",
   "categories": ["business", "productivity", "utilities"],
   "icons": [
     {

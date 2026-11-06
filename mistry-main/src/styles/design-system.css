@@ -10,6 +10,7 @@
 
 :root {
   --ds-bg: #f8fafc;
+  --ds-bg-alt: #f1f5f9;
   --ds-card: #ffffff;
   --ds-line: #e2e8f0;
   --ds-line-strong: #cbd5e1;
@@ -19,9 +20,40 @@
   --ds-primary: #0f172a;
   --ds-primary-hover: #1e293b;
   --ds-select: #2563eb;
+  /* Phase 5 Construction-Grade Brand Tokens */
+  --ds-accent-amber: #f59e0b;
+  --ds-accent-amber-dark: #d97706;
+  --ds-status-present: #16a34a;
+  --ds-status-absent: #dc2626;
+  --ds-focus-ring: 0 0 0 3px rgba(245, 158, 11, 0.28);
 }
 
 html, body { background: var(--ds-bg); color: var(--ds-ink); }
+
+/* Phase 5: Form inputs, selects, textareas - subtle 1px border, 8px radius, safety amber focus ring */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+select,
+textarea {
+  border: 1px solid var(--ds-line-strong);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--ds-accent-amber) !important;
+  box-shadow: var(--ds-focus-ring) !important;
+  outline: none !important;
+}
+
+/* Micro-interactions: interactive elevation & press feedback */
+button.btn, .m-btn, .action-btn {
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+button.btn:active, .m-btn:active, .action-btn:active {
+  transform: scale(0.97);
+}
 
 /* ---- Floor planner, phone: one flat bar docked at the bottom ---------------------------- */
 @media (max-width: 768px) {
@@ -217,41 +249,72 @@ html, body { background: var(--ds-bg); color: var(--ds-ink); }
 }
 .calc-nav .m-btn { flex: 1; }
 
-/* ---- App navigation (phone): one flat, compact bar along the bottom edge -------------------- */
+/* ---- Phase 5: Ergonomic Mobile Bottom Navigation (#app-mobile-nav) ---- */
 @media (max-width: 768px) {
-  :root { --m-nav-h: 60px; }
+  :root { --m-nav-h: 64px; }
+  #app-mobile-nav,
   .m-nav {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
     left: 0;
     right: 0;
     bottom: 0;
-    height: calc(60px + var(--m-safe-b));
-    padding: 4px 4px var(--m-safe-b);
-    background: var(--ds-card);
-    border: 0;
-    border-top: 1px solid var(--ds-line);
-    border-radius: 0;
-    box-shadow: none;
+    height: calc(62px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 3px 2px calc(3px + env(safe-area-inset-bottom, 0px)) !important;
+    background: rgba(255, 255, 255, 0.90) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 0 !important;
+    border-top: 1px solid var(--ds-line) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.06) !important;
+    z-index: 1000 !important;
   }
 }
 .m-nav-btn {
   height: 52px;
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--ds-ink-3);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justifyContent: center;
+  gap: 3px;
+  padding: 4px 1px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-nav-btn:active {
+  transform: scale(0.94);
+  background: rgba(241, 245, 249, 0.7);
 }
 .m-nav-btn[aria-current='page'] {
-  background: transparent;
-  color: var(--ds-ink);
+  background: rgba(254, 243, 199, 0.45);
+  color: var(--ds-accent-amber-dark);
   font-weight: 800;
+}
+.m-nav-btn[aria-current='page'] svg {
+  color: var(--ds-accent-amber-dark);
+  stroke-width: 2.4;
 }
 .m-nav-btn[aria-current='page']::before {
   content: "";
   position: absolute;
-  top: -4px;
-  left: 28%;
-  right: 28%;
+  top: 0;
+  left: 20%;
+  right: 20%;
   height: 3px;
   border-radius: 0 0 3px 3px;
-  background: var(--ds-primary);
+  background: var(--ds-accent-amber);
+}
+
+@media print {
+  #app-mobile-nav,
+  .m-nav {
+    display: none !important;
+  }
 }

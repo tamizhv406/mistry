@@ -382,6 +382,11 @@ export class UnifiedStorageService {
     return localStore.get<StorageSite>('sites');
   }
 
+  async getSite(id: string): Promise<StorageSite | null> {
+    const sites = await this.getSites();
+    return sites.find(s => s.id === id) || null;
+  }
+
   async saveSite(data: Partial<StorageSite>): Promise<StorageSite> {
     const val = validateSite(data);
     if (!val.valid) {
@@ -598,8 +603,8 @@ export class UnifiedStorageService {
             .filter((p) => !(p as any).isDeleted)
             .map((p) => ({
               id: p.id,
-              siteId: p.siteId,
-              name: p.name,
+              siteId: p.siteId || '',
+              name: (p as any).name || (p as any).planName || 'Floor Plan',
               dimensions: (p as any).dimensions || {
                 length: (p as any).gridWidth || 40,
                 width: (p as any).gridHeight || 30,
@@ -671,7 +676,7 @@ export class UnifiedStorageService {
             .filter((e) => !(e as any).isDeleted)
             .map((e) => ({
               id: e.id,
-              siteId: e.siteId,
+              siteId: e.siteId || '',
               builtUpArea: Number((e as any).builtUpArea || (e as any).plotSize || 1000),
               packageType: ((e as any).packageType as PackageType) || 'standard',
               materialRates: (e as any).materialRates || {},

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   BarChart3, Building2, Calculator, CalendarCheck, Check, ChevronDown, ChevronRight, Database, Download, HardHat, Home,
-  LayoutGrid, LogIn, LogOut, Menu, Package, PenTool, Plus, ShieldCheck, Trash2, Wallet, Wrench,
+  LayoutGrid, LogIn, LogOut, Menu, Package, PenTool, Plus, ShieldCheck, Trash2, Wallet, Wrench, Settings,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -153,26 +153,28 @@ export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNa
 
   if (currentView === 'floor-plan-editor') return null;
 
-  const tabs: { view: string; label: string; icon: React.ReactNode; match: string[] }[] = [
-    { view: 'dashboard', label: 'Home', icon: <Home size={22} />, match: ['dashboard'] },
-    { view: 'my-sites', label: 'Projects', icon: <Building2 size={22} />, match: ['my-sites'] },
-    { view: 'floor-plans', label: 'Floor Plan', icon: <PenTool size={22} />, match: ['floor-plans', 'floor-plan-editor'] },
-    { view: 'reports', label: 'Reports', icon: <BarChart3 size={22} />, match: ['reports'] },
+  const tabs: { id: string; view: string; label: string; icon: React.ReactNode; match: string[] }[] = [
+    { id: 'mobile-nav-home', view: 'dashboard', label: 'Home', icon: <Home size={20} />, match: ['dashboard'] },
+    { id: 'mobile-nav-projects', view: 'my-sites', label: 'Projects', icon: <Building2 size={20} />, match: ['my-sites', 'site-detail'] },
+    { id: 'mobile-nav-attendance', view: 'labour', label: 'Attendance', icon: <HardHat size={20} />, match: ['labour', 'worker'] },
+    { id: 'mobile-nav-planner', view: 'floor-plans', label: 'Floor Plan', icon: <PenTool size={20} />, match: ['floor-plans', 'floor-plan-editor'] },
+    { id: 'mobile-nav-calculator', view: 'estimator', label: 'Calculator', icon: <Calculator size={20} />, match: ['estimator'] },
+    { id: 'mobile-nav-settings', view: 'settings', label: 'Settings', icon: <Settings size={20} />, match: ['settings', 'backup', 'admin', 'trash'] },
   ];
-  const moreActive = !tabs.some(t => t.match.includes(currentView));
 
   const go = (view: string) => { setMoreOpen(false); onNavigate(view); };
 
   const items: { label: string; sub: string; icon: React.ReactNode; onClick: () => void; show?: boolean }[] = [
     { label: 'Attendance & Salary', sub: 'Mark attendance, pay workers', icon: <CalendarCheck size={20} />, onClick: () => go('labour') },
-    { label: 'Materials', sub: 'Purchases, usage and stock', icon: <Package size={20} />, onClick: () => go('stock') },
-    { label: 'Tools', sub: 'Issue and return tools', icon: <Wrench size={20} />, onClick: () => go('toolroom') },
-    { label: 'Expenses', sub: 'Tea, fuel, transport, bills', icon: <Wallet size={20} />, onClick: () => go('expenses') },
+    { label: 'Materials & Inventory', sub: 'Purchases, usage and stock', icon: <Package size={20} />, onClick: () => go('stock') },
+    { label: 'Tools Management', sub: 'Issue and return tools', icon: <Wrench size={20} />, onClick: () => go('toolroom') },
+    { label: 'Expenses Ledger', sub: 'Tea, fuel, transport, bills', icon: <Wallet size={20} />, onClick: () => go('expenses') },
+    { label: 'Reports & Analytics', sub: 'Project cost and attendance summary', icon: <BarChart3 size={20} />, onClick: () => go('reports') },
     { label: 'Building Calculator', sub: 'Estimate materials and cost', icon: <Calculator size={20} />, onClick: () => go('estimator') },
-    { label: 'All ledgers', sub: 'Steel rods, payments, notes and more', icon: <LayoutGrid size={20} />, onClick: () => { setMoreOpen(false); onOpenClassic(); }, show: !!siteId },
+    { label: 'All Ledgers', sub: 'Steel rods, payments, notes and more', icon: <LayoutGrid size={20} />, onClick: () => { setMoreOpen(false); onOpenClassic(); }, show: !!siteId },
     { label: 'Admin Portal', sub: 'Users and audit log', icon: <ShieldCheck size={20} />, onClick: () => go('admin'), show: isAdmin(user) },
     { label: `Recycle Bin${trashCount ? ` (${trashCount})` : ''}`, sub: 'Restore deleted records', icon: <Trash2 size={20} />, onClick: () => go('trash') },
-    { label: 'Backup & Data', sub: 'Save or restore this device', icon: <Database size={20} />, onClick: () => go('backup') },
+    { label: 'Backup & Sync', sub: 'Save or restore this device', icon: <Database size={20} />, onClick: () => go('backup') },
     { label: 'Install app', sub: 'Add Mistry to your home screen', icon: <Download size={20} />, onClick: () => { setMoreOpen(false); onInstall(); }, show: canInstall },
     ...(user.id === 'local-builder-user'
       ? [{ label: 'Connect Supabase Cloud', sub: 'Sign in to sync your projects online', icon: <LogIn size={20} />, onClick: () => go('login') }]
@@ -182,17 +184,21 @@ export const MobileBottomNav: React.FC<ChromeProps> = ({ user, currentView, onNa
 
   return (
     <>
-      <nav className="m-nav no-print" aria-label="Main">
+      <nav id="app-mobile-nav" className="m-nav no-print" aria-label="Main Navigation">
         {tabs.map(t => (
-          <button key={t.view} type="button" className="m-nav-btn" aria-current={t.match.includes(currentView) ? 'page' : undefined} onClick={() => onNavigate(t.view)}>
+          <button
+            key={t.view}
+            id={t.id}
+            type="button"
+            className="m-nav-btn"
+            aria-current={t.match.includes(currentView) ? 'page' : undefined}
+            aria-label={t.label}
+            onClick={() => onNavigate(t.view)}
+          >
             {t.icon}
             <span>{t.label}</span>
           </button>
         ))}
-        <button type="button" className="m-nav-btn" aria-current={moreActive ? 'page' : undefined} aria-haspopup="dialog" onClick={() => setMoreOpen(true)}>
-          <Menu size={22} />
-          <span>More</span>
-        </button>
       </nav>
 
       <Sheet open={moreOpen} title="More" onClose={() => setMoreOpen(false)}>

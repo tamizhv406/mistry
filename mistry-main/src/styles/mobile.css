@@ -162,20 +162,23 @@
 /* Bottom navigation (phone): a floating pill. Four labelled tabs, and the Floor Planner,
    the heart of the app, as the round orange button in the middle. */
 @media (max-width: 768px) {
+  #app-mobile-nav,
   .m-nav {
     display: grid;
-    grid-template-columns: 1fr 1fr 76px 1fr 1fr;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     align-items: center;
     position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: calc(10px + var(--m-safe-b));
-    height: 64px;
-    padding: 5px;
-    background: rgba(255, 255, 255, 0.97);
-    border: 1px solid var(--m-line);
-    border-radius: 999px;
-    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.06);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+    padding: 3px 2px calc(3px + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.90);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid var(--m-line);
+    border-radius: 0;
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
     z-index: 1000;
   }
 }
@@ -366,9 +369,9 @@ button.m-row:active { background: var(--m-surface-2); }
   line-clamp: 2;
   overflow-wrap: anywhere;
 }
-.m-row-sub { font-size: 0.82rem; color: var(--m-ink-3); margin-top: 1px; }
-.m-row-end { text-align: right; flex-shrink: 0; }
-.m-row-amount { font-family: var(--font-heading); font-weight: 700; font-size: 1rem; }
+.m-row-sub { font-size: 0.82rem; color: var(--m-ink-3); margin-top: 1px; overflow-wrap: anywhere; }
+.m-row-end { max-width: 46%; min-width: 0; text-align: right; }
+.m-row-amount { font-family: var(--font-heading); font-weight: 700; font-size: 1rem; overflow-wrap: anywhere; }
 .m-row-icon {
   width: 40px;
   height: 40px;
@@ -433,6 +436,11 @@ button.m-stat:active { background: var(--m-surface-2); }
 .m-stat-hint { font-size: 0.76rem; color: var(--m-ink-3); margin-top: 2px; }
 .m-stats.is-3 .m-stat, .m-stats.is-4 .m-stat { padding: 10px 8px; text-align: center; }
 .m-stats.is-3 .m-stat-value, .m-stats.is-4 .m-stat-value { font-size: 1.2rem; }
+
+@media (max-width: 360px) {
+  .expenses-summary-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .expenses-summary-stats > :last-child { grid-column: 1 / -1; }
+}
 
 .is-ok { color: var(--m-ok); }
 .is-warn { color: var(--m-warn); }
