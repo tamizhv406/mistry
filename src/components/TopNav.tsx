@@ -222,8 +222,9 @@ export const TopNav: React.FC<TopNavProps> = ({
             className="erp-mobile-menu-btn"
             onClick={onToggleSidebarMobile}
             aria-label="Toggle navigation menu"
+            id="erp-mobile-hamburger"
           >
-            <Menu size={20} />
+            <Menu size={22} />
           </button>
         )}
 
@@ -395,8 +396,8 @@ export const TopNav: React.FC<TopNavProps> = ({
 
       {/* Right: Notifications, Help, User Profile */}
       <div className="erp-top-nav-right">
-        {/* Language Switcher Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
+        {/* Language Switcher: Full Segmented for Desktop, Streamlined 1-Tap Toggle for Mobile */}
+        <div className="erp-lang-desktop-switch" style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
           <button
             type="button"
             onClick={() => setLang('en')}
@@ -437,6 +438,19 @@ export const TopNav: React.FC<TopNavProps> = ({
           </button>
         </div>
 
+        {/* Mobile Streamlined 1-Tap Language Toggle Pill (eliminates overlap) */}
+        <button
+          type="button"
+          className="erp-mobile-lang-pill"
+          onClick={() => setLang(lang === 'en' ? 'ta' : 'en')}
+          title={lang === 'en' ? 'Switch to தமிழ்' : 'Switch to English'}
+          aria-label="Toggle language"
+          id="erp-mobile-lang-toggle"
+        >
+          <span className="erp-lang-globe">🌐</span>
+          <span className="erp-lang-code">{lang === 'en' ? 'EN' : 'தமிழ்'}</span>
+        </button>
+
         {/* Mobile Search Toggle (< 900px) */}
         <button
           type="button"
@@ -447,12 +461,13 @@ export const TopNav: React.FC<TopNavProps> = ({
           }}
           title="Search"
           aria-label="Search records"
+          id="erp-mobile-search-btn"
         >
           <Search size={18} />
         </button>
 
-        {/* Help Button */}
-        <div className="relative">
+        {/* Help Button (Desktop only on narrow viewports to avoid crowding) */}
+        <div className="relative erp-desktop-help-wrap">
           <button
             type="button"
             className="erp-icon-btn"

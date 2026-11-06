@@ -525,8 +525,6 @@ export function App() {
 
   return (
     <div className={`app-container ${currentView === 'floor-plan-editor' ? 'm-immersive' : ''}`}>
-      {currentView !== 'floor-plan-editor' && <MobileTopBar {...chromeProps} />}
-
       <AppShell
         user={activeUser}
         currentView={currentView}
@@ -821,9 +819,6 @@ export function App() {
         )}
       </main>
       </AppShell>
-
-      {/* Mobile Bottom Navigation Bar */}
-      {currentView !== 'floor-plan-editor' && <MobileBottomNav {...chromeProps} />}
 
       {/* Fast Mobile Site Selector Sheet */}
       {isSitePickerOpen && (

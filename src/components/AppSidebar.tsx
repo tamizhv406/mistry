@@ -24,6 +24,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import { isAdmin, isSuperAdmin, isHouseOwner } from '../services/auth';
 import type { User } from '../db/types';
+import { useLanguage } from '../services/i18n';
 
 interface SidebarItem {
   id: string;
@@ -61,6 +62,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       return trash.length;
     }, [user]) || 0;
 
+  const { lang, setLang } = useLanguage();
   const isOwner = isHouseOwner(user);
 
   const navItems: SidebarItem[] = isOwner
@@ -234,6 +236,26 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           </div>
         )}
       </div>
+
+      {/* Language Switcher inside Drawer & Sidebar */}
+      {!collapsed && (
+        <div className="sidebar-lang-banner no-print">
+          <button
+            type="button"
+            className={`sidebar-lang-pill ${lang === 'en' ? 'active' : ''}`}
+            onClick={() => setLang('en')}
+          >
+            English
+          </button>
+          <button
+            type="button"
+            className={`sidebar-lang-pill ${lang === 'ta' ? 'active' : ''}`}
+            onClick={() => setLang('ta')}
+          >
+            தமிழ்
+          </button>
+        </div>
+      )}
 
       {/* Collapse Toggle */}
       <button

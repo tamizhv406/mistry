@@ -1119,7 +1119,7 @@ button.m-stat:active { background: var(--m-surface-2); }
 @media (max-width: 768px) {
   .fp-fab-furniture,
   .fp-mobile-furniture-toggle {
-    position: absolute !important;
+    position: fixed !important;
     bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
     left: 12px !important;
     z-index: 28 !important;

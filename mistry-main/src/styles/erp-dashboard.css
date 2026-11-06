@@ -1461,3 +1461,231 @@
   max-height: 60vh;
 }
 
+/* ==========================================================================
+   STREAMLINED RESPONSIVE HEADER & LEFT SLIDE-IN NAVIGATION DRAWER
+   ========================================================================== */
+
+/* 1. Removal of Bottom Navigation Bar */
+#app-mobile-nav,
+.m-nav {
+  display: none !important;
+}
+
+:root {
+  --m-nav-h: 0px !important;
+}
+
+/* 2. Responsive Header Navigation */
+.erp-mobile-lang-pill {
+  display: none;
+  align-items: center;
+  gap: 5px;
+  background: #F1F5F9;
+  border: 1px solid #CBD5E1;
+  border-radius: 9999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.erp-mobile-lang-pill:hover,
+.erp-mobile-lang-pill:active {
+  background: #E2E8F0;
+  color: #0F172A;
+  border-color: #94A3B8;
+}
+
+.erp-mobile-lang-pill .erp-lang-globe {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.erp-mobile-lang-pill .erp-lang-code {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.erp-mobile-search-btn {
+  display: none;
+}
+
+/* 3. Smooth Left Slide-In Navigation Drawer */
+.app-shell-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  animation: erpDrawerFadeIn 0.2s ease-out forwards;
+}
+
+.app-shell-drawer-content {
+  position: relative;
+  width: 288px;
+  max-width: 84vw;
+  height: 100vh;
+  max-height: 100vh;
+  background-color: #0f172a;
+  border: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.5);
+  animation: erpSlideInFromLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes erpSlideInFromLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes erpDrawerFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.mobile-drawer-left-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: #090d16;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.mobile-drawer-left-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mobile-drawer-close-btn {
+  position: static;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mobile-drawer-close-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+/* Sidebar In-Drawer Language Switcher */
+.sidebar-lang-banner {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 3px;
+  margin: 10px 14px 12px 14px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-lang-pill {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.sidebar-lang-pill.active {
+  background: #f59e0b;
+  color: #0f172a;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+}
+
+.sidebar-lang-pill:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+}
+
+/* 4. Responsive Header Breakpoints */
+@media (max-width: 900px) {
+  .erp-mobile-search-btn {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 768px) {
+  .erp-lang-desktop-switch {
+    display: none !important;
+  }
+  .erp-mobile-lang-pill {
+    display: inline-flex !important;
+  }
+  .erp-mobile-menu-btn {
+    display: flex !important;
+  }
+  .erp-top-nav {
+    padding: 0 12px !important;
+    height: 56px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .erp-nav-divider,
+  .erp-page-breadcrumb,
+  .erp-desktop-help-wrap {
+    display: none !important;
+  }
+  .erp-top-nav-right {
+    gap: 6px !important;
+  }
+  .erp-icon-btn {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 8px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .erp-brand-name {
+    display: none !important;
+  }
+  .erp-top-nav {
+    padding: 0 8px !important;
+  }
+}
+

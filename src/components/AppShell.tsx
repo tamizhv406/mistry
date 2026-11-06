@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { WifiOff, Wifi } from 'lucide-react';
+import { WifiOff, Wifi, X } from 'lucide-react';
 import { AppSidebar } from './AppSidebar';
 import { TopNav } from './TopNav';
 import type { User } from '../db/types';
@@ -78,17 +78,27 @@ export const AppShell: React.FC<AppShellProps> = ({
         />
       </div>
 
-      {/* Mobile Sidebar Drawer Overlay */}
+      {/* Mobile Sidebar Drawer Overlay (Smooth slide-in from left) */}
       {mobileDrawerOpen && (
         <div
-          className="mobile-drawer-overlay no-print"
+          className="app-shell-drawer-overlay no-print"
           onClick={() => setMobileDrawerOpen(false)}
         >
           <div
-            className="mobile-drawer-content"
+            className="app-shell-drawer-content"
             onClick={e => e.stopPropagation()}
-            style={{ width: '280px', height: '100%', background: 'var(--erp-sidebar-bg)' }}
           >
+            <div className="mobile-drawer-left-header">
+              <span className="mobile-drawer-left-title">Menu</span>
+              <button
+                type="button"
+                className="mobile-drawer-close-btn"
+                onClick={() => setMobileDrawerOpen(false)}
+                aria-label="Close navigation menu"
+              >
+                <X size={18} />
+              </button>
+            </div>
             <AppSidebar
               currentView={currentView}
               user={user}
