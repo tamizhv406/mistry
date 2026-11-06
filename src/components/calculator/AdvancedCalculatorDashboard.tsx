@@ -45,6 +45,7 @@ interface AdvancedCalculatorDashboardProps {
   user: User;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onSelectSite?: (siteId: string) => void;
+  initialBuildingSqFt?: number | null;
 }
 
 const RATES_STORAGE_KEY = 'mistry_building_calc_rates_v1';
@@ -54,8 +55,16 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
   user,
   onNotify,
   onSelectSite,
+  initialBuildingSqFt,
 }) => {
   const [activeModule, setActiveModule] = useState<ExtendedCalculatorModule>('turnkey');
+
+  // If handed over from floor planner, switch to turnkey multi-tier estimator
+  useEffect(() => {
+    if (initialBuildingSqFt && initialBuildingSqFt > 0) {
+      setActiveModule('turnkey');
+    }
+  }, [initialBuildingSqFt]);
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState<string>('');
 
@@ -284,6 +293,7 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
             sites={sites}
             currentSiteId={selectedSiteId}
             onNotify={onNotify}
+            initialArea={initialBuildingSqFt && initialBuildingSqFt > 0 ? Math.round(initialBuildingSqFt) : 1000}
           />
         )}
 

@@ -89,6 +89,12 @@ import type {
   ValidatedPlanAction,
 } from '../services/aiFloorPlanEngine';
 import type { PlanContext } from '../services/aiProvider';
+import {
+  ArchitecturalBlockDrawer,
+  type ArchitecturalRoomBlock,
+  type ArchitecturalOpeningSpec,
+} from '../components/floorplan/ArchitecturalBlockDrawer';
+import { storageService } from '../services/storage';
 
 
 import {
@@ -928,6 +934,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   gridRef.current = { step: gridStep, on: snapToGridEnabled };
   const snapToGrid = useCallback((val: number) => (gridRef.current.on ? roundToStep(val, gridRef.current.step) : val), []);
   const [snapIndicator, setSnapIndicator] = useState<(SnapPoint & { screenX: number; screenY: number }) | null>(null);
+
+  // Magnetic Snap-to-Grid Mode: 'off' | '6in' | '1ft' (default '1ft')
+  const [snapGridMode, setSnapGridMode] = useState<'off' | '6in' | '1ft'>('1ft');
+  const [isArchitecturalDrawerOpen, setIsArchitecturalDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    if (snapGridMode === 'off') {
+      setSnapToGridEnabled(false);
+    } else if (snapGridMode === '6in') {
+      setSnapToGridEnabled(true);
+      setGridStep(unit === 'feet' ? 0.5 : 0.15);
+    } else {
+      setSnapToGridEnabled(true);
+      setGridStep(unit === 'feet' ? 1.0 : 0.3);
+    }
+  }, [snapGridMode, unit]);
   const [liveLengthBadge, setLiveLengthBadge] = useState<{
     lengthStr: string; angleDeg: number; screenX: number; screenY: number;
     /** The same length in the other units (m / mm, or mm / ft-in). */
@@ -6351,6 +6373,211 @@ _Shared via Building Mistry App_`;
     }
   }, [dispatchWithHistory, onNotify, snapToGrid]);
 
+  // ── Phase 4: Architectural Room Blocks & Opening Stamp Handlers ─────────
+  const handleStampArchitecturalBlock = useCallback((block: ArchitecturalRoomBlock) => {
+    const roomCount = editorState.rooms.length;
+    const feetBased = baseUnitOf(unit) === 'feet';
+    const scale = feetBased ? 1 : 0.3048;
+    const w = block.widthFt * scale;
+    const h = block.heightFt * scale;
+    const posX = snapToGrid(4 + (roomCount % 3) * (feetBased ? 12 : 3.6));
+    const posY = snapToGrid(4 + Math.floor(roomCount / 3) * (feetBased ? 12 : 3.6));
+
+    const mainRoomId = uid('room');
+    const mainRoom: FloorPlanRoom = {
+      id: mainRoomId,
+      roomType: block.roomType,
+      label: `${block.title} (${block.widthFt}'×${block.heightFt}')`,
+      x: posX,
+      y: posY,
+      width: w,
+      height: h,
+      rotation: 0,
+      color: ROOM_COLORS[block.roomType] || 'rgba(147,197,253,0.22)',
+      floorFinish: block.floorFinish,
+      wallThickness: feetBased ? 0.75 : 0.23,
+      layer: 'rooms',
+    };
+
+    dispatchWithHistory({ type: 'ADD_ROOM', payload: mainRoom });
+
+    // Attached Suite Room (e.g. Toilet or Utility)
+    if (block.attached) {
+      const attW = block.attached.widthFt * scale;
+      const attH = block.attached.heightFt * scale;
+      const attPosX = snapToGrid(posX + w);
+      const attPosY = posY;
+      const attRoomId = uid('room');
+      const attRoom: FloorPlanRoom = {
+        id: attRoomId,
+        roomType: block.attached.roomType,
+        label: `${block.attached.title} (${block.attached.widthFt}'×${block.attached.heightFt}')`,
+        x: attPosX,
+        y: attPosY,
+        width: attW,
+        height: attH,
+        rotation: 0,
+        color: ROOM_COLORS[block.attached.roomType] || 'rgba(129,140,248,0.22)',
+        floorFinish: block.attached.floorFinish,
+        wallThickness: feetBased ? 0.75 : 0.23,
+        layer: 'rooms',
+      };
+      dispatchWithHistory({ type: 'ADD_ROOM', payload: attRoom });
+    }
+
+    setSelectedElement({ type: 'room', id: mainRoomId });
+    setActiveTool('select');
+    setIsArchitecturalDrawerOpen(false);
+    onNotify(`Stamped ${block.title} (${block.tamilTitle}) into canvas`, 'success');
+  }, [editorState.rooms.length, unit, snapToGrid, dispatchWithHistory, onNotify]);
+
+  const handleSelectArchitecturalOpening = useCallback((spec: ArchitecturalOpeningSpec) => {
+    if (spec.kind === 'door') {
+      setActiveTool('door');
+      const dType = (spec.doorType || spec.type || 'Single') as DoorType;
+      setSelectedDoorType(dType);
+      setIsArchitecturalDrawerOpen(false);
+      onNotify(`Selected ${spec.title} (${spec.tamilTitle}, ${spec.widthFt}' wide). Tap any wall to place.`, 'info');
+    } else {
+      setActiveTool('window');
+      const wType = (spec.windowType || spec.type || 'Standard') as WindowType;
+      setSelectedWindowType(wType);
+      setIsArchitecturalDrawerOpen(false);
+      onNotify(`Selected ${spec.title} (${spec.tamilTitle}, ${spec.widthFt}' wide). Tap any wall to place.`, 'info');
+    }
+  }, [onNotify]);
+
+  // ── Phase 4: Handshake Pipeline to Building Calculator ("Calculate Construction Cost") ──
+  const handleCalculateConstructionCostForPlan = useCallback(async () => {
+    let totalCarpetAreaSqFt = 0;
+    if (editorState.rooms.length > 0) {
+      for (const room of editorState.rooms) {
+        totalCarpetAreaSqFt += areaToSqFt(roomArea(room), unit);
+      }
+    } else if (editorState.walls.length > 0) {
+      const xs = editorState.walls.flatMap(w => [w.x1, w.x2]);
+      const ys = editorState.walls.flatMap(w => [w.y1, w.y2]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const footprint = Math.max(0, (maxX - minX) * (maxY - minY) * 0.75);
+      totalCarpetAreaSqFt = areaToSqFt(footprint, unit);
+    }
+
+    if (totalCarpetAreaSqFt <= 0) {
+      const pW = plan?.plotLength || 40;
+      const pH = plan?.plotWidth || 25;
+      totalCarpetAreaSqFt = areaToSqFt(pW * pH * 0.7, unit);
+    }
+    if (totalCarpetAreaSqFt < 100) {
+      totalCarpetAreaSqFt = 1000;
+    }
+
+    // Civil Engineering Built-Up Area formula: Carpet Area + 18% wall & circulation allowance
+    const builtUpAreaSqFt = Math.round(totalCarpetAreaSqFt * 1.18);
+
+    // Save to Unified Storage Service
+    try {
+      await storageService.savePlan({
+        id: plan?.id || uid('plan'),
+        siteId: plan?.siteId || 'default-site',
+        name: plan?.floorName || plan?.buildingName || 'Floor Plan Layout',
+        dimensions: { length: plan?.plotLength || 50, width: plan?.plotWidth || 40 },
+        rooms: editorState.rooms.map(r => ({ id: r.id, name: r.label || r.roomType, area: roomArea(r) })),
+        walls: editorState.walls.map(w => ({ id: w.id, length: wallLength(w), thickness: w.thickness })),
+        openings: [...editorState.doors, ...editorState.windows].map(o => ({
+          id: o.id,
+          type: (o as any).doorType ? 'door' : 'window',
+          width: o.width,
+        })),
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn('Storage sync error:', err);
+    }
+
+    onNotify(
+      `Total Carpet: ${Math.round(totalCarpetAreaSqFt)} sq.ft + 18% Wall Allowance = ${builtUpAreaSqFt} sq.ft Built-Up Area. Loading Multi-Tier Estimator...`,
+      'success'
+    );
+
+    if (onOpenEstimator) {
+      onOpenEstimator(builtUpAreaSqFt);
+    }
+  }, [editorState.rooms, editorState.walls, editorState.doors, editorState.windows, unit, plan, onNotify, onOpenEstimator]);
+
+  // ── Phase 4: High-Resolution Blueprint PNG Export ────────────────────────
+  const handleExportBlueprintPNG = useCallback(() => {
+    const svg = svgRef.current;
+    if (!svg) {
+      onNotify('Drawing canvas not ready for blueprint export', 'error');
+      return;
+    }
+    try {
+      const serializer = new XMLSerializer();
+      const source = serializer.serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      const bbox = svg.getBoundingClientRect();
+      const width = Math.max(1200, bbox.width * 2);
+      const height = Math.max(800, bbox.height * 2);
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Deep Architectural Navy Blueprint
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, width, height);
+
+      // Blueprint Drafting Grid
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1;
+      const step = 40;
+      for (let x = 0; x < width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      const img = new Image();
+      const svgBlob = new Blob([source], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      img.onload = () => {
+        ctx.drawImage(img, 20, 20, width - 40, height - 100);
+        URL.revokeObjectURL(url);
+
+        // Title Block & Watermark
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 22px system-ui, sans-serif';
+        const planDisplayName = plan?.floorName || plan?.buildingName || 'ARCHITECTURAL BLUEPRINT';
+        ctx.fillText(`BUILDING MISTRY CAD • ${planDisplayName}`, 30, height - 45);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px system-ui, sans-serif';
+        const dateStr = new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+        ctx.fillText(`Scale: 1:100 • Unit: ${unit.toUpperCase()} • Generated: ${dateStr} • IS 456 & NBC Compliant`, 30, height - 20);
+
+        const link = document.createElement('a');
+        link.download = `${(planDisplayName || 'mistry_blueprint').replace(/\s+/g, '_')}_blueprint.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        onNotify('Blueprint PNG generated and downloaded!', 'success');
+      };
+      img.src = url;
+    } catch (err) {
+      onNotify('Export error: ' + (err as Error).message, 'error');
+    }
+  }, [plan, unit, onNotify]);
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 400, color: '#64748b' }}>
@@ -6523,6 +6750,30 @@ _Shared via Building Mistry App_`;
             ) : (
               <Save size={17} />
             )}
+          </button>
+
+          {/* Calculate Construction Cost Mobile CTA */}
+          <button
+            type="button"
+            className="fp-mobile-calc-btn"
+            onClick={handleCalculateConstructionCostForPlan}
+            title="Calculate Construction Cost (மதிப்பீடு)"
+            aria-label="Calculate Construction Cost"
+            id="fp-mobile-calc-cost-btn"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              border: 'none',
+              background: '#059669',
+              color: '#ffffff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <Calculator size={18} />
           </button>
 
           {/* Three-Dots Menu Button: Plan & Floor Overview (⋮) */}
@@ -6789,9 +7040,149 @@ _Shared via Building Mistry App_`;
                   <Download size={15} color="#6d28d9" />
                   <span>PNG Image (.png)</span>
                 </button>
+                <button
+                  type="button"
+                  className="fp-more-item"
+                  onClick={() => { setShowExportMenu(false); handleExportBlueprintPNG(); }}
+                  id="fp-export-blueprint-btn"
+                >
+                  <Download size={15} color="#0284c7" />
+                  <span>Blueprint CAD Image (PNG)</span>
+                </button>
               </div>
             )}
           </div>
+
+          {/* Magnetic Snap Mode Selector */}
+          <div
+            className="fp-builder-snap-pill"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              background: '#f1f5f9',
+              borderRadius: 8,
+              padding: '2px 4px',
+              border: '1px solid #cbd5e1',
+              gap: 2,
+            }}
+            title="CAD Magnetic Snap to Grid"
+            id="fp-snap-mode-pill"
+          >
+            <Magnet size={13} style={{ marginLeft: 4, marginRight: 2, color: snapGridMode === 'off' ? '#94a3b8' : '#0284c7' }} />
+            <button
+              type="button"
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: snapGridMode === 'off' ? 700 : 500,
+                padding: '3px 7px',
+                borderRadius: 6,
+                border: 'none',
+                background: snapGridMode === 'off' ? '#e2e8f0' : 'transparent',
+                color: snapGridMode === 'off' ? '#0f172a' : '#64748b',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setSnapGridMode('off');
+                onNotify('Grid snap: OFF', 'info');
+              }}
+              id="fp-snap-off-btn"
+            >
+              Off
+            </button>
+            <button
+              type="button"
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: snapGridMode === '6in' ? 700 : 500,
+                padding: '3px 7px',
+                borderRadius: 6,
+                border: 'none',
+                background: snapGridMode === '6in' ? '#0284c7' : 'transparent',
+                color: snapGridMode === '6in' ? '#ffffff' : '#64748b',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setSnapGridMode('6in');
+                onNotify('Magnetic Snap: 6 Inches (0.5 ft)', 'info');
+              }}
+              id="fp-snap-6in-btn"
+            >
+              6"
+            </button>
+            <button
+              type="button"
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: snapGridMode === '1ft' ? 700 : 500,
+                padding: '3px 7px',
+                borderRadius: 6,
+                border: 'none',
+                background: snapGridMode === '1ft' ? '#0284c7' : 'transparent',
+                color: snapGridMode === '1ft' ? '#ffffff' : '#64748b',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setSnapGridMode('1ft');
+                onNotify('Magnetic Snap: 1 Foot (1.0 ft)', 'info');
+              }}
+              id="fp-snap-1ft-btn"
+            >
+              1'
+            </button>
+          </div>
+
+          {/* Pre-Built Architectural Room Blocks Drawer Toggle */}
+          <button
+            type="button"
+            className={`fp-builder-room-blocks-btn ${isArchitecturalDrawerOpen ? 'active' : ''}`}
+            onClick={() => setIsArchitecturalDrawerOpen(prev => !prev)}
+            title="Open Pre-Built Room Blocks & Openings Catalog"
+            id="fp-room-blocks-btn"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: isArchitecturalDrawerOpen ? '1.5px solid #6366f1' : '1.5px solid #cbd5e1',
+              background: isArchitecturalDrawerOpen ? '#e0e7ff' : '#f8fafc',
+              color: isArchitecturalDrawerOpen ? '#4338ca' : '#334155',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <LayoutGrid size={14} color={isArchitecturalDrawerOpen ? '#4338ca' : '#475569'} />
+            <span>Room Blocks (அறைகள்)</span>
+          </button>
+
+          {/* Calculate Construction Cost for this Plan CTA */}
+          <button
+            type="button"
+            className="fp-builder-estimate-cta-btn"
+            onClick={handleCalculateConstructionCostForPlan}
+            title="Calculate Construction Cost & Takeoff (பிளானுக்குரிய மதிப்பீடு)"
+            id="fp-calc-cost-btn"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '6px 14px',
+              borderRadius: 8,
+              border: '1.5px solid #059669',
+              background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+              color: '#ffffff',
+              fontWeight: 800,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(16, 185, 129, 0.35)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Calculator size={15} />
+            <span>Calculate Cost (மதிப்பீடு)</span>
+          </button>
 
           {/* AI Copilot Button */}
           <button
@@ -16986,6 +17377,15 @@ _Shared via Building Mistry App_`;
         onClose={() => setIsDesignModalOpen(false)}
         unit={unit}
         onApplyLayout={handleApplyLayoutProposal}
+      />
+
+      {/* ── Phase 4: Pre-Built Architectural Room Blocks & Openings Drawer ── */}
+      <ArchitecturalBlockDrawer
+        isOpen={isArchitecturalDrawerOpen}
+        onClose={() => setIsArchitecturalDrawerOpen(false)}
+        unit={unit}
+        onSelectRoomBlock={handleStampArchitecturalBlock}
+        onSelectOpening={handleSelectArchitecturalOpening}
       />
     </div>
   );

@@ -55,6 +55,13 @@ export const MultiTierEstimatorPanel: React.FC<MultiTierEstimatorPanelProps> = (
 }) => {
   // State
   const [builtUpArea, setBuiltUpArea] = useState<number>(initialArea > 0 ? initialArea : 1000);
+
+  // Sync builtUpArea whenever initialArea changes (e.g. from floor planner handshake)
+  useEffect(() => {
+    if (initialArea && initialArea > 0) {
+      setBuiltUpArea(Math.round(initialArea));
+    }
+  }, [initialArea]);
   const [packageType, setPackageType] = useState<PackageType>('premium'); // Default to Premium as requested
   const [selectedSiteId, setSelectedSiteId] = useState<string>(currentSiteId || (sites[0]?.id || ''));
   const [clientName, setClientName] = useState<string>('');

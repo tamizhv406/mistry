@@ -50,6 +50,7 @@ export const DICTIONARY: Record<string, { en: string; ta: string }> = {
   'roster': { en: 'Worker Roster', ta: 'பணியாளர்கள் பட்டியல்' },
   'wage_ledger': { en: 'Wage Ledger', ta: 'கூலி கணக்கு ஏடு' },
   'advances': { en: 'Advances Paid', ta: 'அட்வான்ஸ் / முன்பணம்' },
+  'advance_paid': { en: 'Advance Paid', ta: 'அட்வான்ஸ் / முன்பணம்' },
   
   // Matrix Actions & Quick Controls
   'mark_all_present': { en: 'Mark All Present Today', ta: 'அனைவருக்கும் முழு நாள் போடு' },
@@ -67,6 +68,7 @@ export const DICTIONARY: Record<string, { en: string; ta: string }> = {
   'daily_wage': { en: 'Daily Wage', ta: 'தினக்கூலி' },
   'total_days': { en: 'Days (P/H/A/OT)', ta: 'நாட்கள் (மு/அ/வி/கூ)' },
   'gross_wage': { en: 'Gross Wage', ta: 'மொத்த கூலி' },
+  'total_wages': { en: 'Total Wages', ta: 'மொத்த கூலி' },
   'advance_deduction': { en: 'Advance Taken', ta: 'முன்பணம் கழிவு' },
   'net_payout': { en: 'Net Payable', ta: 'வழங்க வேண்டிய தொகை' },
   'action': { en: 'Action', ta: 'செயல்' },
@@ -103,25 +105,32 @@ export const DICTIONARY: Record<string, { en: string; ta: string }> = {
   'all_present_marked': { en: 'All active workers marked Present for today', ta: 'அனைத்து பணியாளர்களுக்கும் இன்று முழு நாள் குறிக்கப்பட்டது' },
 };
 
+let memoryLang: Language = 'en';
+
 /**
  * Get current active language ('en' | 'ta')
  */
 export function getLanguage(): Language {
   try {
-    const saved = localStorage.getItem(LANG_STORAGE_KEY);
-    if (saved === 'ta' || saved === 'en') return saved;
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem(LANG_STORAGE_KEY);
+      if (saved === 'ta' || saved === 'en') return saved;
+    }
   } catch {
     // fallback
   }
-  return 'en';
+  return memoryLang;
 }
 
 /**
  * Set active language ('en' | 'ta') and broadcast change
  */
 export function setLanguage(lang: Language): void {
+  memoryLang = lang;
   try {
-    localStorage.setItem(LANG_STORAGE_KEY, lang);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(LANG_STORAGE_KEY, lang);
+    }
   } catch {
     // fallback
   }
@@ -152,7 +161,7 @@ export function useLanguage(): {
   }, []);
 
   const changeLang = (newLang: Language) => {
-    setLang(newLang);
+    setLanguage(newLang);
     setLangState(newLang);
   };
 
@@ -203,8 +212,11 @@ export function getStatusLabel(status: string, lang: Language = getLanguage()): 
  * Strict 10-digit Indian phone number validator (/^[6-9]\d{9}$/)
  */
 export function isValidIndianPhone(phone: string): boolean {
-  if (!phone) return false;
-  const clean = phone.replace(/\D/g, '');
+  if (!phone || typeof phone !== 'string') return false;
+  const trimmed = phone.trim();
+  if (trimmed.startsWith('-')) return false;
+  if (!/^\+?[0-9\s-]+$/.test(trimmed)) return false;
+  const clean = trimmed.replace(/\D/g, '');
   if (clean.length === 12 && clean.startsWith('91')) {
     return /^[6-9]\d{9}$/.test(clean.substring(2));
   }

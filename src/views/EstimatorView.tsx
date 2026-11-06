@@ -406,6 +406,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
           user={user}
           onNotify={onNotify}
           onSelectSite={onOpenSite}
+          initialBuildingSqFt={initialBuildingSqFt}
         />
       ) : (
         <>

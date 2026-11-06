@@ -161,7 +161,7 @@ export function useLanguage(): {
   }, []);
 
   const changeLang = (newLang: Language) => {
-    setLang(newLang);
+    setLanguage(newLang);
     setLangState(newLang);
   };
 
