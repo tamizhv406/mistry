@@ -1,5 +1,5 @@
 // Building Mistry Service Worker
-const CACHE_NAME = 'building-mistry-v2';
+const CACHE_NAME = 'building-mistry-v3';
 
 const STATIC_ASSETS = [
   './',
