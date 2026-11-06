@@ -22,39 +22,12 @@ test('Bottom Bar Metrics and Right-Side Floating CAD Palette Layout', async (t) 
     );
   });
 
-  await t.test('2. Bottom center bar replaces static selected element text with real-time metrics', () => {
-    // Check that fp-bottom-center contains fp-bottom-metrics
-    assert.ok(
-      editorFile.includes('className="fp-bottom-center"'),
-      'fp-bottom-center exists in FloorPlanEditorView'
-    );
-    assert.ok(
-      editorFile.includes('className="fp-bottom-metrics"'),
-      'fp-bottom-metrics is integrated inside the bottom status bar'
-    );
-    assert.ok(
-      editorFile.includes('totalFloorArea.toFixed(1)'),
-      'Floor Area is displayed in bottom bar'
-    );
-    assert.ok(
-      editorFile.includes('editorState.walls.length'),
-      'Walls count is displayed in bottom bar'
-    );
-    assert.ok(
-      editorFile.includes('editorState.rooms.length'),
-      'Rooms count is displayed in bottom bar'
-    );
-    assert.ok(
-      editorFile.includes('editorState.columns.length'),
-      'Columns count is displayed in bottom bar'
-    );
-    assert.ok(
-      editorFile.includes('currentMousePos'),
-      'Mouse cursor coordinates are displayed when hovered'
-    );
-    assert.ok(
-      editorFile.includes('id="fp-bottom-measurements-toggle"'),
-      'Quick Dims ON/OFF toggle is available in bottom bar'
+  await t.test('2. Bottom info panel displaying Unit, Plot, Level, Floor Area, Walls, and Room count is removed to maximize workspace', () => {
+    // Ensure .fp-bottom-bar is removed from the Floor Planner screen to reduce clutter and maximize visible workspace
+    assert.strictEqual(
+      editorFile.includes('<div className="fp-bottom-bar'),
+      false,
+      'fp-bottom-bar information panel should be removed from FloorPlanEditorView to maximize workspace'
     );
   });
 

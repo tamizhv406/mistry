@@ -1689,3 +1689,351 @@
   }
 }
 
+/* ==========================================================================
+   FLOOR PLANNER: REMOVAL OF BOTTOM BAR & OPTIMIZED MOBILE THREE-BAR MENU
+   ========================================================================== */
+
+/* 1. Complete removal of bottom information panel */
+.fp-bottom-bar {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* 2. Mobile Workspace Maximization & Central/Right Clutter Removal */
+/* User Request: Remove the upper floating toolbar on Floor Planner screen ('Design', 'Blueprint', '3D', and zoom controls) */
+.fp-mobile-mode-bar,
+.fp-mobile-zoom-pill {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  /* Hide central panel overlays and right-side floating buttons to maximize workspace */
+  .fp-shape-library-panel,
+  .fp-shape-library-collapsed,
+  .fp-fab-furniture,
+  .fp-fab-ai,
+  .fp-mobile-mode-bar,
+  .fp-mobile-zoom-pill,
+  .fp-floating-cad-controls,
+  .fp-desktop-right-panel {
+    display: none !important;
+  }
+
+  /* Full-bleed responsive CAD canvas */
+  .fp-canvas-container {
+    width: 100vw !important;
+    height: calc(100dvh - 48px) !important;
+    max-height: calc(100dvh - 48px) !important;
+  }
+}
+
+/* 3. Three-Bar Menu (Drawer) Layout Elements & Action Buttons */
+.fp-drawer-action-btn {
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.fp-drawer-action-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.fp-drawer-action-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+}
+
+.fp-drawer-action-btn.btn-3d {
+  background: #0ea5e9;
+  color: #ffffff;
+  border-color: #0ea5e9;
+}
+
+.fp-drawer-cta-btn {
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.fp-drawer-cta-btn:active {
+  transform: scale(0.98);
+}
+
+/* ── Bottom Floating Essential CAD Tools: Select, Outer Wall, Interior Wall, Eraser ── */
+.fp-bottom-essential-dock {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-radius: 9999px;
+  padding: 6px 10px;
+  gap: 6px;
+  z-index: 50;
+  max-width: 95vw;
+  user-select: none;
+}
+
+.fp-essential-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: #cbd5e1;
+  border: none;
+  border-radius: 9999px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.fp-essential-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.fp-essential-btn.active {
+  background: #f59e0b;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+}
+
+.fp-essential-btn.fp-essential-eraser.active {
+  background: #dc2626;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+}
+
+.fp-essential-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.18);
+  margin: 0 2px;
+}
+
+.fp-essential-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  color: currentColor;
+}
+
+.fp-essential-btn.active .fp-essential-badge {
+  background: rgba(15, 23, 42, 0.2);
+}
+
+.fp-essential-btn-kbd {
+  font-size: 0.65rem;
+  font-weight: 800;
+  opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+  .fp-bottom-essential-dock {
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    padding: 4px 6px;
+    gap: 4px;
+    width: auto;
+    max-width: calc(100vw - 20px);
+    overflow-x: auto;
+  }
+  .fp-essential-btn {
+    padding: 7px 10px;
+    font-size: 0.74rem;
+    gap: 4px;
+  }
+  .fp-essential-btn-kbd {
+    display: none;
+  }
+}
+
+/* ── Simplified Attendance Daily Status & Mobile Roster ── */
+.attendance-status-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.attendance-status-pill-btn:active {
+  transform: scale(0.96);
+}
+
+.attendance-quick-cycle-cluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.attendance-mini-status-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  transition: all 0.12s ease;
+}
+
+.attendance-mini-status-btn:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.attendance-mini-status-btn.active-present {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #22c55e;
+}
+
+.attendance-mini-status-btn.active-half_day {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #f59e0b;
+}
+
+.attendance-mini-status-btn.active-overtime {
+  background: #ede9fe;
+  color: #6d28d9;
+  border-color: #8b5cf6;
+}
+
+.attendance-mini-status-btn.active-leave {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #3b82f6;
+}
+
+.attendance-mini-status-btn.active-absent {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #ef4444;
+}
+
+/* Mobile Attendance Worker Roster Cards */
+.attendance-mobile-roster {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .attendance-desktop-table {
+    display: none;
+  }
+
+  .attendance-mobile-roster {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .attendance-worker-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .attendance-worker-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .attendance-worker-card-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .attendance-worker-card-meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .attendance-worker-card-name {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .attendance-worker-card-sub {
+    font-size: 0.74rem;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+  }
+
+  .attendance-worker-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+  }
+}
+
+
+

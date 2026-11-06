@@ -686,7 +686,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
         />
       )}
 
-      {/* Tab 1: Daily Attendance Table */}
+      {/* Tab 1: Daily Attendance Table & Optimized Mobile Roster */}
       {activeTab === 'attendance' && (
         <div
           style={{
@@ -697,21 +697,21 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
+          {/* Desktop Table View (> 768px) */}
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
                 <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name & ID</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Role</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Daily Wage</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Status for {formatDay(selectedDate)}</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Quick Mark Attendance</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Daily Status ({formatDay(selectedDate)})</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredWorkers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={4} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
                       <Users size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                       <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No personnel found for this site</div>
                       <div style={{ fontSize: '0.825rem', marginTop: '4px' }}>Click "+ Add Worker" to enroll personnel.</div>
@@ -722,6 +722,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     const mark = dayMarks.get(w.id);
                     const status = mark?.status;
                     const isSaving = savingWorkerId === w.id;
+                    const statusMeta = status ? ATTENDANCE_STATUS_META[status] : null;
 
                     return (
                       <tr
@@ -776,17 +777,21 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                         <td style={{ padding: '14px 18px', fontWeight: 600, color: '#334155' }}>
                           {formatINR(w.dailyWage)} / day
                         </td>
-                        <td style={{ padding: '14px 18px' }}>
-                          {status ? (
-                            <span
+                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                            {/* Primary 1-Tap Cycling Status Pill */}
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => {
+                                const nextOrder: AttendanceStatus[] = ['present', 'half_day', 'overtime', 'leave', 'absent'];
+                                const curIdx = status ? nextOrder.indexOf(status) : -1;
+                                const nextSt = nextOrder[(curIdx + 1) % nextOrder.length];
+                                handleMarkStatus(w, nextSt);
+                              }}
+                              className="attendance-status-pill-btn"
+                              title={`Click to cycle status (Current: ${statusMeta?.label || 'Not Marked'})`}
                               style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '4px 10px',
-                                borderRadius: '999px',
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
                                 backgroundColor:
                                   status === 'present'
                                     ? '#DCFCE7'
@@ -796,57 +801,50 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                                     ? '#FEF3C7'
                                     : status === 'leave'
                                     ? '#EFF6FF'
-                                    : '#FEE2E2',
+                                    : status === 'absent'
+                                    ? '#FEE2E2'
+                                    : '#F1F5F9',
                                 color:
                                   status === 'present'
-                                    ? '#166534'
+                                    ? '#15803D'
                                     : status === 'overtime'
                                     ? '#6D28D9'
                                     : status === 'half_day'
-                                    ? '#92400E'
+                                    ? '#B45309'
                                     : status === 'leave'
-                                    ? '#1E40AF'
-                                    : '#991B1B',
+                                    ? '#1D4ED8'
+                                    : status === 'absent'
+                                    ? '#B91C1C'
+                                    : '#64748B',
+                                border:
+                                  status
+                                    ? '1px solid currentColor'
+                                    : '1px dashed #CBD5E1',
                               }}
                             >
                               <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
-                              {ATTENDANCE_STATUS_META[status]?.label || status}
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 500 }}>
-                              Not Marked Yet
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            {(['present', 'half_day', 'overtime', 'leave', 'absent'] as AttendanceStatus[]).map(st => {
-                              const isCurrent = status === st;
-                              const meta = ATTENDANCE_STATUS_META[st];
+                              <span>{statusMeta?.label || 'Not Marked'}</span>
+                            </button>
 
-                              return (
-                                <button
-                                  key={st}
-                                  type="button"
-                                  disabled={isSaving}
-                                  onClick={() => handleMarkStatus(w, st)}
-                                  title={`Mark as ${meta.label}`}
-                                  style={{
-                                    padding: '5px 9px',
-                                    borderRadius: '6px',
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    border: isCurrent ? '2px solid #2563EB' : '1px solid #CBD5E1',
-                                    backgroundColor: isCurrent ? '#EFF6FF' : '#FFFFFF',
-                                    color: isCurrent ? '#1D4ED8' : '#475569',
-                                    transition: 'all 0.12s ease',
-                                  }}
-                                >
-                                  {meta.short}
-                                </button>
-                              );
-                            })}
+                            {/* Streamlined 1-Tap Status Selector Cluster */}
+                            <div className="attendance-quick-cycle-cluster">
+                              {(['present', 'half_day', 'overtime', 'leave', 'absent'] as AttendanceStatus[]).map(st => {
+                                const isCurrent = status === st;
+                                const meta = ATTENDANCE_STATUS_META[st];
+                                return (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() => handleMarkStatus(w, st)}
+                                    title={`Mark as ${meta.label}`}
+                                    className={`attendance-mini-status-btn ${isCurrent ? `active-${st}` : ''}`}
+                                  >
+                                    {meta.short}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -855,6 +853,135 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Simplified Mobile Worker Roster Cards (< 768px) */}
+          <div className="attendance-mobile-roster">
+            {filteredWorkers.length === 0 ? (
+              <div style={{ padding: '36px 16px', textAlign: 'center', color: '#94A3B8' }}>
+                <Users size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>No personnel enrolled</div>
+              </div>
+            ) : (
+              filteredWorkers.map(w => {
+                const mark = dayMarks.get(w.id);
+                const status = mark?.status;
+                const isSaving = savingWorkerId === w.id;
+                const statusMeta = status ? ATTENDANCE_STATUS_META[status] : null;
+
+                return (
+                  <div key={w.id} className="attendance-worker-card">
+                    <div className="attendance-worker-card-header">
+                      <div className="attendance-worker-card-info">
+                        <div
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            backgroundColor: '#E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            color: '#334155',
+                            fontSize: '0.85rem',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {w.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="attendance-worker-card-meta">
+                          <span className="attendance-worker-card-name">{w.name}</span>
+                          <span className="attendance-worker-card-sub">
+                            <span
+                              style={{
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: '#EFF6FF',
+                                color: '#1D4ED8',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {w.category}
+                            </span>
+                            <span>{formatINR(w.dailyWage)}/day</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Prominent Mobile Cycling Status Pill */}
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => {
+                          const nextOrder: AttendanceStatus[] = ['present', 'half_day', 'overtime', 'leave', 'absent'];
+                          const curIdx = status ? nextOrder.indexOf(status) : -1;
+                          const nextSt = nextOrder[(curIdx + 1) % nextOrder.length];
+                          handleMarkStatus(w, nextSt);
+                        }}
+                        className="attendance-status-pill-btn"
+                        title="Tap to cycle status"
+                        style={{
+                          backgroundColor:
+                            status === 'present'
+                              ? '#DCFCE7'
+                              : status === 'overtime'
+                              ? '#EDE9FE'
+                              : status === 'half_day'
+                              ? '#FEF3C7'
+                              : status === 'leave'
+                              ? '#EFF6FF'
+                              : status === 'absent'
+                              ? '#FEE2E2'
+                              : '#F1F5F9',
+                          color:
+                            status === 'present'
+                              ? '#15803D'
+                              : status === 'overtime'
+                              ? '#6D28D9'
+                              : status === 'half_day'
+                              ? '#B45309'
+                              : status === 'leave'
+                              ? '#1D4ED8'
+                              : status === 'absent'
+                              ? '#B91C1C'
+                              : '#64748B',
+                          border: status ? '1px solid currentColor' : '1px dashed #CBD5E1',
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                        <span>{statusMeta?.label || 'Tap to Mark'}</span>
+                      </button>
+                    </div>
+
+                    {/* Quick 1-Tap Status Options for Mobile */}
+                    <div className="attendance-worker-card-actions">
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Quick Mark:</span>
+                      <div className="attendance-quick-cycle-cluster">
+                        {(['present', 'half_day', 'overtime', 'leave', 'absent'] as AttendanceStatus[]).map(st => {
+                          const isCurrent = status === st;
+                          const meta = ATTENDANCE_STATUS_META[st];
+                          return (
+                            <button
+                              key={st}
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleMarkStatus(w, st)}
+                              title={`Mark ${meta.label}`}
+                              className={`attendance-mini-status-btn ${isCurrent ? `active-${st}` : ''}`}
+                              style={{ width: '32px', height: '32px' }}
+                            >
+                              {meta.short}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}

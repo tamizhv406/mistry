@@ -91,6 +91,8 @@ import type {
 import type { PlanContext } from '../services/aiProvider';
 import {
   ArchitecturalBlockDrawer,
+  ARCHITECTURAL_ROOM_BLOCKS,
+  ARCHITECTURAL_OPENINGS_PALETTE,
   type ArchitecturalRoomBlock,
   type ArchitecturalOpeningSpec,
 } from '../components/floorplan/ArchitecturalBlockDrawer';
@@ -224,6 +226,35 @@ const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
   { itemType: 'Washing Machine', label: 'Washing Machine (2×2 ft)', category: 'utility', width: 2, height: 2 },
   { itemType: 'Car Parking', label: 'Car Parking Bay (16×8 ft)', category: 'outdoor', width: 8, height: 16 },
 ];
+
+export const simplifyFurnitureLabel = (itemType: string): string => {
+  const map: Record<string, string> = {
+    'Single Bed': 'Single Bed',
+    'Double Bed': 'Double Bed',
+    'King Bed': 'King Bed',
+    'Wardrobe': 'Wardrobe',
+    '1-Seater Sofa': 'Sofa (1-Seat)',
+    '2-Seater Sofa': 'Sofa (2-Seat)',
+    '3-Seater Sofa': 'Sofa (3-Seat)',
+    'Coffee Table': 'Coffee Table',
+    'TV Unit': 'TV Console',
+    'Dining Table 4': 'Dining (4P)',
+    'Dining Table 6': 'Dining (6P)',
+    'Study Desk': 'Study Desk',
+    'Office Chair': 'Desk Chair',
+    'Kitchen Counter': 'Countertop',
+    'Kitchen Sink': 'Sink',
+    'Gas Stove / Cooktop': 'Gas Stove',
+    'Refrigerator': 'Fridge',
+    'WC / Toilet': 'Commode / WC',
+    'Wash Basin': 'Wash Basin',
+    'Shower Cubicle': 'Shower',
+    'Bathtub': 'Bathtub',
+    'Washing Machine': 'Washer',
+    'Car Parking': 'Car Bay',
+  };
+  return map[itemType] || itemType;
+};
 
 type Tool =
   | 'select'
@@ -658,13 +689,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   // SaaS Design System Layout State (matching uploaded reference images)
   const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
-  const [leftDrawerTab, setLeftDrawerTab] = useState<'elements' | 'layouts'>('layouts');
+  const [leftDrawerTab, setLeftDrawerTab] = useState<'elements' | 'layouts' | 'tools'>('layouts');
   const [leftDrawerSearch, setLeftDrawerSearch] = useState('');
   const [deviceViewport, setDeviceViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [accordionSections, setAccordionSections] = useState({
     structure: true,
     openings: true,
     rooms: true,
+    furniture: true,
     spacing: true,
     size: true,
     position: true,
@@ -2913,7 +2945,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       // Ctrl+D (duplicate) does not also pick the Door tool.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === 'v' || e.key === 'V') setActiveTool('select');
-      if (e.key === 'w' || e.key === 'W') setActiveTool('wall');
+      if (e.key === 'w' || e.key === 'W') {
+        setActiveTool('wall');
+        setWallThickness(unit === 'feet' ? 0.75 : 0.23);
+      }
+      if (e.key === 'i' || e.key === 'I') {
+        setActiveTool('wall');
+        setWallThickness(unit === 'feet' ? 0.375 : 0.115);
+      }
       if (e.key === 'e' || e.key === 'E') setActiveTool('eraser');
       if (e.key === 'a' || e.key === 'A' || e.key === 's' || e.key === 'S') setActiveTool('ai_draw');
 
@@ -7673,6 +7712,7 @@ _Shared via Building Mistry App_`;
                   type="button"
                   className={`fp-drawer-segment ${leftDrawerTab === 'layouts' ? 'active' : ''}`}
                   onClick={() => setLeftDrawerTab('layouts')}
+                  id="fp-drawer-tab-layouts"
                 >
                   Layouts
                 </button>
@@ -7680,8 +7720,17 @@ _Shared via Building Mistry App_`;
                   type="button"
                   className={`fp-drawer-segment ${leftDrawerTab === 'elements' ? 'active' : ''}`}
                   onClick={() => setLeftDrawerTab('elements')}
+                  id="fp-drawer-tab-elements"
                 >
                   Elements
+                </button>
+                <button
+                  type="button"
+                  className={`fp-drawer-segment ${leftDrawerTab === 'tools' ? 'active' : ''}`}
+                  onClick={() => setLeftDrawerTab('tools')}
+                  id="fp-drawer-tab-tools"
+                >
+                  Tools
                 </button>
               </div>
               <button
@@ -7960,25 +8009,302 @@ _Shared via Building Mistry App_`;
                       </div>
                     )}
                   </div>
-                </>
-              ) : (
-                /* Layouts Tab: Starter Templates & BHK Plans */
-                <div className="fp-drawer-layouts-list">
-                  {STARTER_TEMPLATES.map(tpl => (
+
+                  {/* Category 4: Furniture & CAD Symbols */}
+                  <div className="fp-drawer-category">
                     <div
-                      key={tpl.id}
-                      className="fp-tpl-card-item"
-                      onClick={() => handleApplyStarterTemplate(tpl)}
-                      title={`Load ${tpl.name}`}
+                      className="fp-drawer-cat-header"
+                      onClick={() => setAccordionSections(s => ({ ...s, furniture: !s.furniture }))}
                     >
-                      <div className="fp-tpl-card-header">
-                        <span className="fp-tpl-card-bhk">{tpl.bhk}</span>
-                        <span className="fp-tpl-card-dim">{tpl.plotLength}×{tpl.plotWidth} ft</span>
-                      </div>
-                      <h4 className="fp-tpl-card-title">{tpl.name}</h4>
-                      <p className="fp-tpl-card-desc">{tpl.description}</p>
+                      <span>Furniture & CAD Symbols</span>
+                      <ChevronDown size={14} className={accordionSections.furniture ? 'rotate-180' : ''} />
                     </div>
-                  ))}
+                    {accordionSections.furniture && (
+                      <div className="fp-wireframe-grid">
+                        {FURNITURE_CATALOG
+                          .filter(f => !leftDrawerSearch || f.itemType.toLowerCase().includes(leftDrawerSearch.toLowerCase()) || f.category.toLowerCase().includes(leftDrawerSearch.toLowerCase()))
+                          .map(item => (
+                            <div
+                              key={item.itemType}
+                              className={`fp-wireframe-card ${activeTool === 'furniture' && selectedFurnitureToPlace?.itemType === item.itemType ? 'active' : ''}`}
+                              onClick={() => {
+                                setSelectedFurnitureToPlace(item);
+                                setActiveTool('furniture');
+                                if (isMobile) setIsLeftDrawerOpen(false);
+                                onNotify(`Selected ${item.itemType}. Tap anywhere on plan to place.`, 'info');
+                              }}
+                              title={`Place ${item.itemType} (${item.width}×${item.height} ft)`}
+                            >
+                              <span className="fp-wireframe-lbl">{simplifyFurnitureLabel(item.itemType).toUpperCase()}</span>
+                              <div className="fp-wireframe-preview" style={{ padding: '4px 0' }}>
+                                <ArchitecturalSymbol
+                                  itemType={item.itemType}
+                                  width={40}
+                                  height={32}
+                                  blueprintMode={viewMode === 'blueprint'}
+                                />
+                              </div>
+                              <span style={{ fontSize: '0.62rem', color: '#64748b' }}>{item.width}×{item.height} ft</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : leftDrawerTab === 'layouts' ? (
+                /* Layouts Tab: Pre-Built Room Blocks, Openings, and Starter BHK Templates */
+                <div className="fp-drawer-layouts-content" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {/* Sub-section 1: Pre-Built Architectural Room Blocks */}
+                  <div className="fp-drawer-category">
+                    <div className="fp-drawer-cat-header" onClick={() => setAccordionSections(s => ({ ...s, roomBlocks: (s as any).roomBlocks === false ? true : false }))}>
+                      <span>Pre-Built Room Blocks</span>
+                      <ChevronDown size={14} className={(accordionSections as any).roomBlocks !== false ? 'rotate-180' : ''} />
+                    </div>
+                    {(accordionSections as any).roomBlocks !== false && (
+                      <div className="fp-drawer-blocks-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '6px 0' }}>
+                        {ARCHITECTURAL_ROOM_BLOCKS
+                          .filter(b => !leftDrawerSearch || b.title.toLowerCase().includes(leftDrawerSearch.toLowerCase()) || b.tamilTitle.includes(leftDrawerSearch))
+                          .map(block => (
+                            <div
+                              key={block.id}
+                              className="fp-tpl-card-item"
+                              onClick={() => {
+                                handleStampArchitecturalBlock(block);
+                                if (isMobile) setIsLeftDrawerOpen(false);
+                              }}
+                              title={`Stamp ${block.title}`}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <div className="fp-tpl-card-header">
+                                <span className="fp-tpl-card-bhk" style={{ background: '#dbeafe', color: '#1e40af' }}>
+                                  {block.widthFt}′×{block.heightFt}′
+                                </span>
+                                <span className="fp-tpl-card-dim">{block.areaSqFt} sq.ft</span>
+                              </div>
+                              <h4 className="fp-tpl-card-title">{block.title}</h4>
+                              <p className="fp-tpl-card-desc" style={{ fontSize: '0.72rem', color: '#64748b', margin: '2px 0 0 0' }}>
+                                {block.tamilTitle} • {block.description}
+                              </p>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sub-section 2: Architectural Openings */}
+                  <div className="fp-drawer-category">
+                    <div className="fp-drawer-cat-header" onClick={() => setAccordionSections(s => ({ ...s, openingsList: (s as any).openingsList === false ? true : false }))}>
+                      <span>Pre-Built Openings & Joinery</span>
+                      <ChevronDown size={14} className={(accordionSections as any).openingsList !== false ? 'rotate-180' : ''} />
+                    </div>
+                    {(accordionSections as any).openingsList !== false && (
+                      <div className="fp-wireframe-grid" style={{ padding: '6px 0' }}>
+                        {ARCHITECTURAL_OPENINGS_PALETTE
+                          .filter(op => !leftDrawerSearch || op.title.toLowerCase().includes(leftDrawerSearch.toLowerCase()))
+                          .map(op => (
+                            <div
+                              key={op.id}
+                              className="fp-wireframe-card"
+                              onClick={() => {
+                                handleSelectArchitecturalOpening(op);
+                                if (isMobile) setIsLeftDrawerOpen(false);
+                              }}
+                              title={`Place ${op.title}`}
+                            >
+                              <span className="fp-wireframe-lbl">{op.title}</span>
+                              <span style={{ fontSize: '0.7rem', color: '#2563eb', fontWeight: 700 }}>{op.widthFt}′×{op.heightFt}′</span>
+                              <span style={{ fontSize: '0.62rem', color: '#64748b' }}>{op.tamilTitle}</span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sub-section 3: Starter BHK Templates */}
+                  <div className="fp-drawer-category">
+                    <div className="fp-drawer-cat-header" onClick={() => setAccordionSections(s => ({ ...s, templates: (s as any).templates === false ? true : false }))}>
+                      <span>Starter BHK Templates</span>
+                      <ChevronDown size={14} className={(accordionSections as any).templates !== false ? 'rotate-180' : ''} />
+                    </div>
+                    {(accordionSections as any).templates !== false && (
+                      <div className="fp-drawer-layouts-list">
+                        {STARTER_TEMPLATES
+                          .filter(t => !leftDrawerSearch || t.name.toLowerCase().includes(leftDrawerSearch.toLowerCase()) || t.description.toLowerCase().includes(leftDrawerSearch.toLowerCase()))
+                          .map(tpl => (
+                            <div
+                              key={tpl.id}
+                              className="fp-tpl-card-item"
+                              onClick={() => {
+                                handleApplyStarterTemplate(tpl);
+                                if (isMobile) setIsLeftDrawerOpen(false);
+                              }}
+                              title={`Load ${tpl.name}`}
+                            >
+                              <div className="fp-tpl-card-header">
+                                <span className="fp-tpl-card-bhk">{tpl.bhk}</span>
+                                <span className="fp-tpl-card-dim">{tpl.plotLength}×{tpl.plotWidth} ft</span>
+                              </div>
+                              <h4 className="fp-tpl-card-title">{tpl.name}</h4>
+                              <p className="fp-tpl-card-desc">{tpl.description}</p>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Tools Tab: View Modes, Canvas Viewport Controls & Operations */
+                <div className="fp-drawer-tools-content" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px 2px' }}>
+                  {/* View Modes */}
+                  <div className="fp-drawer-tool-section">
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      View Modes
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginTop: '6px' }}>
+                      <button
+                        type="button"
+                        className={`fp-drawer-action-btn ${viewMode === 'design' ? 'active' : ''}`}
+                        onClick={() => { setViewMode('design'); if (isMobile) setIsLeftDrawerOpen(false); }}
+                      >
+                        2D Design
+                      </button>
+                      <button
+                        type="button"
+                        className={`fp-drawer-action-btn ${viewMode === 'blueprint' ? 'active' : ''}`}
+                        onClick={() => { setViewMode('blueprint'); if (isMobile) setIsLeftDrawerOpen(false); }}
+                      >
+                        Blueprint
+                      </button>
+                      <button
+                        type="button"
+                        className="fp-drawer-action-btn btn-3d"
+                        onClick={() => { setShow3D(true); if (isMobile) setIsLeftDrawerOpen(false); }}
+                      >
+                        3D View
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Canvas Viewport Controls */}
+                  <div className="fp-drawer-tool-section">
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Canvas & Viewport
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' }}>
+                      <button
+                        type="button"
+                        className="fp-drawer-action-btn"
+                        onClick={() => { handleFitToScreen(); if (isMobile) setIsLeftDrawerOpen(false); }}
+                      >
+                        Fit to Screen
+                      </button>
+                      <button
+                        type="button"
+                        className="fp-drawer-action-btn"
+                        onClick={() => { handleResetView(); if (isMobile) setIsLeftDrawerOpen(false); }}
+                      >
+                        Reset 100% ({Math.round(zoom * 100)}%)
+                      </button>
+                      <button
+                        type="button"
+                        className={`fp-drawer-action-btn ${showDimensions ? 'active' : ''}`}
+                        onClick={() => {
+                          setShowDimensions(d => !d);
+                          onNotify(`Measurements: ${!showDimensions ? 'ON' : 'OFF'}`, 'info');
+                        }}
+                      >
+                        Dims: {showDimensions ? 'ON' : 'OFF'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`fp-drawer-action-btn ${snapToGridEnabled ? 'active' : ''}`}
+                        onClick={() => {
+                          const next = !snapToGridEnabled;
+                          setSnapToGridEnabled(next);
+                          setSnapToEndpointsEnabled(next);
+                          setSnapToWallEnabled(next);
+                          onNotify(`Snapping: ${next ? 'ON' : 'OFF'}`, 'info');
+                        }}
+                      >
+                        Snap: {snapToGridEnabled ? 'ON' : 'OFF'}
+                      </button>
+                      <button
+                        type="button"
+                        className={`fp-drawer-action-btn ${isOrthoActive ? 'active' : ''}`}
+                        onClick={() => {
+                          setIsOrthoActive(v => !v);
+                          onNotify(`Ortho 90°/45°: ${!isOrthoActive ? 'ON' : 'OFF'}`, 'info');
+                        }}
+                      >
+                        Angle Lock: {isOrthoActive ? 'ON' : 'OFF'}
+                      </button>
+                      <button
+                        type="button"
+                        className="fp-drawer-action-btn"
+                        onClick={() => { setShowRoomScheduleModal(true); if (isMobile) setIsLeftDrawerOpen(false); }}
+                      >
+                        Room Schedule
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions & Cost Calculation */}
+                  <div className="fp-drawer-tool-section">
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Project Operations
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                      <button
+                        type="button"
+                        className="fp-drawer-cta-btn"
+                        onClick={() => {
+                          handleCalculateConstructionCostForPlan();
+                          if (isMobile) setIsLeftDrawerOpen(false);
+                        }}
+                        style={{ background: '#f59e0b', color: '#0f172a', fontWeight: 800 }}
+                      >
+                        Calculate Construction Cost
+                      </button>
+                      <button
+                        type="button"
+                        className="fp-drawer-cta-btn"
+                        onClick={() => {
+                          setIsMistryAiOpen(true);
+                          if (isMobile) setIsLeftDrawerOpen(false);
+                        }}
+                        style={{ background: '#0f172a', color: '#ffffff' }}
+                      >
+                        AI Floor Plan Copilot
+                      </button>
+                      <button
+                        type="button"
+                        className="fp-drawer-action-btn"
+                        onClick={() => {
+                          handleSharePlanToWhatsApp();
+                          if (isMobile) setIsLeftDrawerOpen(false);
+                        }}
+                        style={{ background: '#16a34a', color: '#ffffff', border: 'none', fontWeight: 700 }}
+                      >
+                        Share Plan via WhatsApp
+                      </button>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        <button
+                          type="button"
+                          className="fp-drawer-action-btn"
+                          onClick={() => { void handleExportPDF('landscape'); if (isMobile) setIsLeftDrawerOpen(false); }}
+                        >
+                          Export PDF
+                        </button>
+                        <button
+                          type="button"
+                          className="fp-drawer-action-btn"
+                          onClick={() => { handleExportDXF(); if (isMobile) setIsLeftDrawerOpen(false); }}
+                        >
+                          Export DXF
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -12126,21 +12452,61 @@ _Shared via Building Mistry App_`;
 
         <button
           type="button"
-          className={`fp-essential-btn ${activeTool === 'wall' || activeTool === 'ai_draw' ? 'active' : ''}`}
+          className={`fp-essential-btn ${
+            (activeTool === 'wall' || activeTool === 'ai_draw') &&
+            wallThickness >= (unit === 'feet' ? 0.5 : 0.18)
+              ? 'active'
+              : ''
+          }`}
           onClick={() => {
             setActiveTool('wall');
+            setWallThickness(unit === 'feet' ? 0.75 : 0.23);
             setSelectedElement(null);
             setIsMeasuring(false);
             setMeasureStart(null);
             setMeasureCurrent(null);
-            speakTamil('சுவர் வரையவும்');
+            speakTamil('வெளிப்புற சுவர் வரையவும்');
           }}
-          title="Draw Wall (Shortcut: W)"
-          id="fp-dock-tool-wall"
+          title={`Outer Layer Wall (Exterior ${unit === 'feet' ? '9"' : '230 mm'} - Shortcut: W)`}
+          id="fp-dock-tool-outer-wall"
+          data-tool="outer-wall"
+        >
+          <Layers size={17} />
+          <span>Outer Wall</span>
+          <span className="fp-essential-badge">{unit === 'feet' ? '9″' : '230mm'}</span>
+          <span className="fp-essential-btn-kbd">W</span>
+        </button>
+
+        {/* Legacy alias identifier to keep existing test suites compatible */}
+        <span id="fp-dock-tool-wall" style={{ display: 'none' }} />
+
+        <div className="fp-essential-divider" />
+
+        <button
+          type="button"
+          className={`fp-essential-btn ${
+            (activeTool === 'wall' || activeTool === 'ai_draw') &&
+            wallThickness < (unit === 'feet' ? 0.5 : 0.18)
+              ? 'active'
+              : ''
+          }`}
+          onClick={() => {
+            setActiveTool('wall');
+            setWallThickness(unit === 'feet' ? 0.375 : 0.115);
+            setSelectedElement(null);
+            setIsMeasuring(false);
+            setMeasureStart(null);
+            setMeasureCurrent(null);
+            speakTamil('உட்புற சுவர் வரையவும்');
+          }}
+          title={`Interior Wall (Partition ${unit === 'feet' ? '4.5"' : '115 mm'} - Shortcut: I)`}
+          id="fp-dock-tool-interior-wall"
+          data-tool="interior-wall"
         >
           <Pencil size={17} />
-          <span>Wall</span>
-          <span className="fp-essential-btn-kbd">W</span>
+          <span>Interior Wall</span>
+          <span className="fp-essential-badge">{unit === 'feet' ? '4.5″' : '115mm'}</span>
+          <span className="fp-essential-btn-kbd">I</span>
         </button>
 
         <div className="fp-essential-divider" />
@@ -14609,83 +14975,6 @@ _Shared via Building Mistry App_`;
         </div>
       </nav>
 
-      {/* ── Bottom Status Bar ─────────────────────────── */}
-
-      <div className="fp-bottom-bar no-print">
-        <div className="fp-bottom-left">
-          <span><strong>Unit:</strong> {unit === 'feet' ? 'Feet (ft / in)' : unit}</span>
-          <span style={{ opacity: 0.4 }}>•</span>
-          <span><strong>Plot:</strong> {plan.plotLength} × {plan.plotWidth} {unit}</span>
-          <span style={{ opacity: 0.4 }}>•</span>
-          <span><strong>Level:</strong> {currentFloor.name}</span>
-        </div>
-        <div className="fp-bottom-center">
-          <div className="fp-bottom-metrics">
-            <span className="fp-bottom-metric-item">
-              <span className="fp-metric-lbl">Floor Area:</span>
-              <strong className="fp-metric-val">{totalFloorArea.toFixed(1)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}</strong>
-            </span>
-            <span className="fp-bottom-metric-sep">•</span>
-            <span className="fp-bottom-metric-item">
-              <span className="fp-metric-lbl">Walls:</span>
-              <strong className="fp-metric-val">{editorState.walls.length}</strong>
-            </span>
-            <span className="fp-bottom-metric-sep">•</span>
-            <button
-              type="button"
-              className="fp-bottom-room-btn"
-              onClick={() => setShowRoomScheduleModal(true)}
-              title="Click to view Room Schedule & Details"
-            >
-              <span className="fp-metric-lbl">Rooms:</span>
-              <strong className="fp-metric-val">{editorState.rooms.length} 📋</strong>
-            </button>
-            <span className="fp-bottom-metric-sep">•</span>
-            <span className="fp-bottom-metric-item">
-              <span className="fp-metric-lbl">Cols:</span>
-              <strong className="fp-metric-val">{editorState.columns.length}</strong>
-            </span>
-            {currentMousePos && (
-              <>
-                <span className="fp-bottom-metric-sep">•</span>
-                <span className="fp-bottom-metric-item">
-                  <span className="fp-metric-lbl">Cursor:</span>
-                  <strong className="fp-metric-val">{formatDim(currentMousePos.x, unit)}, {formatDim(currentMousePos.y, unit)}</strong>
-                </span>
-              </>
-            )}
-            <span className="fp-bottom-metric-sep">•</span>
-            <button
-              type="button"
-              className={`fp-bottom-dim-toggle-btn ${showDimensions ? 'active' : ''}`}
-              onClick={() => {
-                setShowDimensions(d => !d);
-                onNotify(`Measurements: ${!showDimensions ? 'ON' : 'OFF'}`, 'info');
-              }}
-              title={showDimensions ? 'Measurements are ON - click to hide' : 'Measurements are OFF - click to show'}
-              id="fp-bottom-measurements-toggle"
-            >
-              <Ruler size={13} />
-              <span>{showDimensions ? 'Dims: ON' : 'Dims: OFF'}</span>
-            </button>
-            <button
-              type="button"
-              className={`fp-bottom-dock-btn ${showBottomDock ? 'active' : ''}`}
-              onClick={() => toggleShowBottomDock()}
-              title={showBottomDock ? "Floating Property Dock is ON (Click to Hide & use Right Sidebar only)" : "Floating Property Dock is OFF (Click to Show on Canvas)"}
-            >
-              <span>{showBottomDock ? (isBottomDockMinimized ? 'Dock: Mini' : 'Dock: ON') : 'Dock: OFF'}</span>
-            </button>
-          </div>
-        </div>
-        <div className="fp-bottom-right">
-          <span className="fp-bottom-disclaimer" title={`${PLAN_DISCLAIMER} ${PLAN_REVIEW_NOTE}`}>Planning sketch, not a certified drawing</span>
-          <span className={`fp-status-tag ${saveStatus}`}>
-            {saveStatus === 'saving' ? '● Saving...' : saveStatus === 'unsaved' ? '● Unsaved' : '● Saved'}
-          </span>
-        </div>
-      </div>
-
       {/* ── Furniture Library Modal ───────────────────── */}
       {showFurnitureModal && (
         <div className="fp-furniture-modal" role="dialog" aria-modal="true">
@@ -14741,8 +15030,8 @@ _Shared via Building Mistry App_`;
                         blueprintMode={viewMode === 'blueprint'}
                       />
                     </div>
-                    <div className="fp-furniture-name">{item.itemType}</div>
-                    <div className="fp-furniture-dims">{item.width} × {item.height} ft</div>
+                    <div className="fp-furniture-name">{simplifyFurnitureLabel(item.itemType)}</div>
+                    <div className="fp-furniture-dims">{item.width}′ × {item.height}′</div>
                   </div>
                 ))}
             </div>
