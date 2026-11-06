@@ -74,9 +74,9 @@ export const SandCalculatorPanel: React.FC<SandCalculatorPanelProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* ── Left Input Column (7 cols) ── */}
-      <div className="lg:col-span-7 space-y-4">
+    <div className="bm-calc-workspace-grid">
+      {/* ── Left Input Column ── */}
+      <div className="bm-input-column">
         {/* Section 1: Volume & Moisture Bulking */}
         <CalculatorSection
           title="1. Sand Volume & Moisture Bulking (IS 2386)"
@@ -88,17 +88,13 @@ export const SandCalculatorPanel: React.FC<SandCalculatorPanelProps> = ({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-500 font-medium">Measurement Unit</span>
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="bm-unit-toggle">
                 {(['cft', 'brass', 'm3'] as VolumeUnit[]).map((u) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setUnit(u)}
-                    className={`text-xs px-3 py-1 rounded-md font-semibold transition ${
-                      unit === u
-                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
+                    className={`bm-unit-btn ${unit === u ? 'active' : ''}`}
                   >
                     {u.toUpperCase()}
                   </button>
@@ -161,8 +157,8 @@ export const SandCalculatorPanel: React.FC<SandCalculatorPanelProps> = ({
         </CalculatorSection>
       </div>
 
-      {/* ── Right Column: Logistics & Quantity Takeoff (5 cols) ── */}
-      <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-4">
+      {/* ── Right Column: Logistics & Quantity Takeoff ── */}
+      <div className="bm-takeoff-column">
         {/* Logistics & Vehicle Dispatch Card */}
         <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">

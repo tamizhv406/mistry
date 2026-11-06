@@ -885,6 +885,217 @@ export function generateTurnkeyQuotationPdfBlob(options: TurnkeyQuotationPdfOpti
   return new Blob([pdfBytes as any], { type: 'application/pdf' });
 }
 
+export interface WorkerPayslipPdfOptions {
+  workerName: string;
+  workerRole: string;
+  workerPhone?: string;
+  workerId?: string;
+  siteName: string;
+  periodStr: string;
+  dailyWage: number;
+  fullDays: number;
+  halfDays: number;
+  otHours: number;
+  otHourlyRate: number;
+  grossWage: number;
+  advanceDeducted: number;
+  netPayout: number;
+  preparedBy?: string;
+  paymentMode?: string;
+}
+
+/**
+ * Generate a commercial worker wage payslip / voucher PDF.
+ */
+export function generateWorkerPayslipPdfBlob(options: WorkerPayslipPdfOptions): Blob {
+  const pageWidth = 595.28;
+  const pageHeight = 841.89;
+  const pdf = new MinimalPdfDocument(pageWidth, pageHeight);
+
+  const margin = 32;
+  const contentWidth = pageWidth - margin * 2;
+  const voucherRef = `WAGE-SLIP-${Math.floor(1000 + Math.random() * 9000)}`;
+  const dateStr = new Date().toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // 1. Outer Border
+  pdf.setStrokeColor(203, 213, 225); // slate-300
+  pdf.setLineWidth(1.2);
+  pdf.drawRect(margin, margin + 120, contentWidth, pageHeight - margin * 2 - 120, false, true);
+
+  // 2. Header Banner
+  const headerH = 64;
+  const headerY = pageHeight - margin - headerH;
+  pdf.setFillColor(15, 23, 42); // slate-900 (Navy)
+  pdf.drawRect(margin, headerY, contentWidth, headerH, true, false);
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('BUILDING MISTRY - LABOUR WAGE SETTLEMENT SLIP', margin + 18, headerY + 42, 12, 'F2');
+  pdf.setFillColor(203, 213, 225);
+  pdf.drawText(`Site Personnel Muster Roll & Official Payment Voucher | Ref: ${voucherRef}`, margin + 18, headerY + 26, 8, 'F1');
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(`Site: ${options.siteName.substring(0, 36)} | Generated on ${dateStr}`, margin + 18, headerY + 12, 7.5, 'F1');
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText(`Voucher: #${voucherRef}`, margin + contentWidth - 140, headerY + 42, 8.5, 'F2');
+  pdf.setFillColor(56, 189, 248);
+  pdf.drawText(`Period: ${options.periodStr}`, margin + contentWidth - 140, headerY + 26, 8, 'F2');
+  pdf.setFillColor(203, 213, 225);
+  pdf.drawText(`Mode: ${options.paymentMode || 'Cash Payout'}`, margin + contentWidth - 140, headerY + 12, 7.5, 'F1');
+
+  // 3. Worker Details Card
+  const cardH = 50;
+  const cardY = headerY - cardH - 12;
+  pdf.setFillColor(248, 250, 252);
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawRect(margin + 8, cardY, contentWidth - 16, cardH, true, true);
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('WORKER NAME:', margin + 18, cardY + 34, 7, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(options.workerName, margin + 18, cardY + 20, 10, 'F2');
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText(`ID: #${(options.workerId || 'W001').slice(-6).toUpperCase()}`, margin + 18, cardY + 8, 7, 'F1');
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('TRADE / ROLE:', margin + 180, cardY + 34, 7, 'F1');
+  pdf.setFillColor(37, 99, 235);
+  pdf.drawText(options.workerRole, margin + 180, cardY + 20, 9.5, 'F2');
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText(options.workerPhone ? `Phone: ${options.workerPhone}` : 'Phone: Not Registered', margin + 180, cardY + 8, 7, 'F1');
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('DAILY WAGE RATE:', margin + 340, cardY + 34, 7, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`Rs. ${options.dailyWage.toLocaleString('en-IN')} / day`, margin + 340, cardY + 20, 9.5, 'F2');
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText(`OT: Rs. ${options.otHourlyRate.toLocaleString('en-IN')} / hour`, margin + 340, cardY + 8, 7, 'F1');
+
+  let curY = cardY - 18;
+
+  // 4. Breakdown Table Header
+  pdf.setFillColor(30, 41, 59);
+  pdf.drawRect(margin + 8, curY - 14, contentWidth - 16, 14, true, false);
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('ATTENDANCE, OVERTIME & WAGE PARTICULARS', margin + 18, curY - 10, 8, 'F2');
+  curY -= 14;
+
+  pdf.setFillColor(241, 245, 249);
+  pdf.drawRect(margin + 8, curY - 14, contentWidth - 16, 14, true, false);
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('Wage Component / Description', margin + 18, curY - 10, 7.5, 'F2');
+  pdf.drawText('Units Worked', margin + 280, curY - 10, 7.5, 'F2');
+  pdf.drawText('Unit Rate (Rs)', margin + 380, curY - 10, 7.5, 'F2');
+  pdf.drawText('Total Amount (Rs)', margin + 450, curY - 10, 7.5, 'F2');
+  curY -= 14;
+
+  // Rows
+  const fullDaysPay = Math.round(options.fullDays * options.dailyWage);
+  const halfDaysPay = Math.round(options.halfDays * 0.5 * options.dailyWage);
+  const otPay = Math.round(options.otHours * options.otHourlyRate);
+
+  const items = [
+    { desc: 'Full Day Shifts (Present, 1.0)', units: `${options.fullDays} days`, rate: `${options.dailyWage}`, amt: fullDaysPay },
+    { desc: 'Half Day Shifts (0.5 wage)', units: `${options.halfDays} days`, rate: `${Math.round(options.dailyWage * 0.5)}`, amt: halfDaysPay },
+    { desc: 'Overtime Shifts (OT)', units: `${options.otHours} hours`, rate: `${options.otHourlyRate}/hr`, amt: otPay },
+  ];
+
+  items.forEach((it, idx) => {
+    if (idx % 2 === 1) {
+      pdf.setFillColor(248, 250, 252);
+      pdf.drawRect(margin + 8, curY - 16, contentWidth - 16, 16, true, false);
+    }
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(it.desc, margin + 18, curY - 11, 7.5, 'F1');
+    pdf.setFillColor(71, 85, 105);
+    pdf.drawText(it.units, margin + 280, curY - 11, 7.5, 'F1');
+    pdf.drawText(it.rate, margin + 380, curY - 11, 7.5, 'F1');
+    pdf.setFillColor(15, 23, 42);
+    pdf.drawText(it.amt.toLocaleString('en-IN'), margin + 450, curY - 11, 8, 'F2');
+    curY -= 16;
+  });
+
+  // Divider
+  pdf.setStrokeColor(226, 232, 240);
+  pdf.drawLine(margin + 8, curY - 4, margin + contentWidth - 8, curY - 4);
+  curY -= 12;
+
+  // Gross Subtotal
+  pdf.setFillColor(248, 250, 252);
+  pdf.drawRect(margin + 8, curY - 16, contentWidth - 16, 16, true, false);
+  pdf.setFillColor(71, 85, 105);
+  pdf.drawText('GROSS WAGES EARNED (A):', margin + 18, curY - 11, 8, 'F2');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(`Rs. ${options.grossWage.toLocaleString('en-IN')}`, margin + 450, curY - 11, 8.5, 'F2');
+  curY -= 20;
+
+  // Deductions Section
+  pdf.setFillColor(220, 38, 38); // Red
+  pdf.drawRect(margin + 8, curY - 14, contentWidth - 16, 14, true, false);
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('DEDUCTIONS & RECOVERIES (B)', margin + 18, curY - 10, 8, 'F2');
+  curY -= 14;
+
+  pdf.setFillColor(248, 250, 252);
+  pdf.drawRect(margin + 8, curY - 16, contentWidth - 16, 16, true, false);
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText('Advance Cash Taken Earlier (Recovered from settlement)', margin + 18, curY - 11, 7.5, 'F1');
+  pdf.setFillColor(220, 38, 38);
+  pdf.drawText(`(-) Rs. ${options.advanceDeducted.toLocaleString('en-IN')}`, margin + 440, curY - 11, 8.5, 'F2');
+  curY -= 26;
+
+  // 5. Net Cash Payable Highlight Box
+  const netH = 46;
+  pdf.setFillColor(16, 185, 129); // Emerald
+  pdf.drawRect(margin + 8, curY - netH, contentWidth - 16, netH, true, false);
+
+  pdf.setFillColor(255, 255, 255);
+  pdf.drawText('FINAL NET CASH PAYABLE IN HAND (A - B):', margin + 20, curY - 18, 9.5, 'F2');
+  pdf.drawText('Paid in full settlement without dispute', margin + 20, curY - 32, 7.5, 'F1');
+
+  pdf.drawText(`Rs. ${options.netPayout.toLocaleString('en-IN')}`, margin + contentWidth - 160, curY - 26, 15, 'F2');
+  curY -= netH + 24;
+
+  // 6. Signatures and Authorizations
+  const sigH = 60;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setStrokeColor(203, 213, 225);
+  pdf.drawRect(margin + 8, curY - sigH, contentWidth - 16, sigH, true, true);
+
+  pdf.setFillColor(100, 116, 139);
+  pdf.drawText('Worker Signature / Left Thumb Impression:', margin + 18, curY - 14, 7.5, 'F1');
+  pdf.drawText('(பணியாளர் கையெழுத்து / பெருவிரல் ரேகை)', margin + 18, curY - 24, 6.5, 'F1');
+  pdf.drawLine(margin + 18, curY - 48, margin + 210, curY - 48);
+
+  pdf.drawText('Authorized Contractor / Site Supervisor:', margin + contentWidth - 210, curY - 14, 7.5, 'F1');
+  pdf.setFillColor(15, 23, 42);
+  pdf.drawText(options.preparedBy || 'Building Mistry Construction Co.', margin + contentWidth - 210, curY - 26, 8, 'F2');
+  pdf.drawLine(margin + contentWidth - 210, curY - 48, margin + contentWidth - 20, curY - 48);
+
+  // 7. Footer
+  pdf.setFillColor(148, 163, 184);
+  pdf.drawText(
+    'Mistry ERP Automated Wage Settlement Slip. Keep copy for tax and audit records.',
+    margin + 18,
+    margin + 130,
+    6.5,
+    'F1'
+  );
+  pdf.drawText(
+    `Building Mistry | Tamil Nadu Construction Management System | ${voucherRef}`,
+    margin + 18,
+    margin + 122,
+    6.5,
+    'F1'
+  );
+
+  const pdfBytes = pdf.build();
+  return new Blob([pdfBytes as any], { type: 'application/pdf' });
+}
+
 /**
  * Triggers a real browser file download for any Blob or text content with genuine filename and MIME type.
  */

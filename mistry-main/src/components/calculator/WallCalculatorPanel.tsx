@@ -95,9 +95,9 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="bm-calc-workspace-grid">
       {/* Left Input Forms */}
-      <div className="lg:col-span-7 space-y-4">
+      <div className="bm-input-column">
         {/* Section 1: Dimensions */}
         <CalculatorSection
           title="1. Wall Dimensions & Geometry"
@@ -109,17 +109,13 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-500 font-medium">Measurement Unit</span>
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="bm-unit-toggle">
                 {(['m', 'ft', 'mm', 'in'] as LengthUnit[]).map((u) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setUnit(u)}
-                    className={`text-xs px-2.5 py-1 rounded-md font-semibold transition ${
-                      unit === u
-                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
+                    className={`bm-unit-btn ${unit === u ? 'active' : ''}`}
                   >
                     {u.toUpperCase()}
                   </button>
@@ -280,10 +276,10 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
               {openings.map((op) => (
                 <div
                   key={op.id}
-                  className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs"
+                  className="bm-opening-row"
                 >
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 w-24 truncate">{op.label}</span>
-                  <div className="flex items-center gap-2 flex-1">
+                  <span className="bm-opening-name">{op.label}</span>
+                  <div className="bm-opening-inputs">
                     <InputField
                       label=""
                       unitAddon="W"
@@ -294,7 +290,7 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
                         const val = parseFloat(e.target.value) || 0;
                         setOpenings(openings.map((o) => (o.id === op.id ? { ...o, width: val } : o)));
                       }}
-                      className="w-16"
+                      containerStyle={{ width: 88, minWidth: 88 }}
                     />
                     <InputField
                       label=""
@@ -306,7 +302,7 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
                         const val = parseFloat(e.target.value) || 0;
                         setOpenings(openings.map((o) => (o.id === op.id ? { ...o, height: val } : o)));
                       }}
-                      className="w-16"
+                      containerStyle={{ width: 88, minWidth: 88 }}
                     />
                     <InputField
                       label=""
@@ -318,16 +314,16 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
                         const val = Math.max(1, parseInt(e.target.value) || 1);
                         setOpenings(openings.map((o) => (o.id === op.id ? { ...o, count: val } : o)));
                       }}
-                      className="w-14"
+                      containerStyle={{ width: 80, minWidth: 80 }}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => removeOpening(op.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
+                    style={{ border: 'none', background: 'transparent', padding: '6px', color: '#94a3b8', cursor: 'pointer' }}
                     title="Remove opening"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               ))}
@@ -345,8 +341,8 @@ export const WallCalculatorPanel: React.FC<WallCalculatorPanelProps> = ({
         </CalculatorSection>
       </div>
 
-      {/* Right Column: Commercial Quantity Takeoff & Schedule (Image 2 style) */}
-      <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-4">
+      {/* Right Column: Commercial Quantity Takeoff & Schedule (Image 4 style) */}
+      <div className="bm-takeoff-column">
         {(() => {
           const takeoffMaterials: TakeoffMaterialItem[] = [
             {

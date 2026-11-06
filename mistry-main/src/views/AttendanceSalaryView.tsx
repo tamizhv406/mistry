@@ -42,7 +42,8 @@ import { AttendanceModal } from '../components/AttendanceModal';
 import { WorkerModal } from '../components/WorkerModal';
 import { AdvanceModal } from '../components/AdvanceModal';
 import { SalaryPaymentModal } from '../components/SalaryPaymentModal';
-import { generateLabourSalaryReportPdfBlob, downloadFile } from '../utils/pdfGenerator';
+import { useLanguage } from '../services/i18n';
+import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
 
 export interface AttendanceSalaryViewProps {
   user: User;
@@ -59,11 +60,13 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   onNavigateSiteDetail,
   onNotify,
 }) => {
+  const { lang, t, roleLabel, statusLabel } = useLanguage();
+
   // Current Site Selection
   const [selectedSiteId, setSelectedSiteId] = useState<string>(initialSiteId || (sites[0]?.id || ''));
 
   // View state
-  const [activeTab, setActiveTab] = useState<'attendance' | 'salary' | 'roster' | 'advances'>('attendance');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'attendance' | 'salary' | 'roster' | 'advances'>('matrix');
   const [selectedDate, setSelectedDate] = useState<string>(todayKey());
   const [selectedMonth, setSelectedMonth] = useState<string>(monthKeyOf(todayKey()));
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -193,52 +196,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   };
 
   const handleExportPDF = () => {
-    try {
-      const items = (workers || []).map(w => {
-        const workerAttendance = (attendance || []).filter(a => a.workerId === w.id);
-        const workerAdvances = (advances || []).filter(a => a.workerId === w.id);
-        const workerPayments = (salaryPayments || []).filter(s => s.workerId === w.id);
-        const ledger = buildWorkerLedger(w, workerAttendance, workerAdvances, workerPayments, policy);
-        return {
-          workerName: w.name,
-          category: w.category,
-          dailyRate: w.dailyWage,
-          workedDays: ledger.workedDayEquivalents,
-          earnedAmount: ledger.earned,
-          advanceDeducted: ledger.recoverableAdvances,
-          salaryPaid: ledger.salaryPaid,
-          balanceDue: ledger.pending,
-        };
-      });
-
-      const totalWorkers = items.length;
-      const totalDaysWorked = items.reduce((sum, i) => sum + i.workedDays, 0);
-      const totalEarned = items.reduce((sum, i) => sum + i.earnedAmount, 0);
-      const totalAdvance = items.reduce((sum, i) => sum + i.advanceDeducted, 0);
-      const totalPaid = items.reduce((sum, i) => sum + i.salaryPaid, 0);
-      const totalBalanceDue = items.reduce((sum, i) => sum + i.balanceDue, 0);
-
-      const blob = generateLabourSalaryReportPdfBlob({
-        projectName: activeSite?.name || 'Project Workforce',
-        projectAddress: activeSite?.address || activeSite?.area,
-        monthName: formatMonth(selectedMonth),
-        generatedDate: formatDay(todayKey()),
-        totalWorkers,
-        totalDaysWorked,
-        totalEarned,
-        totalAdvance,
-        totalPaid,
-        totalBalanceDue,
-        items,
-      });
-
-      const cleanProjName = (activeSite?.name || 'Project').replace(/[^a-zA-Z0-9_-]/g, '_');
-      downloadFile(blob, `Muster_Roll_${cleanProjName}_${selectedMonth}.pdf`);
-      onNotify('Workforce Muster Roll & Salary Statement PDF downloaded successfully', 'success');
-    } catch (err: any) {
-      console.error('Failed to export Muster PDF:', err);
-      window.print();
-    }
+    window.print();
   };
 
   return (
@@ -612,12 +570,13 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
+        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px', flexWrap: 'wrap', gap: '2px' }}>
           {[
-            { id: 'attendance', label: 'Daily Attendance' },
-            { id: 'salary', label: 'Salary Ledger' },
-            { id: 'advances', label: 'Advances History' },
-            { id: 'roster', label: 'Worker Roster' },
+            { id: 'matrix', label: lang === 'ta' ? 'வருகை மேட்ரிக்ஸ் (Weekly)' : 'Attendance Matrix (Weekly)' },
+            { id: 'attendance', label: lang === 'ta' ? 'தினசரி பதிவு' : 'Daily Mark' },
+            { id: 'salary', label: lang === 'ta' ? 'கூலி கணக்கு ஏடு' : 'Salary Ledger' },
+            { id: 'advances', label: lang === 'ta' ? 'அட்வான்ஸ்' : 'Advances' },
+            { id: 'roster', label: lang === 'ta' ? 'பணியாளர்கள்' : 'Worker Roster' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -627,10 +586,10 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                 borderRadius: '6px',
                 border: 'none',
                 fontSize: '0.825rem',
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: 'pointer',
                 backgroundColor: activeTab === tab.id ? '#FFFFFF' : 'transparent',
-                color: activeTab === tab.id ? '#0F172A' : '#64748B',
+                color: activeTab === tab.id ? '#4F46E5' : '#64748B',
                 boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -709,6 +668,23 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Tab 0: Mobile-First Attendance Matrix (Spreadsheet View) */}
+      {activeTab === 'matrix' && activeSite && (
+        <AttendanceMatrix
+          user={user}
+          activeSite={activeSite}
+          workers={workers}
+          attendance={attendance}
+          advances={advances}
+          salaryPayments={salaryPayments}
+          onNotify={onNotify}
+          onOpenWorkerModal={w => {
+            setWorkerToEdit(w || null);
+            setIsWorkerModalOpen(true);
+          }}
+        />
+      )}
 
       {/* Tab 1: Daily Attendance Table */}
       {activeTab === 'attendance' && (

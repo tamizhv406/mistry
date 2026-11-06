@@ -8,6 +8,7 @@ import { db } from '../../db/db';
 import type { Site, User } from '../../db/types';
 import { isAdmin } from '../../services/auth';
 import { SearchBox, Sheet } from './kit';
+import { useLanguage } from '../../services/i18n';
 
 interface ChromeProps {
   user: User;
@@ -25,6 +26,7 @@ interface ChromeProps {
 
 /** Slim top bar (phone only): brand, project switcher, account. */
 export const MobileTopBar: React.FC<ChromeProps> = ({ user, currentView, sites, siteId, onSelectSite, onNavigate, onNewSite, onLogout }) => {
+  const { lang, setLang } = useLanguage();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -48,6 +50,43 @@ export const MobileTopBar: React.FC<ChromeProps> = ({ user, currentView, sites, 
           </span>
           <ChevronDown size={18} className="is-muted" />
         </button>
+
+        {/* Mobile Language Switcher */}
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #CBD5E1', marginLeft: 'auto', marginRight: '6px' }}>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            style={{
+              padding: '3px 6px',
+              borderRadius: '4px',
+              fontSize: '10px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              border: 'none',
+              backgroundColor: lang === 'en' ? '#FFFFFF' : 'transparent',
+              color: lang === 'en' ? '#4F46E5' : '#64748B',
+            }}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('ta')}
+            style={{
+              padding: '3px 6px',
+              borderRadius: '4px',
+              fontSize: '10px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              border: 'none',
+              backgroundColor: lang === 'ta' ? '#FFFFFF' : 'transparent',
+              color: lang === 'ta' ? '#4F46E5' : '#64748B',
+            }}
+          >
+            தமிழ்
+          </button>
+        </div>
+
         <button type="button" className="m-avatar" onClick={() => setAccountOpen(true)} aria-label="Account">
           {(user.fullName || user.username || 'U')[0].toUpperCase()}
         </button>

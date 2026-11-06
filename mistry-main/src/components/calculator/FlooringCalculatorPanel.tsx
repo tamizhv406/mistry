@@ -103,9 +103,9 @@ export const FlooringCalculatorPanel: React.FC<FlooringCalculatorPanelProps> = (
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="bm-calc-workspace-grid">
       {/* Left Input Column */}
-      <div className="lg:col-span-7 space-y-4">
+      <div className="bm-input-column">
         {/* Section 1: Room Dimensions */}
         <CalculatorSection
           title="1. Room & Floor Area"
@@ -117,17 +117,13 @@ export const FlooringCalculatorPanel: React.FC<FlooringCalculatorPanelProps> = (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-500 font-medium">Measurement Unit</span>
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="bm-unit-toggle">
                 {(['m', 'ft', 'mm', 'in'] as LengthUnit[]).map((u) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setUnit(u)}
-                    className={`text-xs px-2.5 py-1 rounded-md font-semibold transition ${
-                      unit === u
-                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
+                    className={`bm-unit-btn ${unit === u ? 'active' : ''}`}
                   >
                     {u.toUpperCase()}
                   </button>
@@ -334,7 +330,7 @@ export const FlooringCalculatorPanel: React.FC<FlooringCalculatorPanelProps> = (
       </div>
 
       {/* Right Output & Summary Column */}
-      <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-4">
+      <div className="bm-takeoff-column">
         {(() => {
           const takeoffMaterials: TakeoffMaterialItem[] = [
             {

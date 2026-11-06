@@ -109,9 +109,9 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="bm-calc-workspace-grid">
       {/* Left Input Forms */}
-      <div className="lg:col-span-7 space-y-4">
+      <div className="bm-input-column">
         {/* Section 1: Dimensions */}
         <CalculatorSection
           title="1. RCC Slab & Roof Geometry"
@@ -123,17 +123,13 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-500 font-medium">Measurement Unit</span>
-              <div className="inline-flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+              <div className="bm-unit-toggle">
                 {(['m', 'ft', 'mm', 'in'] as LengthUnit[]).map((u) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setUnit(u)}
-                    className={`text-xs px-2.5 py-1 rounded-md font-semibold transition ${
-                      unit === u
-                        ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-2xs'
-                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                    }`}
+                    className={`bm-unit-btn ${unit === u ? 'active' : ''}`}
                   >
                     {u.toUpperCase()}
                   </button>
@@ -344,10 +340,10 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
               {cutouts.map((co) => (
                 <div
                   key={co.id}
-                  className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs"
+                  className="bm-opening-row"
                 >
-                  <span className="font-semibold text-slate-800 dark:text-slate-200 w-28 truncate">{co.label}</span>
-                  <div className="flex items-center gap-2 flex-1">
+                  <span className="bm-opening-name">{co.label}</span>
+                  <div className="bm-opening-inputs">
                     <InputField
                       label=""
                       unitAddon="W"
@@ -358,7 +354,7 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
                         const val = parseFloat(e.target.value) || 0;
                         setCutouts(cutouts.map((c) => (c.id === co.id ? { ...c, width: val } : c)));
                       }}
-                      className="w-16"
+                      containerStyle={{ width: 88, minWidth: 88 }}
                     />
                     <InputField
                       label=""
@@ -370,7 +366,7 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
                         const val = parseFloat(e.target.value) || 0;
                         setCutouts(cutouts.map((c) => (c.id === co.id ? { ...c, height: val } : c)));
                       }}
-                      className="w-16"
+                      containerStyle={{ width: 88, minWidth: 88 }}
                     />
                     <InputField
                       label=""
@@ -382,16 +378,16 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
                         const val = Math.max(1, parseInt(e.target.value) || 1);
                         setCutouts(cutouts.map((c) => (c.id === co.id ? { ...c, count: val } : c)));
                       }}
-                      className="w-14"
+                      containerStyle={{ width: 80, minWidth: 80 }}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => removeCutout(co.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md transition-colors"
+                    style={{ border: 'none', background: 'transparent', padding: '6px', color: '#94a3b8', cursor: 'pointer' }}
                     title="Remove cutout"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               ))}
@@ -410,7 +406,7 @@ export const SlabCalculatorPanel: React.FC<SlabCalculatorPanelProps> = ({
       </div>
 
       {/* Right Column: Material Summaries & Costing Takeoff Schedule */}
-      <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-4">
+      <div className="bm-takeoff-column">
         {(() => {
           const takeoffMaterials: TakeoffMaterialItem[] = [
             {

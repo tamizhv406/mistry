@@ -169,42 +169,41 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
   ];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-2 sm:px-4 pb-16">
-      {/* ── Top Header / Project Switcher Bar ── */}
-      <div className="bg-white dark:bg-slate-900 p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center shadow-xs">
+    <div className="bm-calc-workspace">
+      {/* ── Top Header / Project Switcher Bar (MyDesignerPlus Image 4 Style) ── */}
+      <div className="bm-header-bar">
+        <div className="bm-header-title-box">
+          <div className="bm-header-icon-box">
             <Calculator size={22} />
           </div>
           <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="bm-header-title">
                 Building Estimation Workspace
               </h1>
-              <span className="text-[10px] uppercase font-bold tracking-wider py-0.5 px-2.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <span className="bm-header-badge">
                 IS 456 &amp; IS 1200 Standards
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="bm-header-subtitle">
               Civil quantity takeoff engine for structural masonry, concrete, finishing, and procurement.
             </p>
           </div>
         </div>
 
         {/* Project Selector & Status Pill */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {sites.length > 0 && (
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs">
-              <Building2 size={15} className="text-indigo-600 dark:text-indigo-400" />
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Linked Site</span>
+            <div className="bm-site-pill">
+              <Building2 size={15} style={{ color: '#4f46e5' }} />
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 700, color: '#94a3b8' }}>Linked Site</span>
                 <select
                   value={selectedSiteId}
                   onChange={(e) => {
                     setSelectedSiteId(e.target.value);
                     if (onSelectSite) onSelectSite(e.target.value);
                   }}
-                  className="text-xs font-bold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-2"
                 >
                   <option value="">No Project Linked</option>
                   {sites.map((s) => (
@@ -218,25 +217,25 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
           )}
 
           {/* Quick Stats Pill */}
-          <div className="hidden md:flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-              <Bookmark size={13} className="text-indigo-500" />
-              <span className="font-semibold">{savedCalculations.length}</span>
-              <span className="text-[11px] text-slate-400">saved</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '6px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#475569' }}>
+              <Bookmark size={13} style={{ color: '#6366f1' }} />
+              <span style={{ fontWeight: 700 }}>{savedCalculations.length}</span>
+              <span style={{ color: '#94a3b8' }}>saved</span>
             </div>
-            <div className="w-px h-3.5 bg-slate-200 dark:bg-slate-700" />
-            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-              <Tag size={13} className="text-emerald-500" />
-              <span className="font-semibold">{rates.length}</span>
-              <span className="text-[11px] text-slate-400">rates</span>
+            <div style={{ width: '1px', height: '14px', background: '#cbd5e1' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#475569' }}>
+              <Tag size={13} style={{ color: '#10b981' }} />
+              <span style={{ fontWeight: 700 }}>{rates.length}</span>
+              <span style={{ color: '#94a3b8' }}>rates</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── CAD Ribbon Navigation Bar (Bond360 Style) ── */}
-      <div className="bg-slate-50/80 dark:bg-slate-900/60 p-2 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+      {/* ── CAD Ribbon Navigation Bar (Bond360 Image 1 Style) ── */}
+      <div className="bm-ribbon-bar">
+        <div className="bm-ribbon-track">
           {modulesList.map((m) => {
             const isActive = activeModule === m.id;
             return (
@@ -244,41 +243,30 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
                 key={m.id}
                 type="button"
                 onClick={() => setActiveModule(m.id)}
-                className={`shrink-0 px-3.5 py-2.5 rounded-xl text-left transition-all relative flex items-center gap-2.5 ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-600'
-                    : 'bg-white dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-50 dark:hover:bg-slate-700/60 hover:border-slate-300'
-                }`}
+                className={`bm-ribbon-btn ${isActive ? 'active' : ''}`}
               >
-                <div
-                  className={`p-1.5 rounded-lg shrink-0 ${
-                    isActive
-                      ? 'bg-indigo-700/60 text-white'
-                      : 'bg-slate-100 dark:bg-slate-700/60 text-indigo-600 dark:text-indigo-400'
-                  }`}
-                >
+                <div className="bm-ribbon-icon">
                   {m.icon}
                 </div>
-                <div className="flex flex-col min-w-0 pr-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold leading-tight whitespace-nowrap">{m.label}</span>
+                <div className="bm-ribbon-texts">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="bm-ribbon-title">{m.label}</span>
                     {m.badge && (
                       <span
-                        className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono font-bold leading-none ${
-                          isActive
-                            ? 'bg-indigo-500 text-white'
-                            : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                        }`}
+                        style={{
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: '9999px',
+                          background: isActive ? 'rgba(255,255,255,0.25)' : '#e0e7ff',
+                          color: isActive ? '#ffffff' : '#3730a3',
+                        }}
                       >
                         {m.badge}
                       </span>
                     )}
                   </div>
-                  <span
-                    className={`text-[10px] leading-tight font-medium ${
-                      isActive ? 'text-indigo-100' : 'text-slate-400 dark:text-slate-500'
-                    }`}
-                  >
+                  <span className="bm-ribbon-sub">
                     {m.sublabel}
                   </span>
                 </div>

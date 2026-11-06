@@ -6,6 +6,7 @@ import type { LabourWorker, LabourCategory } from '../db/types';
 import { getCurrentUser } from '../services/auth';
 import { writableSite } from '../services/records';
 import { VoiceInputField } from './VoiceInputField';
+import { isValidIndianPhone } from '../services/i18n';
 
 interface WorkerModalProps {
   isOpen: boolean;
@@ -79,6 +80,10 @@ export const WorkerModal: React.FC<WorkerModalProps> = ({
 
     if (!name.trim()) {
       setError('Please enter the worker name.');
+      return;
+    }
+    if (phone.trim() && !isValidIndianPhone(phone)) {
+      setError('Please enter a valid 10-digit Indian phone number starting with 6-9.');
       return;
     }
     if (numWage <= 0) {

@@ -32,6 +32,7 @@ import { isAdmin, isSuperAdmin } from '../services/auth';
 import type { User, Site, LabourWorker, Material, FloorPlan } from '../db/types';
 import { todayKey, DEFAULT_TIME_ZONE } from '../utils/datetime';
 import { buildStock } from '../domain/stock';
+import { useLanguage } from '../services/i18n';
 
 interface TopNavProps {
   user: User | null;
@@ -59,6 +60,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onLogout,
   onToggleSidebarMobile,
 }) => {
+  const { lang, setLang } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -393,6 +395,48 @@ export const TopNav: React.FC<TopNavProps> = ({
 
       {/* Right: Notifications, Help, User Profile */}
       <div className="erp-top-nav-right">
+        {/* Language Switcher Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F1F5F9', padding: '3px', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
+          <button
+            type="button"
+            onClick={() => setLang('en')}
+            style={{
+              padding: '4px 8px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              border: 'none',
+              backgroundColor: lang === 'en' ? '#FFFFFF' : 'transparent',
+              color: lang === 'en' ? '#4F46E5' : '#64748B',
+              boxShadow: lang === 'en' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+            title="English"
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang('ta')}
+            style={{
+              padding: '4px 8px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              border: 'none',
+              backgroundColor: lang === 'ta' ? '#FFFFFF' : 'transparent',
+              color: lang === 'ta' ? '#4F46E5' : '#64748B',
+              boxShadow: lang === 'ta' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+            title="தமிழ்"
+          >
+            தமிழ்
+          </button>
+        </div>
+
         {/* Mobile Search Toggle (< 900px) */}
         <button
           type="button"
