@@ -12,10 +12,10 @@ import {
   ChevronUp, GripHorizontal, SlidersHorizontal, Grid as GridIcon,
   MoreVertical, Shapes, Minus, Type, Image as ImageIcon,
   Maximize, Minimize, FilePlus, Edit, Bed, Sofa, Utensils, Bath, Zap,
-  Eraser, Search, LocateFixed, LayoutGrid, Share2, Volume2, VolumeX,
+  Eraser, Search, LocateFixed, LayoutGrid, Share2, Volume2, VolumeX, Bell, BellOff,
   Monitor, Tablet, Smartphone, Link as LinkIcon, AlignLeft, AlignCenter, AlignRight, Menu,
 } from 'lucide-react';
-import { speakTamil, isVoiceEnabled, toggleVoice } from '../utils/tamilVoice';
+import { speakTamil, isVoiceEnabled, setVoiceEnabled, toggleVoice } from '../utils/tamilVoice';
 import type {
   FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanDoor, FloorPlanWindow,
   FloorPlanFurniture, FloorPlanStaircase, FloorPlanColumn, FloorPlanAnnotation,
@@ -550,11 +550,69 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   user,
   onBack,
   onBackToSite,
-  onNotify,
+  onNotify: rawOnNotify,
   onOpenEstimator,
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Voice Assistant and Notifications preferences
+  const [voiceAssistantEnabled, setVoiceAssistantEnabled] = useState<boolean>(() => {
+    return isVoiceEnabled();
+  });
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('mistry_fp_notifications_enabled');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const onNotify = useCallback((msg: string, type?: 'success' | 'error' | 'info') => {
+    if (!notificationsEnabled && type !== 'error') {
+      return;
+    }
+    rawOnNotify(msg, type);
+  }, [notificationsEnabled, rawOnNotify]);
+
+  const handleToggleVoiceAssistant = useCallback(() => {
+    setVoiceAssistantEnabled((prev) => {
+      const next = !prev;
+      setVoiceEnabled(next);
+      if (!next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+        } catch {
+          // ignore
+        }
+      }
+      if (next) {
+        speakTamil('குரல் உதவி ஆன் செய்யப்பட்டது');
+      }
+      rawOnNotify(
+        next ? 'Voice Assistant turned ON' : 'Voice Assistant turned OFF',
+        next ? 'success' : 'info'
+      );
+      return next;
+    });
+  }, [rawOnNotify]);
+
+  const handleToggleNotifications = useCallback(() => {
+    setNotificationsEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('mistry_fp_notifications_enabled', String(next));
+      } catch {
+        // ignore
+      }
+      rawOnNotify(
+        next ? 'Notifications turned ON' : 'Notifications turned OFF',
+        next ? 'success' : 'info'
+      );
+      return next;
+    });
+  }, [rawOnNotify]);
 
   const [plan, setPlan] = useState<FloorPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -8470,6 +8528,37 @@ _Shared via Building Mistry App_`;
                       </div>
                     </div>
                   </div>
+
+                  {/* Preferences: Voice Assistant & Notifications */}
+                  <div className="fp-drawer-tool-section">
+                    <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Voice & Notifications
+                    </span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '6px' }}>
+                      <button
+                        type="button"
+                        id="fp-tool-toggle-voice"
+                        className={`fp-drawer-action-btn ${voiceAssistantEnabled ? 'active' : ''}`}
+                        onClick={handleToggleVoiceAssistant}
+                        title={voiceAssistantEnabled ? 'Turn off Voice Assistant' : 'Turn on Voice Assistant'}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      >
+                        {voiceAssistantEnabled ? <Volume2 size={15} color="#16a34a" /> : <VolumeX size={15} color="#ef4444" />}
+                        <span>Voice: {voiceAssistantEnabled ? 'ON' : 'OFF'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="fp-tool-toggle-notifications"
+                        className={`fp-drawer-action-btn ${notificationsEnabled ? 'active' : ''}`}
+                        onClick={handleToggleNotifications}
+                        title={notificationsEnabled ? 'Turn off Notifications' : 'Turn on Notifications'}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      >
+                        {notificationsEnabled ? <Bell size={15} color="#16a34a" /> : <BellOff size={15} color="#ef4444" />}
+                        <span>Alerts: {notificationsEnabled ? 'ON' : 'OFF'}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -14818,6 +14907,26 @@ _Shared via Building Mistry App_`;
                     <Settings size={16} color="#475569" />
                     <span>Scale & Snapping</span>
                   </button>
+                  <button
+                    type="button"
+                    id="fp-desktop-tool-toggle-voice"
+                    className="fp-symbol-item-btn"
+                    onClick={handleToggleVoiceAssistant}
+                    title={voiceAssistantEnabled ? 'Turn off Voice Assistant' : 'Turn on Voice Assistant'}
+                  >
+                    {voiceAssistantEnabled ? <Volume2 size={16} color="#16a34a" /> : <VolumeX size={16} color="#ef4444" />}
+                    <span>Voice Assistant: {voiceAssistantEnabled ? 'ON' : 'OFF'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="fp-desktop-tool-toggle-notifications"
+                    className="fp-symbol-item-btn"
+                    onClick={handleToggleNotifications}
+                    title={notificationsEnabled ? 'Turn off Notifications' : 'Turn on Notifications'}
+                  >
+                    {notificationsEnabled ? <Bell size={16} color="#16a34a" /> : <BellOff size={16} color="#ef4444" />}
+                    <span>Notifications: {notificationsEnabled ? 'ON' : 'OFF'}</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -17770,6 +17879,42 @@ _Shared via Building Mistry App_`;
                 >
                   <div className="fp-mobile-grid-btn-icon"><Magnet size={18} /></div>
                   <span>{snapToGridEnabled ? 'Disable Snap' : 'Enable Snap'}</span>
+                </button>
+              )}
+
+              {(!mobileToolSearch || 'voice assistant audio sound'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  id="fp-mobile-more-tool-voice"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    handleToggleVoiceAssistant();
+                    setShowMobileMoreTools(false);
+                  }}
+                  title={voiceAssistantEnabled ? 'Turn off Voice Assistant' : 'Turn on Voice Assistant'}
+                >
+                  <div className="fp-mobile-grid-btn-icon">
+                    {voiceAssistantEnabled ? <Volume2 size={18} color="#16a34a" /> : <VolumeX size={18} color="#ef4444" />}
+                  </div>
+                  <span>{voiceAssistantEnabled ? 'Voice: ON' : 'Voice: OFF'}</span>
+                </button>
+              )}
+
+              {(!mobileToolSearch || 'notification notifications alert alerts'.includes(mobileToolSearch.toLowerCase())) && (
+                <button
+                  type="button"
+                  id="fp-mobile-more-tool-notifications"
+                  className="fp-mobile-grid-btn"
+                  onClick={() => {
+                    handleToggleNotifications();
+                    setShowMobileMoreTools(false);
+                  }}
+                  title={notificationsEnabled ? 'Turn off Notifications' : 'Turn on Notifications'}
+                >
+                  <div className="fp-mobile-grid-btn-icon">
+                    {notificationsEnabled ? <Bell size={18} color="#16a34a" /> : <BellOff size={18} color="#ef4444" />}
+                  </div>
+                  <span>{notificationsEnabled ? 'Alerts: ON' : 'Alerts: OFF'}</span>
                 </button>
               )}
             </div>
