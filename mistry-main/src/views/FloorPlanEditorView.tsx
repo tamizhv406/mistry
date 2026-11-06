@@ -189,6 +189,8 @@ import {
   RoomDimensionsSheet,
   WallDimensionsSheet,
   EstimationModal,
+  TransformBoundingBox,
+  MobileContextBar,
 } from './floorPlan';
 
 export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
@@ -969,6 +971,24 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     startAngle: number;
     startPointerAngle: number;
   } | null>(null);
+
+  const [rotatingOpening, setRotatingOpening] = useState<{
+    type: 'door' | 'window';
+    id: string;
+    center: { x: number; y: number };
+    startAngle: number;
+    startPointerAngle: number;
+  } | null>(null);
+  const rotatingOpeningRef = useRef<{
+    type: 'door' | 'window';
+    id: string;
+    center: { x: number; y: number };
+    startAngle: number;
+    startPointerAngle: number;
+  } | null>(null);
+
+  const [magneticGuides, setMagneticGuides] = useState<{ x1: number; y1: number; x2: number; y2: number }[]>([]);
+  const [showMobileMoreProperties, setShowMobileMoreProperties] = useState(false);
 
   const [furnitureProportionalLock, setFurnitureProportionalLock] = useState<Record<string, boolean>>({});
 
@@ -3605,10 +3625,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (curFurnRotate) {
         const furn = editorState.furniture.find(f => f.id === curFurnRotate.furnId);
         if (furn) {
-          const currentPointerAngle = Math.atan2(world.y - curFurnRotate.center.y, world.x - curFurnRotate.center.y) * (180 / Math.PI);
+          const currentPointerAngle = Math.atan2(world.y - curFurnRotate.center.y, world.x - curFurnRotate.center.x) * (180 / Math.PI);
           const deltaAngle = currentPointerAngle - curFurnRotate.startPointerAngle;
           let rawAngle = Math.round((curFurnRotate.startAngle + deltaAngle + 360) % 360);
-          if (!e.altKey) {
+          const SNAP_ANGLES = [0, 45, 90, 180, 270, 360];
+          let snapped = false;
+          for (const s of SNAP_ANGLES) {
+            if (Math.abs(rawAngle - s) <= 5 || Math.abs(rawAngle - (s - 360)) <= 5) {
+              rawAngle = s % 360;
+              snapped = true;
+              break;
+            }
+          }
+          if (!snapped && !e.altKey) {
             rawAngle = Math.round(rawAngle / 15) * 15 % 360;
           }
           dispatch({
@@ -3618,7 +3647,45 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           });
           setLiveLengthBadge({
             lengthStr: `Rotation: ${rawAngle}°`,
-            alt: `Snap: 15° (Hold Alt for free rotation)`,
+            alt: snapped ? 'Snapped to cardinal angle' : `Snap: 15° (Hold Alt for free rotation)`,
+            angleDeg: rawAngle,
+            screenX: svgPos.x + 18,
+            screenY: svgPos.y - 18,
+          });
+          return;
+        }
+      }
+
+      // ── Handle Door & Window Interactive Rotation ──
+      const curOpeningRotate = rotatingOpeningRef.current || rotatingOpening;
+      if (curOpeningRotate) {
+        const item = curOpeningRotate.type === 'door'
+          ? editorState.doors.find(d => d.id === curOpeningRotate.id)
+          : editorState.windows.find(w => w.id === curOpeningRotate.id);
+        if (item) {
+          const currentPointerAngle = Math.atan2(world.y - curOpeningRotate.center.y, world.x - curOpeningRotate.center.x) * (180 / Math.PI);
+          const deltaAngle = currentPointerAngle - curOpeningRotate.startPointerAngle;
+          let rawAngle = Math.round((curOpeningRotate.startAngle + deltaAngle + 360) % 360);
+          const SNAP_ANGLES = [0, 45, 90, 180, 270, 360];
+          let snapped = false;
+          for (const s of SNAP_ANGLES) {
+            if (Math.abs(rawAngle - s) <= 5 || Math.abs(rawAngle - (s - 360)) <= 5) {
+              rawAngle = s % 360;
+              snapped = true;
+              break;
+            }
+          }
+          if (!snapped && !e.altKey) {
+            rawAngle = Math.round(rawAngle / 15) * 15 % 360;
+          }
+          if (curOpeningRotate.type === 'door') {
+            dispatch({ type: 'UPDATE_DOOR', id: item.id, changes: { rotation: rawAngle } });
+          } else {
+            dispatch({ type: 'UPDATE_WINDOW', id: item.id, changes: { rotation: rawAngle } });
+          }
+          setLiveLengthBadge({
+            lengthStr: `Rotation: ${rawAngle}°`,
+            alt: snapped ? 'Snapped to cardinal angle' : 'Snap: 15°',
             angleDeg: rawAngle,
             screenX: svgPos.x + 18,
             screenY: svgPos.y - 18,
@@ -4089,6 +4156,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             const changes = { x: fit.x, y: fit.y, rotation: fit.rotation, wallId: hostProj.wall.id, wallOffset: fit.wallOffset, hostWallThickness: hostProj.wall.thickness };
             if (type === 'door') dispatch({ type: 'UPDATE_DOOR', id, changes });
             else dispatch({ type: 'UPDATE_WINDOW', id, changes });
+          } else if (!hostProj) {
+            // Smooth free drag across canvas when off a wall, preventing touch dragging from freezing
+            const snap = dragElementSnapshot as { x: number; y: number };
+            const nx = snapToGridEnabled ? snapToGrid(snap.x + snappedDx) : snap.x + snappedDx;
+            const ny = snapToGridEnabled ? snapToGrid(snap.y + snappedDy) : snap.y + snappedDy;
+            const changes = { x: +nx.toFixed(2), y: +ny.toFixed(2), wallId: '' };
+            if (type === 'door') dispatch({ type: 'UPDATE_DOOR', id, changes });
+            else dispatch({ type: 'UPDATE_WINDOW', id, changes });
           }
         } else if (type === 'column') {
           const snap = dragElementSnapshot as FloorPlanColumn;
@@ -4267,6 +4342,20 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       setRotatingFurniture(null);
       setLiveLengthBadge(null);
       onNotify('Rotated object.', 'info');
+      return;
+    }
+
+    const curOpRotate = rotatingOpeningRef.current || rotatingOpening;
+    if (curOpRotate) {
+      if (dragStartStateRef.current !== editorState) {
+        pushHistory(editorState);
+        markUnsaved();
+      }
+      dragStartStateRef.current = null;
+      rotatingOpeningRef.current = null;
+      setRotatingOpening(null);
+      setLiveLengthBadge(null);
+      onNotify('Rotated opening.', 'info');
       return;
     }
 
@@ -4536,10 +4625,9 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         const at = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
         setWallTap({ id, point: svgToWorld(at.x, at.y) });
       }
-      // On a touch screen a drag that happens to start on a wall or room must not move it.
-      // The first tap selects; only an element that is already selected can be dragged.
-      // EXCEPTION: furniture elements support direct drag-to-move on touch gestures.
-      if ((e as React.PointerEvent).pointerType === 'touch' && type !== 'furniture' && selectedElement?.id !== id) {
+      // On touch screens: furniture, doors, windows, and columns support direct selection and immediate drag-to-move!
+      const isDirectTouchDraggable = type === 'furniture' || type === 'door' || type === 'window' || type === 'column';
+      if ((e as React.PointerEvent).pointerType === 'touch' && !isDirectTouchDraggable && selectedElement?.id !== id) {
         pendingSelectRef.current = { type, id } as SelectedElement;
         return;
       }
@@ -5030,6 +5118,29 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
+  const beginOpeningRotate = (
+    e: React.SyntheticEvent,
+    type: 'door' | 'window',
+    item: FloorPlanDoor | FloorPlanWindow
+  ) => {
+    e.stopPropagation();
+    if ('preventDefault' in e) e.preventDefault();
+    const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+    const worldPos = svgToWorld(svgPos.x, svgPos.y);
+    const center = { x: item.x, y: item.y };
+    const startPointerAngle = Math.atan2(worldPos.y - center.y, worldPos.x - center.x) * (180 / Math.PI);
+    const rotObj = {
+      id: item.id,
+      type,
+      center,
+      startAngle: item.rotation || 0,
+      startPointerAngle,
+    };
+    rotatingOpeningRef.current = rotObj;
+    setRotatingOpening(rotObj);
+    setSelectedElement({ type, id: item.id });
+  };
+
   const handleAddRoomCorner = (roomId: string, edgeIndex: number) => {
     const room = editorState.rooms.find(r => r.id === roomId);
     if (!room || room.locked) return;
@@ -5365,30 +5476,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       const base = pendingViewRef.current || { panX, panY, zoom };
       const p = pinchPoints();
 
-      // Check if furniture is selected to activate touch gesture pinch-to-scale
-      const activeFurnitureSnapshots = selectedFurnitureIds.length > 0
-        ? editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id))
-        : (selectedElement?.type === 'furniture'
-          ? [editorState.furniture.find(f => f.id === selectedElement.id)!].filter(Boolean)
-          : []);
-
-      if (activeFurnitureSnapshots.length > 0) {
-        dragStartStateRef.current = editorState;
-        const minX = Math.min(...activeFurnitureSnapshots.map(f => f.x));
-        const minY = Math.min(...activeFurnitureSnapshots.map(f => f.y));
-        const maxX = Math.max(...activeFurnitureSnapshots.map(f => f.x + f.width));
-        const maxY = Math.max(...activeFurnitureSnapshots.map(f => f.y + f.height));
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-        Object.assign(g, {
-          kind: 'furniturePinch',
-          startDist: p.dist,
-          groupCenter: { x: centerX, y: centerY },
-          furnitureItems: JSON.parse(JSON.stringify(activeFurnitureSnapshots)),
-        });
-        return;
-      }
-
+      // Two-Finger Touch Anywhere: Dedicated exclusively to Pinch-to-Zoom and Canvas Pan.
+      // Never move or resize an object during a two-finger gesture.
       Object.assign(g, {
         kind: 'pinch', startDist: p.dist, startZoom: base.zoom,
         // The plan point between the fingers; it stays between them while pinching.
@@ -5415,24 +5504,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const g = gestureRef.current;
 
-    if ((g as any).kind === 'furniturePinch') {
-      if (pointersRef.current.size < 2) return;
-      const p = pinchPoints();
-      const scaleRatio = Math.max(0.2, Math.min(5.0, p.dist / (g as any).startDist));
-      ((g as any).furnitureItems as FloorPlanFurniture[]).forEach(item => {
-        const newW = Math.max(0.5, +(item.width * scaleRatio).toFixed(2));
-        const newH = Math.max(0.5, +(item.height * scaleRatio).toFixed(2));
-        const newX = +((g as any).groupCenter.x + (item.x - (g as any).groupCenter.x) * scaleRatio).toFixed(2);
-        const newY = +((g as any).groupCenter.y + (item.y - (g as any).groupCenter.y) * scaleRatio).toFixed(2);
-        dispatch({
-          type: 'UPDATE_FURNITURE',
-          id: item.id,
-          changes: { width: newW, height: newH, x: newX, y: newY },
-        });
-      });
-      return;
-    }
-
     if (g.kind === 'pinch') {
       if (pointersRef.current.size < 2) return;
       const p = pinchPoints();
@@ -5457,8 +5528,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       return;
     }
 
-    // Dragging a selected element / wall corner, rotating wall, room vertex, room edge, room rotation, or sketching freehand.
-    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingFurniture || rotatingFurniture || resizingRoomVertex || draggingRoomEdge || rotatingRoom || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
+    // Dragging a selected element / wall corner, rotating wall, room vertex, room edge, room rotation, opening rotation, or sketching freehand.
+    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingFurniture || rotatingFurniture || resizingRoomVertex || draggingRoomEdge || rotatingRoom || rotatingOpening || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
       queueMove(e.clientX, e.clientY, e.shiftKey, e.altKey);
       return;
     }
@@ -5512,36 +5583,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     lastTapRef.current = { time: Date.now(), x: e.clientX, y: e.clientY };
     const g = gestureRef.current;
 
-    if ((g as any).kind === 'furniturePinch') {
-      if (pointersRef.current.size < 2) return;
-      const p = pinchPoints();
-      const scaleRatio = Math.max(0.2, Math.min(5.0, p.dist / (g as any).startDist));
-      ((g as any).furnitureItems as FloorPlanFurniture[]).forEach(item => {
-        const newW = Math.max(0.5, +(item.width * scaleRatio).toFixed(2));
-        const newH = Math.max(0.5, +(item.height * scaleRatio).toFixed(2));
-        const newX = +((g as any).groupCenter.x + (item.x - (g as any).groupCenter.x) * scaleRatio).toFixed(2);
-        const newY = +((g as any).groupCenter.y + (item.y - (g as any).groupCenter.y) * scaleRatio).toFixed(2);
-        dispatch({
-          type: 'UPDATE_FURNITURE',
-          id: item.id,
-          changes: { width: newW, height: newH, x: newX, y: newY },
-        });
-      });
-      return;
-    }
-
-    if ((g as any).kind === 'furniturePinch') {
-      if (pointersRef.current.size === 0) {
-        g.kind = 'none';
-        if (dragStartStateRef.current !== editorState) {
-          pushHistory(editorState);
-          markUnsaved();
-        }
-        dragStartStateRef.current = null;
-      }
-      return;
-    }
-
     if (g.kind === 'pinch') {
       // The finger left on the screen after a pinch does nothing until the screen is clear.
       if (pointersRef.current.size === 0) {
@@ -5566,7 +5607,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     flushMove();
     const input = latestInputRef.current;
 
-    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingFurniture || rotatingFurniture || resizingRoomVertex || draggingRoomEdge || rotatingRoom || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
+    if (g.onElement || resizingWall || rotatingWall || resizingStairs || resizingFurniture || rotatingFurniture || resizingRoomVertex || draggingRoomEdge || rotatingRoom || rotatingOpening || isDragging || jointDragRef.current || activeTool === 'ai_draw') {
       input.handleMouseUp();
       return;
     }
@@ -5606,6 +5647,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     if (activeTool === 'select' || activeTool === 'pan') {
       // A tap selects what was tapped, or clears the selection on empty space.
       setSelectedElement(g.pendingSelect);
+      if (g.pendingSelect?.type === 'furniture') {
+        setSelectedFurnitureIds([g.pendingSelect.id]);
+      } else {
+        setSelectedFurnitureIds([]);
+      }
+      if (!g.pendingSelect) {
+        setShowMobileMoreProperties(false);
+      }
       return;
     }
     // A tap with a placing tool places the item at the tapped point.
@@ -9462,15 +9511,6 @@ _Shared via Building Mistry App_`;
               >
                 {isSelected && (
                   <>
-                    {/* Active Selection Outline */}
-                    <rect
-                      x={fx - 4 * zoom} y={fy - 4 * zoom}
-                      width={fw + 8 * zoom} height={fh + 8 * zoom}
-                      fill="rgba(37, 99, 235, 0.08)" stroke="#2563eb" strokeWidth={2 * zoom}
-                      strokeDasharray={`${4 * zoom},${2 * zoom}`}
-                      rx={3 * zoom}
-                    />
-
                     {/* Live Size & Dimension Badge above object (for single selection) */}
                     {!isMultiSelected && (showDimensions || !!resizingFurniture) && (
                       <g transform={`translate(${fx + fw / 2}, ${fy - 14 * zoom})`} style={{ pointerEvents: 'none' }}>
@@ -9492,88 +9532,19 @@ _Shared via Building Mistry App_`;
                       </g>
                     )}
 
-                    {!furn.locked && activeTool === 'select' && !isMultiSelected && (() => {
-                      const handleR = Math.max(5, 6 * zoom);
-                      return (
-                        <g className="fp-furn-resize-handles">
-                          {/* 4 Corner Handles: Proportional / Free Scale */}
-                          {/* NW */}
-                          <g {...furnitureHandleDownProps(furn, 'nw')} style={{ cursor: 'nwse-resize' }}>
-                            <circle cx={fx} cy={fy} r={handleR + 8} fill="transparent" />
-                            <circle cx={fx} cy={fy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                            <circle cx={fx} cy={fy} r={handleR * 0.4} fill="#2563eb" />
-                          </g>
-                          {/* NE */}
-                          <g {...furnitureHandleDownProps(furn, 'ne')} style={{ cursor: 'nesw-resize' }}>
-                            <circle cx={fx + fw} cy={fy} r={handleR + 8} fill="transparent" />
-                            <circle cx={fx + fw} cy={fy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                            <circle cx={fx + fw} cy={fy} r={handleR * 0.4} fill="#2563eb" />
-                          </g>
-                          {/* SE (Primary scale handle) */}
-                          <g {...furnitureHandleDownProps(furn, 'se')} style={{ cursor: 'nwse-resize' }}>
-                            <circle cx={fx + fw} cy={fy + fh} r={handleR + 10} fill="transparent" />
-                            <circle cx={fx + fw} cy={fy + fh} r={handleR + 2} fill="#2563eb" stroke="#ffffff" strokeWidth={2.5} />
-                            <circle cx={fx + fw} cy={fy + fh} r={(handleR + 2) * 0.45} fill="#ffffff" />
-                          </g>
-                          {/* SW */}
-                          <g {...furnitureHandleDownProps(furn, 'sw')} style={{ cursor: 'nesw-resize' }}>
-                            <circle cx={fx} cy={fy + fh} r={handleR + 8} fill="transparent" />
-                            <circle cx={fx} cy={fy + fh} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                            <circle cx={fx} cy={fy + fh} r={handleR * 0.4} fill="#2563eb" />
-                          </g>
-
-                          {/* 4 Edge Midpoint Handles: Independent Width/Height */}
-                          {/* East (Width) */}
-                          <g {...furnitureHandleDownProps(furn, 'e')} style={{ cursor: 'ew-resize' }}>
-                            <circle cx={fx + fw} cy={fy + fh / 2} r={handleR + 8} fill="transparent" />
-                            <rect
-                              x={fx + fw - 4 * zoom} y={fy + fh / 2 - 8 * zoom}
-                              width={8 * zoom} height={16 * zoom} rx={3 * zoom}
-                              fill="#2563eb" stroke="#ffffff" strokeWidth={1.5}
-                            />
-                          </g>
-                          {/* South (Height/Depth) */}
-                          <g {...furnitureHandleDownProps(furn, 's')} style={{ cursor: 'ns-resize' }}>
-                            <circle cx={fx + fw / 2} cy={fy + fh} r={handleR + 8} fill="transparent" />
-                            <rect
-                              x={fx + fw / 2 - 8 * zoom} y={fy + fh - 4 * zoom}
-                              width={16 * zoom} height={8 * zoom} rx={3 * zoom}
-                              fill="#2563eb" stroke="#ffffff" strokeWidth={1.5}
-                            />
-                          </g>
-                          {/* West (Width) */}
-                          <g {...furnitureHandleDownProps(furn, 'w')} style={{ cursor: 'ew-resize' }}>
-                            <circle cx={fx} cy={fy + fh / 2} r={handleR + 8} fill="transparent" />
-                            <rect
-                              x={fx - 4 * zoom} y={fy + fh / 2 - 8 * zoom}
-                              width={8 * zoom} height={16 * zoom} rx={3 * zoom}
-                              fill="#ffffff" stroke="#2563eb" strokeWidth={2}
-                            />
-                          </g>
-                          {/* North (Height/Depth) */}
-                          <g {...furnitureHandleDownProps(furn, 'n')} style={{ cursor: 'ns-resize' }}>
-                            <circle cx={fx + fw / 2} cy={fy} r={handleR + 8} fill="transparent" />
-                            <rect
-                              x={fx + fw / 2 - 8 * zoom} y={fy - 4 * zoom}
-                              width={16 * zoom} height={8 * zoom} rx={3 * zoom}
-                              fill="#ffffff" stroke="#2563eb" strokeWidth={2}
-                            />
-                          </g>
-
-                          {/* Top Rotation Stem & Handle */}
-                          <line
-                            x1={fx + fw / 2} y1={fy}
-                            x2={fx + fw / 2} y2={fy - 22 * zoom}
-                            stroke="#2563eb" strokeWidth={1.5 * zoom}
-                          />
-                          <g {...furnitureRotateDownProps(furn)} style={{ cursor: 'grab' }}>
-                            <circle cx={fx + fw / 2} cy={fy - 22 * zoom} r={handleR + 8} fill="transparent" />
-                            <circle cx={fx + fw / 2} cy={fy - 22 * zoom} r={handleR + 1} fill="#2563eb" stroke="#ffffff" strokeWidth={2} />
-                            <circle cx={fx + fw / 2} cy={fy - 22 * zoom} r={(handleR + 1) * 0.4} fill="#ffffff" />
-                          </g>
-                        </g>
-                      );
-                    })()}
+                    {/* Direct Touch Transform Bounding Box with Corner Handles & Top Rotation Dial */}
+                    {!isMultiSelected && (
+                      <TransformBoundingBox
+                        x={fx}
+                        y={fy}
+                        width={fw}
+                        height={fh}
+                        isLocked={!!furn.locked}
+                        onResizeStart={(e, handle) => beginFurnitureResize(e, furn, handle)}
+                        onRotateStart={(e) => beginFurnitureRotate(e, furn)}
+                        onDragStart={(e) => handleElementMouseDown(e as any, 'furniture', furn.id)}
+                      />
+                    )}
                   </>
                 )}
                 {furn.locked && (
@@ -9699,28 +9670,18 @@ _Shared via Building Mistry App_`;
                 style={{ cursor: activeTool === 'select' ? 'move' : undefined }}
                 {...elementDownProps('column', col.id)}
               >
-                {isSelected && !col.locked && activeTool === 'select' && (() => {
-                  const handleR = Math.max(5, 6 * zoom);
-                  return (
-                    <g className="fp-column-resize-handles">
-                      <g {...columnHandleDownProps(col, 'e')} style={{ cursor: 'ew-resize' }}>
-                        <circle cx={cx + cw / 2} cy={cy} r={handleR + 8} fill="transparent" />
-                        <circle cx={cx + cw / 2} cy={cy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                        <circle cx={cx + cw / 2} cy={cy} r={handleR * 0.4} fill="#2563eb" />
-                      </g>
-                      <g {...columnHandleDownProps(col, 's')} style={{ cursor: 'ns-resize' }}>
-                        <circle cx={cx} cy={cy + cd / 2} r={handleR + 8} fill="transparent" />
-                        <circle cx={cx} cy={cy + cd / 2} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                        <circle cx={cx} cy={cy + cd / 2} r={handleR * 0.4} fill="#2563eb" />
-                      </g>
-                      <g {...columnHandleDownProps(col, 'se')} style={{ cursor: 'nwse-resize' }}>
-                        <circle cx={cx + cw / 2} cy={cy + cd / 2} r={handleR + 8} fill="transparent" />
-                        <circle cx={cx + cw / 2} cy={cy + cd / 2} r={handleR + 1} fill="#2563eb" stroke="#ffffff" strokeWidth={2} />
-                        <circle cx={cx + cw / 2} cy={cy + cd / 2} r={(handleR + 1) * 0.4} fill="#ffffff" />
-                      </g>
-                    </g>
-                  );
-                })()}
+                {isSelected && activeTool === 'select' && (
+                  <TransformBoundingBox
+                    x={cx - cw / 2}
+                    y={cy - cd / 2}
+                    width={cw}
+                    height={cd}
+                    isLocked={!!col.locked}
+                    hideRotationDial={true}
+                    onResizeStart={(e, handle) => beginColumnResize(e, col, handle)}
+                    onDragStart={(e) => handleElementMouseDown(e as any, 'column', col.id)}
+                  />
+                )}
                 {col.shape === 'round' ? (
                   <circle
                     cx={cx} cy={cy} r={cw / 2}
@@ -10024,24 +9985,22 @@ _Shared via Building Mistry App_`;
                   </g>
                 )}
 
-                {/* Door interactive width resize handles when selected */}
-                {isSelected && !door.locked && activeTool === 'select' && (() => {
-                  const handleR = Math.max(5, 6 * zoom);
-                  return (
-                    <g className="fp-door-resize-handles">
-                      <g {...doorHandleDownProps(door, 'start')} style={{ cursor: 'ew-resize' }}>
-                        <circle cx={dx - dw / 2} cy={dy} r={handleR + 8} fill="transparent" />
-                        <circle cx={dx - dw / 2} cy={dy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                        <circle cx={dx - dw / 2} cy={dy} r={handleR * 0.4} fill="#2563eb" />
-                      </g>
-                      <g {...doorHandleDownProps(door, 'end')} style={{ cursor: 'ew-resize' }}>
-                        <circle cx={dx + dw / 2} cy={dy} r={handleR + 8} fill="transparent" />
-                        <circle cx={dx + dw / 2} cy={dy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                        <circle cx={dx + dw / 2} cy={dy} r={handleR * 0.4} fill="#2563eb" />
-                      </g>
-                    </g>
-                  );
-                })()}
+                {/* Door interactive touch transform handles when selected */}
+                {isSelected && activeTool === 'select' && (
+                  <TransformBoundingBox
+                    x={dx - dw / 2}
+                    y={dy - wallThickPx / 2}
+                    width={dw}
+                    height={wallThickPx}
+                    isLocked={!!door.locked}
+                    onResizeStart={(e, handle) => {
+                      const end = (handle === 'nw' || handle === 'sw' || handle === 'w') ? 'start' : 'end';
+                      beginDoorResize(e, door, end);
+                    }}
+                    onRotateStart={(e) => beginOpeningRotate(e, 'door', door)}
+                    onDragStart={(e) => handleElementMouseDown(e as any, 'door', door.id)}
+                  />
+                )}
 
                 {/* Door label (Kept upright regardless of wall rotation) */}
                 {zoom > 0.6 && (() => {
@@ -10243,24 +10202,22 @@ _Shared via Building Mistry App_`;
                   </>
                 )}
 
-                {/* Window interactive width resize handles when selected */}
-                {isSelected && !win.locked && activeTool === 'select' && (() => {
-                  const handleR = Math.max(5, 6 * zoom);
-                  return (
-                    <g className="fp-window-resize-handles">
-                      <g {...windowHandleDownProps(win, 'start')} style={{ cursor: 'ew-resize' }}>
-                        <circle cx={wx - ww / 2} cy={wy} r={handleR + 8} fill="transparent" />
-                        <circle cx={wx - ww / 2} cy={wy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                        <circle cx={wx - ww / 2} cy={wy} r={handleR * 0.4} fill="#2563eb" />
-                      </g>
-                      <g {...windowHandleDownProps(win, 'end')} style={{ cursor: 'ew-resize' }}>
-                        <circle cx={wx + ww / 2} cy={wy} r={handleR + 8} fill="transparent" />
-                        <circle cx={wx + ww / 2} cy={wy} r={handleR} fill="#ffffff" stroke="#2563eb" strokeWidth={2.5} />
-                        <circle cx={wx + ww / 2} cy={wy} r={handleR * 0.4} fill="#2563eb" />
-                      </g>
-                    </g>
-                  );
-                })()}
+                {/* Window interactive touch transform handles when selected */}
+                {isSelected && activeTool === 'select' && (
+                  <TransformBoundingBox
+                    x={wx - ww / 2}
+                    y={wy - wallThickPx / 2}
+                    width={ww}
+                    height={wallThickPx}
+                    isLocked={!!win.locked}
+                    onResizeStart={(e, handle) => {
+                      const end = (handle === 'nw' || handle === 'sw' || handle === 'w') ? 'start' : 'end';
+                      beginWindowResize(e, win, end);
+                    }}
+                    onRotateStart={(e) => beginOpeningRotate(e, 'window', win)}
+                    onDragStart={(e) => handleElementMouseDown(e as any, 'window', win.id)}
+                  />
+                )}
 
                 {/* Window Label (Kept upright regardless of wall rotation) */}
                 {zoom > 0.6 && (() => {
@@ -11278,6 +11235,25 @@ _Shared via Building Mistry App_`;
               <line x1={snapIndicator.screenX} y1={-20000} x2={snapIndicator.screenX} y2={20000} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="4,4" opacity={0.85} />
             </g>
           )}
+
+          {/* Smart Magnetic Alignment Guides when dragging furniture */}
+          {magneticGuides.length > 0 && (
+            <g className="fp-magnetic-guides" style={{ pointerEvents: 'none' }}>
+              {magneticGuides.map((g, idx) => (
+                <line
+                  key={`mag-${idx}`}
+                  x1={g.x1 * GRID_SIZE_PX * zoom + panX}
+                  y1={g.y1 * GRID_SIZE_PX * zoom + panY}
+                  x2={g.x2 * GRID_SIZE_PX * zoom + panX}
+                  y2={g.y2 * GRID_SIZE_PX * zoom + panY}
+                  stroke="#0284c7"
+                  strokeWidth={1.5}
+                  strokeDasharray="4,3"
+                  opacity={0.85}
+                />
+              ))}
+            </g>
+          )}
         </svg>
 
         {/* Measurement check: a small badge at each spot where two measurements that should
@@ -12066,6 +12042,181 @@ _Shared via Building Mistry App_`;
                   </button>
                 </div>
               </div>
+            );
+          }
+
+          if (isMobile) {
+            return (
+              <>
+                <MobileContextBar
+                  selectedElement={selectedElement}
+                  entity={entity}
+                  unit={unit}
+                  onRotate90={handleRotateSelected}
+                  onDuplicate={handleDuplicateSelected}
+                  onFlipHorizontal={() => {
+                    if (selectedElement.type === 'door') {
+                      const d = entity as FloorPlanDoor;
+                      dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { rotation: ((d.rotation || 0) + 180) % 360 } });
+                    } else if (selectedElement.type === 'furniture') {
+                      const f = entity as FloorPlanFurniture;
+                      dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: ((f.rotation || 0) + 180) % 360 } });
+                    } else if (selectedElement.type === 'window') {
+                      const w = entity as FloorPlanWindow;
+                      dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { rotation: ((w.rotation || 0) + 180) % 360 } });
+                    }
+                  }}
+                  onDelete={handleDeleteSelected}
+                  onDeselect={() => setSelectedElement(null)}
+                  onToggleMore={() => setShowMobileMoreProperties(p => !p)}
+                  onQuickResize={(newW, newH) => {
+                    if (selectedElement.type === 'furniture') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_FURNITURE',
+                        id: selectedElement.id,
+                        changes: newH !== undefined ? { width: newW, height: newH } : { width: newW },
+                      });
+                      markUnsaved();
+                    } else if (selectedElement.type === 'door') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_DOOR',
+                        id: selectedElement.id,
+                        changes: { width: newW },
+                      });
+                      markUnsaved();
+                    } else if (selectedElement.type === 'window') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_WINDOW',
+                        id: selectedElement.id,
+                        changes: { width: newW },
+                      });
+                      markUnsaved();
+                    }
+                  }}
+                />
+
+                {/* Optional Fine-Tuning Sheet on mobile: ONLY shown when user taps "More" */}
+                {showMobileMoreProperties && (
+                  <Sheet
+                    open={showMobileMoreProperties}
+                    title={`${selectedElement.type.toUpperCase()} Fine Tuning`}
+                    onClose={() => setShowMobileMoreProperties(false)}
+                  >
+                    <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+                      {selectedElement.type === 'furniture' && (() => {
+                        const f = entity as FloorPlanFurniture;
+                        return (
+                          <>
+                            <Field label={`Width (${unit})`}>
+                              <input
+                                type="number"
+                                step="0.25"
+                                className="fp-inspector-input"
+                                value={f.width}
+                                onChange={e => {
+                                  dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { width: parseFloat(e.target.value) || 1 } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                            <Field label={`Depth (${unit})`}>
+                              <input
+                                type="number"
+                                step="0.25"
+                                className="fp-inspector-input"
+                                value={f.height}
+                                onChange={e => {
+                                  dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { height: parseFloat(e.target.value) || 1 } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                            <Field label="Rotation (°)">
+                              <input
+                                type="number"
+                                step="15"
+                                className="fp-inspector-input"
+                                value={Math.round(f.rotation || 0)}
+                                onChange={e => {
+                                  dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: (parseInt(e.target.value) || 0) % 360 } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                          </>
+                        );
+                      })()}
+                      {(selectedElement.type === 'door' || selectedElement.type === 'window') && (() => {
+                        const d = entity as (FloorPlanDoor | FloorPlanWindow);
+                        const isDoor = selectedElement.type === 'door';
+                        return (
+                          <>
+                            <Field label={`Width (${unit})`}>
+                              <input
+                                type="number"
+                                step="0.25"
+                                className="fp-inspector-input"
+                                value={d.width}
+                                onChange={e => {
+                                  const val = parseFloat(e.target.value) || 1;
+                                  if (isDoor) dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: val } });
+                                  else dispatchWithHistory({ type: 'UPDATE_WINDOW', id: d.id, changes: { width: val } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                            <Field label="Rotation Angle (°)">
+                              <input
+                                type="number"
+                                step="15"
+                                className="fp-inspector-input"
+                                value={Math.round(d.rotation || 0)}
+                                onChange={e => {
+                                  const val = (parseInt(e.target.value) || 0) % 360;
+                                  if (isDoor) dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { rotation: val } });
+                                  else dispatchWithHistory({ type: 'UPDATE_WINDOW', id: d.id, changes: { rotation: val } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                          </>
+                        );
+                      })()}
+                      {selectedElement.type === 'column' && (() => {
+                        const c = entity as FloorPlanColumn;
+                        return (
+                          <>
+                            <Field label={`Width (${unit})`}>
+                              <input
+                                type="number"
+                                step="0.25"
+                                className="fp-inspector-input"
+                                value={c.width}
+                                onChange={e => {
+                                  dispatchWithHistory({ type: 'UPDATE_COLUMN', id: c.id, changes: { width: parseFloat(e.target.value) || 0.75 } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                            <Field label={`Depth (${unit})`}>
+                              <input
+                                type="number"
+                                step="0.25"
+                                className="fp-inspector-input"
+                                value={c.depth}
+                                onChange={e => {
+                                  dispatchWithHistory({ type: 'UPDATE_COLUMN', id: c.id, changes: { depth: parseFloat(e.target.value) || 0.75 } });
+                                  markUnsaved();
+                                }}
+                              />
+                            </Field>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </Sheet>
+                )}
+              </>
             );
           }
 

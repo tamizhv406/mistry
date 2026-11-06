@@ -2766,7 +2766,18 @@ input:focus, select:focus, textarea:focus {
    FLOOR PLAN EDITOR
    ================================================================ */
 
-.fp-editor-root { display: flex; flex-direction: column; height: 100vh; background: #f8fafc; overflow: hidden; position: relative; }
+.fp-editor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #f8fafc;
+  overflow: hidden;
+  position: relative;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 .fp-blueprint-mode { background: #1a2744; }
 
 /* Planner palette. The editor's own values for the app variables, so every rule written with
@@ -10533,4 +10544,137 @@ button.fp-mobile-zoom-text {
     bottom: calc(var(--fp-bar-bottom, 10px) + 64px);
   }
 }
+
+/* ================================================================
+   MOBILE DIRECT TOUCH TRANSFORM HANDLES & CONTEXTUAL ACTION BAR
+   ================================================================ */
+
+.fp-touch-transform-box {
+  pointer-events: all;
+  touch-action: none;
+}
+
+.fp-touch-transform-box circle,
+.fp-touch-transform-box line,
+.fp-touch-transform-box rect {
+  touch-action: none;
+}
+
+/* Sleek Floating Mobile Contextual Action Bar */
+.fp-mobile-context-bar {
+  position: absolute;
+  bottom: calc(var(--fp-bar-h, 56px) + env(safe-area-inset-bottom, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 20px);
+  z-index: 55;
+  pointer-events: auto;
+  animation: fpContextPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fpContextPop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.fp-context-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+  padding: 4px 8px;
+  box-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+  overflow-x: auto;
+  max-width: 95vw;
+  scrollbar-width: none;
+}
+.fp-context-pill-row::-webkit-scrollbar {
+  display: none;
+}
+
+.fp-context-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, transform 0.1s;
+  touch-action: manipulation;
+  user-select: none;
+}
+.fp-context-btn:active {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(0.95);
+}
+.fp-context-btn.danger {
+  color: #fca5a5;
+}
+.fp-context-btn.danger:active {
+  background: rgba(239, 68, 68, 0.35);
+}
+
+.fp-context-quick-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 4px 8px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  overflow-x: auto;
+  max-width: 95vw;
+  scrollbar-width: none;
+}
+.fp-context-quick-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.fp-quick-size-pill {
+  padding: 3px 9px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+  touch-action: manipulation;
+  user-select: none;
+}
+.fp-quick-size-pill.active {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);
+}
+.fp-quick-size-pill:active {
+  transform: scale(0.94);
+}
+
 
