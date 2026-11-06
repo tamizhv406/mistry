@@ -124,426 +124,72 @@ import { MistryAiSheet } from '../components/MistryAiSheet';
 import { ConfirmSheet, Field, Note, Segmented, Sheet } from '../components/mobile/kit';
 
 // ─────────────────────────────────────────────────────────
-// Constants & Catalogs
+// Modular Architecture Imports (Constants, Types, Reducer, Utils, Modals)
 // ─────────────────────────────────────────────────────────
+import {
+  GRID_SIZE_PX,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  SNAP_THRESHOLD,
+  WALL_THICKNESS_DEFAULT,
+  WALL_HEIGHT_DEFAULT,
+  UNDO_HISTORY_LIMIT,
+  ROOM_FILL,
+  ROOM_COLORS,
+  ROOM_TYPES,
+  DOOR_TYPES,
+  WINDOW_TYPES,
+  FURNITURE_CATALOG,
+  simplifyFurnitureLabel,
+  TOOL_HINTS,
+  HINTS_KEY,
+  getLiveToolHint,
+} from './floorPlan/constants';
 
-// Screen pixels per plan unit at 100% zoom. Zoom and pan only change the view: stored
-// coordinates stay in feet or metres (see src/domain/planGeometry.ts).
-const GRID_SIZE_PX = PX_PER_UNIT;
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 4;
-const SNAP_THRESHOLD = 0.5;
-const WALL_THICKNESS_DEFAULT = 0.75; // ft or m
-const WALL_HEIGHT_DEFAULT = 10;
-const UNDO_HISTORY_LIMIT = 50;
+import type {
+  Tool,
+  ViewMode,
+  SelectedElement,
+  EditorState,
+  EditorAction,
+  FurnitureCatalogItem,
+  FloorPlanEditorViewProps,
+} from './floorPlan/types';
 
-/** Every room is drawn with this one light fill (design system: rgba(248, 250, 252, 0.85)). */
-const ROOM_FILL = 'rgba(248, 250, 252, 0.85)';
+import {
+  uid,
+  roundToStep,
+  tidy,
+  readSetting,
+  writeSetting,
+  formatDim,
+  wallLength,
+  computeRoomArea,
+  computeRoomPerimeter,
+} from './floorPlan/utils';
 
-const ROOM_COLORS: Record<RoomType, string> = {
-  'Living Room': 'rgba(251,191,36,0.18)',
-  'Master Bedroom': 'rgba(147,197,253,0.22)',
-  'Bedroom': 'rgba(96,165,250,0.18)',
-  'Guest Room': 'rgba(165,180,252,0.18)',
-  'Kids Room': 'rgba(244,114,182,0.18)',
-  'Kitchen': 'rgba(52,211,153,0.18)',
-  'Dining': 'rgba(100, 116, 139,0.18)',
-  'Bathroom': 'rgba(129,140,248,0.18)',
-  'Toilet': 'rgba(167,139,250,0.18)',
-  'Utility': 'rgba(156,163,175,0.18)',
-  'Balcony': 'rgba(34,197,94,0.18)',
-  'Store': 'rgba(180,83,9,0.18)',
-  'Store Room': 'rgba(180,83,9,0.18)',
-  'Staircase': 'rgba(234,179,8,0.18)',
-  'Parking': 'rgba(100,116,139,0.18)',
-  'Garage': 'rgba(71,85,105,0.18)',
-  'Study': 'rgba(14,165,233,0.18)',
-  'Office': 'rgba(56,189,248,0.18)',
-  'Pooja': 'rgba(239,68,68,0.18)',
-  'Prayer Room': 'rgba(239,68,68,0.18)',
-  'Corridor': 'rgba(203,213,225,0.18)',
-  'Terrace': 'rgba(45,212,191,0.18)',
-  'Custom': 'rgba(148,163,184,0.18)',
-};
+import {
+  editorReducer,
+  reducePlan,
+  WALL_ACTIONS,
+} from './floorPlan/editorReducer';
 
-const ROOM_TYPES: RoomType[] = [
-  'Living Room', 'Master Bedroom', 'Bedroom', 'Guest Room', 'Kids Room',
-  'Kitchen', 'Dining', 'Bathroom', 'Toilet', 'Utility', 'Balcony',
-  'Store Room', 'Staircase', 'Parking', 'Garage', 'Study', 'Office',
-  'Prayer Room', 'Pooja', 'Store', 'Corridor', 'Terrace', 'Custom',
-];
-
-const DOOR_TYPES: DoorType[] = [
-  'Single', 'Double', 'Main Entrance', 'Sliding', 'Pocket', 'Bathroom', 'Balcony', 'French', 'Opening',
-];
-
-const WINDOW_TYPES: WindowType[] = [
-  'Single Window', 'Double Window', 'Sliding Window', 'Large Window',
-  'Bay Window', 'Corner Window', 'Fixed Window', 'Ventilator', 'Standard',
-];
-
-interface FurnitureCatalogItem {
-  itemType: string;
-  label: string;
-  category: 'bedroom' | 'living' | 'dining' | 'kitchen' | 'bathroom' | 'utility' | 'outdoor' | 'structural';
-  width: number; // in feet
-  height: number; // in feet
-}
-
-const FURNITURE_CATALOG: FurnitureCatalogItem[] = [
-  // Bedroom
-  { itemType: 'Single Bed', label: 'Single Bed (3×6.5 ft)', category: 'bedroom', width: 3, height: 6.5 },
-  { itemType: 'Double Bed', label: 'Double Bed (5×6.5 ft)', category: 'bedroom', width: 5, height: 6.5 },
-  { itemType: 'Queen Bed', label: 'Queen Bed (5.5×6.5 ft)', category: 'bedroom', width: 5.5, height: 6.5 },
-  { itemType: 'King Bed', label: 'King Bed (6×6.5 ft)', category: 'bedroom', width: 6, height: 6.5 },
-  { itemType: 'Wardrobe', label: 'Wardrobe (4×2 ft)', category: 'bedroom', width: 4, height: 2 },
-  { itemType: 'Dressing Table', label: 'Dressing Table (3.5×1.5 ft)', category: 'bedroom', width: 3.5, height: 1.5 },
-  { itemType: 'Nightstand', label: 'Bedside Nightstand (1.5×1.5 ft)', category: 'bedroom', width: 1.5, height: 1.5 },
-
-  // Living
-  { itemType: '1-Seater Sofa', label: 'Armchair (3×3 ft)', category: 'living', width: 3, height: 3 },
-  { itemType: '2-Seater Sofa', label: '2-Seater Sofa (5×3 ft)', category: 'living', width: 5, height: 3 },
-  { itemType: '3-Seater Sofa', label: '3-Seater Sofa (7×3 ft)', category: 'living', width: 7, height: 3 },
-  { itemType: 'L-shaped Sofa', label: 'L-Shaped Sectional Sofa (7×6 ft)', category: 'living', width: 7, height: 6 },
-  { itemType: 'Coffee Table', label: 'Coffee Table (3.5×2 ft)', category: 'living', width: 3.5, height: 2 },
-  { itemType: 'TV Unit', label: 'TV Console (4.5×1.5 ft)', category: 'living', width: 4.5, height: 1.5 },
-  { itemType: 'Bookshelf', label: 'Bookshelf / Display (3.5×1.2 ft)', category: 'living', width: 3.5, height: 1.2 },
-  { itemType: 'Shoe Rack', label: 'Shoe Rack / Foyer Cabinet (3×1.2 ft)', category: 'living', width: 3, height: 1.2 },
-
-  // Dining & Study
-  { itemType: 'Dining Table 4', label: 'Dining Table 4-Seat (3.5×3.5 ft)', category: 'dining', width: 3.5, height: 3.5 },
-  { itemType: 'Dining Table 6', label: 'Dining Table 6-Seat (5.5×3.5 ft)', category: 'dining', width: 5.5, height: 3.5 },
-  { itemType: 'Dining Table 8', label: 'Dining Table 8-Seat (7×3.5 ft)', category: 'dining', width: 7, height: 3.5 },
-  { itemType: 'Study Desk', label: 'Study / Work Desk (4×2 ft)', category: 'dining', width: 4, height: 2 },
-  { itemType: 'Office Chair', label: 'Desk Chair (2×2 ft)', category: 'dining', width: 2, height: 2 },
-
-  // Kitchen
-  { itemType: 'Kitchen Counter', label: 'Countertop (6×2 ft)', category: 'kitchen', width: 6, height: 2 },
-  { itemType: 'Kitchen Sink', label: 'Kitchen Sink (3×2 ft)', category: 'kitchen', width: 3, height: 2 },
-  { itemType: 'Gas Stove / Cooktop', label: 'Gas Stove / Hob (2.5×2 ft)', category: 'kitchen', width: 2.5, height: 2 },
-  { itemType: 'Refrigerator', label: 'Refrigerator (2.5×2.5 ft)', category: 'kitchen', width: 2.5, height: 2.5 },
-  { itemType: 'Kitchen Island', label: 'Kitchen Island (5×3 ft)', category: 'kitchen', width: 5, height: 3 },
-  { itemType: 'Breakfast Counter', label: 'Breakfast Bar (5×1.8 ft)', category: 'kitchen', width: 5, height: 1.8 },
-
-  // Bathroom & Sanitary
-  { itemType: 'WC / Toilet', label: 'Commode / WC (2×2.5 ft)', category: 'bathroom', width: 2, height: 2.5 },
-  { itemType: 'Indian Toilet', label: 'Squatting Pan / Orissa Pan (2×2.5 ft)', category: 'bathroom', width: 2, height: 2.5 },
-  { itemType: 'Wash Basin', label: 'Wash Basin (2×1.5 ft)', category: 'bathroom', width: 2, height: 1.5 },
-  { itemType: 'Bathroom Vanity', label: 'Vanity Counter (3×1.8 ft)', category: 'bathroom', width: 3, height: 1.8 },
-  { itemType: 'Shower Cubicle', label: 'Shower Enclosure (3×3 ft)', category: 'bathroom', width: 3, height: 3 },
-  { itemType: 'Bathtub', label: 'Bathtub (5×2.5 ft)', category: 'bathroom', width: 5, height: 2.5 },
-
-  // Utility, Electrical, Structural & Outdoor
-  { itemType: 'Washing Machine', label: 'Washing Machine (2×2 ft)', category: 'utility', width: 2, height: 2 },
-  { itemType: 'Split AC', label: 'Split AC Indoor Unit (3×0.8 ft)', category: 'utility', width: 3, height: 0.8 },
-  { itemType: 'Ceiling Fan', label: 'Ceiling Fan (3×3 ft)', category: 'utility', width: 3, height: 3 },
-  { itemType: 'Distribution Board', label: 'Electrical DB Panel (2×0.8 ft)', category: 'utility', width: 2, height: 0.8 },
-  { itemType: 'Column', label: 'Structural Pillar (1.5×1.5 ft)', category: 'structural', width: 1.5, height: 1.5 },
-  { itemType: 'Plant', label: 'Indoor Planter (2×2 ft)', category: 'outdoor', width: 2, height: 2 },
-  { itemType: 'Car Parking', label: 'Car Parking Bay (16×8 ft)', category: 'outdoor', width: 8, height: 16 },
-];
-
-export const simplifyFurnitureLabel = (itemType: string): string => {
-  const map: Record<string, string> = {
-    'Single Bed': 'Single Bed',
-    'Double Bed': 'Double Bed',
-    'Queen Bed': 'Queen Bed',
-    'King Bed': 'King Bed',
-    'Wardrobe': 'Wardrobe',
-    'Dressing Table': 'Vanity Mirror',
-    'Nightstand': 'Nightstand',
-    '1-Seater Sofa': 'Sofa (1-Seat)',
-    '2-Seater Sofa': 'Sofa (2-Seat)',
-    '3-Seater Sofa': 'Sofa (3-Seat)',
-    'L-shaped Sofa': 'L-Sofa',
-    'Coffee Table': 'Coffee Table',
-    'TV Unit': 'TV Console',
-    'Bookshelf': 'Bookshelf',
-    'Shoe Rack': 'Shoe Rack',
-    'Dining Table 4': 'Dining (4P)',
-    'Dining Table 6': 'Dining (6P)',
-    'Dining Table 8': 'Dining (8P)',
-    'Study Desk': 'Study Desk',
-    'Office Chair': 'Desk Chair',
-    'Kitchen Counter': 'Countertop',
-    'Kitchen Sink': 'Sink',
-    'Gas Stove / Cooktop': 'Gas Stove',
-    'Refrigerator': 'Fridge',
-    'Kitchen Island': 'Island',
-    'Breakfast Counter': 'Breakfast Bar',
-    'WC / Toilet': 'Commode / WC',
-    'Indian Toilet': 'Orissa Pan',
-    'Wash Basin': 'Wash Basin',
-    'Bathroom Vanity': 'Vanity',
-    'Shower Cubicle': 'Shower',
-    'Bathtub': 'Bathtub',
-    'Washing Machine': 'Washer',
-    'Split AC': 'Split AC',
-    'Ceiling Fan': 'Fan',
-    'Distribution Board': 'DB Panel',
-    'Column': 'Pillar',
-    'Plant': 'Planter',
-    'Car Parking': 'Car Bay',
-  };
-  return map[itemType] || itemType;
-};
-
-type Tool =
-  | 'select'
-  | 'wall'
-  | 'room'
-  | 'door'
-  | 'window'
-  | 'column'
-  | 'stairs'
-  | 'furniture'
-  | 'dimension'
-  | 'annotation'
-  | 'pan'
-  | 'measure'
-  | 'ai_draw'
-  | 'eraser'
-  | 'split';
-
-type ViewMode = 'design' | 'blueprint' | 'presentation';
-
-type SelectedElement =
-  | { type: 'wall'; id: string }
-  | { type: 'room'; id: string }
-  | { type: 'door'; id: string }
-  | { type: 'window'; id: string }
-  | { type: 'column'; id: string }
-  | { type: 'stairs'; id: string }
-  | { type: 'furniture'; id: string }
-  | { type: 'annotation'; id: string }
-  | null;
-
-interface EditorState {
-  walls: FloorPlanWall[];
-  rooms: FloorPlanRoom[];
-  doors: FloorPlanDoor[];
-  windows: FloorPlanWindow[];
-  furniture: FloorPlanFurniture[];
-  stairs: FloorPlanStaircase[];
-  columns: FloorPlanColumn[];
-  annotations: FloorPlanAnnotation[];
-}
-
-type EditorAction =
-  | { type: 'SET_STATE'; payload: EditorState }
-  | { type: 'SET_WALLS'; walls: FloorPlanWall[] }
-  | { type: 'ADD_WALL'; payload: FloorPlanWall }
-  | { type: 'UPDATE_WALL'; id: string; changes: Partial<FloorPlanWall> }
-  | { type: 'DELETE_WALL'; id: string }
-  | { type: 'ADD_ROOM'; payload: FloorPlanRoom }
-  | { type: 'UPDATE_ROOM'; id: string; changes: Partial<FloorPlanRoom> }
-  | { type: 'DELETE_ROOM'; id: string }
-  | { type: 'ADD_DOOR'; payload: FloorPlanDoor }
-  | { type: 'UPDATE_DOOR'; id: string; changes: Partial<FloorPlanDoor> }
-  | { type: 'DELETE_DOOR'; id: string }
-  | { type: 'ADD_WINDOW'; payload: FloorPlanWindow }
-  | { type: 'UPDATE_WINDOW'; id: string; changes: Partial<FloorPlanWindow> }
-  | { type: 'DELETE_WINDOW'; id: string }
-  | { type: 'ADD_COLUMN'; payload: FloorPlanColumn }
-  | { type: 'UPDATE_COLUMN'; id: string; changes: Partial<FloorPlanColumn> }
-  | { type: 'DELETE_COLUMN'; id: string }
-  | { type: 'ADD_STAIRS'; payload: FloorPlanStaircase }
-  | { type: 'UPDATE_STAIRS'; id: string; changes: Partial<FloorPlanStaircase> }
-  | { type: 'DELETE_STAIRS'; id: string }
-  | { type: 'ADD_FURNITURE'; payload: FloorPlanFurniture }
-  | { type: 'UPDATE_FURNITURE'; id: string; changes: Partial<FloorPlanFurniture> }
-  | { type: 'DELETE_FURNITURE'; id: string }
-  | { type: 'ADD_ANNOTATION'; payload: FloorPlanAnnotation }
-  | { type: 'UPDATE_ANNOTATION'; id: string; changes: Partial<FloorPlanAnnotation> }
-  | { type: 'DELETE_ANNOTATION'; id: string };
-
-function editorReducer(state: EditorState, action: EditorAction): EditorState {
-  switch (action.type) {
-    case 'SET_STATE':
-      return action.payload;
-    case 'SET_WALLS':
-      return { ...state, walls: action.walls };
-    case 'ADD_WALL':
-      return { ...state, walls: [...state.walls, action.payload] };
-    case 'UPDATE_WALL':
-      return { ...state, walls: state.walls.map(w => w.id === action.id ? { ...w, ...action.changes } : w) };
-    case 'DELETE_WALL':
-      return { ...state, walls: state.walls.filter(w => w.id !== action.id) };
-    case 'ADD_ROOM':
-      return { ...state, rooms: [...state.rooms, action.payload] };
-    case 'UPDATE_ROOM':
-      return { ...state, rooms: state.rooms.map(r => r.id === action.id ? { ...r, ...action.changes } : r) };
-    case 'DELETE_ROOM':
-      return { ...state, rooms: state.rooms.filter(r => r.id !== action.id) };
-    case 'ADD_DOOR':
-      return { ...state, doors: [...state.doors, action.payload] };
-    case 'UPDATE_DOOR':
-      return { ...state, doors: state.doors.map(d => d.id === action.id ? { ...d, ...action.changes } : d) };
-    case 'DELETE_DOOR':
-      return { ...state, doors: state.doors.filter(d => d.id !== action.id) };
-    case 'ADD_WINDOW':
-      return { ...state, windows: [...state.windows, action.payload] };
-    case 'UPDATE_WINDOW':
-      return { ...state, windows: state.windows.map(w => w.id === action.id ? { ...w, ...action.changes } : w) };
-    case 'DELETE_WINDOW':
-      return { ...state, windows: state.windows.filter(w => w.id !== action.id) };
-    case 'ADD_COLUMN':
-      return { ...state, columns: [...state.columns, action.payload] };
-    case 'UPDATE_COLUMN':
-      return { ...state, columns: state.columns.map(c => c.id === action.id ? { ...c, ...action.changes } : c) };
-    case 'DELETE_COLUMN':
-      return { ...state, columns: state.columns.filter(c => c.id !== action.id) };
-    case 'ADD_STAIRS':
-      return { ...state, stairs: [...state.stairs, action.payload] };
-    case 'UPDATE_STAIRS':
-      return { ...state, stairs: state.stairs.map(s => s.id === action.id ? { ...s, ...action.changes } : s) };
-    case 'DELETE_STAIRS':
-      return { ...state, stairs: state.stairs.filter(s => s.id !== action.id) };
-    case 'ADD_FURNITURE':
-      return { ...state, furniture: [...state.furniture, action.payload] };
-    case 'UPDATE_FURNITURE':
-      return { ...state, furniture: state.furniture.map(f => f.id === action.id ? { ...f, ...action.changes } : f) };
-    case 'DELETE_FURNITURE':
-      return { ...state, furniture: state.furniture.filter(f => f.id !== action.id) };
-    case 'ADD_ANNOTATION':
-      return { ...state, annotations: [...state.annotations, action.payload] };
-    case 'UPDATE_ANNOTATION':
-      return { ...state, annotations: state.annotations.map(a => a.id === action.id ? { ...a, ...action.changes } : a) };
-    case 'DELETE_ANNOTATION':
-      return { ...state, annotations: state.annotations.filter(a => a.id !== action.id) };
-    default:
-      return state;
-  }
-}
-
-function uid(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
-const WALL_ACTIONS = new Set<EditorAction['type']>(['ADD_WALL', 'UPDATE_WALL', 'DELETE_WALL', 'SET_WALLS']);
-
-/**
- * Applies an edit and, when walls changed, brings the floor back to a consistent state:
- * rooms enclosed by walls are recalculated and doors/windows stay on (or go with) their wall.
- */
-function reducePlan(state: EditorState, action: EditorAction, unit: FloorPlanUnit): EditorState {
-  if (!WALL_ACTIONS.has(action.type)) return editorReducer(state, action);
-  // Rooms that already match their walls (older plans) are tied to them first, so they
-  // follow this edit instead of being left behind at their old size.
-  const next = editorReducer(prepareForWallEdit(state, unit), action);
-  return normaliseFloor(next, unit, () => uid('room')).state;
-}
-
-function roundToStep(val: number, step: number): number {
-  return step > 0 ? Math.round(val / step) * step : val;
-}
-
-/** Removes floating-point fuzz (11.999999999998 -> 12) without rounding any real measurement. */
-const tidy = (v: number) => Math.round(v * 1e9) / 1e9;
-
-// First-use tips, one per tool. Each is shown once per browser and never again after "Got it".
-const TOOL_HINTS: Record<string, string> = {
-  start: 'Pick Wall to begin. Sketch draws a whole room in one stroke; Straight draws one exact wall at a time.',
-  select: 'Tap a wall to select it. Drag a round handle to resize it, or tap a red measurement to type an exact length.',
-  wall: 'Drag to draw a straight wall, or tap its two ends. Switch to Sketch to draw a whole room in one go. Two fingers move and zoom.',
-  ai_draw: 'Draw the room outline in one stroke. It is straightened and joined as you draw. Two fingers move and zoom.',
-  door: 'Tap on a wall to place a door there.',
-  window: 'Tap on a wall to place a window there.',
-  room: 'Tap where the room should go. Closing a loop of walls also makes a room.',
-  measure: 'Tap two points to measure the distance between them.',
-  eraser: 'Tap a wall to erase only the part under your finger, up to the next joint.',
-  split: 'Tap a wall where it should be cut. Each part can then be moved, sized or erased on its own.',
-};
-
-function getLiveToolHint(tool: Tool): string {
-  switch (tool) {
-    case 'select':
-      return 'Select Tool: Tap any wall, room, door, or item to move, resize, rotate, or delete.';
-    case 'pan':
-      return 'Pan Tool: Drag anywhere to move canvas. Hold Space or right-click drag anytime.';
-    case 'wall':
-      return 'Wall Tool: Click & drag to draw straight walls. Snaps at 90° and 45° automatically.';
-    case 'ai_draw':
-      return 'Sketch Tool: Draw a rough continuous outline. Auto-straightens and welds closed loops.';
-    case 'eraser':
-      return 'Eraser: tap a wall to erase only that part, up to the next joint. Tap a door, window or item to remove it.';
-    case 'split':
-      return 'Split: tap a wall where it should be cut into two walls.';
-    case 'door':
-      return 'Door Tool: Tap on any wall segment to place an architectural door.';
-    case 'window':
-      return 'Window Tool: Tap on any wall segment to place an architectural window.';
-    case 'room':
-      return 'Room Tool: Tap to place a room or close 4 walls to auto-generate an enclosed room.';
-    case 'furniture':
-      return 'Furniture Tool: Select items from library catalog and tap on canvas to place.';
-    case 'column':
-      return 'Column Tool: Tap anywhere on canvas to position a structural column/pillar.';
-    case 'stairs':
-      return 'Stairs Tool: Tap anywhere on canvas to place a staircase.';
-    case 'measure':
-      return 'Measure Tool: Tap two points on canvas to measure exact distance and angle.';
-    case 'annotation':
-      return 'Note Tool: Tap anywhere on canvas to place a custom text label or callout note.';
-    default:
-      return 'Click on canvas to draw or place elements.';
-  }
-}
-const HINTS_KEY = 'bm_fp_hints_seen';
-
-function readSetting(key: string, fallback: string): string {
-  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
-}
-function writeSetting(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* private mode: the setting lasts for this visit only */ }
-}
-
-function formatDim(val: number, unit: FloorPlanUnit): string {
-  if (unit === 'feet') {
-    const totalInches = Math.round(val * 12);
-    const feet = Math.floor(totalInches / 12);
-    const inches = totalInches % 12;
-    if (inches === 0) return `${feet} ft`;
-    return `${feet} ft ${inches} in`;
-  } else if (unit === 'inches') {
-    return `${Math.round(val * 12)} in`;
-  } else if (unit === 'centimeters') {
-    return `${Math.round(val * 100)} cm`;
-  }
-  return `${val.toFixed(2)} m`;
-}
-
-function wallLength(w: FloorPlanWall): number {
-  return Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2);
-}
-
-// Coordinates are in feet (feet/inches plans) or metres (metre/centimetre plans), so the
-// outline area is already in sq.ft or sq.m. It is the area of the outline as drawn.
-function computeRoomArea(r: FloorPlanRoom, unit: FloorPlanUnit): string {
-  const area = roomArea(r);
-  return baseUnitOf(unit) === 'feet' ? `${area.toFixed(1)} sq.ft` : `${area.toFixed(2)} sq.m`;
-}
-
-function computeRoomPerimeter(r: FloorPlanRoom, unit: FloorPlanUnit): string {
-  const perimeter = roomPerimeter(r);
-  if (unit === 'feet') return `${perimeter.toFixed(1)} ft`;
-  if (unit === 'inches') return `${(perimeter * 12).toFixed(1)} in`;
-  if (unit === 'centimeters') return `${(perimeter * 100).toFixed(0)} cm`;
-  return `${perimeter.toFixed(2)} m`;
-}
-
-// ─────────────────────────────────────────────────────────
-// FloorPlanEditorView Component
-// ─────────────────────────────────────────────────────────
-
-interface FloorPlanEditorViewProps {
-  planId: string;
-  user: User;
-  onBack: () => void;
-  onBackToSite?: (siteId: string) => void;
-  onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
-  onOpenEstimator?: (areaSqFt: number) => void;
-}
+import {
+  KeyboardShortcutsModal,
+  VersionHistoryModal,
+  CadSettingsModal,
+  ParallelWallDistanceModal,
+  DrawingTipsModal,
+  TemplatesModal,
+  FurnitureLibraryModal,
+  RoomScheduleModal,
+  AddRoomDimensionsModal,
+  CalibrationModal,
+  MeasurementCheckModal,
+  RoomDimensionsSheet,
+  WallDimensionsSheet,
+  EstimationModal,
+} from './floorPlan';
 
 export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   planId,
@@ -15752,1248 +15398,175 @@ _Shared via Building Mistry App_`;
       </nav>
 
       {/* ── Furniture Library Modal ───────────────────── */}
-      {showFurnitureModal && (
-        <div className="fp-furniture-modal" role="dialog" aria-modal="true">
-          <div className="fp-furniture-dialog">
-            <div className="fp-furniture-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Armchair size={20} color="#1e293b" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  CAD Architectural Symbols & Furniture
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowFurnitureModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-furniture-categories">
-              {['all', 'bedroom', 'living', 'dining', 'kitchen', 'bathroom', 'utility', 'outdoor'].map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`fp-cat-chip ${furnitureCategory === cat ? 'active' : ''}`}
-                  onClick={() => setFurnitureCategory(cat)}
-                >
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </button>
-              ))}
-            </div>
-
-            <div className="fp-furniture-grid">
-              {FURNITURE_CATALOG
-                .filter(item => furnitureCategory === 'all' || item.category === furnitureCategory)
-                .map(item => (
-                  <div
-                    key={item.itemType}
-                    className="fp-furniture-item-card"
-                    onClick={() => {
-                      setSelectedFurnitureToPlace(item);
-                      setActiveTool('furniture');
-                      setShowFurnitureModal(false);
-                      onNotify(`Selected ${item.itemType}. Click anywhere on the plan to place.`, 'info');
-                    }}
-                  >
-                    <div className="fp-furniture-icon-box">
-                      <ArchitecturalSymbol
-                        itemType={item.itemType}
-                        width={48}
-                        height={48}
-                        blueprintMode={viewMode === 'blueprint'}
-                      />
-                    </div>
-                    <div className="fp-furniture-name">{simplifyFurnitureLabel(item.itemType)}</div>
-                    <div className="fp-furniture-dims">{item.width}′ × {item.height}′</div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <FurnitureLibraryModal
+        isOpen={showFurnitureModal}
+        onClose={() => setShowFurnitureModal(false)}
+        furnitureCategory={furnitureCategory}
+        onCategoryChange={setFurnitureCategory}
+        viewMode={viewMode}
+        onSelectFurniture={(item) => {
+          setSelectedFurnitureToPlace(item);
+          setActiveTool('furniture');
+          setShowFurnitureModal(false);
+          onNotify(`Selected ${item.itemType}. Click anywhere on the plan to place.`, 'info');
+        }}
+      />
 
       {/* ── Material & Cost Estimation Modal ──────────── */}
-      {showEstimationModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog">
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Calculator size={20} color="#334155" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  Floor Plan Material & Quantity Estimation
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowEstimationModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body">
-              <div className="fp-calc-metric-grid">
-                <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Floor Area (தரை பரப்பு)</span>
-                  <span className="fp-calc-metric-num">{totalFloorArea.toFixed(0)}</span>
-                  <span className="fp-calc-metric-unit">{unit === 'feet' ? 'sq.ft' : 'sq.m'}</span>
-                </div>
-                <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Wall Length (சுவர் நீளம்)</span>
-                  <span className="fp-calc-metric-num">{totalWallLength.toFixed(1)}</span>
-                  <span className="fp-calc-metric-unit">{unit === 'feet' ? 'ft' : 'm'}</span>
-                </div>
-                <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Est. Bricks (செங்கல்)</span>
-                  <span className="fp-calc-metric-num">{estimatedBricks.toLocaleString()}</span>
-                  <span className="fp-calc-metric-unit">Standard modular</span>
-                </div>
-                <div className="fp-calc-metric-card">
-                  <span className="fp-calc-metric-title">Cement Bags (சிமெண்ட்)</span>
-                  <span className="fp-calc-metric-num">{estimatedCementBags}</span>
-                  <span className="fp-calc-metric-unit">50 kg bags</span>
-                </div>
-              </div>
-
-              <table className="fp-calc-table">
-                <thead>
-                  <tr>
-                    <th>Material Item (பொருட்கள்)</th>
-                    <th>Calculated Quantity</th>
-                    <th>Usage Basis</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td><strong>செங்கல் (Red Clay Bricks / AAC)</strong></td>
-                    <td><strong style={{ color: '#b45309' }}>{estimatedBricks.toLocaleString()} pcs</strong></td>
-                    <td>Based on {totalWallLength.toFixed(1)} {unit} wall length & {ceilingHeight} ft ceiling height</td>
-                  </tr>
-                  <tr>
-                    <td><strong>சிமெண்ட் மூட்டைகள் (Cement Bags PPC/OPC)</strong></td>
-                    <td><strong style={{ color: '#1e293b' }}>{estimatedCementBags} bags</strong></td>
-                    <td>Masonry mortar 1:6 + Internal/External plaster</td>
-                  </tr>
-                  <tr>
-                    <td><strong>மணல் (Sand / M-Sand)</strong></td>
-                    <td><strong>{estimatedSandCuFt} cu.ft ({(estimatedSandCuFt / 100).toFixed(1)} units)</strong></td>
-                    <td>Mortar binding & wall finishing</td>
-                  </tr>
-                  <tr>
-                    <td><strong>கம்பி (Steel Rebar)</strong></td>
-                    <td><strong>{estimatedSteelKg} kg</strong></td>
-                    <td>Columns, lintels & sill bands</td>
-                  </tr>
-                  <tr>
-                    <td><strong>தரை டைல்ஸ் (Flooring Tiles)</strong></td>
-                    <td><strong>{estimatedTileArea} sq.ft</strong></td>
-                    <td>Carpet area + 10% cutting wastage</td>
-                  </tr>
-                  <tr>
-                    <td><strong>சுவர் பெயிண்ட் (Wall Paint 2 Coats)</strong></td>
-                    <td><strong>{estimatedPaintLitres} litres</strong></td>
-                    <td>Interior & exterior wall surface coverage</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="fp-calc-footer">
-              <button
-                type="button"
-                className="btn btn-success"
-                style={{ background: '#16a34a', color: '#ffffff', borderColor: '#16a34a', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
-                onClick={handleSharePlanToWhatsApp}
-                title="Share estimate and plan details to WhatsApp"
-                id="fp-calc-whatsapp-btn"
-              >
-                <Share2 size={16} />
-                <span>WhatsApp-ல் அனுப்பு</span>
-              </button>
-              {onOpenEstimator && (
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => {
-                    const sqFt = unit === 'feet' ? totalFloorArea : totalFloorArea * 10.764;
-                    setShowEstimationModal(false);
-                    onOpenEstimator(sqFt);
-                  }}
-                >
-                  <Sparkles size={16} /> Open in Building Calculator
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setShowEstimationModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EstimationModal
+        isOpen={showEstimationModal}
+        onClose={() => setShowEstimationModal(false)}
+        totalFloorArea={totalFloorArea}
+        totalWallLength={totalWallLength}
+        estimatedBricks={estimatedBricks}
+        estimatedCementBags={estimatedCementBags}
+        estimatedSandCuFt={estimatedSandCuFt}
+        estimatedSteelKg={estimatedSteelKg}
+        estimatedTileArea={estimatedTileArea}
+        estimatedPaintLitres={estimatedPaintLitres}
+        ceilingHeight={ceilingHeight}
+        unit={unit}
+        onShareToWhatsApp={handleSharePlanToWhatsApp}
+        onOpenEstimator={onOpenEstimator}
+      />
 
       {/* ── Room Schedule & Breakdown Modal ("namba room ethana irukku") ── */}
-      {showRoomScheduleModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 760 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Box size={20} color="#15803d" />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                    Floor Plan Room Schedule & Breakdown
-                  </h3>
-                  <span style={{ fontSize: '0.78rem', color: '#475569' }}>
-                    Total Rooms in Floor Plan: <strong style={{ color: '#15803d' }}>{editorState.rooms.length} Rooms</strong> • Total Built-up Area: <strong style={{ color: '#1e293b' }}>{totalFloorArea.toFixed(1)} {unit === 'feet' ? 'sq.ft' : 'sq.m'}</strong>
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowRoomScheduleModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body" style={{ maxHeight: '72vh', overflowY: 'auto' }}>
-              {/* Metric Stat Cards */}
-              <div className="fp-room-stat-grid">
-                <div className="fp-room-stat-card">
-                  <span className="fp-room-stat-num" style={{ color: '#15803d' }}>
-                    {editorState.rooms.length}
-                  </span>
-                  <span className="fp-room-stat-label">Total Rooms</span>
-                </div>
-                <div className="fp-room-stat-card">
-                  <span className="fp-room-stat-num" style={{ color: '#1e293b' }}>
-                    {totalFloorArea.toFixed(1)} <small style={{ fontSize: '0.75rem' }}>{unit === 'feet' ? 'sq.ft' : 'sq.m'}</small>
-                  </span>
-                  <span className="fp-room-stat-label">Total Built-up Area</span>
-                </div>
-                <div className="fp-room-stat-card">
-                  <span className="fp-room-stat-num" style={{ color: '#b45309' }}>
-                    {plan.plotLength * plan.plotWidth} <small style={{ fontSize: '0.75rem' }}>{unit === 'feet' ? 'sq.ft' : 'sq.m'}</small>
-                  </span>
-                  <span className="fp-room-stat-label">Plot Area</span>
-                </div>
-                <div className="fp-room-stat-card">
-                  <span className="fp-room-stat-num" style={{ color: '#6d28d9' }}>
-                    {((totalFloorArea / Math.max(1, plan.plotLength * plan.plotWidth)) * 100).toFixed(1)}%
-                  </span>
-                  <span className="fp-room-stat-label">Plot Coverage</span>
-                </div>
-              </div>
-
-              {/* Rooms Schedule Table */}
-              <div style={{ marginBottom: 16 }}>
-                <h5 style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  All Configured Rooms & Dimensions
-                </h5>
-                {editorState.rooms.length > 0 ? (
-                  <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 10 }}>
-                    <table className="fp-room-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: 36 }}>#</th>
-                          <th>Room Name</th>
-                          <th>Type</th>
-                          <th>Width ({unit === 'feet' ? 'ft' : 'm'})</th>
-                          <th>Height ({unit === 'feet' ? 'ft' : 'm'})</th>
-                          <th>Area</th>
-                          <th>Finish</th>
-                          <th style={{ textAlign: 'right' }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {editorState.rooms.map((rm, idx) => (
-                          <tr key={rm.id}>
-                            <td style={{ color: '#64748b', fontWeight: 700 }}>{idx + 1}</td>
-                            <td>
-                              <input
-                                type="text"
-                                value={rm.label}
-                                onChange={e => {
-                                  dispatch({ type: 'UPDATE_ROOM', id: rm.id, changes: { label: e.target.value } });
-                                  markUnsaved();
-                                }}
-                                style={{
-                                  background: '#ffffff',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: 5,
-                                  color: '#0f172a',
-                                  padding: '4px 8px',
-                                  fontSize: '0.82rem',
-                                  fontWeight: 600,
-                                  width: 120,
-                                }}
-                              />
-                            </td>
-                            <td>
-                              <select
-                                value={rm.roomType}
-                                onChange={e => {
-                                  const rt = e.target.value as RoomType;
-                                  dispatch({ type: 'UPDATE_ROOM', id: rm.id, changes: { roomType: rt, color: ROOM_COLORS[rt] } });
-                                  markUnsaved();
-                                }}
-                                style={{
-                                  background: '#ffffff',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: 5,
-                                  color: '#0f172a',
-                                  padding: '4px 6px',
-                                  fontSize: '0.78rem',
-                                }}
-                              >
-                                {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
-                              </select>
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                step={0.5}
-                                className="fp-room-table-input"
-                                value={rm.width}
-                                onChange={e => {
-                                  dispatch({ type: 'UPDATE_ROOM', id: rm.id, changes: { width: parseFloat(e.target.value) || 1 } });
-                                  markUnsaved();
-                                }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                step={0.5}
-                                className="fp-room-table-input"
-                                value={rm.height}
-                                onChange={e => {
-                                  dispatch({ type: 'UPDATE_ROOM', id: rm.id, changes: { height: parseFloat(e.target.value) || 1 } });
-                                  markUnsaved();
-                                }}
-                              />
-                            </td>
-                            <td style={{ fontWeight: 700, color: '#15803d' }}>
-                              {computeRoomArea(rm, unit)}
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="fp-stepper-btn"
-                                style={{ width: 'auto', padding: '2px 8px', fontSize: '0.72rem' }}
-                                onClick={() => {
-                                  const next = rm.floorFinish === 'Color Tint' ? 'Wood Parquet' : 'Color Tint';
-                                  dispatch({ type: 'UPDATE_ROOM', id: rm.id, changes: { floorFinish: next } });
-                                  markUnsaved();
-                                }}
-                                title="Toggle Floor Finish"
-                              >
-                                {rm.floorFinish === 'Color Tint' ? '🎨 Tint' : '🪵 Wood'}
-                              </button>
-                            </td>
-                            <td style={{ textAlign: 'right' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                                <button
-                                  type="button"
-                                  className="btn btn-outline btn-sm"
-                                  style={{ padding: '3px 8px', fontSize: '0.72rem' }}
-                                  onClick={() => handleFocusRoom(rm)}
-                                  title="Focus & Select on Canvas"
-                                >
-                                  🎯 Focus
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-danger btn-sm"
-                                  style={{ padding: '3px 8px', fontSize: '0.72rem' }}
-                                  onClick={() => {
-                                    dispatch({ type: 'DELETE_ROOM', id: rm.id });
-                                    markUnsaved();
-                                  }}
-                                  title="Delete Room"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div style={{ padding: 30, textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: 8 }}>
-                    No rooms created in this floor plan yet. Use the form below to add your first room!
-                  </div>
-                )}
-              </div>
-
-              {/* Quick Add Room by Height & Width Inputs */}
-              <div style={{ padding: 16, background: '#f8fafc', border: '1.5px solid #cbd5e1', borderRadius: 12 }}>
-                <h4 style={{ margin: '0 0 12px 0', fontSize: '0.9rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Plus size={16} color="#1e293b" /> Add Room with Exact Height & Width
-                </h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Type of Room</label>
-                    <select
-                      value={draftRoomType}
-                      onChange={e => setDraftRoomType(e.target.value as RoomType)}
-                      style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 10px', fontSize: '0.82rem' }}
-                    >
-                      {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
-                    <input
-                      type="number"
-                      step={0.5}
-                      value={draftRoomWidth}
-                      onChange={e => setDraftRoomWidth(parseFloat(e.target.value) || 1)}
-                      style={{ width: 85, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 8px', fontSize: '0.82rem', fontWeight: 600 }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
-                    <input
-                      type="number"
-                      step={0.5}
-                      value={draftRoomHeight}
-                      onChange={e => setDraftRoomHeight(parseFloat(e.target.value) || 1)}
-                      style={{ width: 85, background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 8px', fontSize: '0.82rem', fontWeight: 600 }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: 4 }}>Floor Finish</label>
-                    <select
-                      value={draftRoomFloorFinish}
-                      onChange={e => setDraftRoomFloorFinish(e.target.value)}
-                      style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 6, color: '#0f172a', padding: '7px 10px', fontSize: '0.82rem' }}
-                    >
-                      <option value="Wood Parquet">🪵 Wood Floor Parquet</option>
-                      <option value="Color Tint">🎨 Color Tint</option>
-                    </select>
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => handleAddRoomByDimensions(draftRoomWidth, draftRoomHeight, draftRoomType, draftRoomFloorFinish)}
-                    >
-                      <Plus size={16} /> Place Room on Canvas
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="fp-calc-footer">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setShowRoomScheduleModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RoomScheduleModal
+        isOpen={showRoomScheduleModal}
+        onClose={() => setShowRoomScheduleModal(false)}
+        rooms={editorState.rooms}
+        totalFloorArea={totalFloorArea}
+        plotLength={plan.plotLength}
+        plotWidth={plan.plotWidth}
+        unit={unit}
+        onUpdateRoom={(id, changes) => {
+          dispatch({ type: 'UPDATE_ROOM', id, changes });
+          markUnsaved();
+        }}
+        onDeleteRoom={(id) => {
+          dispatch({ type: 'DELETE_ROOM', id });
+          markUnsaved();
+        }}
+        onFocusRoom={handleFocusRoom}
+        draftRoomType={draftRoomType}
+        onDraftRoomTypeChange={setDraftRoomType}
+        draftRoomWidth={draftRoomWidth}
+        onDraftRoomWidthChange={setDraftRoomWidth}
+        draftRoomHeight={draftRoomHeight}
+        onDraftRoomHeightChange={setDraftRoomHeight}
+        draftRoomFloorFinish={draftRoomFloorFinish}
+        onDraftRoomFloorFinishChange={setDraftRoomFloorFinish}
+        onAddRoomByDimensions={handleAddRoomByDimensions}
+      />
 
       {/* ── Add Room with Dimensions Modal ───────────── */}
-      {showAddRoomModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 480 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Plus size={20} color="#1e293b" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  Add Room by Exact Dimensions
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowAddRoomModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
-                    Type of Room
-                  </label>
-                  <select
-                    value={draftRoomType}
-                    onChange={e => setDraftRoomType(e.target.value as RoomType)}
-                    style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.85rem' }}
-                  >
-                    {ROOM_TYPES.map(rt => <option key={rt} value={rt}>{rt}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
-                      Width ({unit === 'feet' ? 'ft' : 'm'})
-                    </label>
-                    <input
-                      type="number"
-                      step={0.5}
-                      value={draftRoomWidth}
-                      onChange={e => setDraftRoomWidth(parseFloat(e.target.value) || 1)}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.9rem', fontWeight: 700 }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
-                      Height / Length ({unit === 'feet' ? 'ft' : 'm'})
-                    </label>
-                    <input
-                      type="number"
-                      step={0.5}
-                      value={draftRoomHeight}
-                      onChange={e => setDraftRoomHeight(parseFloat(e.target.value) || 1)}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.9rem', fontWeight: 700 }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
-                      Wall Thickness ({unit === 'feet' ? 'in' : 'cm'})
-                    </label>
-                    <input
-                      type="number"
-                      step={1}
-                      value={unit === 'feet' ? Math.round(draftRoomThickness * 12) : Math.round(draftRoomThickness * 100)}
-                      onChange={e => {
-                        const val = parseFloat(e.target.value) || 9;
-                        setDraftRoomThickness(unit === 'feet' ? val / 12 : val / 100);
-                      }}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.9rem' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: 6, fontWeight: 600 }}>
-                      Floor Finish
-                    </label>
-                    <select
-                      value={draftRoomFloorFinish}
-                      onChange={e => setDraftRoomFloorFinish(e.target.value)}
-                      style={{ width: '100%', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#0f172a', padding: '9px 12px', fontSize: '0.85rem' }}
-                    >
-                      <option value="Wood Parquet">🪵 Wood Floor Parquet</option>
-                      <option value="Color Tint">🎨 Plain Tint</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '10px 14px', borderRadius: 8 }}>
-                  <span style={{ fontSize: '0.82rem', color: '#15803d', fontWeight: 600 }}>
-                    Computed Room Area: {unit === 'feet' ? `${(draftRoomWidth * draftRoomHeight).toFixed(1)} sq.ft` : `${(draftRoomWidth * draftRoomHeight).toFixed(2)} sq.m`}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="fp-calc-footer">
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => setShowAddRoomModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => handleAddRoomByDimensions(draftRoomWidth, draftRoomHeight, draftRoomType, draftRoomFloorFinish)}
-              >
-                <Plus size={16} /> Place Room on Plan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddRoomDimensionsModal
+        isOpen={showAddRoomModal}
+        onClose={() => setShowAddRoomModal(false)}
+        unit={unit}
+        draftRoomType={draftRoomType}
+        onDraftRoomTypeChange={setDraftRoomType}
+        draftRoomWidth={draftRoomWidth}
+        onDraftRoomWidthChange={setDraftRoomWidth}
+        draftRoomHeight={draftRoomHeight}
+        onDraftRoomHeightChange={setDraftRoomHeight}
+        draftRoomThickness={draftRoomThickness}
+        onDraftRoomThicknessChange={setDraftRoomThickness}
+        draftRoomFloorFinish={draftRoomFloorFinish}
+        onDraftRoomFloorFinishChange={setDraftRoomFloorFinish}
+        onAddRoomByDimensions={handleAddRoomByDimensions}
+      />
 
       {/* ── Version History Modal ─────────────────────── */}
-      {showVersionModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 580 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <History size={20} color="#1e293b" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  Floor Plan Version Snapshots
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowVersionModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body">
-              {/* Create Snapshot Input */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  type="text"
-                  placeholder="Snapshot label (Prior to adding master bedroom)"
-                  value={versionNote}
-                  onChange={e => setVersionNote(e.target.value)}
-                  style={{ flex: 1, padding: '8px 12px', borderRadius: 8, background: '#ffffff', border: '1px solid #e2e8f0', color: '#0f172a', fontSize: '0.85rem' }}
-                />
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={handleCreateSnapshot}
-                >
-                  Save Snapshot
-                </button>
-              </div>
-
-              {/* List of Saved Snapshots */}
-              <div style={{ marginTop: 16 }}>
-                <h5 style={{ margin: '0 0 8px 0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase' }}>
-                  Previous Snapshots
-                </h5>
-                {plan.versionHistory && plan.versionHistory.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {plan.versionHistory.map(v => (
-                      <div
-                        key={v.versionId}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 14px',
-                          background: '#f8fafc',
-                          borderRadius: 8,
-                          border: '1px solid #e2e8f0',
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.85rem' }}>
-                            {v.note || 'Snapshot'}
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                            {new Date(v.timestamp).toLocaleString('en-IN')}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => handleRestoreSnapshot(v.versionId)}
-                        >
-                          Restore
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ padding: 24, textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
-                    No version snapshots recorded yet. Create one above to preserve your design milestones.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <VersionHistoryModal
+        isOpen={showVersionModal}
+        onClose={() => setShowVersionModal(false)}
+        versionNote={versionNote}
+        onVersionNoteChange={setVersionNote}
+        onCreateSnapshot={handleCreateSnapshot}
+        versionHistory={plan.versionHistory}
+        onRestoreSnapshot={handleRestoreSnapshot}
+      />
 
       {/* ── Keyboard Shortcuts Modal ──────────────────── */}
-      {showShortcutsModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 500 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Keyboard size={20} color="#1e293b" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  Keyboard Shortcuts
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowShortcutsModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body">
-              <table className="fp-calc-table">
-                <tbody>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>V</kbd></td><td>Select / Move Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>W</kbd></td><td>Wall Tool: one straight wall at a time</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>S</kbd></td><td>Sketch Walls: a rough outline becomes straight walls</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>R</kbd></td><td>Place Room Tool (rotates the selection when something is selected)</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>D</kbd></td><td>Place Door Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Enter</kbd></td><td>Type an exact size for the selected wall</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>M</kbd></td><td>Toggle Dimensions & Measurements</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>G</kbd></td><td>Toggle Grid</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>H</kbd></td><td>Pan / Hand Tool</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>F</kbd></td><td>Fit the Plan to the Screen</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>0</kbd></td><td>Reset the View to 100%</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>+ / -</kbd></td><td>Zoom In / Out</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Z</kbd></td><td>Undo</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + Y / Ctrl + Shift + Z</kbd></td><td>Redo</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + D</kbd></td><td>Duplicate Selected Element</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + L</kbd></td><td>Lock / Unlock Selected Element</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + C / Ctrl + V</kbd></td><td>Copy / Paste</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Ctrl + S</kbd></td><td>Save Floor Plan</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Del / Backspace</kbd></td><td>Delete Selected Element</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Esc</kbd></td><td>Cancel Drawing / Deselect</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Mouse Wheel</kbd></td><td>Zoom In / Out</td></tr>
-                  <tr><td><kbd style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>Middle Mouse / Alt+Drag</kbd></td><td>Pan Canvas</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
 
       {/* ── Background Image Calibration Modal (FloorPlanCreator standard) ── */}
-      {showBgImageModal && (
-        <div className="fp-calc-modal no-print" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 480 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ImageIcon size={20} color="#1e293b" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  Background Reference Plan Image
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowBgImageModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <p style={{ fontSize: '0.82rem', color: '#475569', margin: 0 }}>
-                Import an existing blueprint, surveyor drawing, or sketch (PNG/JPG) to trace over in Building Mistry CAD.
-              </p>
-
-              <div>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
-                  Upload Image File
-                </label>
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg, image/webp"
-                  style={{ fontSize: '0.8rem', color: '#0f172a' }}
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                      const dataUrl = reader.result as string;
-                      const bg: BackgroundPlanImage = {
-                        id: uid('bg'),
-                        url: dataUrl,
-                        x: 0,
-                        y: 0,
-                        width: bgImageScaleW,
-                        height: bgImageScaleH,
-                        opacity: bgImageOpacity,
-                        locked: true,
-                        visible: true,
-                      };
-                      setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, backgroundImage: bg } : lvl));
-                      markUnsaved();
-                      onNotify('Background reference image imported successfully', 'success');
-                    };
-                    reader.readAsDataURL(file);
-                  }}
-                />
-              </div>
-
-              {currentFloor.backgroundImage && (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div>
-                      <label style={{ fontSize: '0.78rem', color: '#475569' }}>Width ({unit === 'feet' ? 'ft' : 'm'})</label>
-                      <input
-                        type="number"
-                        className="fp-inspector-input"
-                        value={currentFloor.backgroundImage.width}
-                        onChange={e => {
-                          const w = parseFloat(e.target.value) || 10;
-                          setBgImageScaleW(w);
-                          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, width: w } } : lvl));
-                          markUnsaved();
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.78rem', color: '#475569' }}>Height ({unit === 'feet' ? 'ft' : 'm'})</label>
-                      <input
-                        type="number"
-                        className="fp-inspector-input"
-                        value={currentFloor.backgroundImage.height}
-                        onChange={e => {
-                          const h = parseFloat(e.target.value) || 10;
-                          setBgImageScaleH(h);
-                          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, height: h } } : lvl));
-                          markUnsaved();
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ fontSize: '0.78rem', color: '#475569', display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span>Opacity</span>
-                      <span>{Math.round((currentFloor.backgroundImage.opacity ?? 0.5) * 100)}%</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1.0"
-                      step="0.05"
-                      value={currentFloor.backgroundImage.opacity ?? 0.5}
-                      style={{ width: '100%' }}
-                      onChange={e => {
-                        const op = parseFloat(e.target.value);
-                        setBgImageOpacity(op);
-                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, opacity: op } } : lvl));
-                        markUnsaved();
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 8 }}>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        const isLocked = !currentFloor.backgroundImage?.locked;
-                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, locked: isLocked } } : lvl));
-                        markUnsaved();
-                      }}
-                    >
-                      {currentFloor.backgroundImage.locked ? <Lock size={14} /> : <Unlock size={14} />}
-                      <span>{currentFloor.backgroundImage.locked ? 'Locked' : 'Unlocked'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        const isVis = currentFloor.backgroundImage?.visible === false;
-                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, visible: isVis } } : lvl));
-                        markUnsaved();
-                      }}
-                    >
-                      <Eye size={14} />
-                      <span>{currentFloor.backgroundImage.visible !== false ? 'Visible' : 'Hidden'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-danger btn-sm"
-                      onClick={() => {
-                        setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, backgroundImage: undefined } : lvl));
-                        markUnsaved();
-                        onNotify('Background reference image removed', 'info');
-                      }}
-                    >
-                      <Trash2 size={14} />
-                      <span>Remove</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="fp-calc-footer" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => setShowBgImageModal(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CalibrationModal
+        isOpen={showBgImageModal}
+        onClose={() => setShowBgImageModal(false)}
+        unit={unit}
+        currentFloor={currentFloor}
+        bgImageScaleW={bgImageScaleW}
+        bgImageScaleH={bgImageScaleH}
+        bgImageOpacity={bgImageOpacity}
+        onBgImageLoaded={(bg) => {
+          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, backgroundImage: bg } : lvl));
+          markUnsaved();
+          onNotify('Background plan loaded. Calibrate its real-world dimensions below.', 'success');
+        }}
+        onUpdateBgImage={(changes) => {
+          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex && lvl.backgroundImage ? { ...lvl, backgroundImage: { ...lvl.backgroundImage, ...changes } } : lvl));
+          markUnsaved();
+        }}
+        onRemoveBgImage={() => {
+          setFloorLevels(prev => prev.map((lvl, idx) => idx === activeFloorIndex ? { ...lvl, backgroundImage: undefined } : lvl));
+          markUnsaved();
+          onNotify('Background reference image removed', 'info');
+        }}
+      />
 
       {/* ── CAD Drawing & Snapping Settings Modal ────── */}
-      {showSettingsModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 560 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Settings size={20} color="#1e293b" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  Drawing settings
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowSettingsModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body">
-              {/* Help that is off by default, so nothing pops up while drawing */}
-              <div style={{ marginBottom: 16, display: 'grid', gap: 8 }}>
-                <label className="fp-setting-switch">
-                  <input
-                    type="checkbox"
-                    checked={showTips}
-                    onChange={e => { setShowTips(e.target.checked); writeSetting('bm_fp_show_tips', e.target.checked ? '1' : '0'); }}
-                    id="fp-setting-tips"
-                  />
-                  <span><strong>Show tips</strong> A one-line tip for the tool in hand, and first-use tips.</span>
-                </label>
-                <label className="fp-setting-switch">
-                  <input
-                    type="checkbox"
-                    checked={isAiLiveAssistActive}
-                    onChange={e => setIsAiLiveAssistActive(e.target.checked)}
-                    id="fp-setting-live-assist"
-                  />
-                  <span><strong>Read sketch strokes live</strong> Guesses what a freehand stroke is (door, window, room) and asks. Off by default.</span>
-                </label>
-              </div>
-
-              {/* Wall Thickness Presets */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                  Standard Wall Thickness Presets
-                </label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {WALL_THICKNESS_PRESETS_MM.map(presetMm => {
-                    const presetUnits = mmToPlanUnits(presetMm, unit);
-                    const isCurrent = Math.abs(wallThickness - presetUnits) < 0.05;
-                    return (
-                      <button
-                        key={presetMm}
-                        type="button"
-                        className={`fp-cat-chip ${isCurrent ? 'active' : ''}`}
-                        onClick={() => {
-                          setWallThickness(presetUnits);
-                          onNotify(`Wall thickness set to ${presetMm}mm (${presetUnits.toFixed(2)} ${unit === 'feet' ? 'ft' : 'm'})`, 'info');
-                        }}
-                      >
-                        {presetMm} mm ({presetMm <= 115 ? 'Partition' : presetMm === 150 ? 'AAC Block' : '9" Brick'})
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Grid Spacing Presets */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                  Snap Step
-                </label>
-                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0 0 0' }}>
-                  With Snap to Grid on, wall ends and anything you place or drag land on multiples of this.
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {gridStepOptions(unit).map(option => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      className={`fp-cat-chip ${Math.abs(gridStep - option.value) < 1e-9 ? 'active' : ''}`}
-                      aria-pressed={Math.abs(gridStep - option.value) < 1e-9}
-                      onClick={() => setGridStep(option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* How far a finger reaches for a corner or wall */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                  Snap Reach
-                </label>
-                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0 0 0' }}>
-                  How close a wall end must be to a corner, crossing or wall before it joins it.
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {[{ label: 'Short', value: 0.6 }, { label: 'Normal', value: 1 }, { label: 'Long', value: 1.5 }].map(option => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      className={`fp-cat-chip ${snapReach === option.value ? 'active' : ''}`}
-                      aria-pressed={snapReach === option.value}
-                      onClick={() => { setSnapReach(option.value); writeSetting('bm_fp_snap_reach', String(option.value)); }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Measurement text size: a view setting only */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                  Measurement Text Size
-                </label>
-                <p style={{ fontSize: '0.8rem', color: '#475569', margin: '4px 0 0 0' }}>
-                  Changes how large measurements are written on the plan. It never changes a wall's length.
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {[{ label: 'Small', value: 0.85 }, { label: 'Normal', value: 1 }, { label: 'Large', value: 1.25 }, { label: 'Extra large', value: 1.5 }].map(option => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      className={`fp-cat-chip ${dimTextScale === option.value ? 'active' : ''}`}
-                      aria-pressed={dimTextScale === option.value}
-                      id={`fp-dim-text-${option.value}`}
-                      onClick={() => { setDimTextScale(option.value); writeSetting('bm_fp_dim_text', String(option.value)); }}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* CAD Snapping Toggles */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                  Snapping & Alignment Guides
-                </label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={snapToGridEnabled}
-                      onChange={e => setSnapToGridEnabled(e.target.checked)}
-                    />
-                    <span><strong>Snap to Grid:</strong> Magnetic alignment to background grid intervals</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={snapToEndpointsEnabled}
-                      onChange={e => setSnapToEndpointsEnabled(e.target.checked)}
-                    />
-                    <span><strong>Snap to Endpoints:</strong> Automatic magnetic corner joining for enclosed walls</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={snapToWallEnabled}
-                      onChange={e => setSnapToWallEnabled(e.target.checked)}
-                    />
-                    <span><strong>Snap Along Walls:</strong> Automatic hosting for doors, windows, TVs & ACs</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', cursor: 'pointer', fontSize: '0.88rem' }}>
-                    <input
-                      type="checkbox"
-                      checked={isOrthoActive}
-                      onChange={e => setIsOrthoActive(e.target.checked)}
-                    />
-                    <span><strong>Ortho Mode:</strong> Constrain drawing to strictly horizontal & vertical lines</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Starter Plan Template Loader */}
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 16 }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>
-                  Architectural Starter Plan
-                </label>
-                <p style={{ fontSize: '0.82rem', color: '#475569', margin: '6px 0 12px 0' }}>
-                  Load a verified 30×40 2BHK architectural plan with living room, master bedroom, kitchen, dining, toilet, and columns.
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  onClick={handleLoadStarterPlan}
-                >
-                  <Sparkles size={16} /> Load 30×40 2BHK Plan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <CadSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        showTips={showTips}
+        onShowTipsChange={(val) => {
+          setShowTips(val);
+          writeSetting('bm_fp_show_tips', val ? '1' : '0');
+        }}
+        isAiLiveAssistActive={isAiLiveAssistActive}
+        onAiLiveAssistChange={setIsAiLiveAssistActive}
+        unit={unit}
+        wallThickness={wallThickness}
+        onWallThicknessChange={(th, label) => {
+          setWallThickness(th);
+          onNotify(`Wall thickness set to ${label}`, 'info');
+        }}
+        gridStep={gridStep}
+        onGridStepChange={(gs) => {
+          setGridStep(gs);
+          onNotify(`Grid step set to ${gs} ${unit}`, 'info');
+        }}
+        snapReach={snapReach}
+        onSnapReachChange={setSnapReach}
+        dimTextScale={dimTextScale}
+        onDimTextScaleChange={setDimTextScale}
+        snapToGridEnabled={snapToGridEnabled}
+        onSnapToGridChange={setSnapToGridEnabled}
+        snapToEndpointsEnabled={snapToEndpointsEnabled}
+        onSnapToEndpointsChange={setSnapToEndpointsEnabled}
+        snapToWallEnabled={snapToWallEnabled}
+        onSnapToWallChange={setSnapToWallEnabled}
+        isOrthoActive={isOrthoActive}
+        onOrthoActiveChange={setIsOrthoActive}
+        onLoadStarterPlan={handleLoadStarterPlan}
+      />
 
       {/* ── CAD Parallel Wall Distance Modal ─────────── */}
-      {showParallelInputModal && (
-        <div className="fp-calc-modal" role="dialog" aria-modal="true">
-          <div className="fp-calc-dialog" style={{ maxWidth: 520 }}>
-            <div className="fp-calc-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Ruler size={20} color="#0284c7" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>
-                  CAD Parallel Wall Distance (mm)
-                </h3>
-              </div>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowParallelInputModal(false)}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="fp-calc-body">
-              <div style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: 8,
-                padding: '12px 14px',
-                marginBottom: 16,
-              }}>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: 4 }}>
-                  Current Parallel Distance
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', fontFamily: 'monospace' }}>
-                    {parallelGuide ? parallelGuide.formattedDistance : `${customParallelMmInput || 19} mm`}
-                  </span>
-                  {parallelGuide?.isSnapped && (
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#16a34a', background: '#dcfce7', padding: '2px 8px', borderRadius: 12 }}>
-                      SNAPPED
-                    </span>
-                  )}
-                  {parallelGuide && (
-                    <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: 'auto' }}>
-                      {parallelGuide.isVertical ? 'Vertical Wall' : parallelGuide.isHorizontal ? 'Horizontal Wall' : 'Angled Wall'}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Input for mm */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: 6 }}>
-                  Exact Distance in Millimeters (mm):
-                </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="1"
-                    max="10000"
-                    value={customParallelMmInput}
-                    onChange={e => setCustomParallelMmInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleApplyParallelDistance();
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #cbd5e1',
-                      fontSize: '1rem',
-                      fontFamily: 'monospace',
-                    }}
-                    placeholder="e.g. 19"
-                    id="fp-parallel-mm-input"
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => handleApplyParallelDistance()}
-                    id="fp-apply-parallel-btn"
-                  >
-                    Apply Exact
-                  </button>
-                </div>
-              </div>
-
-              {/* Quick Preset Buttons */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Standard Architectural Presets (mm)
-                </label>
-                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  {COMMON_PARALLEL_OFFSETS_MM.map(presetMm => {
-                    const isSelected = parseFloat(customParallelMmInput) === presetMm;
-                    return (
-                      <button
-                        key={presetMm}
-                        type="button"
-                        className={`fp-cat-chip ${isSelected ? 'active' : ''}`}
-                        onClick={() => {
-                          setCustomParallelMmInput(String(presetMm));
-                          handleApplyParallelDistance(presetMm);
-                        }}
-                      >
-                        {presetMm} mm {presetMm === 19 ? '(3/4" Gap)' : presetMm === 50 ? '(2" Stud)' : presetMm === 115 ? '(4.5" Wall)' : presetMm === 230 ? '(9" Main)' : ''}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Tolerance Selector */}
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Snapping Tolerance
-                </label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-                  {[3, 6, 12, 20].map(tol => (
-                    <button
-                      key={tol}
-                      type="button"
-                      className={`fp-cat-chip ${parallelToleranceMm === tol ? 'active' : ''}`}
-                      onClick={() => setParallelToleranceMm(tol)}
-                    >
-                      ±{tol} mm
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="fp-calc-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '12px 16px', borderTop: '1px solid #e2e8f0' }}>
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => setShowParallelInputModal(false)}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => handleApplyParallelDistance()}
-              >
-                Set Distance
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ParallelWallDistanceModal
+        isOpen={showParallelInputModal}
+        onClose={() => setShowParallelInputModal(false)}
+        parallelGuide={parallelGuide}
+        customParallelMmInput={customParallelMmInput}
+        onCustomParallelMmInputChange={setCustomParallelMmInput}
+        onApplyParallelDistance={handleApplyParallelDistance}
+        parallelToleranceMm={parallelToleranceMm}
+        onParallelToleranceMmChange={setParallelToleranceMm}
+      />
 
       {/* ── 3D Preview Modal ─────────────────────────── */}
       <Sheet
@@ -17665,75 +16238,11 @@ _Shared via Building Mistry App_`;
       />
 
       {/* ── Starter Templates Chooser Modal (Priority 1) ── */}
-      {showStarterTemplatesModal && (
-        <div className="fp-ai-dialog fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-800/40">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                  <LayoutGrid className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                    Choose a Starter Floor Plan Template
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Instantly load a professionally proportioned architectural layout.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowStarterTemplatesModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {STARTER_TEMPLATES.map(tpl => (
-                <div
-                  key={tpl.id}
-                  onClick={() => handleApplyStarterTemplate(tpl)}
-                  className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:border-amber-500 dark:hover:border-amber-500 hover:bg-amber-50/30 dark:hover:bg-amber-950/20 cursor-pointer transition-all flex flex-col justify-between group shadow-sm hover:shadow"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300">
-                        {tpl.bhk}
-                      </span>
-                      <span className="text-xs text-slate-500 font-mono">
-                        {tpl.plotLength} × {tpl.plotWidth} {tpl.unit === 'feet' ? 'ft' : 'm'}
-                      </span>
-                    </div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
-                      {tpl.name}
-                    </h3>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-                      {tpl.description}
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>{tpl.rooms.length} Rooms • {tpl.walls.length} Walls • {tpl.doors.length} Doors</span>
-                    <span className="font-semibold text-amber-600 group-hover:translate-x-0.5 transition-transform">Use &rarr;</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="px-6 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowStarterTemplatesModal(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TemplatesModal
+        isOpen={showStarterTemplatesModal}
+        onClose={() => setShowStarterTemplatesModal(false)}
+        onApplyTemplate={handleApplyStarterTemplate}
+      />
 
       {/* ── "Analyze Plan" Geometric Metrics Modal ── */}
       <PlanAnalysisModal
