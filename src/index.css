@@ -2097,8 +2097,11 @@ input:focus, select:focus, textarea:focus {
 /* App Shell container */
 .app-shell {
   display: flex;
+  height: 100vh;
   min-height: 100vh;
+  max-height: 100vh;
   position: relative;
+  overflow: hidden;
 }
 
 .app-shell-sidebar {
@@ -2108,7 +2111,11 @@ input:focus, select:focus, textarea:focus {
   position: sticky;
   top: 0;
   height: 100vh;
-  overflow: hidden;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .shell-sidebar-collapsed .app-shell-sidebar {
@@ -2118,8 +2125,14 @@ input:focus, select:focus, textarea:focus {
 .app-shell-main {
   flex: 1;
   min-width: 0;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  position: relative;
+  scrollbar-width: thin;
 }
 
 .app-shell-main-immersive {
@@ -2268,13 +2281,39 @@ input:focus, select:focus, textarea:focus {
 
 .app-sidebar {
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  max-height: 100vh;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   user-select: none;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.app-sidebar::-webkit-scrollbar,
+.app-shell-sidebar::-webkit-scrollbar,
+.app-shell-main::-webkit-scrollbar {
+  width: 5px;
+}
+.app-sidebar::-webkit-scrollbar-track,
+.app-shell-sidebar::-webkit-scrollbar-track,
+.app-shell-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-sidebar::-webkit-scrollbar-thumb,
+.app-shell-sidebar::-webkit-scrollbar-thumb,
+.app-shell-main::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+.app-sidebar::-webkit-scrollbar-thumb:hover,
+.app-shell-sidebar::-webkit-scrollbar-thumb:hover,
+.app-shell-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .sidebar-brand {
@@ -2285,6 +2324,7 @@ input:focus, select:focus, textarea:focus {
   cursor: pointer;
   min-height: 68px;
   border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
 }
 
 .sidebar-brand-icon {
@@ -2313,11 +2353,19 @@ input:focus, select:focus, textarea:focus {
   border: none;
   cursor: pointer;
   transition: color 0.15s;
+  flex-shrink: 0;
 }
 .sidebar-collapse-btn:hover { color: #475569; }
 
-.sidebar-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px; }
-.sidebar-bottom-nav { padding: 4px 8px; }
+.sidebar-nav {
+  padding: 8px;
+  overflow-y: visible;
+  flex-shrink: 0;
+}
+.sidebar-bottom-nav {
+  padding: 4px 8px;
+  flex-shrink: 0;
+}
 .sidebar-nav-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
 
 .sidebar-nav-item {
@@ -2347,9 +2395,14 @@ input:focus, select:focus, textarea:focus {
 .sidebar-nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-nav-badge { background: #ef4444; color: #fff; font-size: 0.7rem; font-weight: 800; border-radius: 999px; padding: 1px 7px; margin-left: auto; }
 .sidebar-nav-badge-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; position: absolute; top: 8px; right: 10px; }
-.sidebar-divider { height: 1px; background: var(--sidebar-border); margin: 6px 12px; }
+.sidebar-divider { height: 1px; background: var(--sidebar-border); margin: 6px 12px; flex-shrink: 0; }
 
-.sidebar-user { padding: 10px 8px; border-top: 1px solid var(--sidebar-border); }
+.sidebar-user {
+  padding: 10px 8px;
+  border-top: 1px solid var(--sidebar-border);
+  margin-top: auto;
+  flex-shrink: 0;
+}
 .sidebar-user-inner { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; transition: background 0.15s; }
 .sidebar-user-inner:hover { background: var(--sidebar-item-hover); }
 .sidebar-user-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.88rem; color: white; flex-shrink: 0; }

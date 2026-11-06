@@ -686,11 +686,26 @@
    -------------------------------------------------------------------------- */
 .app-shell-sidebar {
   background: var(--erp-sidebar-bg) !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 .app-sidebar {
   background: var(--erp-sidebar-bg) !important;
   border-right: 1px solid var(--erp-sidebar-border) !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.app-sidebar .sidebar-nav {
+  overflow-y: visible !important;
+  flex-shrink: 0 !important;
 }
 
 .app-sidebar .sidebar-brand {
@@ -746,6 +761,8 @@
 
 .app-sidebar .sidebar-user {
   border-top: 1px solid var(--erp-sidebar-border) !important;
+  margin-top: auto !important;
+  flex-shrink: 0 !important;
 }
 
 .app-sidebar .sidebar-user-name {
