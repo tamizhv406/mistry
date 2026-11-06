@@ -59,7 +59,7 @@
   .m-topbar .m-brand { display: none; }
   .m-topbar .m-project-switch { flex: 0 1 420px; }
   .m-topbar .m-avatar { margin-left: auto; }
-  .app-shell-sidebar { top: var(--m-top-h); height: calc(100vh - var(--m-top-h)); }
+  .app-shell-sidebar { top: 0 !important; height: 100vh !important; max-height: 100vh !important; overflow-y: auto !important; }
 }
 
 @media (max-width: 768px) {

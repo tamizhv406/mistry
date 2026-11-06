@@ -684,12 +684,23 @@
 /* --------------------------------------------------------------------------
    COLLAPSIBLE SIDEBAR OVERRIDES & TOOLTIPS
    -------------------------------------------------------------------------- */
+.app-shell {
+  display: flex !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
 .app-shell-sidebar {
   background: var(--erp-sidebar-bg) !important;
+  position: sticky !important;
+  top: 0 !important;
   height: 100vh !important;
   max-height: 100vh !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
+  scrollbar-width: thin !important;
 }
 
 .app-sidebar {
@@ -701,6 +712,21 @@
   overflow-x: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  box-sizing: border-box !important;
+  scrollbar-width: thin !important;
+}
+
+.app-shell-main {
+  flex: 1 !important;
+  min-width: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  position: relative !important;
+  scrollbar-width: thin !important;
 }
 
 .app-sidebar .sidebar-nav {
