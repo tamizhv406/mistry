@@ -103,6 +103,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const [usersList, setUsersList] = useState<User[]>([]);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<'mastri' | 'engineer'>(() => {
+    if (user?.role === 'MISTRY' || (user?.role as string) === 'contractor') return 'mastri';
+    return 'engineer';
+  });
+  const [tnArea, setTnArea] = useState<number>(1000);
+
+  const handleMarkAllPresent = async () => {
+    try {
+      const today = todayKey();
+      const allSites = await db.sites.toArray();
+      const siteFilter = selectedSiteFilterId ? [selectedSiteFilterId] : allSites.map(s => s.id);
+      const workersToMark = await db.workers
+        .filter(w => siteFilter.includes(w.siteId) && !w.isDeleted)
+        .toArray();
+
+      if (workersToMark.length === 0) {
+        onNotify('ஆஜர் பதிவு செய்ய தொழிலாளர்கள் இல்லை. (No workers found)', 'info');
+        return;
+      }
+
+      const existingAttendance = await db.attendance.where('date').equals(today).toArray();
+      const existingWorkerIds = new Set(existingAttendance.map(a => a.workerId));
+
+      let markedCount = 0;
+      for (const worker of workersToMark) {
+        if (!existingWorkerIds.has(worker.id)) {
+          await db.attendance.add({
+            id: 'att_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            siteId: worker.siteId,
+            workerId: worker.id,
+            date: today,
+            status: 'present',
+            dayMultiplier: 1,
+            isDeleted: false,
+            wageEarned: worker.dailyWage || 0,
+            dailyWageSnapshot: worker.dailyWage || 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          markedCount++;
+        }
+      }
+
+      onNotify(`${markedCount > 0 ? markedCount : workersToMark.length} தொழிலாளர்களுக்கு இன்றைய ஆஜர் வெற்றிகரமாக பதிவு செய்யப்பட்டது!`, 'success');
+    } catch (err: any) {
+      onNotify('ஆஜர் பதிவு தோல்வி: ' + err.message, 'error');
+    }
+  };
 
   React.useEffect(() => {
     if (isAdmin(user)) {
@@ -247,6 +295,186 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             >
               Total Projects Monitored: <strong>{stats.totalSites}</strong>
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* 4.5 Mode Toggle: Mastri Field Mode vs Engineer Mode */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 6, backgroundColor: '#f1f5f9', padding: 4, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+          <button
+            type="button"
+            onClick={() => setDashboardMode('mastri')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 8,
+              border: dashboardMode === 'mastri' ? '1px solid #d97706' : 'none',
+              backgroundColor: dashboardMode === 'mastri' ? '#fef3c7' : 'transparent',
+              color: dashboardMode === 'mastri' ? '#92400e' : '#64748b',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+            }}
+          >
+            <HardHat size={16} />
+            <span>👷 மேஸ்திரி ஃபீல்டு மோட் (Mastri Field Mode)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDashboardMode('engineer')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 8,
+              border: dashboardMode === 'engineer' ? '1px solid #0284c7' : 'none',
+              backgroundColor: dashboardMode === 'engineer' ? '#e0f2fe' : 'transparent',
+              color: dashboardMode === 'engineer' ? '#0369a1' : '#64748b',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+            }}
+          >
+            <span>📐 பொறியாளர் மோட் (Engineer Mode)</span>
+          </button>
+        </div>
+
+        <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+          {dashboardMode === 'mastri' ? '⚡ அதிவேக ஆன்-சைட் மேலாண்மை வசதிகள்' : '📊 முழு CAD வரைபடம், திட்ட மதிப்பீடு & பகுப்பாய்வு'}
+        </span>
+      </div>
+
+      {/* 4.6 Mastri Field Mode Active Card */}
+      {dashboardMode === 'mastri' && (
+        <div
+          style={{
+            backgroundColor: '#fffbeb',
+            border: '1.5px solid #fde68a',
+            borderRadius: 14,
+            padding: '16px 20px',
+            marginBottom: 16,
+            boxShadow: '0 2px 8px rgba(217, 119, 6, 0.08)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <HardHat size={20} />
+              </div>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 800, color: '#92400e' }}>
+                  மேஸ்திரி ஆன்-சைட் விரைவு கட்டுப்பாடுகள் (Mastri Quick Site Controls)
+                </h4>
+                <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#78350f' }}>
+                  தொழிலாளர் ஆஜர், டீ/ஸ்நாக்ஸ் சில்லறை செலவு, மற்றும் மெட்டீரியல் வரவு 1-கிளிக்கில் பதிவு செய்யவும்
+                </p>
+              </div>
+            </div>
+
+            <span style={{ backgroundColor: '#fef3c7', border: '1px solid #fcd34d', color: '#b45309', padding: '3px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>
+              {stats.attendanceToday.present} Present / {stats.totalWorkers} Workers
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            {/* 1-Click Mark All Present */}
+            <button
+              type="button"
+              onClick={handleMarkAllPresent}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: 'none',
+                backgroundColor: '#16a34a',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(22, 163, 74, 0.25)',
+              }}
+            >
+              <CheckCircle2 size={18} />
+              <span>1-Click Mark All Present (அனைவரும் ஆஜர்)</span>
+            </button>
+
+            {/* Quick Tea & Snacks Petty Cash */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenExpenseModal) onOpenExpenseModal('tea_snacks');
+                else if (onNavigate) onNavigate('expenses');
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid #f59e0b',
+                backgroundColor: '#ffffff',
+                color: '#b45309',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Coffee size={18} color="#d97706" />
+              <span>டீ / ஸ்நாக்ஸ் செலவு (Tea / Snacks ₹)</span>
+            </button>
+
+            {/* Quick Material Inward */}
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenMaterialModal) onOpenMaterialModal('cement');
+                else if (onNavigate) onNavigate('stock');
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid #0284c7',
+                backgroundColor: '#ffffff',
+                color: '#0369a1',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Layers size={18} color="#0284c7" />
+              <span>மெட்டீரியல் வரவு (Material Inward)</span>
+            </button>
+
+            {/* Attendance & Wage Settlement */}
+            <button
+              type="button"
+              onClick={() => onNavigate ? onNavigate('labour') : undefined}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid #7c3aed',
+                backgroundColor: '#ffffff',
+                color: '#6d28d9',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Users size={18} color="#7c3aed" />
+              <span>சம்பள பட்டுவாடா & ரசீது (Wage Slips)</span>
+            </button>
           </div>
         </div>
       )}
@@ -444,6 +672,116 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Module 6: Real Tamil Nadu Material Costing & Quick Estimation */}
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          border: '1.5px solid #e2e8f0',
+          borderRadius: 16,
+          padding: '18px 20px',
+          marginBottom: 20,
+          boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderBottom: '1px solid #f1f5f9', paddingBottom: 12, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Calculator size={20} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+                தமிழ்நாடு கட்டுமானப் பொருட்கள் விலை நிலவரம் & மதிப்பீடு (Tamil Nadu Costing)
+              </h3>
+              <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#64748b' }}>
+                சந்தையின் தற்போதைய நேரடி விலை நிலவரம் மற்றும் சதுர அடி அடிப்படையிலான உத்தேச மதிப்பீடு
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569' }}>கட்டிட பரப்பு (Area):</span>
+            <input
+              type="number"
+              min={100}
+              step={50}
+              value={tnArea}
+              onChange={e => setTnArea(Math.max(100, Number(e.target.value) || 0))}
+              style={{
+                width: '100px',
+                padding: '6px 10px',
+                borderRadius: 8,
+                border: '1.5px solid #cbd5e1',
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                textAlign: 'right',
+              }}
+            />
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b' }}>sq.ft</span>
+          </div>
+        </div>
+
+        {/* 5 Real TN Material Benchmarks */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10, marginBottom: 14 }}>
+          <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 600 }}>சிமெண்ட் (Cement)</span>
+            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>₹400</strong>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}> / 50kg bag</span>
+          </div>
+          <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 600 }}>எம்-சாண்ட் (M-Sand)</span>
+            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>₹55</strong>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}> / cft</span>
+          </div>
+          <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 600 }}>ஆற்று மணல் (River Sand)</span>
+            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>₹95</strong>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}> / cft</span>
+          </div>
+          <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 600 }}>செங்கல் (Red Bricks)</span>
+            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>₹11</strong>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}> / piece</span>
+          </div>
+          <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', display: 'block', fontWeight: 600 }}>TMT கம்பிகள் (Fe 550D Steel)</span>
+            <strong style={{ fontSize: '1rem', color: '#0f172a' }}>₹65</strong>
+            <span style={{ fontSize: '0.72rem', color: '#64748b' }}> / kg</span>
+          </div>
+        </div>
+
+        {/* Total Cost Formula & Material Quantities for given sq.ft */}
+        {(() => {
+          const ratePerSqFt = 1850;
+          const totalCost = tnArea * ratePerSqFt;
+          const cementBags = Math.round(tnArea * 0.4);
+          const steelKg = Math.round(tnArea * 4);
+          const sandCft = Math.round(tnArea * 1.8);
+          const bricksCount = Math.round(tnArea * 19);
+
+          return (
+            <div style={{ backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                <div>
+                  <span style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 700, display: 'block' }}>
+                    {tnArea} sq.ft க்கான உத்தேச கட்டுமான செலவு (Standard G+1 Residential @ ₹1,850/sq.ft):
+                  </span>
+                  <strong style={{ fontSize: '1.35rem', color: '#15803d', fontWeight: 900 }}>
+                    ₹{totalCost.toLocaleString('en-IN')}
+                  </strong>
+                </div>
+
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: '0.8rem', color: '#166534' }}>
+                  <div>📦 சிமெண்ட்: <strong>{cementBags} மூட்டைகள்</strong> (~₹{(cementBags * 400).toLocaleString('en-IN')})</div>
+                  <div>🔩 ஸ்டீல்: <strong>{steelKg.toLocaleString('en-IN')} kg</strong> (~₹{(steelKg * 65).toLocaleString('en-IN')})</div>
+                  <div>⏳ மணல்: <strong>{sandCft.toLocaleString('en-IN')} cft</strong> (~₹{(sandCft * 55).toLocaleString('en-IN')})</div>
+                  <div>🧱 செங்கல்: <strong>{bricksCount.toLocaleString('en-IN')} கல்</strong> (~₹{(bricksCount * 11).toLocaleString('en-IN')})</div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* 7 & 8. Main 2-Column Section: Project Portfolio & Financials */}
       {/* Site Selection Filter Bar (Requirement 6) */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronRight, X, Download } from 'lucide-react';
+import { ChevronRight, X, Download, Building2 } from 'lucide-react';
 import { db } from './db/db';
 import { MobileTopBar, MobileBottomNav } from './components/mobile/MobileChrome';
 import { HomeView } from './views/mobile/HomeView';
@@ -84,6 +84,9 @@ const CURRENT_SITE_KEY = 'mistry_current_site';
 export function App() {
   const [currentUser, setCurrentUser] = useState<User>(() => getCurrentUser() || getLocalWorkspaceUser());
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [localSitesToMerge, setLocalSitesToMerge] = useState<Site[]>([]);
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [mergeTargetUser, setMergeTargetUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<AppViewName>('dashboard');
   // The current project is remembered on this device so the app reopens where the user left off.
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => {
@@ -1334,12 +1337,126 @@ export function App() {
               <X size={18} color="#475569" />
             </button>
             <LoginView
-              onLoginSuccess={user => {
+              onLoginSuccess={async user => {
                 setCurrentUser(user);
                 setIsAuthModalOpen(false);
                 addToast(`Connected to cloud profile: ${user.fullName || user.username}!`, 'success');
+                try {
+                  const localSites = await db.sites
+                    .filter(s => s.userId === 'local_builder' || s.userId === 'local-builder-user')
+                    .toArray();
+                  if (localSites.length > 0) {
+                    setLocalSitesToMerge(localSites);
+                    setMergeTargetUser(user);
+                    setIsMergeModalOpen(true);
+                  }
+                } catch (err) {
+                  console.error('Failed checking local sites for merge:', err);
+                }
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Post-Authentication Merge Local Sites Dialog (Module 4) */}
+      {isMergeModalOpen && mergeTargetUser && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 1300 }}
+          onClick={() => setIsMergeModalOpen(false)}
+        >
+          <div
+            className="modal-dialog"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth: '480px', width: '100%', borderRadius: 16, overflow: 'hidden' }}
+          >
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Building2 size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    உள்ளூர் திட்டங்கள் கண்டறியப்பட்டன
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: '#64748b' }}>
+                    Local Sites Detected ({localSitesToMerge.length} projects)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMergeModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px' }}>
+              <p style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.5, margin: '0 0 14px' }}>
+                நீங்கள் ஆஃப்லைன் முறையில் உருவாக்கிய <strong>{localSitesToMerge.length} திட்டங்கள்</strong> உள்ளன. அவற்றை உங்கள் கணக்கில் (<strong>{mergeTargetUser.fullName || mergeTargetUser.username}</strong>) இணைக்க விரும்புகிறீர்களா?
+              </p>
+              <div style={{ backgroundColor: '#f1f5f9', borderRadius: 10, padding: '10px 14px', marginBottom: 16, maxHeight: '140px', overflowY: 'auto' }}>
+                {localSitesToMerge.map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '4px 0', borderBottom: '1px solid #e2e8f0' }}>
+                    <strong>{s.name}</strong>
+                    <span style={{ color: '#64748b' }}>{s.location || 'Local'}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setIsMergeModalOpen(false)}
+                  style={{
+                    flex: 1,
+                    padding: '11px',
+                    borderRadius: 10,
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#64748b',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  தவிர்க்கவும் (Keep Separate)
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      for (const site of localSitesToMerge) {
+                        await db.sites.update(site.id, { userId: mergeTargetUser.id, updatedAt: new Date().toISOString() });
+                      }
+                      addToast(`${localSitesToMerge.length} உள்ளூர் திட்டங்கள் கணக்கில் இணைக்கப்பட்டன!`, 'success');
+                      await performFullSync(mergeTargetUser.id);
+                    } catch (err: any) {
+                      addToast('Merge failed: ' + err.message, 'error');
+                    } finally {
+                      setIsMergeModalOpen(false);
+                      setLocalSitesToMerge([]);
+                    }
+                  }}
+                  style={{
+                    flex: 1.5,
+                    padding: '11px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: '#0284c7',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  இணைக்கவும் (Merge Sites)
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

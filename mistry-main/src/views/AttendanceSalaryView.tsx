@@ -22,6 +22,7 @@ import {
   Edit2,
   Check,
   Sparkles,
+  Printer,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
@@ -42,6 +43,7 @@ import { AttendanceModal } from '../components/AttendanceModal';
 import { WorkerModal } from '../components/WorkerModal';
 import { AdvanceModal } from '../components/AdvanceModal';
 import { SalaryPaymentModal } from '../components/SalaryPaymentModal';
+import { WageSlipModal } from '../components/WageSlipModal';
 import { useLanguage } from '../services/i18n';
 import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
 
@@ -84,6 +86,8 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   const [salaryToEdit, setSalaryToEdit] = useState<SalaryPayment | null>(null);
   const [selectedWorkerForAction, setSelectedWorkerForAction] = useState<string | null>(null);
   const [lastPaidWorkerId, setLastPaidWorkerId] = useState<string | null>(null);
+  const [isWageSlipModalOpen, setIsWageSlipModalOpen] = useState<boolean>(false);
+  const [selectedWorkerForSlip, setSelectedWorkerForSlip] = useState<LabourWorker | null>(null);
 
   const handlePaymentSuccess = (msg: string, workerId?: string) => {
     onNotify(msg, 'success');
@@ -1228,6 +1232,30 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                             >
                               Advance
                             </button>
+                            <button
+                              id={`salary-slip-btn-${w.id}`}
+                              onClick={() => {
+                                setSelectedWorkerForSlip(w);
+                                setIsWageSlipModalOpen(true);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #0284C7',
+                                backgroundColor: '#F0F9FF',
+                                color: '#0284C7',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                              title="1-Click Printable Wage Slip"
+                            >
+                              <Printer size={13} />
+                              <span>Slip</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1350,6 +1378,31 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                         }}
                       >
                         Advance
+                      </button>
+                      <button
+                        type="button"
+                        id={`mobile-wage-slip-${w.id}`}
+                        onClick={() => {
+                          setSelectedWorkerForSlip(w);
+                          setIsWageSlipModalOpen(true);
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: '1px solid #0284C7',
+                          backgroundColor: '#F0F9FF',
+                          color: '#0284C7',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Printer size={14} />
+                        <span>Slip</span>
                       </button>
                     </div>
                   </div>
@@ -1630,6 +1683,20 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
         initialWorkerId={selectedWorkerForAction}
         onClose={() => setIsSalaryModalOpen(false)}
         onSuccess={handlePaymentSuccess}
+      />
+
+      {/* 1-Click Printable Wage Slip Modal */}
+      <WageSlipModal
+        isOpen={isWageSlipModalOpen}
+        onClose={() => {
+          setIsWageSlipModalOpen(false);
+          setSelectedWorkerForSlip(null);
+        }}
+        worker={selectedWorkerForSlip}
+        siteName={sites.find(s => s.id === selectedSiteId)?.name || 'Building Mistry Project'}
+        attendance={attendance}
+        advances={advances}
+        salaryPayments={salaryPayments}
       />
     </div>
   );

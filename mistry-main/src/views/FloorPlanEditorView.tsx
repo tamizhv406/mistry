@@ -12093,6 +12093,67 @@ _Shared via Building Mistry App_`;
                       markUnsaved();
                     }
                   }}
+                  onNudge={(dx, dy) => {
+                    const step = unit === 'meters' ? 0.15 : 0.5;
+                    const deltaX = dx * step;
+                    const deltaY = dy * step;
+                    if (selectedElement.type === 'furniture') {
+                      const f = entity as FloorPlanFurniture;
+                      if (f.locked) return;
+                      dispatchWithHistory({
+                        type: 'UPDATE_FURNITURE',
+                        id: f.id,
+                        changes: { x: Number((f.x + deltaX).toFixed(2)), y: Number((f.y + deltaY).toFixed(2)) },
+                      });
+                      markUnsaved();
+                    } else if (selectedElement.type === 'door') {
+                      const d = entity as FloorPlanDoor;
+                      if (d.locked) return;
+                      dispatchWithHistory({
+                        type: 'UPDATE_DOOR',
+                        id: d.id,
+                        changes: { x: Number((d.x + deltaX).toFixed(2)), y: Number((d.y + deltaY).toFixed(2)) },
+                      });
+                      markUnsaved();
+                    } else if (selectedElement.type === 'window') {
+                      const w = entity as FloorPlanWindow;
+                      if (w.locked) return;
+                      dispatchWithHistory({
+                        type: 'UPDATE_WINDOW',
+                        id: w.id,
+                        changes: { x: Number((w.x + deltaX).toFixed(2)), y: Number((w.y + deltaY).toFixed(2)) },
+                      });
+                      markUnsaved();
+                    }
+                  }}
+                  onStepDimension={(dim, delta) => {
+                    const step = unit === 'meters' ? 0.15 : 0.5;
+                    const change = delta * step;
+                    if (selectedElement.type === 'furniture') {
+                      const f = entity as FloorPlanFurniture;
+                      if (f.locked) return;
+                      if (dim === 'width') {
+                        const newW = Math.max(0.5, Number((f.width + change).toFixed(2)));
+                        dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { width: newW } });
+                      } else {
+                        const newH = Math.max(0.5, Number((f.height + change).toFixed(2)));
+                        dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { height: newH } });
+                      }
+                      markUnsaved();
+                    } else if (selectedElement.type === 'door') {
+                      const d = entity as FloorPlanDoor;
+                      if (d.locked) return;
+                      const newW = Math.max(1, Number((d.width + change).toFixed(2)));
+                      dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { width: newW } });
+                      markUnsaved();
+                    } else if (selectedElement.type === 'window') {
+                      const w = entity as FloorPlanWindow;
+                      if (w.locked) return;
+                      const newW = Math.max(1, Number((w.width + change).toFixed(2)));
+                      dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: newW } });
+                      markUnsaved();
+                    }
+                  }}
                 />
 
                 {/* Optional Fine-Tuning Sheet on mobile: ONLY shown when user taps "More" */}

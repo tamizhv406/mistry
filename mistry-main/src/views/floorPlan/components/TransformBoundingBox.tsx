@@ -52,6 +52,13 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
     if ('preventDefault' in e && (e as any).cancelable) {
       (e as any).preventDefault();
     }
+    if ('setPointerCapture' in e.target && 'pointerId' in (e as any)) {
+      try {
+        (e.target as Element).setPointerCapture((e as any).pointerId);
+      } catch {
+        // Pointer capture not supported on this node
+      }
+    }
     action();
   };
 
@@ -63,9 +70,10 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
         y={by}
         width={bw}
         height={bh}
-        fill="rgba(2, 132, 199, 0.06)"
+        fill="rgba(2, 132, 199, 0.08)"
         stroke="#0284c7"
         strokeWidth={2}
+        strokeDasharray="4 3"
         rx={4}
         style={{ cursor: isLocked ? 'not-allowed' : 'move', touchAction: 'none' }}
         onPointerDown={onDragStart ? (e) => handlePointerDown(e, () => onDragStart(e)) : undefined}
