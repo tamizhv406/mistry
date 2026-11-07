@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { MinimalPdfDocument, generateFloorPlanPdfBlob, generateBuildingEstimatePdfBlob } from '../src/utils/pdfGenerator';
+import { MinimalPdfDocument, generateFloorPlanPdfBlob, generateBuildingEstimatePdfBlob, renderCADSymbol } from '../src/utils/pdfGenerator';
 import type { FloorPlan, FloorPlanWall, FloorPlanRoom } from '../src/db/types';
 
 describe('[PDF Export Engine] Genuine PDF File & MIME Type Verification', () => {
@@ -263,6 +263,91 @@ describe('[PDF Export Engine] Genuine PDF File & MIME Type Verification', () => 
     assert.strictEqual(ungroupedItems[0].groupId, undefined);
     assert.strictEqual(ungroupedItems[1].groupId, undefined);
     assert.strictEqual(ungroupedItems[2].groupId, undefined);
+  });
+
+  it('renders realistic 2D architectural CAD blocks instead of empty bounding boxes', () => {
+    // Create a mock canvas context recording all draw operations
+    const ops: Array<{ op: string; args: any[] }> = [];
+    const createMockCtx = () => {
+      ops.length = 0;
+      return {
+        save: () => ops.push({ op: 'save', args: [] }),
+        restore: () => ops.push({ op: 'restore', args: [] }),
+        translate: (x: number, y: number) => ops.push({ op: 'translate', args: [x, y] }),
+        rotate: (r: number) => ops.push({ op: 'rotate', args: [r] }),
+        fillRect: (x: number, y: number, w: number, h: number) => ops.push({ op: 'fillRect', args: [x, y, w, h] }),
+        strokeRect: (x: number, y: number, w: number, h: number) => ops.push({ op: 'strokeRect', args: [x, y, w, h] }),
+        beginPath: () => ops.push({ op: 'beginPath', args: [] }),
+        closePath: () => ops.push({ op: 'closePath', args: [] }),
+        moveTo: (x: number, y: number) => ops.push({ op: 'moveTo', args: [x, y] }),
+        lineTo: (x: number, y: number) => ops.push({ op: 'lineTo', args: [x, y] }),
+        stroke: () => ops.push({ op: 'stroke', args: [] }),
+        fill: () => ops.push({ op: 'fill', args: [] }),
+        arc: (x: number, y: number, r: number, sa: number, ea: number) => ops.push({ op: 'arc', args: [x, y, r, sa, ea] }),
+        ellipse: (x: number, y: number, rx: number, ry: number, ro: number, sa: number, ea: number) =>
+          ops.push({ op: 'ellipse', args: [x, y, rx, ry, ro, sa, ea] }),
+        fillText: (t: string, x: number, y: number) => ops.push({ op: 'fillText', args: [t, x, y] }),
+        setLineDash: (d: number[]) => ops.push({ op: 'setLineDash', args: [d] }),
+        fillStyle: '',
+        strokeStyle: '',
+        lineWidth: 1,
+        font: '',
+        textAlign: '',
+        textBaseline: '',
+      } as unknown as CanvasRenderingContext2D;
+    };
+
+    const mockCtx = createMockCtx();
+
+    // 1. Double Bed: must draw frame, headboard, 2 pillows, and blanket fold line
+    renderCADSymbol(mockCtx, { x: 50, y: 50, w: 100, h: 120, rotation: 0, type: 'double bed', name: 'King Bed' });
+    const bedFillRects = ops.filter(o => o.op === 'fillRect');
+    const bedStrokes = ops.filter(o => o.op === 'stroke');
+    assert.ok(bedFillRects.length >= 4, 'Double Bed must draw outer frame, headboard, and two distinct pillows');
+    assert.ok(bedStrokes.length >= 1, 'Double Bed must draw blanket fold stroke line');
+
+    // 2. L-Shaped Sofa: must draw main seating, extension, backrest, and cushion divider creases
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 200, y: 100, w: 120, h: 120, rotation: 45, type: 'L Sofa' });
+    const sofaRects = ops.filter(o => o.op === 'fillRect' || o.op === 'strokeRect');
+    const sofaLines = ops.filter(o => o.op === 'lineTo');
+    assert.ok(sofaRects.length >= 4, 'L-Sofa must draw main seating, extension, and backrest segments');
+    assert.ok(sofaLines.length >= 2, 'L-Sofa must draw cushion crease divider lines');
+
+    // 3. Ceiling Fan: must draw safety circle boundary, central hub, and 4 aerodynamic blades
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 100, y: 200, w: 60, h: 60, rotation: 0, type: 'ceiling fan' });
+    const fanArcs = ops.filter(o => o.op === 'arc');
+    const fanRotates = ops.filter(o => o.op === 'rotate');
+    assert.ok(fanArcs.length >= 2, 'Ceiling Fan must render outer boundary circle and central hub pin');
+    assert.ok(fanRotates.length >= 4, 'Ceiling Fan must rotate and render 4 aerodynamic blades');
+
+    // 4. Toilet / WC: must draw cistern tank and oval bowl
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 300, y: 50, w: 40, h: 50, rotation: 90, type: 'wc' });
+    const wcRects = ops.filter(o => o.op === 'fillRect' || o.op === 'strokeRect');
+    const wcEllipses = ops.filter(o => o.op === 'ellipse' || o.op === 'arc');
+    assert.ok(wcRects.length >= 2, 'WC must draw water tank and flush mechanism');
+    assert.ok(wcEllipses.length >= 1, 'WC must draw oval bowl');
+
+    // 5. Dining Table: must draw central table and chairs
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 50, y: 300, w: 80, h: 80, rotation: 0, type: 'dining table' });
+    const diningRects = ops.filter(o => o.op === 'fillRect' || o.op === 'strokeRect');
+    assert.ok(diningRects.length >= 6, 'Dining Table must draw central table and 4 chairs surrounding it');
+
+    // 6. Washing Machine & AC & Gas Stove
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 0, y: 0, w: 50, h: 50, rotation: 0, type: 'washing machine' });
+    assert.ok(ops.filter(o => o.op === 'ellipse' || o.op === 'arc').length >= 2, 'Washing Machine must render glass drum and dials');
+
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 0, y: 0, w: 60, h: 20, rotation: 0, type: 'split ac' });
+    assert.ok(ops.some(o => o.op === 'lineTo'), 'Split AC must render louver lines and indicator LED');
+
+    createMockCtx();
+    renderCADSymbol(mockCtx, { x: 0, y: 0, w: 60, h: 40, rotation: 0, type: 'gas stove' });
+    assert.ok(ops.filter(o => o.op === 'arc').length >= 4, 'Gas Stove must render dual concentric burner rings');
   });
 });
 

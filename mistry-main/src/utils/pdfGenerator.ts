@@ -299,6 +299,813 @@ export async function rasterizeSvgToJpeg(
   });
 }
 
+export interface RenderCADSymbolItem {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation?: number;
+  type: string;
+  name?: string;
+  label?: string;
+  rotateAroundOrigin?: boolean;
+}
+
+/**
+ * Renders high-fidelity 2D architectural CAD blocks onto an HTML5 Canvas context.
+ * Used for PDF exports and blueprint generation, replacing plain bounding boxes
+ * with realistic architectural symbols (beds, sofas, dining tables, fans, toilets, etc.).
+ */
+export function renderCADSymbol(
+  ctx: CanvasRenderingContext2D,
+  item: RenderCADSymbolItem
+): void {
+  ctx.save();
+  const w = Math.max(4, item.w);
+  const h = Math.max(4, item.h);
+
+  ctx.translate(item.x, item.y);
+  if (item.rotation) {
+    if (item.rotateAroundOrigin) {
+      ctx.rotate((item.rotation * Math.PI) / 180);
+    } else {
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate((item.rotation * Math.PI) / 180);
+      ctx.translate(-w / 2, -h / 2);
+    }
+  }
+
+  const rawType = (item.type || item.name || item.label || '').toLowerCase().trim();
+  const displayName = item.label || item.name || item.type || 'Item';
+
+  // Helper for safe ellipse drawing across all canvas environments
+  const drawEllipse = (
+    cx: number,
+    cy: number,
+    rx: number,
+    ry: number,
+    fill = true,
+    stroke = true
+  ) => {
+    ctx.beginPath();
+    if (typeof (ctx as any).ellipse === 'function') {
+      (ctx as any).ellipse(cx, cy, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, Math.PI * 2);
+    } else {
+      ctx.arc(cx, cy, Math.max(0.1, Math.min(rx, ry)), 0, Math.PI * 2);
+    }
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  };
+
+  // Helper for rounded rectangles if available or fallback to rect
+  const drawRoundRect = (
+    rx: number,
+    ry: number,
+    rw: number,
+    rh: number,
+    radius: number,
+    fill = true,
+    stroke = true
+  ) => {
+    ctx.beginPath();
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(rx, ry, rw, rh, radius);
+    } else {
+      ctx.rect(rx, ry, rw, rh);
+    }
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+  };
+
+  switch (true) {
+    // ═══════════════════════════════════════════════════════════════
+    // 1. DOUBLE BED / KING BED / QUEEN BED
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'bed' ||
+      rawType === 'double bed' ||
+      rawType === 'king bed' ||
+      rawType === 'queen bed' ||
+      rawType.includes('double bed') ||
+      rawType.includes('king bed') ||
+      rawType.includes('queen bed'): {
+      // Outer Frame
+      ctx.fillStyle = '#EFF6FF';
+      ctx.strokeStyle = '#1E40AF';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Headboard
+      ctx.fillStyle = '#BFDBFE';
+      ctx.fillRect(0, 0, w, h * 0.15);
+      ctx.strokeRect(0, 0, w, h * 0.15);
+
+      // Two Pillows
+      const pW = w * 0.38;
+      const pH = h * 0.22;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(w * 0.08, h * 0.20, pW, pH);
+      ctx.strokeRect(w * 0.08, h * 0.20, pW, pH);
+      ctx.fillRect(w * 0.54, h * 0.20, pW, pH);
+      ctx.strokeRect(w * 0.54, h * 0.20, pW, pH);
+
+      // Blanket Fold Line
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.55);
+      ctx.lineTo(w, h * 0.55);
+      ctx.strokeStyle = '#3B82F6';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Bed Sheet Turn-down Accent
+      ctx.fillStyle = 'rgba(191, 219, 254, 0.4)';
+      ctx.fillRect(0, h * 0.45, w, h * 0.1);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 1b. SINGLE BED
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'single bed' || rawType.includes('single bed'): {
+      ctx.fillStyle = '#EFF6FF';
+      ctx.strokeStyle = '#1E40AF';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Headboard
+      ctx.fillStyle = '#BFDBFE';
+      ctx.fillRect(0, 0, w, h * 0.15);
+      ctx.strokeRect(0, 0, w, h * 0.15);
+
+      // Single Central Pillow
+      const spW = w * 0.65;
+      const spH = h * 0.22;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect((w - spW) / 2, h * 0.20, spW, spH);
+      ctx.strokeRect((w - spW) / 2, h * 0.20, spW, spH);
+
+      // Blanket Fold Line
+      ctx.beginPath();
+      ctx.moveTo(0, h * 0.55);
+      ctx.lineTo(w, h * 0.55);
+      ctx.strokeStyle = '#3B82F6';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 2. L-SHAPED SOFA / SECTIONAL
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'sofa' ||
+      rawType === 'l sofa' ||
+      rawType === 'l-sofa' ||
+      rawType.includes('l-shaped') ||
+      rawType.includes('sectional') ||
+      rawType === 'l-shaped sofa': {
+      ctx.fillStyle = '#F0FDF4';
+      ctx.strokeStyle = '#15803D';
+      ctx.lineWidth = 1.5;
+
+      // Main horizontal seating
+      ctx.fillRect(0, h * 0.4, w, h * 0.6);
+      ctx.strokeRect(0, h * 0.4, w, h * 0.6);
+
+      // Vertical extension / chaise lounge
+      ctx.fillRect(w * 0.55, 0, w * 0.45, h * 0.4);
+      ctx.strokeRect(w * 0.55, 0, w * 0.45, h * 0.4);
+
+      // Backrest outer strip
+      ctx.fillStyle = '#DCFCE7';
+      ctx.fillRect(0, h * 0.85, w, h * 0.15);
+      ctx.strokeRect(0, h * 0.85, w, h * 0.15);
+      ctx.fillRect(w * 0.85, 0, w * 0.15, h * 0.85);
+      ctx.strokeRect(w * 0.85, 0, w * 0.15, h * 0.85);
+
+      // Cushion divider creases
+      ctx.strokeStyle = '#86EFAC';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.3, h * 0.4);
+      ctx.lineTo(w * 0.3, h * 0.85);
+      ctx.moveTo(w * 0.55, h * 0.4);
+      ctx.lineTo(w * 0.55, h * 0.85);
+      ctx.moveTo(w * 0.55, h * 0.2);
+      ctx.lineTo(w * 0.85, h * 0.2);
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 2b. LINEAR SOFA / 2-SEATER / 3-SEATER / ARMCHAIR
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('sofa') ||
+      rawType.includes('couch') ||
+      rawType.includes('armchair') ||
+      rawType.includes('seating'): {
+      ctx.fillStyle = '#F0FDF4';
+      ctx.strokeStyle = '#15803D';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Backrest
+      const backH = h * 0.28;
+      ctx.fillStyle = '#DCFCE7';
+      ctx.fillRect(0, 0, w, backH);
+      ctx.strokeRect(0, 0, w, backH);
+
+      // Armrests
+      const armW = w * 0.14;
+      ctx.fillRect(0, backH, armW, h - backH);
+      ctx.strokeRect(0, backH, armW, h - backH);
+      ctx.fillRect(w - armW, backH, armW, h - backH);
+      ctx.strokeRect(w - armW, backH, armW, h - backH);
+
+      // Cushions divider
+      ctx.strokeStyle = '#86EFAC';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.5, backH);
+      ctx.lineTo(w * 0.5, h);
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 3. DINING TABLE & 4 CHAIRS / 6 CHAIRS
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'dining' ||
+      rawType === 'dining table' ||
+      rawType === '4-seat dining table' ||
+      rawType.includes('dining'): {
+      // Central Table
+      ctx.fillStyle = '#FEFCE8';
+      ctx.strokeStyle = '#B45309';
+      ctx.lineWidth = 1.5;
+      const tX = w * 0.2, tY = h * 0.2, tW = w * 0.6, tH = h * 0.6;
+      ctx.fillRect(tX, tY, tW, tH);
+      ctx.strokeRect(tX, tY, tW, tH);
+
+      // Check if 6-seat dining table
+      const is6Seat = rawType.includes('6') || (w / Math.max(1, h) > 1.4);
+      ctx.fillStyle = '#FDE68A';
+
+      if (is6Seat) {
+        const cW = tW * 0.38;
+        const cH = tY;
+        // Top 2 chairs
+        ctx.fillRect(tX + tW * 0.08, 0, cW, cH);
+        ctx.strokeRect(tX + tW * 0.08, 0, cW, cH);
+        ctx.fillRect(tX + tW * 0.54, 0, cW, cH);
+        ctx.strokeRect(tX + tW * 0.54, 0, cW, cH);
+        // Bottom 2 chairs
+        ctx.fillRect(tX + tW * 0.08, tY + tH, cW, cH);
+        ctx.strokeRect(tX + tW * 0.08, tY + tH, cW, cH);
+        ctx.fillRect(tX + tW * 0.54, tY + tH, cW, cH);
+        ctx.strokeRect(tX + tW * 0.54, tY + tH, cW, cH);
+        // End chairs (left & right)
+        const sideW = tX;
+        const sideH = tH * 0.5;
+        ctx.fillRect(0, tY + (tH - sideH) / 2, sideW, sideH);
+        ctx.strokeRect(0, tY + (tH - sideH) / 2, sideW, sideH);
+        ctx.fillRect(tX + tW, tY + (tH - sideH) / 2, sideW, sideH);
+        ctx.strokeRect(tX + tW, tY + (tH - sideH) / 2, sideW, sideH);
+      } else {
+        // Standard 4 Chairs around table
+        const cSize = Math.min(w, h) * 0.22;
+        // Top Chair
+        ctx.strokeRect(w * 0.5 - cSize / 2, 0, cSize, tY);
+        ctx.fillRect(w * 0.5 - cSize / 2, 0, cSize, tY);
+        // Bottom Chair
+        ctx.strokeRect(w * 0.5 - cSize / 2, tY + tH, cSize, tY);
+        ctx.fillRect(w * 0.5 - cSize / 2, tY + tH, cSize, tY);
+        // Left Chair
+        ctx.strokeRect(0, h * 0.5 - cSize / 2, tX, cSize);
+        ctx.fillRect(0, h * 0.5 - cSize / 2, tX, cSize);
+        // Right Chair
+        ctx.strokeRect(tX + tW, h * 0.5 - cSize / 2, tX, cSize);
+        ctx.fillRect(tX + tW, h * 0.5 - cSize / 2, tX, cSize);
+      }
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 4. CEILING FAN (Central Hub + Aerodynamic Blades)
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'fan' ||
+      rawType === 'ceiling fan' ||
+      rawType.includes('fan'): {
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = Math.min(w, h) * 0.45;
+
+      ctx.strokeStyle = '#0284C7';
+      ctx.fillStyle = '#E0F2FE';
+      ctx.lineWidth = 1.5;
+
+      // Outer safety boundary (dashed circle)
+      ctx.save();
+      if (typeof ctx.setLineDash === 'function') {
+        ctx.setLineDash([4, 3]);
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      // 4 Fan Blades
+      ctx.fillStyle = '#0284C7';
+      for (let angle = 0; angle < 360; angle += 90) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((angle * Math.PI) / 180);
+        ctx.fillRect(-Math.max(2, radius * 0.08), 6, Math.max(4, radius * 0.16), radius - 8);
+        ctx.restore();
+      }
+
+      // Central Hub
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.3, 0, Math.PI * 2);
+      ctx.fillStyle = '#0369A1';
+      ctx.fill();
+      ctx.strokeStyle = '#075985';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Center Pin
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(1.5, radius * 0.08), 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 5. TOILET WATER CLOSET (WC)
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'toilet' ||
+      rawType === 'wc' ||
+      rawType.includes('toilet') ||
+      rawType.includes('water closet') ||
+      rawType.includes('commode'): {
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1.2;
+
+      // Tank (Cistern)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, w, h * 0.35);
+      ctx.strokeRect(0, 0, w, h * 0.35);
+
+      // Flush button
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillRect(w * 0.42, h * 0.1, w * 0.16, h * 0.12);
+
+      // Bowl Oval
+      drawEllipse(w / 2, h * 0.65, w * 0.4, h * 0.32, true, true);
+
+      // Inner Hole
+      ctx.strokeStyle = '#94A3B8';
+      drawEllipse(w / 2, h * 0.7, w * 0.22, h * 0.18, false, true);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 6. WASHING MACHINE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('washing') ||
+      rawType.includes('washer') ||
+      rawType.includes('laundry'): {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Top Control Panel
+      ctx.fillStyle = '#E2E8F0';
+      ctx.fillRect(0, 0, w, h * 0.22);
+      ctx.strokeRect(0, 0, w, h * 0.22);
+
+      // Dials / Buttons
+      ctx.fillStyle = '#0284C7';
+      drawEllipse(w * 0.25, h * 0.11, w * 0.08, h * 0.06, true, false);
+      ctx.fillStyle = '#64748B';
+      drawEllipse(w * 0.65, h * 0.11, w * 0.05, h * 0.04, true, false);
+      drawEllipse(w * 0.8, h * 0.11, w * 0.05, h * 0.04, true, false);
+
+      // Large Glass Door / Drum (Circular)
+      ctx.fillStyle = '#F1F5F9';
+      ctx.strokeStyle = '#0284C7';
+      drawEllipse(w / 2, h * 0.62, w * 0.34, h * 0.28, true, true);
+      // Inner drum ring
+      ctx.strokeStyle = '#94A3B8';
+      drawEllipse(w / 2, h * 0.62, w * 0.22, h * 0.18, false, true);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 7. SPLIT AIR CONDITIONER (AC)
+    // ═══════════════════════════════════════════════════════════════
+    case rawType === 'ac' ||
+      rawType === 'split ac' ||
+      rawType.includes('air conditioner') ||
+      rawType.includes('ac'): {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Discharge Air Vent Louvers
+      ctx.fillStyle = '#E2E8F0';
+      ctx.fillRect(w * 0.08, h * 0.6, w * 0.84, h * 0.28);
+      ctx.strokeRect(w * 0.08, h * 0.6, w * 0.84, h * 0.28);
+
+      // Louver lines
+      ctx.strokeStyle = '#94A3B8';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.12, h * 0.74);
+      ctx.lineTo(w * 0.88, h * 0.74);
+      ctx.stroke();
+
+      // Power / Temperature Display LED
+      ctx.fillStyle = '#10B981';
+      ctx.beginPath();
+      ctx.arc(w * 0.85, h * 0.3, Math.max(1.5, Math.min(w, h) * 0.05), 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 8. REFRIGERATOR / FRIDGE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('fridge') ||
+      rawType.includes('refrigerator'): {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Door division line (Freezer top / Fridge bottom)
+      const splitY = h * 0.38;
+      ctx.strokeStyle = '#475569';
+      ctx.beginPath();
+      ctx.moveTo(0, splitY);
+      ctx.lineTo(w, splitY);
+      ctx.stroke();
+
+      // Door Handles
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillRect(w * 0.86, h * 0.12, w * 0.06, h * 0.18);
+      ctx.fillRect(w * 0.86, splitY + h * 0.08, w * 0.06, h * 0.28);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 9. GAS STOVE / COOKTOP
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('stove') ||
+      rawType.includes('cooktop') ||
+      rawType.includes('gas') ||
+      rawType.includes('hob'): {
+      ctx.fillStyle = '#1E293B';
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Burners
+      const bRad = Math.min(w, h) * 0.22;
+      const bCenters = [
+        { x: w * 0.28, y: h * 0.5 },
+        { x: w * 0.72, y: h * 0.5 },
+      ];
+
+      bCenters.forEach(bc => {
+        // Outer burner ring
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#94A3B8';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(bc.x, bc.y, bRad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Inner brass burner
+        ctx.fillStyle = '#F59E0B';
+        ctx.beginPath();
+        ctx.arc(bc.x, bc.y, bRad * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Grate cross lines
+        ctx.strokeStyle = '#CBD5E1';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bc.x - bRad, bc.y);
+        ctx.lineTo(bc.x + bRad, bc.y);
+        ctx.moveTo(bc.x, bc.y - bRad);
+        ctx.lineTo(bc.x, bc.y + bRad);
+        ctx.stroke();
+      });
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 10. KITCHEN SINK
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('sink') && !rawType.includes('basin'): {
+      ctx.fillStyle = '#F1F5F9';
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Basin Bowl
+      const bInset = Math.min(w, h) * 0.12;
+      ctx.fillStyle = '#E2E8F0';
+      ctx.fillRect(bInset, bInset, w - 2 * bInset, h - 2 * bInset);
+      ctx.strokeRect(bInset, bInset, w - 2 * bInset, h - 2 * bInset);
+
+      // Drain Hole
+      ctx.fillStyle = '#64748B';
+      drawEllipse(w / 2, h / 2, Math.min(w, h) * 0.08, Math.min(w, h) * 0.08, true, false);
+
+      // Faucet Neck & Spout
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, bInset);
+      ctx.lineTo(w / 2, h * 0.35);
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 11. WASH BASIN (Bathroom)
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('basin') || rawType.includes('wash basin'): {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1.4;
+
+      // Outer Counter/Mount
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Oval Basin Cavity
+      drawEllipse(w / 2, h * 0.55, w * 0.38, h * 0.35, true, true);
+
+      // Faucet Tap
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillRect(w * 0.44, h * 0.05, w * 0.12, h * 0.2);
+
+      // Drain Hole
+      ctx.fillStyle = '#64748B';
+      drawEllipse(w / 2, h * 0.58, w * 0.08, h * 0.08, true, false);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 12. WARDROBE / CLOSET / ALMIRAH
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('wardrobe') ||
+      rawType.includes('closet') ||
+      rawType.includes('almirah') ||
+      rawType.includes('cupboard'): {
+      ctx.fillStyle = '#FEFCE8';
+      ctx.strokeStyle = '#854D0E';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Center Divider line (sliding/hinged doors)
+      ctx.strokeStyle = '#A16207';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0);
+      ctx.lineTo(w / 2, h);
+      ctx.stroke();
+
+      // Hanger Rod & Hangers representation
+      ctx.strokeStyle = '#CA8A04';
+      ctx.lineWidth = 1;
+      const numHangers = Math.max(3, Math.floor(w / 12));
+      const step = w / (numHangers + 1);
+      for (let i = 1; i <= numHangers; i++) {
+        const hx = i * step;
+        ctx.beginPath();
+        ctx.moveTo(hx - step * 0.35, h * 0.25);
+        ctx.lineTo(hx + step * 0.35, h * 0.25);
+        ctx.lineTo(hx, h * 0.55);
+        ctx.closePath();
+        ctx.stroke();
+      }
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 13. TV UNIT / CONSOLE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('tv') ||
+      rawType.includes('television') ||
+      rawType.includes('entertainment'): {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.4;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Slim Flat TV Screen Screen Bar
+      ctx.fillStyle = '#0F172A';
+      const tvH = Math.max(3, h * 0.2);
+      ctx.fillRect(w * 0.1, (h - tvH) / 2, w * 0.8, tvH);
+
+      // Stand
+      ctx.fillStyle = '#64748B';
+      ctx.fillRect(w * 0.4, (h - tvH) / 2 + tvH, w * 0.2, h * 0.15);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 14. COFFEE TABLE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('coffee') ||
+      rawType.includes('tea table') ||
+      rawType.includes('center table'): {
+      ctx.fillStyle = '#FEFCE8';
+      ctx.strokeStyle = '#B45309';
+      ctx.lineWidth = 1.4;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Inner glass inlay rect
+      const inset = Math.min(w, h) * 0.18;
+      ctx.fillStyle = '#EFF6FF';
+      ctx.strokeStyle = '#38BDF8';
+      ctx.lineWidth = 1;
+      ctx.fillRect(inset, inset, w - 2 * inset, h - 2 * inset);
+      ctx.strokeRect(inset, inset, w - 2 * inset, h - 2 * inset);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 15. SHOWER / SHOWER CUBICLE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('shower'): {
+      ctx.fillStyle = '#F0F9FF';
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Shower head circle with spray dots
+      const cx = w * 0.3;
+      const cy = h * 0.3;
+      ctx.fillStyle = '#0284C7';
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.min(w, h) * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Drain in opposite corner
+      drawEllipse(w * 0.75, h * 0.75, Math.min(w, h) * 0.08, Math.min(w, h) * 0.08, true, false);
+
+      // Glass partition door line
+      ctx.strokeStyle = '#38BDF8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(w * 0.7, 0);
+      ctx.lineTo(w, h * 0.3);
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 16. BATHTUB
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('bathtub') || rawType.includes('tub'): {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Smooth Rounded Inner Tub Cavity
+      const inset = Math.min(w, h) * 0.14;
+      ctx.fillStyle = '#F0F9FF';
+      ctx.strokeStyle = '#38BDF8';
+      drawRoundRect(inset, inset, w - 2 * inset, h - 2 * inset, inset, true, true);
+
+      // Drain
+      ctx.fillStyle = '#64748B';
+      drawEllipse(w * 0.2, h / 2, Math.min(w, h) * 0.07, Math.min(w, h) * 0.07, true, false);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 17. CAR / PARKING
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('car') ||
+      rawType.includes('parking') ||
+      rawType.includes('vehicle'): {
+      ctx.fillStyle = '#E2E8F0';
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 1.5;
+      drawRoundRect(0, 0, w, h, Math.min(w, h) * 0.15, true, true);
+
+      // Windshield & Rear glass
+      ctx.fillStyle = '#38BDF8';
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1;
+      // Front windshield
+      ctx.fillRect(w * 0.15, h * 0.22, w * 0.7, h * 0.16);
+      ctx.strokeRect(w * 0.15, h * 0.22, w * 0.7, h * 0.16);
+      // Rear glass
+      ctx.fillRect(w * 0.18, h * 0.68, w * 0.64, h * 0.14);
+      ctx.strokeRect(w * 0.18, h * 0.68, w * 0.64, h * 0.14);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 18. PLANT / INDOOR PLANT / TREE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('plant') ||
+      rawType.includes('tree') ||
+      rawType.includes('pot'): {
+      const pcx = w / 2;
+      const pcy = h / 2;
+      const pr = Math.min(w, h) * 0.42;
+
+      // Radiating Leaf Lobes
+      ctx.fillStyle = '#86EFAC';
+      ctx.strokeStyle = '#15803D';
+      ctx.lineWidth = 1.2;
+      for (let angle = 0; angle < 360; angle += 45) {
+        ctx.save();
+        ctx.translate(pcx, pcy);
+        ctx.rotate((angle * Math.PI) / 180);
+        drawEllipse(0, pr * 0.55, pr * 0.22, pr * 0.42, true, true);
+        ctx.restore();
+      }
+
+      // Center Pot Rim
+      ctx.beginPath();
+      ctx.arc(pcx, pcy, pr * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = '#CA8A04';
+      ctx.fill();
+      ctx.strokeStyle = '#854D0E';
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 19. DESK / OFFICE TABLE / STUDY TABLE
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('desk') ||
+      rawType.includes('study') ||
+      rawType.includes('office table'): {
+      ctx.fillStyle = '#FEFCE8';
+      ctx.strokeStyle = '#854D0E';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      // Laptop / Notebook outline
+      ctx.fillStyle = '#64748B';
+      ctx.fillRect(w * 0.32, h * 0.25, w * 0.36, h * 0.4);
+
+      // Chair back curve behind desk
+      ctx.fillStyle = '#0284C7';
+      drawEllipse(w / 2, h * 0.9, w * 0.22, h * 0.15, true, false);
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DEFAULT FALLBACK: Clean architectural block with legible label
+    // ═══════════════════════════════════════════════════════════════
+    default: {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#64748B';
+      ctx.lineWidth = 1.2;
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeRect(0, 0, w, h);
+
+      ctx.fillStyle = '#334155';
+      const fontSize = Math.max(8, Math.min(12, Math.floor(Math.min(w, h) * 0.25)));
+      ctx.font = `600 ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(displayName, w / 2, h / 2);
+      break;
+    }
+  }
+
+  ctx.restore();
+}
+
 /**
  * Renders the floor plan to a high-resolution offscreen HTML5 canvas and returns a PNG Data URL.
  * Ensures willReadFrequently: true and complete bitmap capture so exported PDFs never have blank drawings.
@@ -447,27 +1254,22 @@ export function renderFloorPlanToCanvas(
     ctx.stroke();
   });
 
-  // Furniture / Fixtures
+  // Furniture / Fixtures - High-Fidelity 2D Architectural CAD Blocks
   (options.furniture || []).forEach(f => {
     const fx = toScreenX(f.x);
     const fy = toScreenY(f.y);
     const fw = f.width * scale;
     const fh = f.height * scale;
-    ctx.save();
-    ctx.translate(fx + fw / 2, fy + fh / 2);
-    if (f.rotation) ctx.rotate((f.rotation * Math.PI) / 180);
-    ctx.fillStyle = '#f1f5f9';
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 1.2;
-    ctx.fillRect(-fw / 2, -fh / 2, fw, fh);
-    ctx.strokeRect(-fw / 2, -fh / 2, fw, fh);
-
-    ctx.fillStyle = '#334155';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(f.label || f.itemType || 'Item', 0, 0);
-    ctx.restore();
+    renderCADSymbol(ctx, {
+      x: fx,
+      y: fy,
+      w: fw,
+      h: fh,
+      rotation: f.rotation || 0,
+      type: f.itemType || f.label || '',
+      name: f.label || f.itemType || 'Furniture',
+      label: f.label,
+    });
   });
 
   // North Compass
