@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Building2,
   HardHat,
@@ -35,7 +35,7 @@ import {
   Package,
   Calculator,
 } from 'lucide-react';
-import { useOverallStats } from '../hooks/useOverallStats';
+import { useOverallStats, type DashboardExpenseItem } from '../hooks/useOverallStats';
 import { loadDemoData } from '../db/seedData';
 import { db } from '../db/db';
 import { isAdmin, isSuperAdmin } from '../services/auth';
@@ -90,13 +90,73 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 }) => {
   const [selectedSiteFilterId, setSelectedSiteFilterId] = useState<string | null>(() => selectedSiteId || null);
 
+  const stats = useOverallStats(user, selectedSiteFilterId);
+  const sites = stats?.allSites || [];
+
+  // Active site ID for site-wise expense isolation (default to first site if available)
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(() => selectedSiteId || null);
+
   React.useEffect(() => {
     if (selectedSiteId !== undefined) {
       setSelectedSiteFilterId(selectedSiteId);
+      if (selectedSiteId) {
+        setActiveSiteId(selectedSiteId);
+      }
     }
   }, [selectedSiteId]);
 
-  const stats = useOverallStats(user, selectedSiteFilterId);
+  React.useEffect(() => {
+    if (selectedSiteFilterId) {
+      setActiveSiteId(selectedSiteFilterId);
+    } else if (!activeSiteId && sites.length > 0) {
+      setActiveSiteId(sites[0].id);
+    }
+  }, [selectedSiteFilterId, sites, activeSiteId]);
+
+  // Handler for clicking any site card or row
+  const handleSiteClick = (siteId: string) => {
+    setActiveSiteId(siteId);
+    setSelectedSiteFilterId(siteId);
+    if (onSelectSite) onSelectSite(siteId);
+  };
+
+  const handleClearSiteFilter = () => {
+    setSelectedSiteFilterId(null);
+    if (onSelectSite) onSelectSite(null);
+  };
+
+  // 4. GET THE ACTIVE SITE OBJECT
+  const activeSite = useMemo(() => {
+    if (!sites || sites.length === 0) return null;
+    return sites.find(s => s.id === activeSiteId) || sites.find(s => s.id === selectedSiteFilterId) || sites[0];
+  }, [sites, activeSiteId, selectedSiteFilterId]);
+
+  // 5. STRICT FILTER: Only expenses belonging to the CLICKED site
+  const filteredSiteExpenses = useMemo<DashboardExpenseItem[]>(() => {
+    const targetSiteId = activeSiteId || selectedSiteFilterId || activeSite?.id;
+    if (!targetSiteId || !stats?.allExpenses) return [];
+    return stats.allExpenses.filter(e => String(e.siteId) === String(targetSiteId));
+  }, [stats?.allExpenses, activeSiteId, selectedSiteFilterId, activeSite]);
+
+  // 6. TOTAL AMOUNT FOR THE CLICKED SITE ONLY
+  const siteTotalCost = useMemo(() => {
+    return filteredSiteExpenses.reduce((sum: number, item: DashboardExpenseItem) => sum + Number(item.amount || 0), 0);
+  }, [filteredSiteExpenses]);
+
+  // Pre-calculated individual totals per site for the selector cards badge
+  const siteExpenseSums = useMemo(() => {
+    const map: Record<string, number> = {};
+    (stats?.allExpenses || []).forEach(e => {
+      map[e.siteId] = (map[e.siteId] || 0) + Number(e.amount || 0);
+    });
+    (stats?.siteSummaries || []).forEach(s => {
+      if (!map[s.site.id] && s.totalExpense > 0) {
+        map[s.site.id] = s.totalExpense;
+      }
+    });
+    return map;
+  }, [stats?.allExpenses, stats?.siteSummaries]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [selectedContractor, setSelectedContractor] = useState<string>('All');
@@ -798,7 +858,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           padding: '14px 18px',
           borderRadius: '12px',
           border: selectedSiteFilterId ? '1.5px solid #3B82F6' : '1px solid var(--erp-border)',
-          marginBottom: '20px',
+          marginBottom: '16px',
           boxShadow: 'var(--erp-shadow-sm)',
         }}
       >
@@ -814,10 +874,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               id="dashboard-site-pill-all"
-              onClick={() => {
-                setSelectedSiteFilterId(null);
-                if (onSelectSite) onSelectSite(null);
-              }}
+              onClick={handleClearSiteFilter}
               style={{
                 borderRadius: '20px',
                 fontSize: '0.78rem',
@@ -840,11 +897,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   key={site.id}
                   type="button"
                   id={`dashboard-site-pill-${site.id}`}
-                  onClick={() => {
-                    const next = isSelected ? null : site.id;
-                    setSelectedSiteFilterId(next);
-                    if (onSelectSite) onSelectSite(next);
-                  }}
+                  onClick={() => handleSiteClick(site.id)}
                   style={{
                     borderRadius: '20px',
                     fontSize: '0.78rem',
@@ -875,10 +928,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
             <button
               type="button"
-              onClick={() => {
-                setSelectedSiteFilterId(null);
-                if (onSelectSite) onSelectSite(null);
-              }}
+              onClick={handleClearSiteFilter}
               style={{
                 background: '#FFFFFF',
                 border: '1px solid #BFDBFE',
@@ -895,6 +945,267 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* 10 SITES HORIZONTAL SELECTOR BAR */}
+      <div className="mb-6" id="dashboard-site-horizontal-selector" style={{ marginBottom: '20px' }}>
+        <h2
+          className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-3"
+          style={{
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            color: '#475569',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            marginBottom: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <Building2 size={16} color="#2563EB" />
+          Select Site to View Expenses (தளத்தை தேர்வு செய்க):
+        </h2>
+
+        <div
+          className="flex gap-3 overflow-x-auto pb-3"
+          style={{
+            display: 'flex',
+            gap: '12px',
+            overflowX: 'auto',
+            paddingBottom: '12px',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {sites.map(site => {
+            const isSelected = site.id === activeSiteId;
+            // Site individual total badge: strictly calculated for this site
+            const siteSum = siteExpenseSums[site.id] || 0;
+
+            return (
+              <button
+                key={site.id}
+                id={`dashboard-site-card-select-${site.id}`}
+                type="button"
+                onClick={() => handleSiteClick(site.id)}
+                className={`flex-shrink-0 text-left p-4 rounded-xl border-2 transition-all min-w-[210px] ${
+                  isSelected
+                    ? 'border-blue-600 bg-blue-50/60 shadow-md ring-2 ring-blue-600/20'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+                style={{
+                  flexShrink: 0,
+                  textAlign: 'left',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  borderWidth: '2px',
+                  borderStyle: 'solid',
+                  borderColor: isSelected ? '#2563EB' : '#E2E8F0',
+                  backgroundColor: isSelected ? 'rgba(239, 246, 255, 0.85)' : '#FFFFFF',
+                  boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.18)' : '0 1px 3px rgba(0,0,0,0.04)',
+                  minWidth: '210px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <div
+                  className="flex justify-between items-center mb-1"
+                  style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}
+                >
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      backgroundColor: isSelected ? '#2563EB' : '#F1F5F9',
+                      color: isSelected ? '#FFFFFF' : '#475569',
+                    }}
+                  >
+                    {isSelected ? '✓ Selected' : 'Click to View'}
+                  </span>
+                </div>
+                <h3
+                  className="font-bold text-slate-900 text-sm truncate"
+                  style={{
+                    fontWeight: 800,
+                    color: '#0F172A',
+                    fontSize: '0.88rem',
+                    margin: '0 0 4px 0',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {site.name}
+                </h3>
+                <p
+                  className="text-xs text-slate-500 mb-2"
+                  style={{ fontSize: '0.75rem', color: '#64748B', margin: '0 0 8px 0' }}
+                >
+                  {site.ownerName || (site as any).client || 'Client'} • {site.area || (site as any).sqft || '—'} sq.ft
+                </p>
+                <div
+                  className="text-xs font-semibold text-slate-700"
+                  style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}
+                >
+                  Total: <span className="text-blue-700 font-bold" style={{ color: '#1D4ED8', fontWeight: 800 }}>₹{siteSum.toLocaleString('en-IN')}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* SELECTED SITE EXPENSE BREAKDOWN */}
+      {activeSite && (
+        <div
+          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6"
+          id="dashboard-active-site-breakdown"
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '16px',
+            border: '1px solid #E2E8F0',
+            padding: '22px',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-4"
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              borderBottom: '1px solid #F1F5F9',
+              paddingBottom: '16px',
+              marginBottom: '16px',
+            }}
+          >
+            <div>
+              <span
+                className="text-xs font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded"
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  color: '#2563EB',
+                  backgroundColor: '#EFF6FF',
+                  padding: '3px 8px',
+                  borderRadius: '4px',
+                  display: 'inline-block',
+                }}
+              >
+                Active Site Expenses
+              </span>
+              <h1
+                className="text-2xl font-black text-slate-900 mt-1"
+                style={{ fontSize: '1.45rem', fontWeight: 900, color: '#0F172A', margin: '4px 0 2px 0' }}
+              >
+                {activeSite.name}
+              </h1>
+              <p
+                className="text-sm text-slate-500"
+                style={{ fontSize: '0.82rem', color: '#64748B', margin: 0 }}
+              >
+                Client: {activeSite.ownerName || (activeSite as any).client || 'Client'} | Area: {activeSite.area || (activeSite as any).sqft || '—'} sq.ft
+              </p>
+            </div>
+
+            {/* SINGLE SITE EXPENSE TOTAL */}
+            <div
+              className="bg-slate-900 text-white px-5 py-3 rounded-xl text-right"
+              style={{
+                backgroundColor: '#0F172A',
+                color: '#FFFFFF',
+                padding: '12px 22px',
+                borderRadius: '12px',
+                textAlign: 'right',
+                minWidth: '220px',
+              }}
+            >
+              <span
+                className="text-xs text-slate-400 block"
+                style={{ fontSize: '0.75rem', color: '#94A3B8', display: 'block', marginBottom: '2px' }}
+              >
+                Intha Site-oda Mattum Selavu:
+              </span>
+              <span
+                className="text-2xl font-black text-amber-400"
+                style={{ fontSize: '1.55rem', fontWeight: 900, color: '#FBBF24' }}
+              >
+                ₹{siteTotalCost.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+
+          {/* TABLE SHOWING ONLY THIS SITE'S EXPENSES */}
+          <div className="overflow-x-auto" style={{ overflowX: 'auto' }}>
+            <h4
+              className="text-sm font-bold text-slate-800 mb-3"
+              style={{ fontSize: '0.88rem', fontWeight: 800, color: '#1E293B', marginBottom: '12px' }}
+            >
+              Expenses List ({activeSite.name}):
+            </h4>
+
+            {filteredSiteExpenses.length === 0 ? (
+              <div
+                className="text-center py-8 text-slate-400 text-sm"
+                style={{ textAlign: 'center', padding: '32px 16px', color: '#94A3B8', fontSize: '0.88rem' }}
+              >
+                Intha site-la innum expenses ethuvum add pannala.
+              </div>
+            ) : (
+              <table
+                className="w-full text-left text-sm border-collapse"
+                style={{ width: '100%', textAlign: 'left', fontSize: '0.84rem', borderCollapse: 'collapse' }}
+              >
+                <thead>
+                  <tr
+                    className="border-b border-slate-200 text-slate-500 text-xs"
+                    style={{ borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.75rem', textTransform: 'uppercase' }}
+                  >
+                    <th className="pb-3 font-semibold" style={{ paddingBottom: '10px', fontWeight: 700 }}>Date</th>
+                    <th className="pb-3 font-semibold" style={{ paddingBottom: '10px', fontWeight: 700 }}>Title / Description</th>
+                    <th className="pb-3 font-semibold" style={{ paddingBottom: '10px', fontWeight: 700 }}>Category</th>
+                    <th className="pb-3 font-semibold text-right" style={{ paddingBottom: '10px', fontWeight: 700, textAlign: 'right' }}>Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSiteExpenses.map((item: DashboardExpenseItem) => (
+                    <tr key={item.id} className="hover:bg-slate-50/80" style={{ borderBottom: '1px solid #F8FAFC' }}>
+                      <td className="py-3 text-slate-600" style={{ padding: '10px 0', color: '#475569' }}>{item.date}</td>
+                      <td className="py-3 font-medium text-slate-900" style={{ padding: '10px 0', fontWeight: 600, color: '#0F172A' }}>{item.title}</td>
+                      <td className="py-3" style={{ padding: '10px 0' }}>
+                        <span
+                          className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700"
+                          style={{
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            backgroundColor: '#F1F5F9',
+                            color: '#334155',
+                          }}
+                        >
+                          {item.category}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right font-bold text-slate-900" style={{ padding: '10px 0', textAlign: 'right', fontWeight: 800, color: '#0F172A' }}>
+                        ₹{Number(item.amount).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="erp-main-grid">
         {/* Left Column: Project Overview (Section 7) */}
@@ -1078,6 +1389,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         onClick={() => {
                           const next = isSelected ? null : site.id;
                           setSelectedSiteFilterId(next);
+                          setActiveSiteId(next || (sites[0]?.id || null));
                           if (onSelectSite) onSelectSite(next);
                         }}
                         style={{
@@ -1211,6 +1523,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     onClick={() => {
                       const next = isSelected ? null : site.id;
                       setSelectedSiteFilterId(next);
+                      setActiveSiteId(next || (sites[0]?.id || null));
                       if (onSelectSite) onSelectSite(next);
                     }}
                     style={{

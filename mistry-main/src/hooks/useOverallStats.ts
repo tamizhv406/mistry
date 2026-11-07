@@ -66,6 +66,16 @@ export interface CategoryExpenseItem {
   color: string;
 }
 
+export interface DashboardExpenseItem {
+  id: string | number;
+  siteId: string;
+  title: string;
+  category: string;
+  amount: number;
+  date: string;
+  paidAmount?: number;
+}
+
 export function useOverallStats(user?: User | null, selectedSiteId?: string | null) {
   return useLiveQuery(async () => {
     const effectiveUser = user || getCurrentUser();
@@ -552,6 +562,128 @@ export function useOverallStats(user?: User | null, selectedSiteId?: string | nu
     activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const recentActivities = activities.slice(0, 15);
 
+    // Dedicated Site-Wise Expense Items Collection
+    const allExpenses: DashboardExpenseItem[] = [];
+
+    allTeaSnacks.forEach(t => {
+      if (!t.siteId) return;
+      allExpenses.push({
+        id: `tea-${t.id}`,
+        siteId: String(t.siteId),
+        title: `Tea & Snacks${t.payee ? ` (${t.payee})` : ''}`,
+        category: 'Petty',
+        amount: Number(t.totalAmount) || 0,
+        date: t.date || (t.createdAt ? t.createdAt.slice(0, 10) : today),
+        paidAmount: Number(t.paidAmount) || 0,
+      });
+    });
+
+    allMaterials.forEach(m => {
+      if (!m.siteId) return;
+      allExpenses.push({
+        id: `mat-${m.id}`,
+        siteId: String(m.siteId),
+        title: `${m.materialName || (m as any).name || 'Material'}${m.brand ? ` - ${m.brand}` : ''}`,
+        category: 'Materials',
+        amount: Number(m.totalAmount) || 0,
+        date: m.purchaseDate || (m.createdAt ? m.createdAt.slice(0, 10) : today),
+        paidAmount: Number(m.paidAmount) || 0,
+      });
+    });
+
+    allRodEntries.forEach(r => {
+      if (!r.siteId) return;
+      allExpenses.push({
+        id: `rod-${r.id}`,
+        siteId: String(r.siteId),
+        title: `Steel Rods (${r.diameter || 12}mm)`,
+        category: 'Materials',
+        amount: Number(r.totalAmount) || 0,
+        date: r.purchaseDate || (r.createdAt ? r.createdAt.slice(0, 10) : today),
+        paidAmount: Number(r.paidAmount) || 0,
+      });
+    });
+
+    allTools.forEach(t => {
+      if (!t.siteId) return;
+      allExpenses.push({
+        id: `tool-${t.id}`,
+        siteId: String(t.siteId),
+        title: `Tool: ${t.toolName || 'Equipment'}`,
+        category: 'Tools',
+        amount: Number(t.cost) || 0,
+        date: t.purchaseDate || (t.createdAt ? t.createdAt.slice(0, 10) : today),
+        paidAmount: Number(t.paidAmount) || 0,
+      });
+    });
+
+    allPooja.forEach(p => {
+      if (!p.siteId) return;
+      allExpenses.push({
+        id: `pooja-${p.id}`,
+        siteId: String(p.siteId),
+        title: `Pooja: ${p.poojaName || 'Ceremony'}`,
+        category: 'Pooja',
+        amount: Number(p.totalAmount) || 0,
+        date: p.date || (p.createdAt ? p.createdAt.slice(0, 10) : today),
+        paidAmount: Number(p.paidAmount) || 0,
+      });
+    });
+
+    allElectricity.forEach(e => {
+      if (!e.siteId) return;
+      allExpenses.push({
+        id: `elec-${e.id}`,
+        siteId: String(e.siteId),
+        title: `Electricity Bill (${e.month || 'Monthly'})`,
+        category: 'Utilities',
+        amount: Number(e.billAmount) || 0,
+        date: e.dueDate || e.month || (e.createdAt ? e.createdAt.slice(0, 10) : today),
+        paidAmount: Number(e.paidAmount) || 0,
+      });
+    });
+
+    allWater.forEach(w => {
+      if (!w.siteId) return;
+      allExpenses.push({
+        id: `water-${w.id}`,
+        siteId: String(w.siteId),
+        title: `Water Supply Bill (${w.supplier || 'Tanker'})`,
+        category: 'Utilities',
+        amount: Number(w.billAmount) || 0,
+        date: w.date || (w.createdAt ? w.createdAt.slice(0, 10) : today),
+        paidAmount: Number(w.paidAmount) || 0,
+      });
+    });
+
+    allOtherExpenses.forEach(o => {
+      if (!o.siteId) return;
+      allExpenses.push({
+        id: `other-${o.id}`,
+        siteId: String(o.siteId),
+        title: o.description || `${o.category || 'General'} Expense`,
+        category: o.category || 'Petty',
+        amount: Number(o.amount) || 0,
+        date: o.date || (o.createdAt ? o.createdAt.slice(0, 10) : today),
+        paidAmount: Number(o.paidAmount) || 0,
+      });
+    });
+
+    allAdvances.forEach(a => {
+      if (!a.siteId) return;
+      allExpenses.push({
+        id: `adv-${a.id}`,
+        siteId: String(a.siteId),
+        title: `Labour Advance${a.reason ? ` (${a.reason})` : ''}`,
+        category: 'Labour',
+        amount: Number(a.amount) || 0,
+        date: a.date || (a.createdAt ? a.createdAt.slice(0, 10) : today),
+        paidAmount: Number(a.amount) || 0,
+      });
+    });
+
+    allExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     return {
       totalSites: sites.length,
       activeSites: sites.filter(s => s.status === 'Active').length,
@@ -584,6 +716,7 @@ export function useOverallStats(user?: User | null, selectedSiteId?: string | nu
 
       siteSummaries,
       recentActivities,
+      allExpenses,
       allSites: sites,
       filteredSiteId: isSiteFiltered ? (selectedSiteId || null) : null,
       filteredSiteName: isSiteFiltered && selectedSiteId ? (siteMap.get(selectedSiteId) || 'Selected Site') : null,

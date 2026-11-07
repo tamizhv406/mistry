@@ -707,7 +707,7 @@ export function App() {
             onlySites={false}
             selectedSiteId={selectedSiteId}
             onSelectSite={siteId => {
-              if (siteId) setSelectedSiteId(siteId);
+              setSelectedSiteId(siteId);
             }}
             onOpenSite={siteId => {
               setSelectedSiteId(siteId);
