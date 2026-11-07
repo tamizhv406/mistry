@@ -11,9 +11,11 @@ import {
   Eye,
   EyeOff,
   HelpCircle,
+  Mail,
 } from 'lucide-react';
 import { db } from '../db/db';
 import type { User as UserType } from '../db/types';
+import { requestEmailPasswordReset } from '../services/emailRecoveryService';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -251,10 +253,21 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 <div style={{ position: 'relative' }}>
                   <User size={18} color="#94a3b8" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
                   <input
+                    type="email"
+                    id="fp-email-recovery"
+                    value={identifier.includes('@') ? identifier : ''}
+                    onChange={e => setIdentifier(e.target.value)}
+                    style={{ display: 'none' }}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    autoComplete="email"
+                  />
+                  <input
                     type="text"
+                    id="fp-identifier"
                     value={identifier}
                     onChange={e => setIdentifier(e.target.value)}
-                    placeholder="எ.கா. 9876543210 அல்லது tamizh"
+                    placeholder="எ.கா. 9876543210 அல்லது user@example.com"
                     required
                     style={{
                       width: '100%',

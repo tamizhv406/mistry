@@ -428,7 +428,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           setError('Security verification failed: 3 consecutive incorrect attempts. Account recovery has been locked for 24 hours to protect your account.');
         } else {
           localStorage.setItem(lockoutKey, JSON.stringify({ attempts: currentAttempts, lockedUntil: 0 }));
-          setError(`Security verification failed: Incorrect answers to security questions (Attempt ${currentAttempts} of 3). After 3 failed attempts, account recovery will be locked for 24 hours.`);
+          setError(`Security verification failed: Incorrect answers to security questions. Password reset request denied. (Attempt ${currentAttempts} of 3). After 3 failed attempts, account recovery will be locked for 24 hours.`);
         }
       }
     } catch (err: any) {

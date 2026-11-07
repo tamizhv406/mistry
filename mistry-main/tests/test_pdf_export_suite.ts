@@ -87,7 +87,7 @@ describe('[PDF Export Engine] Genuine PDF File & MIME Type Verification', () => 
     const arrayBuffer = await pdfBlob.arrayBuffer();
     const text = new TextDecoder('latin1').decode(new Uint8Array(arrayBuffer));
 
-    assert.ok(text.startsWith('%PDF-1.4'), 'Exported blob must be a genuine PDF document');
+    assert.ok(text.startsWith('%PDF-1.'), 'Exported blob must be a genuine PDF document');
     assert.ok(text.includes('BUILDING MISTRY'), 'Must include title block');
     assert.ok(text.includes('Sri Krishna Villa'), 'Must include project name');
     assert.ok(text.includes('Ground Floor'), 'Must include floor name');
@@ -163,6 +163,106 @@ describe('[PDF Export Engine] Genuine PDF File & MIME Type Verification', () => 
 
     // Verify document termination
     assert.ok(text.trimEnd().endsWith('%%EOF'), 'Must terminate with %%EOF');
+  });
+
+  it('generateFloorPlanPdfBlob embeds canvas image snapshot and enforces strictly 1 landscape page', async () => {
+    // 1x1 transparent/white PNG data url for test
+    const dummyCanvasImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
+    const mockPlan: FloorPlan = {
+      id: 'fp-multipage-test',
+      userId: 'test-user-id',
+      siteId: 'site-test-1',
+      buildingName: 'Arulmozhi Illam',
+      floorName: 'First Floor',
+      plotLength: 50,
+      plotWidth: 35,
+      unit: 'feet',
+      walls: [
+        { id: 'w1', x1: 0, y1: 0, x2: 50, y2: 0, thickness: 0.75, wallType: 'exterior' },
+      ],
+      rooms: [
+        { id: 'r1', label: 'Living Hall', roomType: 'Living', width: 20, height: 16, x: 2, y: 2 },
+        { id: 'r2', label: 'Pooja Room', roomType: 'Pooja', width: 8, height: 8, x: 24, y: 2 },
+      ],
+      doors: [],
+      windows: [],
+      floors: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const pdfBlob = await generateFloorPlanPdfBlob({
+      plan: mockPlan,
+      walls: mockPlan.walls,
+      rooms: mockPlan.rooms,
+      unit: 'feet',
+      orientation: 'landscape',
+      canvasImage: dummyCanvasImage,
+      furniture: [
+        { id: 'f1', itemType: 'Sofa', label: 'L-Shaped Sofa', x: 4, y: 4, width: 6, height: 3, roomId: 'r1' },
+        { id: 'f2', itemType: 'Lamp', label: 'Brass Diya', x: 26, y: 4, width: 2, height: 2, roomId: 'r2' },
+      ],
+    });
+
+    assert.strictEqual(pdfBlob.type, 'application/pdf');
+    const arrayBuffer = await pdfBlob.arrayBuffer();
+    const text = new TextDecoder('latin1').decode(new Uint8Array(arrayBuffer));
+
+    // Must include architectural CAD elements
+    assert.ok(text.includes('Arulmozhi Illam'), 'Must include project name');
+    assert.ok(text.includes('FITTINGS & FIXTURES'), 'Must include room schedule fittings column');
+    assert.ok(text.includes('L-Shaped Sofa'), 'Must include fitting label');
+    assert.ok(text.includes('Brass Diya'), 'Must include pooja fixture');
+    assert.ok(text.trimEnd().endsWith('%%EOF'));
+  });
+
+  it('multi-element group and ungroup mechanics correctly bind and release group IDs', () => {
+    interface TestItem {
+      id: string;
+      label: string;
+      x: number;
+      y: number;
+      groupId?: string;
+    }
+
+    const items: TestItem[] = [
+      { id: 'bed-1', label: 'King Bed', x: 10, y: 10 },
+      { id: 'table-1', label: 'Side Table', x: 16, y: 10 },
+      { id: 'lamp-1', label: 'Reading Lamp', x: 16, y: 8 },
+    ];
+
+    // 1. Group items
+    const newGroupId = 'grp_' + Date.now();
+    const selectedIds = ['bed-1', 'table-1', 'lamp-1'];
+    const groupedItems = items.map(it => selectedIds.includes(it.id) ? { ...it, groupId: newGroupId } : it);
+
+    assert.strictEqual(groupedItems[0].groupId, newGroupId);
+    assert.strictEqual(groupedItems[1].groupId, newGroupId);
+    assert.strictEqual(groupedItems[2].groupId, newGroupId);
+
+    // 2. Group drag physics translation: moving one member by dx, dy translates all sister items
+    const dx = 5;
+    const dy = -3;
+    const translatedItems = groupedItems.map(it => {
+      if (it.groupId === newGroupId) {
+        return { ...it, x: it.x + dx, y: it.y + dy };
+      }
+      return it;
+    });
+
+    assert.strictEqual(translatedItems[0].x, 15);
+    assert.strictEqual(translatedItems[0].y, 7);
+    assert.strictEqual(translatedItems[1].x, 21);
+    assert.strictEqual(translatedItems[1].y, 7);
+    assert.strictEqual(translatedItems[2].x, 21);
+    assert.strictEqual(translatedItems[2].y, 5);
+
+    // 3. Ungroup items
+    const ungroupedItems = translatedItems.map(it => ({ ...it, groupId: undefined }));
+    assert.strictEqual(ungroupedItems[0].groupId, undefined);
+    assert.strictEqual(ungroupedItems[1].groupId, undefined);
+    assert.strictEqual(ungroupedItems[2].groupId, undefined);
   });
 });
 

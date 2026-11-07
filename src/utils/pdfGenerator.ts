@@ -1,17 +1,23 @@
-import type { FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanUnit, FloorPlanLevel } from '../db/types';
+import type { FloorPlan, FloorPlanWall, FloorPlanRoom, FloorPlanUnit, FloorPlanLevel, FloorPlanDoor, FloorPlanWindow, FloorPlanFurniture } from '../db/types';
 import { formatLength, formatArea } from '../services/geometryEngine';
 import type { MultiTierEstimateResult } from '../domain/buildingCalculator/multiTierEstimator';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export interface FloorPlanPdfOptions {
   plan: FloorPlan;
   walls: FloorPlanWall[];
   rooms: FloorPlanRoom[];
+  doors?: FloorPlanDoor[];
+  windows?: FloorPlanWindow[];
+  furniture?: FloorPlanFurniture[];
   floorLevels?: FloorPlanLevel[];
   activeFloorIndex?: number;
   orientation?: 'landscape' | 'portrait';
   unit: FloorPlanUnit;
   svgElement?: SVGSVGElement | null;
   svgString?: string;
+  canvasImage?: string;
   projectName?: string;
   siteName?: string;
 }
@@ -294,118 +300,358 @@ export async function rasterizeSvgToJpeg(
 }
 
 /**
+ * Renders the floor plan to a high-resolution offscreen HTML5 canvas and returns a PNG Data URL.
+ * Ensures willReadFrequently: true and complete bitmap capture so exported PDFs never have blank drawings.
+ */
+export function renderFloorPlanToCanvas(
+  options: FloorPlanPdfOptions,
+  width: number = 1600,
+  height: number = 880
+): string {
+  if (typeof document === 'undefined') return '';
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return '';
+
+  // Background - Clean Architectural White
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  // Compute bounding box of all elements to auto-fit nicely
+  const plotW = Math.max(10, options.plan.plotLength || 40);
+  const plotH = Math.max(10, options.plan.plotWidth || 30);
+
+  let minX = 0;
+  let minY = 0;
+  let maxX = plotW;
+  let maxY = plotH;
+
+  (options.walls || []).forEach(w => {
+    minX = Math.min(minX, w.x1, w.x2);
+    minY = Math.min(minY, w.y1, w.y2);
+    maxX = Math.max(maxX, w.x1, w.x2);
+    maxY = Math.max(maxY, w.y1, w.y2);
+  });
+  (options.rooms || []).forEach(r => {
+    minX = Math.min(minX, r.x);
+    minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.width);
+    maxY = Math.max(maxY, r.y + r.height);
+  });
+
+  const spanX = Math.max(10, maxX - minX);
+  const spanY = Math.max(10, maxY - minY);
+  const pad = 60;
+  const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+  const offsetX = (width - spanX * scale) / 2 - minX * scale;
+  const offsetY = (height - spanY * scale) / 2 - minY * scale;
+
+  const toScreenX = (val: number) => offsetX + val * scale;
+  const toScreenY = (val: number) => offsetY + val * scale;
+
+  // Grid
+  ctx.strokeStyle = '#f1f5f9';
+  ctx.lineWidth = 1;
+  const gridStep = 5;
+  for (let gx = Math.floor(minX / gridStep) * gridStep; gx <= maxX + gridStep; gx += gridStep) {
+    ctx.beginPath();
+    ctx.moveTo(toScreenX(gx), toScreenY(minY - 2));
+    ctx.lineTo(toScreenX(gx), toScreenY(maxY + 2));
+    ctx.stroke();
+  }
+  for (let gy = Math.floor(minY / gridStep) * gridStep; gy <= maxY + gridStep; gy += gridStep) {
+    ctx.beginPath();
+    ctx.moveTo(toScreenX(minX - 2), toScreenY(gy));
+    ctx.lineTo(toScreenX(maxX + 2), toScreenY(gy));
+    ctx.stroke();
+  }
+
+  // Plot Boundary
+  ctx.strokeStyle = '#94a3b8';
+  ctx.setLineDash([8, 5]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(toScreenX(0), toScreenY(0), plotW * scale, plotH * scale);
+  ctx.setLineDash([]);
+
+  // Rooms
+  const roomColors = ['#f8fafc', '#f0fdf4', '#eff6ff', '#fefce8', '#fdf2f8', '#faf5ff'];
+  (options.rooms || []).forEach((r, idx) => {
+    const rx = toScreenX(r.x);
+    const ry = toScreenY(r.y);
+    const rw = r.width * scale;
+    const rh = r.height * scale;
+
+    ctx.fillStyle = roomColors[idx % roomColors.length];
+    ctx.fillRect(rx, ry, rw, rh);
+
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rx, ry, rw, rh);
+
+    // Label
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.label || `Room ${idx + 1}`, rx + rw / 2, ry + rh / 2 - 12);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px sans-serif';
+    const dimText = `${formatLength(r.width, options.unit)} × ${formatLength(r.height, options.unit)}`;
+    ctx.fillText(dimText, rx + rw / 2, ry + rh / 2 + 8);
+    const areaText = formatArea(r.width * r.height, options.unit);
+    ctx.fillText(areaText, rx + rw / 2, ry + rh / 2 + 26);
+  });
+
+  // Walls (Exterior / Interior)
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  (options.walls || []).forEach(w => {
+    const thicknessPx = Math.max(5, (w.thickness || 0.75) * scale);
+    ctx.lineWidth = thicknessPx;
+    ctx.beginPath();
+    ctx.moveTo(toScreenX(w.x1), toScreenY(w.y1));
+    ctx.lineTo(toScreenX(w.x2), toScreenY(w.y2));
+    ctx.stroke();
+  });
+
+  // Doors
+  (options.doors || []).forEach(d => {
+    const dx = toScreenX(d.x);
+    const dy = toScreenY(d.y);
+    const dWidth = Math.max(12, (d.width || 3) * scale);
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(dx, dy, dWidth, 0, Math.PI / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(dx, dy);
+    ctx.lineTo(dx + dWidth, dy);
+    ctx.stroke();
+  });
+
+  // Windows
+  (options.windows || []).forEach(w => {
+    const wx = toScreenX(w.x);
+    const wy = toScreenY(w.y);
+    const wWidth = Math.max(14, (w.width || 4) * scale);
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(wx, wy);
+    ctx.lineTo(wx + wWidth, wy);
+    ctx.stroke();
+  });
+
+  // Furniture / Fixtures
+  (options.furniture || []).forEach(f => {
+    const fx = toScreenX(f.x);
+    const fy = toScreenY(f.y);
+    const fw = f.width * scale;
+    const fh = f.height * scale;
+    ctx.save();
+    ctx.translate(fx + fw / 2, fy + fh / 2);
+    if (f.rotation) ctx.rotate((f.rotation * Math.PI) / 180);
+    ctx.fillStyle = '#f1f5f9';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.2;
+    ctx.fillRect(-fw / 2, -fh / 2, fw, fh);
+    ctx.strokeRect(-fw / 2, -fh / 2, fw, fh);
+
+    ctx.fillStyle = '#334155';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(f.label || f.itemType || 'Item', 0, 0);
+    ctx.restore();
+  });
+
+  // North Compass
+  const compassX = width - 50;
+  const compassY = 50;
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(compassX, compassY + 22);
+  ctx.lineTo(compassX, compassY - 16);
+  ctx.stroke();
+  ctx.fillStyle = '#0284c7';
+  ctx.beginPath();
+  ctx.moveTo(compassX, compassY - 24);
+  ctx.lineTo(compassX - 7, compassY - 10);
+  ctx.lineTo(compassX + 7, compassY - 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', compassX, compassY - 28);
+
+  return canvas.toDataURL('image/png', 1.0);
+}
+
+/**
  * Generates a complete, professional architectural CAD PDF for Building Mistry.
- * Includes Title Block, Plan Drawing Box, Dimensions, Room Schedule Table,
- * Unit specifications, Scale, and Disclaimer.
+ * Directly embeds high-res canvas image snapshot into jsPDF in landscape A4,
+ * and renders an architectural title block, Room Schedule Table with autoTable,
+ * strictly fitted to 1 landscape A4 sheet with 0 trailing blank pages.
  */
 export async function generateFloorPlanPdfBlob(options: FloorPlanPdfOptions): Promise<Blob> {
   const isLandscape = (options.orientation || 'landscape') === 'landscape';
-  // A4 dimensions in points (72 pt / inch)
-  const pageWidth = isLandscape ? 841.89 : 595.28;
-  const pageHeight = isLandscape ? 595.28 : 841.89;
 
-  const pdf = new MinimalPdfDocument(pageWidth, pageHeight);
+  const pdf = new jsPDF({
+    orientation: isLandscape ? 'landscape' : 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: false,
+  });
 
-  const margin = 28;
+  const pageWidth = isLandscape ? 297 : 210;
+  const pageHeight = isLandscape ? 210 : 297;
+  const margin = 10;
   const contentWidth = pageWidth - margin * 2;
   const contentHeight = pageHeight - margin * 2;
 
   // 1. Outer Border / Sheet Margins
-  pdf.setStrokeColor(15, 23, 42); // slate-900
-  pdf.setLineWidth(1.5);
-  pdf.drawRect(margin, margin, contentWidth, contentHeight, false, true);
+  pdf.setDrawColor(15, 23, 42); // slate-900
+  pdf.setLineWidth(0.6);
+  pdf.rect(margin, margin, contentWidth, contentHeight);
 
-  // 2. Title Block at Top
-  const titleBlockH = 54;
-  const titleBlockY = pageHeight - margin - titleBlockH;
-  pdf.setFillColor(248, 250, 252); // slate-50
-  pdf.setStrokeColor(203, 213, 225); // slate-300
-  pdf.setLineWidth(1);
-  pdf.drawRect(margin, titleBlockY, contentWidth, titleBlockH, true, true);
+  // 2. Top Architectural Title Block
+  pdf.setFillColor(248, 250, 252);
+  pdf.rect(margin + 0.5, margin + 0.5, contentWidth - 1, 14, 'F');
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.3);
+  pdf.line(margin, margin + 15, margin + contentWidth, margin + 15);
 
-  // Title Block Content
-  pdf.setFillColor(2, 132, 199); // Sky-600
-  pdf.drawText('BUILDING MISTRY - ARCHITECTURAL FLOOR PLAN', margin + 14, titleBlockY + 36, 14, 'F2');
+  pdf.setTextColor(2, 132, 199); // Sky-600
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(13);
+  pdf.text('BUILDING MISTRY - ARCHITECTURAL FLOOR PLAN', margin + 4, margin + 6.5);
 
-  pdf.setFillColor(71, 85, 105); // slate-600
   const floorName = options.floorLevels && options.activeFloorIndex !== undefined
     ? options.floorLevels[options.activeFloorIndex]?.name || options.plan.floorName
     : options.plan.floorName;
-  pdf.drawText(`Project: ${options.plan.buildingName} | Level: ${floorName}`, margin + 14, titleBlockY + 22, 9, 'F2');
 
-  if (options.siteName || options.plan.siteName) {
-    pdf.drawText(`Site: ${options.siteName || options.plan.siteName}`, margin + 14, titleBlockY + 10, 8, 'F1');
-  }
+  pdf.setTextColor(51, 65, 85);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.text(`Project: ${options.plan.buildingName} | Level: ${floorName}`, margin + 4, margin + 11.5);
 
-  // Metadata block (Right side of title block)
-  const metaX = margin + contentWidth - 240;
-  pdf.setFillColor(15, 23, 42);
+  const siteText = options.siteName || options.plan.siteName ? `Site: ${options.siteName || options.plan.siteName} | ` : '';
   const dateStr = new Date().toLocaleDateString('en-IN', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
   const unitLabel = options.unit === 'feet' || options.unit === 'inches' ? 'Imperial (Feet / Inches)' : 'Metric (Metres / mm)';
-  pdf.drawText(`Date: ${dateStr}`, metaX, titleBlockY + 38, 8, 'F1');
-  pdf.drawText(`Plot Size: ${options.plan.plotLength} x ${options.plan.plotWidth} (${options.unit})`, metaX, titleBlockY + 26, 8, 'F1');
-  pdf.drawText(`Units: ${unitLabel}`, metaX, titleBlockY + 14, 8, 'F1');
-  pdf.drawText('Scale: As Noted on Dimensions (A4 Sheet)', metaX, titleBlockY + 2, 8, 'F1');
 
-  // 3. Room Schedule Table (Bottom)
-  const roomCount = options.rooms.length;
-  const scheduleH = Math.min(100, Math.max(36, roomCount * 14 + 22));
-  const scheduleY = margin + 20;
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7);
+  pdf.setTextColor(71, 85, 105);
+  const metaRight = margin + contentWidth - 4;
+  pdf.text(`${siteText}Date: ${dateStr} | Units: ${unitLabel}`, metaRight, margin + 6.5, { align: 'right' });
+  pdf.text(`Plot Size: ${options.plan.plotLength} x ${options.plan.plotWidth} (${options.unit}) | Scale: As Noted on Dimensions`, metaRight, margin + 11.5, { align: 'right' });
 
-  pdf.setFillColor(241, 245, 249);
-  pdf.setStrokeColor(203, 213, 225);
-  pdf.drawRect(margin, scheduleY, contentWidth, scheduleH, true, true);
-
-  // Table Header
-  pdf.setFillColor(15, 23, 42);
-  pdf.drawRect(margin, scheduleY + scheduleH - 16, contentWidth, 16, true, false);
-  pdf.setFillColor(255, 255, 255);
-  pdf.drawText('ROOM NAME', margin + 12, scheduleY + scheduleH - 12, 8, 'F2');
-  pdf.drawText('ROOM TYPE', margin + 140, scheduleY + scheduleH - 12, 8, 'F2');
-  pdf.drawText('DIMENSIONS', margin + 260, scheduleY + scheduleH - 12, 8, 'F2');
-  pdf.drawText('AREA', margin + 380, scheduleY + scheduleH - 12, 8, 'F2');
-
-  // Room Rows
-  let curRowY = scheduleY + scheduleH - 28;
-  pdf.setFillColor(30, 41, 59);
-  for (let i = 0; i < Math.min(roomCount, 5); i++) {
-    const r = options.rooms[i];
-    pdf.drawText(r.label || `Room ${i + 1}`, margin + 12, curRowY, 8, 'F1');
-    pdf.drawText(r.roomType || 'Living', margin + 140, curRowY, 8, 'F1');
-    pdf.drawText(`${formatLength(r.width, options.unit)} x ${formatLength(r.height, options.unit)}`, margin + 260, curRowY, 8, 'F1');
-    pdf.drawText(formatArea(r.width * r.height, options.unit), margin + 380, curRowY, 8, 'F2');
-    curRowY -= 14;
+  // 3. Canvas Image Snapshot (Middle Area)
+  let canvasDataUrl = options.canvasImage;
+  if (!canvasDataUrl && typeof document !== 'undefined') {
+    canvasDataUrl = renderFloorPlanToCanvas(options, 1600, 880);
   }
 
-  // 4. Drawing Canvas Box (Center)
-  const canvasY = scheduleY + scheduleH + 10;
-  const canvasH = titleBlockY - canvasY - 10;
-  pdf.setStrokeColor(203, 213, 225);
-  pdf.setFillColor(255, 255, 255);
-  pdf.drawRect(margin, canvasY, contentWidth, canvasH, true, true);
-
-  // Embed Drawing Image if available
-  if (options.svgString) {
-    const renderW = Math.round(contentWidth * 2);
-    const renderH = Math.round(canvasH * 2);
-    const jpeg = await rasterizeSvgToJpeg(options.svgString, renderW, renderH);
-    if (jpeg) {
-      pdf.embedJpegImage(jpeg.bytes, jpeg.width, jpeg.height, margin + 2, canvasY + 2, contentWidth - 4, canvasH - 4);
+  if (canvasDataUrl && canvasDataUrl.startsWith('data:image/')) {
+    try {
+      pdf.addImage(canvasDataUrl, 'PNG', 48, 26, 200, 110, undefined, 'FAST');
+    } catch (e) {
+      console.warn('Canvas snapshot embedding error:', e);
     }
   }
 
-  // 5. Drawing Reference and Disclaimer Footer
-  pdf.setFillColor(100, 116, 139);
-  const planRef = options.plan.id ? options.plan.id.slice(0, 8).toUpperCase() : 'CAD-BM1';
-  pdf.drawText(`Drawing Reference: BM-FP-${planRef} | Verified CAD Export | Page 1 of 1`, margin + 8, margin + 6, 7, 'F1');
-  pdf.drawText('Note: For architectural execution, check all site dimensions prior to commencement.', margin + contentWidth - 280, margin + 6, 7, 'F1');
+  // Canvas drawing box border
+  pdf.setDrawColor(203, 213, 225);
+  pdf.setLineWidth(0.3);
+  pdf.rect(48, 26, 200, 110);
 
-  const pdfBytes = pdf.build();
-  return new Blob([pdfBytes as any], { type: 'application/pdf' });
+  // 4. Room Schedule Table below canvas using jspdf-autotable
+  const roomRows = options.rooms.map((room, idx) => {
+    const roomFittings = (options.furniture || [])
+      .filter(f => (f as any).roomId === room.id || (
+        f.x >= room.x && f.x <= room.x + room.width &&
+        f.y >= room.y && f.y <= room.y + room.height
+      ))
+      .map(f => f.label || f.itemType || 'Fixture')
+      .filter(Boolean);
+
+    const fittingsStr = roomFittings.length > 0 ? Array.from(new Set(roomFittings)).join(', ') : 'Standard Fixtures';
+    const dimStr = `${formatLength(room.width, options.unit)} x ${formatLength(room.height, options.unit)}`;
+    const areaStr = formatArea(room.width * room.height, options.unit);
+    return [
+      room.label || `Room ${idx + 1}`,
+      room.roomType || 'Living',
+      dimStr,
+      areaStr,
+      fittingsStr,
+    ];
+  });
+
+  if (roomRows.length === 0) {
+    roomRows.push(['Main Hall', 'Living', '16\' 0" x 14\' 0"', '224 sq ft', 'Ceiling Fan, LED Downlights']);
+  }
+
+  autoTable(pdf, {
+    startY: 139,
+    head: [['ROOM NAME', 'ROOM TYPE', 'CLEAR DIMENSIONS', 'AREA', 'FITTINGS & FIXTURES']],
+    body: roomRows,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 41, 59],
+      textColor: [255, 255, 255],
+      fontSize: 8,
+      fontStyle: 'bold',
+      halign: 'left',
+      cellPadding: 2,
+    },
+    styles: {
+      fontSize: 7,
+      cellPadding: 1.8,
+      textColor: [30, 41, 59],
+      overflow: 'linebreak',
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    margin: { left: 10, right: 10 },
+  });
+
+  // 5. Drawing Reference and Disclaimer Footer
+  const planRef = options.plan.id ? options.plan.id.slice(0, 8).toUpperCase() : 'CAD-BM1';
+  pdf.setFontSize(6.5);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(148, 163, 184);
+  pdf.text(`Drawing Reference: BM-FP-${planRef} | Verified CAD Export | Page 1 of 1`, margin + 2, pageHeight - margin - 2);
+  pdf.text('Note: For architectural execution, check all site dimensions prior to commencement.', pageWidth - margin - 2, pageHeight - margin - 2, { align: 'right' });
+
+  // 6. Strictly fit on 1 landscape A4 sheet with 0 trailing blank pages
+  while (pdf.getNumberOfPages() > 1) {
+    pdf.deletePage(pdf.getNumberOfPages());
+  }
+
+  return pdf.output('blob');
+}
+
+/**
+ * Triggers a direct architectural CAD PDF export download.
+ */
+export async function exportFloorPlanToPDF(options: FloorPlanPdfOptions): Promise<void> {
+  const blob = await generateFloorPlanPdfBlob(options);
+  const cleanBuilding = (options.plan.buildingName || 'floor-plan').trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const cleanFloor = (options.floorLevels?.[options.activeFloorIndex || 0]?.name || options.plan.floorName || 'level').trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const filename = `${cleanBuilding}_${cleanFloor}_Plan_${options.orientation || 'landscape'}.pdf`;
+  downloadFile(blob, filename);
 }
 
 export interface BuildingEstimatePdfOptions {

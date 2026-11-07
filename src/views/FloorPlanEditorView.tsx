@@ -45,7 +45,8 @@ import {
   COMMON_PARALLEL_OFFSETS_MM,
   type ParallelGuideResult,
 } from '../services/cadParallelGuide';
-import { generateFloorPlanPdfBlob, downloadFile } from '../utils/pdfGenerator';
+import { generateFloorPlanPdfBlob, downloadFile, renderFloorPlanToCanvas, exportFloorPlanToPDF } from '../utils/pdfGenerator';
+import { SideGroupToolbar } from './floorPlan/components/SideGroupToolbar';
 import { isSupabaseConfigured, supabase } from '../services/supabase';
 import { runCloudSync } from '../services/cloudSync';
 import { FloorPlan3DPreview } from '../components/FloorPlan3DPreview';
@@ -134,7 +135,6 @@ import {
   WALL_THICKNESS_DEFAULT,
   WALL_HEIGHT_DEFAULT,
   UNDO_HISTORY_LIMIT,
-  ROOM_FILL,
   ROOM_COLORS,
   ROOM_TYPES,
   DOOR_TYPES,
@@ -145,6 +145,8 @@ import {
   HINTS_KEY,
   getLiveToolHint,
 } from './floorPlan/constants';
+
+const ROOM_FILL = 'rgba(248, 250, 252, 0.85)';
 
 import type {
   Tool,
@@ -1231,6 +1233,78 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   }, []);
 
   const markUnsaved = useCallback(() => setSaveStatus('unsaved'), []);
+
+  const hasGroupedItems = useMemo(() => {
+    return selectedFurnitureIds.some(id => {
+      const f = editorState.furniture.find(item => item.id === id);
+      return Boolean(f?.groupId);
+    });
+  }, [selectedFurnitureIds, editorState.furniture]);
+
+  const handleGroupSelected = useCallback(() => {
+    if (selectedFurnitureIds.length < 2) return;
+    const newGroupId = 'grp_' + Date.now();
+    selectedFurnitureIds.forEach(id => {
+      dispatch({
+        type: 'UPDATE_FURNITURE',
+        id,
+        changes: { groupId: newGroupId },
+      });
+    });
+    pushHistory(editorState);
+    markUnsaved();
+    onNotify(`${selectedFurnitureIds.length} items grouped together (🔗 ஒன்றாக்கப்பட்டன).`, 'success');
+  }, [selectedFurnitureIds, editorState, pushHistory, markUnsaved, onNotify]);
+
+  const handleUngroupSelected = useCallback(() => {
+    if (selectedFurnitureIds.length === 0) return;
+    const selectedItems = editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id));
+    const groupIdsToClear = new Set(selectedItems.map(f => f.groupId).filter(Boolean));
+    if (groupIdsToClear.size === 0) {
+      onNotify('No grouped items selected to ungroup.', 'info');
+      return;
+    }
+    editorState.furniture.forEach(f => {
+      if (f.groupId && (groupIdsToClear.has(f.groupId) || selectedFurnitureIds.includes(f.id))) {
+        dispatch({
+          type: 'UPDATE_FURNITURE',
+          id: f.id,
+          changes: { groupId: undefined },
+        });
+      }
+    });
+    pushHistory(editorState);
+    markUnsaved();
+    onNotify('Items ungrouped successfully (🔓 பிரிக்கப்பட்டன).', 'success');
+  }, [selectedFurnitureIds, editorState, pushHistory, markUnsaved, onNotify]);
+
+  const handleRotateSelectedGroup = useCallback(() => {
+    if (selectedFurnitureIds.length === 0) return;
+    selectedFurnitureIds.forEach(id => {
+      const f = editorState.furniture.find(item => item.id === id);
+      if (f) {
+        dispatch({
+          type: 'UPDATE_FURNITURE',
+          id,
+          changes: { rotation: ((f.rotation || 0) + 90) % 360 },
+        });
+      }
+    });
+    pushHistory(editorState);
+    markUnsaved();
+  }, [selectedFurnitureIds, editorState, pushHistory, markUnsaved]);
+
+  const handleDeleteSelectedGroup = useCallback(() => {
+    if (selectedFurnitureIds.length === 0) return;
+    selectedFurnitureIds.forEach(id => {
+      dispatch({ type: 'DELETE_FURNITURE', id });
+    });
+    setSelectedFurnitureIds([]);
+    setSelectedElement(null);
+    pushHistory(editorState);
+    markUnsaved();
+    onNotify('Selected group items deleted.', 'info');
+  }, [selectedFurnitureIds, editorState, pushHistory, markUnsaved, onNotify]);
 
   // ── Auto Fit-To-Screen Handler ────────────────────────
   const handleFitToScreen = useCallback(() => {
@@ -4639,7 +4713,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
       if (type === 'furniture') {
         const isShift = (e as React.MouseEvent).shiftKey;
-        if (isShift) {
+        const currentItem = editorState.furniture.find(f => f.id === id);
+        if (currentItem?.groupId) {
+          // All items belonging to this persistent group move and select together
+          const sisterItems = editorState.furniture.filter(f => f.groupId === currentItem.groupId);
+          const sisterIds = sisterItems.map(f => f.id);
+          setSelectedFurnitureIds(sisterIds);
+          dragGroupFurnitureSnapshotsRef.current = JSON.parse(JSON.stringify(sisterItems));
+        } else if (isShift) {
           setSelectedFurnitureIds(prev => {
             const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
             const group = editorState.furniture.filter(f => next.includes(f.id));
@@ -4648,7 +4729,6 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           });
         } else if (!selectedFurnitureIds.includes(id)) {
           setSelectedFurnitureIds([id]);
-          const currentItem = editorState.furniture.find(f => f.id === id);
           dragGroupFurnitureSnapshotsRef.current = currentItem ? [JSON.parse(JSON.stringify(currentItem))] : null;
         } else {
           const group = editorState.furniture.filter(f => selectedFurnitureIds.includes(f.id));
@@ -5827,15 +5907,39 @@ _Shared via Building Mistry App_`;
     try {
       const exportSvg = buildExportSvg();
       const svgText = exportSvg ? exportSvg.text : undefined;
-      const pdfBlob = await generateFloorPlanPdfBlob({
+
+      let canvasImage: string | undefined;
+      try {
+        canvasImage = renderFloorPlanToCanvas({
+          plan,
+          walls: editorState.walls,
+          rooms: editorState.rooms,
+          doors: editorState.doors,
+          windows: editorState.windows,
+          furniture: editorState.furniture,
+          floorLevels,
+          activeFloorIndex,
+          orientation,
+          unit,
+          siteName: plan.siteName,
+        }, 1600, 880);
+      } catch (err) {
+        console.warn('Canvas render error, falling back to svg:', err);
+      }
+
+      await exportFloorPlanToPDF({
         plan,
         walls: editorState.walls,
         rooms: editorState.rooms,
+        doors: editorState.doors,
+        windows: editorState.windows,
+        furniture: editorState.furniture,
         floorLevels,
         activeFloorIndex,
         orientation,
         unit,
         svgString: svgText,
+        canvasImage,
         siteName: plan.siteName,
       });
 
@@ -5843,12 +5947,11 @@ _Shared via Building Mistry App_`;
       const cleanFloor = (floorLevels[activeFloorIndex]?.name || plan.floorName || 'level').trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
       const filename = `${cleanBuilding}_${cleanFloor}_Plan_${orientation}.pdf`;
 
-      downloadFile(pdfBlob, filename);
       onNotify(`Genuine CAD PDF sheet downloaded: ${filename}`, 'success');
     } catch (err: any) {
       onNotify('Failed to generate PDF: ' + (err.message || 'Export error'), 'error');
     }
-  }, [buildExportSvg, plan, editorState.walls, editorState.rooms, floorLevels, activeFloorIndex, unit, onNotify]);
+  }, [buildExportSvg, plan, editorState.walls, editorState.rooms, editorState.doors, editorState.windows, editorState.furniture, floorLevels, activeFloorIndex, unit, onNotify]);
 
   const handlePrintPlan = useCallback(() => {
     const exportSvg = buildExportSvg();
@@ -9545,7 +9648,29 @@ _Shared via Building Mistry App_`;
                         onDragStart={(e) => handleElementMouseDown(e as any, 'furniture', furn.id)}
                       />
                     )}
+
+                    {/* Individual Active Border for Multi-Selected Items */}
+                    {isMultiSelected && (
+                      <rect
+                        x={fx - 2}
+                        y={fy - 2}
+                        width={fw + 4}
+                        height={fh + 4}
+                        fill="rgba(37, 99, 235, 0.08)"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        strokeDasharray="4 2"
+                        rx={3}
+                        pointerEvents="none"
+                      />
+                    )}
                   </>
+                )}
+                {furn.groupId && (
+                  <g transform={`translate(${fx + 2 * zoom}, ${fy + 2 * zoom})`} style={{ pointerEvents: 'none' }}>
+                    <circle cx={7 * zoom} cy={7 * zoom} r={7 * zoom} fill="#0284c7" />
+                    <text x={7 * zoom} y={10 * zoom} textAnchor="middle" fontSize={7 * zoom} fill="#ffffff">🔗</text>
+                  </g>
                 )}
                 {furn.locked && (
                   <g transform={`translate(${fx + fw - 12 * zoom}, ${fy + 2 * zoom})`}>
@@ -15642,8 +15767,9 @@ _Shared via Building Mistry App_`;
         onOpenEstimator={onOpenEstimator}
       />
 
-      {/* ── Room Schedule & Breakdown Modal ("namba room ethana irukku") ── */}
+      {/* ── Floor Plan Room Schedule & Breakdown ("namba room ethana irukku") ── */}
       <RoomScheduleModal
+        aria-label="Floor Plan Room Schedule & Breakdown"
         isOpen={showRoomScheduleModal}
         onClose={() => setShowRoomScheduleModal(false)}
         rooms={editorState.rooms}
@@ -16174,6 +16300,22 @@ _Shared via Building Mistry App_`;
         onConfirm={confirmDeleteCurrentFloor}
         onCancel={() => setConfirmDeleteFloor(false)}
       />
+
+      {/* Floating Side Group & Ungroup Toolbar */}
+      {(selectedFurnitureIds.length >= 2 || (selectedFurnitureIds.length >= 1 && hasGroupedItems)) && (
+        <SideGroupToolbar
+          selectedCount={selectedFurnitureIds.length}
+          hasGroupedItems={hasGroupedItems}
+          onGroup={handleGroupSelected}
+          onUngroup={handleUngroupSelected}
+          onDeselect={() => {
+            setSelectedFurnitureIds([]);
+            setSelectedElement(null);
+          }}
+          onRotateGroup={handleRotateSelectedGroup}
+          onDeleteGroup={handleDeleteSelectedGroup}
+        />
+      )}
 
       {show3D && plan && (
         <FloorPlan3DPreview

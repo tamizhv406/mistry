@@ -13,7 +13,8 @@ function assert(condition, message) {
   passCount++;
 }
 
-const editorSrc = readFileSync(resolve('src/views/FloorPlanEditorView.tsx'), 'utf8');
+const editorSrc = readFileSync(resolve('src/views/FloorPlanEditorView.tsx'), 'utf8') + '\n' +
+  readFileSync(resolve('src/views/floorPlan/modals/RoomScheduleModal.tsx'), 'utf8');
 const typesSrc = readFileSync(resolve('src/db/types.ts'), 'utf8');
 const cssSrc = readFileSync(resolve('src/index.css'), 'utf8');
 

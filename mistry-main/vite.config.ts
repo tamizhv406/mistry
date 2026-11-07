@@ -27,13 +27,17 @@ export default defineConfig({
     ),
   },
   build: {
-    minify: 'esbuild',
+    target: 'esnext',
+    minify: false,
+    sourcemap: false,
     chunkSizeWarningLimit: 2500,
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('FloorPlanEditorView')) return 'view-floorplan-editor';
           if (id.includes('node_modules')) {
             if (id.includes('three')) return 'vendor-three';
+            if (id.includes('jspdf')) return 'vendor-jspdf';
             if (id.includes('react') || id.includes('lucide') || id.includes('motion')) return 'vendor-framework';
             if (id.includes('dexie') || id.includes('supabase')) return 'vendor-db';
             return 'vendor-deps';

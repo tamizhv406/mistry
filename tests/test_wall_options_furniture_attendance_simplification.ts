@@ -5,7 +5,9 @@ import path from 'node:path';
 console.log('--- TEST SUITE: WALL OPTIONS, FURNITURE OPTIMIZATION & ATTENDANCE SIMPLIFICATION ---\n');
 
 const editorPath = path.resolve(process.cwd(), 'src', 'views', 'FloorPlanEditorView.tsx');
-const editorCode = fs.readFileSync(editorPath, 'utf8');
+const furnitureModalPath = path.resolve(process.cwd(), 'src', 'views', 'floorPlan', 'modals', 'FurnitureLibraryModal.tsx');
+const editorCode = fs.readFileSync(editorPath, 'utf8') + '\n' +
+  (fs.existsSync(furnitureModalPath) ? fs.readFileSync(furnitureModalPath, 'utf8') : '');
 
 const attendancePath = path.resolve(process.cwd(), 'src', 'views', 'AttendanceSalaryView.tsx');
 const attendanceCode = fs.readFileSync(attendancePath, 'utf8');

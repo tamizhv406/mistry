@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 
-export { supabase, isSupabaseConfigured };
+export { supabase, isSupabaseConfigured, createClient };
 
 /**
  * Checks if the current URL contains a Supabase password recovery token or hash

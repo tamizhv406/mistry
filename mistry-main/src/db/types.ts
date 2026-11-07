@@ -716,6 +716,7 @@ export interface FloorPlanRoom {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export type DoorType =
@@ -740,6 +741,7 @@ export interface FloorPlanDoor {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export type WindowType =
@@ -764,6 +766,7 @@ export interface FloorPlanWindow {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export type FurnitureCategory =
@@ -789,6 +792,7 @@ export interface FloorPlanFurniture {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export type StaircaseType = 'Straight' | 'L' | 'U' | 'Spiral';
@@ -810,6 +814,7 @@ export interface FloorPlanStaircase {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export type StructuralType = 'Column' | 'Pillar' | 'Beam';
@@ -847,6 +852,7 @@ export interface FloorPlanAnnotation {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export interface FloorPlanDimension {
@@ -864,6 +870,7 @@ export interface FloorPlanDimension {
   layerId?: string;
   layer?: string;
   locked?: boolean;
+  groupId?: string;
 }
 
 export interface FloorPlanLayerConfig {

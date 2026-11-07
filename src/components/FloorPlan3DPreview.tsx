@@ -98,7 +98,7 @@ export const FloorPlan3DPreview: React.FC<FloorPlan3DPreviewProps> = ({
     updateCamera();
 
     // ── Renderer ──────────────────────────────────────
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;

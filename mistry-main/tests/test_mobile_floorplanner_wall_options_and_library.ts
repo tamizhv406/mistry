@@ -12,7 +12,9 @@ async function runMobileFloorPlannerWallOptionsAndLibraryTests() {
   // ───────────────────────────────────────────────────────────────────────────
   console.log('[Test 1] Verifying Floor Planner Three-Bar Drawer Menu & Mobile Workspace Maximization...');
   const editorPath = path.resolve('src/views/FloorPlanEditorView.tsx');
-  const editorCode = fs.readFileSync(editorPath, 'utf8');
+  const constantsPath = path.resolve('src/views/floorPlan/constants.ts');
+  const editorCode = fs.readFileSync(editorPath, 'utf8') + '\n' +
+    (fs.existsSync(constantsPath) ? fs.readFileSync(constantsPath, 'utf8') : '');
 
   // Three-bar menu toggle button
   if (!editorCode.includes('id="fp-mobile-drawer-toggle-btn"') || !editorCode.includes('Toggle Layouts & Elements (☰)')) {

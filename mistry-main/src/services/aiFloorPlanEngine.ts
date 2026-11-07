@@ -2140,7 +2140,7 @@ export function generateProposedLayout(req: ProposedLayoutRequest): ProposedLayo
     carpetArea,
     builtUpArea,
     structuralSuggestions,
-    disclaimer: 'AI-generated preliminary architectural layout. Respect plot boundaries and statutory setbacks. Professional verification by a licensed architect and structural engineer is required before construction.',
+    disclaimer: 'AI-generated design suggestion and preliminary architectural layout. Respect plot boundaries and statutory setbacks. Professional verification by a licensed architect and structural engineer is required before construction.',
   };
 }
 
