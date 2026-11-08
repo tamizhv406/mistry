@@ -341,4 +341,87 @@ describe('Mobile Floor Planner Re-engineering Test Suite', () => {
       assert.equal(getTouchGesture(1, false), 'CANVAS_PAN');
     });
   });
+
+  describe('Phase 5: Direct Feet & Inches Quick Keypad (Precision Input)', () => {
+    it('converts feet and inches accurately into decimal feet', () => {
+      const toDecimalFeet = (feetStr: string, inchesStr: string) => {
+        const f = parseFloat(feetStr) || 0;
+        const i = parseFloat(inchesStr) || 0;
+        return Number((f + i / 12).toFixed(2));
+      };
+
+      // 10' 6" = 10.5 ft
+      assert.equal(toDecimalFeet('10', '6'), 10.5);
+      // 12' 0" = 12.0 ft
+      assert.equal(toDecimalFeet('12', '0'), 12);
+      // 2' 6" = 2.5 ft (standard toilet door)
+      assert.equal(toDecimalFeet('2', '6'), 2.5);
+      // 3' 3" = 3.25 ft
+      assert.equal(toDecimalFeet('3', '3'), 3.25);
+      // 14' 9" = 14.75 ft
+      assert.equal(toDecimalFeet('14', '9'), 14.75);
+    });
+
+    it('resizes wall length accurately along existing directional vector', () => {
+      const resizeWall = (wall: { x1: number; y1: number; x2: number; y2: number }, targetLen: number) => {
+        const dx = wall.x2 - wall.x1;
+        const dy = wall.y2 - wall.y1;
+        const currentLen = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        return {
+          x1: wall.x1,
+          y1: wall.y1,
+          x2: Number((wall.x1 + targetLen * Math.cos(angle)).toFixed(2)),
+          y2: Number((wall.y1 + targetLen * Math.sin(angle)).toFixed(2)),
+        };
+      };
+
+      // Horizontal wall from (0,0) to (10,0) stretched to 15.5 ft
+      const hWall = resizeWall({ x1: 0, y1: 0, x2: 10, y2: 0 }, 15.5);
+      assert.equal(hWall.x2, 15.5);
+      assert.equal(hWall.y2, 0);
+
+      // Vertical wall from (5,5) to (5,15) stretched to 20 ft
+      const vWall = resizeWall({ x1: 5, y1: 5, x2: 5, y2: 15 }, 20);
+      assert.equal(vWall.x2, 5);
+      assert.equal(vWall.y2, 25);
+    });
+
+    it('scales room polygon points proportionally when new width and length are applied', () => {
+      const scaleRoom = (
+        room: { x: number; y: number; width: number; height: number; polygonPoints: { x: number; y: number }[] },
+        newW: number,
+        newH: number
+      ) => {
+        const scaleX = newW / room.width;
+        const scaleY = newH / room.height;
+        return room.polygonPoints.map(p => ({
+          x: Number((room.x + (p.x - room.x) * scaleX).toFixed(2)),
+          y: Number((room.y + (p.y - room.y) * scaleY).toFixed(2)),
+        }));
+      };
+
+      const testRoom = {
+        x: 10,
+        y: 10,
+        width: 10,
+        height: 10,
+        polygonPoints: [
+          { x: 10, y: 10 },
+          { x: 20, y: 10 },
+          { x: 20, y: 20 },
+          { x: 10, y: 20 },
+        ],
+      };
+
+      // Resize from 10x10 to 12x14
+      const scaledPts = scaleRoom(testRoom, 12, 14);
+      assert.deepEqual(scaledPts, [
+        { x: 10, y: 10 },
+        { x: 22, y: 10 },
+        { x: 22, y: 24 },
+        { x: 10, y: 24 },
+      ]);
+    });
+  });
 });

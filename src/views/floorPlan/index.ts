@@ -23,3 +23,4 @@ export * from './modals/EstimationModal';
 export * from './components/TransformBoundingBox';
 export * from './components/MobileContextBar';
 export * from './components/SideGroupToolbar';
+export * from './components/QuickDimensionModal';

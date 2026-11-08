@@ -193,6 +193,7 @@ import {
   EstimationModal,
   TransformBoundingBox,
   MobileContextBar,
+  QuickDimensionModal,
 } from './floorPlan';
 
 export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
@@ -991,6 +992,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const [magneticGuides, setMagneticGuides] = useState<{ x1: number; y1: number; x2: number; y2: number }[]>([]);
   const [showMobileMoreProperties, setShowMobileMoreProperties] = useState(false);
+  const [showQuickDimensionModal, setShowQuickDimensionModal] = useState(false);
 
   const [furnitureProportionalLock, setFurnitureProportionalLock] = useState<Record<string, boolean>>({});
 
@@ -11405,6 +11407,7 @@ _Shared via Building Mistry App_`;
                 </g>
                 {/* North (Top edge - scale run length) */}
                 <g {...stairHandleDownProps(stair, 'n')} style={{ cursor: 'ns-resize' }}>
+   
                   <circle cx={sx + sw / 2} cy={sy} r={handleR + 8} fill="transparent" />
                   <rect
                     x={sx + sw / 2 - 10 * zoom} y={sy - 5 * zoom}
@@ -12480,6 +12483,96 @@ _Shared via Building Mistry App_`;
                       if (w.locked) return;
                       const newW = Math.max(1, Number((w.width + change).toFixed(2)));
                       dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { width: newW } });
+                      markUnsaved();
+                    }
+                  }}
+                />
+
+                {/* Direct Feet & Inches Quick Keypad Modal */}
+                <QuickDimensionModal
+                  isOpen={showQuickDimensionModal}
+                  onClose={() => setShowQuickDimensionModal(false)}
+                  selectedElement={selectedElement}
+                  entity={entity}
+                  unit={unit}
+                  onApply={(newW: number, newH?: number) => {
+                    const selType = (selectedElement as any).type;
+                    if (selType === 'furniture') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_FURNITURE',
+                        id: selectedElement.id,
+                        changes: newH !== undefined ? { width: newW, height: newH } : { width: newW },
+                      });
+                      markUnsaved();
+                    } else if (selType === 'door') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_DOOR',
+                        id: selectedElement.id,
+                        changes: { width: newW },
+                      });
+                      markUnsaved();
+                    } else if (selType === 'window') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_WINDOW',
+                        id: selectedElement.id,
+                        changes: { width: newW },
+                      });
+                      markUnsaved();
+                    } else if (selType === 'wall') {
+                      const wall = editorState.walls.find(w => w.id === selectedElement.id);
+                      if (wall) {
+                        const dx = wall.x2 - wall.x1;
+                        const dy = wall.y2 - wall.y1;
+                        const currentLen = Math.hypot(dx, dy);
+                        if (currentLen > 0.001) {
+                          const angle = Math.atan2(dy, dx);
+                          const newX2 = Number((wall.x1 + newW * Math.cos(angle)).toFixed(2));
+                          const newY2 = Number((wall.y1 + newW * Math.sin(angle)).toFixed(2));
+                          dispatchWithHistory({
+                            type: 'UPDATE_WALL',
+                            id: wall.id,
+                            changes: { x2: newX2, y2: newY2 },
+                          });
+                          markUnsaved();
+                        }
+                      }
+                    } else if (selType === 'room') {
+                      const room = editorState.rooms.find(r => r.id === selectedElement.id);
+                      if (room) {
+                        const currentW = room.width || 10;
+                        const currentH = room.height || 10;
+                        const finalH = newH !== undefined ? newH : currentH;
+                        let newPoly = room.polygonPoints;
+                        if (newPoly && newPoly.length >= 3) {
+                          const scaleX = newW / currentW;
+                          const scaleY = finalH / currentH;
+                          const originX = room.x;
+                          const originY = room.y;
+                          newPoly = newPoly.map(p => ({
+                            x: Number((originX + (p.x - originX) * scaleX).toFixed(2)),
+                            y: Number((originY + (p.y - originY) * scaleY).toFixed(2)),
+                          }));
+                        }
+                        dispatchWithHistory({
+                          type: 'UPDATE_ROOM',
+                          id: room.id,
+                          changes: {
+                            width: newW,
+                            height: finalH,
+                            polygonPoints: newPoly,
+                          },
+                        });
+                        markUnsaved();
+                      }
+                    } else if (selType === 'column') {
+                      dispatchWithHistory({
+                        type: 'UPDATE_COLUMN',
+                        id: selectedElement.id,
+                        changes: {
+                          width: newW,
+                          depth: newH !== undefined ? newH : newW,
+                        },
+                      });
                       markUnsaved();
                     }
                   }}

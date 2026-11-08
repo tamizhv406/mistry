@@ -33,6 +33,7 @@ export interface MobileContextBarProps {
   onToggleLock?: () => void;
   onToggleMore: () => void;
   onQuickResize: (width: number, height?: number) => void;
+  onOpenExactDimension?: () => void;
   onNudge?: (dx: number, dy: number) => void;
   onStepDimension?: (dimension: 'width' | 'height', delta: number) => void;
 }
@@ -50,6 +51,7 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
   onToggleLock,
   onToggleMore,
   onQuickResize,
+  onOpenExactDimension,
   onNudge,
   onStepDimension,
 }) => {
@@ -393,8 +395,11 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
           {/* Width Chip */}
           <button
             type="button"
-            onClick={() => setShowSteppers(s => !s)}
-            title="Width dimension (Tap to adjust)"
+            onClick={() => {
+              if (onOpenExactDimension) onOpenExactDimension();
+              else setShowSteppers(s => !s);
+            }}
+            title="Width dimension (Tap to type exact size in ft/in)"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -418,8 +423,11 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
           {details.hasHeight && (
             <button
               type="button"
-              onClick={() => setShowSteppers(s => !s)}
-              title="Length dimension (Tap to adjust)"
+              onClick={() => {
+                if (onOpenExactDimension) onOpenExactDimension();
+                else setShowSteppers(s => !s);
+              }}
+              title="Length dimension (Tap to type exact size in ft/in)"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -437,6 +445,31 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             >
               <span style={{ color: '#0284c7', fontWeight: 800 }}>L:</span>
               <span>{details.heightStr}</span>
+            </button>
+          )}
+
+          {/* Direct Feet/Inches Keypad Trigger Button */}
+          {onOpenExactDimension && (
+            <button
+              type="button"
+              onClick={onOpenExactDimension}
+              title="Type exact feet and inches (நேரடி அடி/இன்ச் அளவு)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                fontSize: '0.70rem',
+                fontWeight: 800,
+                color: '#0284c7',
+                backgroundColor: '#ffffff',
+                padding: '2px 6px',
+                borderRadius: '8px',
+                border: '1.5px dashed #0284c7',
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+              }}
+            >
+              <span>⌨️ Size</span>
             </button>
           )}
 
