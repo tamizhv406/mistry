@@ -2925,6 +2925,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         setIsDrawingWall(false);
         setWallStart(null);
         setActiveTool('select');
+        setActiveTool('select');
         setSelectedElement(null);
         setSelectedFurnitureToPlace(null);
         setIsAiAssistantOpen(false);
@@ -3089,6 +3090,14 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         dispatchWithHistory({ type: 'ADD_WALL', payload: pieces[0] });
       } else {
         dispatchWithHistory({ type: 'SET_WALLS', walls: [...editorState.walls, ...pieces] });
+      }
+
+      // Auto-revert: If wall closed an enclosed loop or met an endpoint, switch back to select
+      if (snapPt.type === 'endpoint' || snapPt.type === 'intersection') {
+        setIsDrawingWall(false);
+        setWallStart(null);
+        setActiveTool('select');
+        setActiveTool('select');
       }
     }
     setParallelGuide(null);
@@ -3365,10 +3374,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             rot = Math.round(wallSnap.rotation);
           }
         }
+        const newFurnId = uid('furn');
         dispatchWithHistory({
           type: 'ADD_FURNITURE',
           payload: {
-            id: uid('furn'),
+            id: newFurnId,
             itemType: selectedFurnitureToPlace.itemType,
             label: selectedFurnitureToPlace.itemType,
             category: selectedFurnitureToPlace.category,
@@ -3380,6 +3390,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
             layer: selectedFurnitureToPlace.category === 'kitchen' ? 'kitchen' : selectedFurnitureToPlace.category === 'bathroom' ? 'bathroom' : 'furniture',
           },
         });
+        setSelectedElement({ type: 'furniture', id: newFurnId });
+        setSelectedFurnitureIds([newFurnId]);
         setSelectedFurnitureToPlace(null);
         setActiveTool('select');
       } else if (activeTool === 'annotation') {
@@ -4601,6 +4613,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       if (e.touches.length >= 2) {
         setIsDrawingWall(false);
         setWallStart(null);
+        setActiveTool('select');
         setIsDragging(false);
         setDragStartPos(null);
         setLiveLengthBadge(null);
@@ -4685,6 +4698,71 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
   }, [isPanning, handleMouseUp]);
 
+  // ── Smart Spatial Hit-Test (Z-order priority for direct touch auto-select) ──
+  const findHitItemAtWorldPos = useCallback(
+    (world: { x: number; y: number }): { type: 'door' | 'window' | 'furniture' | 'column' | 'stairs' | 'wall' | 'room' | 'annotation'; id: string } | null => {
+      const reach = pixelsToPlan(isMobile ? 26 : 16, zoom);
+
+      // 1. Openings / Doors / Windows (Highest priority for fine selection)
+      const doorHit = editorState.doors.find(d => Math.hypot(d.x - world.x, d.y - world.y) <= Math.max(reach, (d.width || 3) / 2));
+      if (doorHit) return { type: 'door', id: doorHit.id };
+
+      const winHit = editorState.windows.find(w => Math.hypot(w.x - world.x, w.y - world.y) <= Math.max(reach, (w.width || 4) / 2));
+      if (winHit) return { type: 'window', id: winHit.id };
+
+      // 2. Furniture / Fixtures (Beds, Sofas, Fans, Lights, Desks)
+      // Reverse array so top-most rendered item gets hit first
+      const furns = [...editorState.furniture].reverse();
+      const pad = reach * 0.4;
+      for (const f of furns) {
+        const rotRad = (-(f.rotation || 0) * Math.PI) / 180;
+        const cx = f.x + f.width / 2;
+        const cy = f.y + f.height / 2;
+        const dx = world.x - cx;
+        const dy = world.y - cy;
+        const localX = cx + (dx * Math.cos(rotRad) - dy * Math.sin(rotRad));
+        const localY = cy + (dx * Math.sin(rotRad) + dy * Math.cos(rotRad));
+        if (
+          localX >= f.x - pad &&
+          localX <= f.x + f.width + pad &&
+          localY >= f.y - pad &&
+          localY <= f.y + f.height + pad
+        ) {
+          return { type: 'furniture', id: f.id };
+        }
+      }
+
+      // Columns & Stairs
+      const colHit = editorState.columns.find(c => Math.hypot(c.x - world.x, c.y - world.y) <= Math.max(reach, (c.width || 1) / 2));
+      if (colHit) return { type: 'column', id: colHit.id };
+
+      const stairHit = editorState.stairs.find(s => {
+        return world.x >= s.x - reach && world.x <= s.x + s.width + reach &&
+               world.y >= s.y - reach && world.y <= s.y + s.length + reach;
+      });
+      if (stairHit) return { type: 'stairs', id: stairHit.id };
+
+      // 3. Wall Nodes / Corners & Walls
+      let bestWall: FloorPlanWall | null = null;
+      let bestWallDist = Infinity;
+      for (const w of editorState.walls) {
+        const d = pointSegmentDistance(world, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 });
+        if (d <= reach + (w.thickness || 0) / 2 && d < bestWallDist) {
+          bestWallDist = d;
+          bestWall = w;
+        }
+      }
+      if (bestWall) return { type: 'wall', id: bestWall.id };
+
+      // 4. Room Polygons
+      const roomHit = editorState.rooms.find(r => pointInPolygon(world, roomOutline(r)));
+      if (roomHit) return { type: 'room', id: roomHit.id };
+
+      return null;
+    },
+    [editorState, isMobile, zoom]
+  );
+
   // ── Element Selection MouseDown ───────────────────────
 
   const handleElementMouseDown = useCallback(
@@ -4693,8 +4771,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
       type: 'wall' | 'room' | 'door' | 'window' | 'column' | 'stairs' | 'furniture' | 'annotation',
       id: string
     ) => {
-      if (activeTool !== 'select' && !(activeTool === 'stairs' && type === 'stairs')) return;
-      if (activeTool === 'stairs' && type === 'stairs') {
+      if (activeTool === 'eraser' || activeTool === 'split') return;
+      if (isDrawingWall && wallStart) return;
+
+      // Direct-Touch Auto-Select: Immediately transition to 'select' mode!
+      if (activeTool !== 'select') {
         setActiveTool('select');
       }
       // A second finger starts a pinch; it never grabs the element under it.
@@ -4703,14 +4784,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         const at = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
         setWallTap({ id, point: svgToWorld(at.x, at.y) });
       }
-      // On touch screens: furniture, doors, windows, and columns support direct selection and immediate drag-to-move!
-      const isDirectTouchDraggable = type === 'furniture' || type === 'door' || type === 'window' || type === 'column';
-      if ((e as React.PointerEvent).pointerType === 'touch' && !isDirectTouchDraggable && selectedElement?.id !== id) {
-        pendingSelectRef.current = { type, id } as SelectedElement;
-        return;
-      }
-      // Tell the canvas handler that this press landed on an element (so it does not start
-      // panning), while still letting it track the pointer for pinch detection.
+      // Direct-Touch: ALL elements support direct selection and immediate single-finger drag!
       elementHitRef.current = true;
       e.stopPropagation();
       setSelectedElement({ type, id });
@@ -4831,18 +4905,23 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     type: 'wall' | 'room' | 'door' | 'window' | 'column' | 'stairs' | 'furniture' | 'annotation',
     id: string
   ) => {
-    // Eraser and Split act on a tap, worked out by the canvas from where the finger landed
-    // (handleMouseDown). Elements do not take the press themselves, so a pinch or a pan that
-    // happens to start on a wall never erases or cuts it.
-    if (activeTool !== 'select' && !(activeTool === 'stairs' && type === 'stairs')) return { style: { pointerEvents: 'none' as const } };
+    // If the active tool is eraser or split, let canvas handleMouseDown process it via coordinates
+    if (activeTool === 'eraser' || activeTool === 'split') {
+      return { style: { pointerEvents: 'none' as const } };
+    }
+    // If actively drawing a wall and point 1 is already placed, allow canvas to place next point
+    if (isDrawingWall && wallStart) {
+      return { style: { pointerEvents: 'none' as const } };
+    }
+    // Direct-Touch Auto-Select: ALWAYS allow pointer events so touching an element directly selects & moves it!
     return supportsPointer
       ? { onPointerDown: (e: React.PointerEvent) => handleElementMouseDown(e, type, id) }
       : { onMouseDown: (e: React.MouseEvent) => handleElementMouseDown(e, type, id) };
   };
 
   const beginJointDrag = (e: React.SyntheticEvent, wall: FloorPlanWall, endpoint: 1 | 2) => {
-    // Corners are only dragged with the Select tool, and never by the second finger of a pinch.
-    if (activeTool !== 'select') return;
+    if (activeTool === 'eraser' || activeTool === 'split') return;
+    if (activeTool !== 'select') setActiveTool('select');
     const pe = e as unknown as React.PointerEvent;
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
@@ -4865,7 +4944,8 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const beginWallRotation = (e: React.SyntheticEvent, wall: FloorPlanWall) => {
-    if (activeTool !== 'select') return;
+    if (activeTool === 'eraser' || activeTool === 'split') return;
+    if (activeTool !== 'select') setActiveTool('select');
     const pe = e as unknown as React.PointerEvent;
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
@@ -4892,16 +4972,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const rotationDownProps = (wall: FloorPlanWall) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    return supportsPointer
-      ? { onPointerDown: (e: React.PointerEvent) => beginWallRotation(e, wall) }
-      : { onMouseDown: (e: React.MouseEvent) => beginWallRotation(e, wall) };
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginWallRotation(e, wall);
+    };
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
   /** Pressing a wall's measurement label. The length box opens when the press turns out to be a tap. */
   const dimDownProps = (wallId: string) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
     const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
       const pe = e as unknown as React.PointerEvent;
       if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
       // Stops the browser's follow-up mouse events, which would land on the sheet that opens.
@@ -4917,14 +5000,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const jointDownProps = (wall: FloorPlanWall, endpoint: 1 | 2) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    return supportsPointer
-      ? { onPointerDown: (e: React.PointerEvent) => beginJointDrag(e, wall, endpoint) }
-      : { onMouseDown: (e: React.MouseEvent) => beginJointDrag(e, wall, endpoint) };
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginJointDrag(e, wall, endpoint);
+    };
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
   const beginRoomVertexDrag = (e: React.SyntheticEvent, roomId: string, vertexIndex: number) => {
-    if (activeTool !== 'select') return;
+    if (activeTool === 'eraser' || activeTool === 'split') return;
+    if (activeTool !== 'select') setActiveTool('select');
     const pe = e as unknown as React.PointerEvent;
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
@@ -4938,14 +5024,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const roomVertexDownProps = (roomId: string, vertexIndex: number) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    return supportsPointer
-      ? { onPointerDown: (e: React.PointerEvent) => beginRoomVertexDrag(e, roomId, vertexIndex) }
-      : { onMouseDown: (e: React.MouseEvent) => beginRoomVertexDrag(e, roomId, vertexIndex) };
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginRoomVertexDrag(e, roomId, vertexIndex);
+    };
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
   const beginRoomEdgeDrag = (e: React.SyntheticEvent, roomId: string, edgeIndex: number) => {
-    if (activeTool !== 'select') return;
+    if (activeTool === 'eraser' || activeTool === 'split') return;
+    if (activeTool !== 'select') setActiveTool('select');
     const pe = e as unknown as React.PointerEvent;
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
@@ -5166,8 +5255,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     furn: FloorPlanFurniture,
     handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
   ) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    const down = (e: React.SyntheticEvent) => beginFurnitureResize(e, furn, handle);
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginFurnitureResize(e, furn, handle);
+    };
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -5197,8 +5289,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const furnitureRotateDownProps = (furn: FloorPlanFurniture) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    const down = (e: React.SyntheticEvent) => beginFurnitureRotate(e, furn);
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginFurnitureRotate(e, furn);
+    };
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -5532,6 +5627,22 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* capture is a nicety */ }
     touchInputRef.current = e.pointerType !== 'mouse';
 
+    // 1. Two-Finger Touch Anywhere: Dedicated exclusively to Pinch-to-Zoom and Canvas Pan.
+    if (pointersRef.current.size >= 1 && !e.isPrimary) {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      cancelSingleGesture();
+      setSelectionBox(null);
+      const base = pendingViewRef.current || { panX, panY, zoom };
+      const p = pinchPoints();
+      Object.assign(gestureRef.current, {
+        kind: 'pinch',
+        startDist: p.dist,
+        startZoom: base.zoom,
+        anchor: { x: (p.midX - base.panX) / (GRID_SIZE_PX * base.zoom), y: (p.midY - base.panY) / (GRID_SIZE_PX * base.zoom) },
+      });
+      return;
+    }
+
     if (e.pointerType === 'mouse') {
       // A click on a measurement opens its length box and does nothing else: no pan, no
       // deselect. A drag from it moves the label instead (decided when the button comes up).
@@ -5539,7 +5650,21 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         mouseDimRef.current = { wallId: dimHit, x: e.clientX, y: e.clientY, moved: false };
         return;
       }
-      if (!onElement) handleMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
+      let isElementHit = onElement;
+      if (!isElementHit && activeTool !== 'eraser' && activeTool !== 'split' && !(isDrawingWall && wallStart)) {
+        const svgPos = getSvgPos(e as unknown as React.MouseEvent<SVGSVGElement>);
+        const world = svgToWorld(svgPos.x, svgPos.y);
+        const hitItem = findHitItemAtWorldPos(world);
+        if (hitItem && e.button === 0) {
+          handleElementMouseDown(e, hitItem.type, hitItem.id);
+          isElementHit = true;
+        } else if (!hitItem && e.button === 0 && activeTool === 'select') {
+          setSelectedElement(null);
+          setSelectedFurnitureIds([]);
+          setShowMobileMoreProperties(false);
+        }
+      }
+      if (!isElementHit) handleMouseDown(e as unknown as React.MouseEvent<SVGSVGElement>);
       return;
     }
 
@@ -5555,8 +5680,27 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointersRef.current.size === 1) {
+      let isElementHit = onElement;
+      // Smart Item Hit-Test: if touch missed thin SVG stroke or landed on canvas directly
+      if (!isElementHit && activeTool !== 'eraser' && activeTool !== 'split' && !(isDrawingWall && wallStart)) {
+        const svgPos = getSvgPos(fakeMouse(e.clientX, e.clientY));
+        const world = svgToWorld(svgPos.x, svgPos.y);
+        const hitItem = findHitItemAtWorldPos(world);
+        if (hitItem) {
+          handleElementMouseDown(fakeMouse(e.clientX, e.clientY), hitItem.type, hitItem.id);
+          isElementHit = true;
+        } else if (!isDrawingWall && activeTool !== 'ai_draw') {
+          // Empty canvas touch: deselect currently selected item cleanly
+          if (selectedElement) {
+            setSelectedElement(null);
+            setSelectedFurnitureIds([]);
+            setShowMobileMoreProperties(false);
+          }
+        }
+      }
+
       Object.assign(g, {
-        kind: 'single', onElement, pendingSelect, dimHit, downAt: { x: e.clientX, y: e.clientY },
+        kind: 'single', onElement: isElementHit, pendingSelect, dimHit, downAt: { x: e.clientX, y: e.clientY },
         moved: false, dragDrawing: false, wallStart: null, panning: false,
       });
       // Freehand sketching starts at once; everything else waits to see tap or drag.
@@ -5716,6 +5860,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
         if (!stub && g.wallStart) input.finishWallAt(g.wallStart, fakeMouse(e.clientX, e.clientY));
         setIsDrawingWall(false);
         setWallStart(null);
+        setActiveTool('select');
       } else if (g.moved && input.isDrawingWall) {
         input.handleMouseDown(fakeMouse(e.clientX, e.clientY)); // continues from a tapped start point
       } else if (!g.moved) {
@@ -15768,10 +15913,32 @@ _Shared via Building Mistry App_`;
         onCategoryChange={setFurnitureCategory}
         viewMode={viewMode}
         onSelectFurniture={(item) => {
-          setSelectedFurnitureToPlace(item);
-          setActiveTool('furniture');
+          const vw = containerRef.current?.clientWidth || window.innerWidth;
+          const vh = containerRef.current?.clientHeight || window.innerHeight;
+          const worldCenter = svgToWorld(vw / 2, vh / 2);
+          const posX = snapToGrid(worldCenter.x || (plan?.plotLength || 30) / 2);
+          const posY = snapToGrid(worldCenter.y || (plan?.plotWidth || 20) / 2);
+          const newFurnId = uid('furn');
+          dispatchWithHistory({
+            type: 'ADD_FURNITURE',
+            payload: {
+              id: newFurnId,
+              itemType: item.itemType,
+              label: item.itemType,
+              category: item.category,
+              x: posX,
+              y: posY,
+              width: item.width,
+              height: item.height,
+              rotation: 0,
+              layer: item.category === 'kitchen' ? 'kitchen' : item.category === 'bathroom' ? 'bathroom' : 'furniture',
+            },
+          });
+          setSelectedElement({ type: 'furniture', id: newFurnId });
+          setSelectedFurnitureIds([newFurnId]);
+          setActiveTool('select');
           setShowFurnitureModal(false);
-          onNotify(`Selected ${item.itemType}. Click anywhere on the plan to place.`, 'info');
+          onNotify(`Added ${item.itemType} to plan. You can drag, rotate, or resize it directly.`, 'success');
         }}
       />
 

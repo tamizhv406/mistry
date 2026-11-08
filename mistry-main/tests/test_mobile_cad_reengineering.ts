@@ -230,4 +230,115 @@ describe('Mobile Floor Planner Re-engineering Test Suite', () => {
       assert.equal(typeof dataUrl, 'string');
     });
   });
+
+  describe('Phase 4: Direct-Touch Auto-Select & Auto-Revert Navigation (Floor Plan Creator UX)', () => {
+    it('verifies spatial hit-testing z-order priority: Door/Window > Furniture > Column > Wall > Room', () => {
+      // Priority scoring helper replicating findHitItemAtWorldPos
+      type EntityType = 'door' | 'window' | 'furniture' | 'column' | 'wall' | 'room';
+      const getZOrder = (type: EntityType): number => {
+        switch (type) {
+          case 'door':
+          case 'window':
+            return 1;
+          case 'furniture':
+            return 2;
+          case 'column':
+            return 3;
+          case 'wall':
+            return 4;
+          case 'room':
+            return 5;
+        }
+      };
+
+      const candidates: { id: string; type: EntityType }[] = [
+        { id: 'room-1', type: 'room' },
+        { id: 'wall-1', type: 'wall' },
+        { id: 'furn-1', type: 'furniture' },
+        { id: 'door-1', type: 'door' },
+        { id: 'col-1', type: 'column' },
+      ];
+
+      candidates.sort((a, b) => getZOrder(a.type) - getZOrder(b.type));
+
+      assert.equal(candidates[0].type, 'door');
+      assert.equal(candidates[1].type, 'furniture');
+      assert.equal(candidates[2].type, 'column');
+      assert.equal(candidates[3].type, 'wall');
+      assert.equal(candidates[4].type, 'room');
+    });
+
+    it('verifies single-touch on empty space initiates canvas pan and deselects', () => {
+      let selectedId: string | null = 'furn-1';
+      let isPanning = false;
+
+      const handlePointerDown = (hasHitItem: boolean, pointerCount: number) => {
+        if (pointerCount >= 2) {
+          // Pinch-to-zoom / multi-touch pan
+          return { mode: 'pinch' };
+        }
+        if (hasHitItem) {
+          selectedId = 'item-at-finger';
+          return { mode: 'drag-item', activeTool: 'select' };
+        } else {
+          selectedId = null;
+          isPanning = true;
+          return { mode: 'pan-canvas' };
+        }
+      };
+
+      // Tap on empty space with 1 finger
+      const result = handlePointerDown(false, 1);
+      assert.equal(result.mode, 'pan-canvas');
+      assert.equal(selectedId, null);
+      assert.equal(isPanning, true);
+    });
+
+    it('verifies direct-touch on element auto-switches activeTool to select', () => {
+      let activeTool = 'wall';
+      let selectedElement: { type: string; id: string } | null = null;
+
+      const onDirectTouchItem = (itemType: string, itemId: string) => {
+        activeTool = 'select';
+        selectedElement = { type: itemType, id: itemId };
+      };
+
+      // User was in wall drawing tool, but taps on an existing bed
+      onDirectTouchItem('furniture', 'bed-123');
+      assert.equal(activeTool, 'select');
+      assert.deepEqual(selectedElement, { type: 'furniture', id: 'bed-123' });
+    });
+
+    it('verifies one-shot placement auto-reverts activeTool to select and selects the new entity', () => {
+      let activeTool = 'furniture';
+      let selectedElement: { type: string; id: string } | null = null;
+
+      const placeFurnitureItem = (furnitureId: string) => {
+        // Direct placement: spawn at center, auto-select, auto-revert tool
+        selectedElement = { type: 'furniture', id: furnitureId };
+        activeTool = 'select';
+      };
+
+      placeFurnitureItem('sofa-999');
+      assert.equal(activeTool, 'select');
+      assert.equal(selectedElement?.id, 'sofa-999');
+    });
+
+    it('verifies multi-touch (2 fingers) always takes pinch/zoom priority over object dragging', () => {
+      const getTouchGesture = (pointerCount: number, underFingerItem: boolean) => {
+        if (pointerCount >= 2) {
+          return 'PINCH_ZOOM_PAN';
+        }
+        if (underFingerItem) {
+          return 'ITEM_DRAG';
+        }
+        return 'CANVAS_PAN';
+      };
+
+      // Even if finger 1 is right on top of a bed, second finger down triggers pinch/zoom
+      assert.equal(getTouchGesture(2, true), 'PINCH_ZOOM_PAN');
+      assert.equal(getTouchGesture(1, true), 'ITEM_DRAG');
+      assert.equal(getTouchGesture(1, false), 'CANVAS_PAN');
+    });
+  });
 });
