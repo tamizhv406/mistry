@@ -114,6 +114,8 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
                   cy={by - stemLen}
                   r={hitR}
                   fill="transparent"
+                  pointerEvents="all"
+                  style={{ pointerEvents: 'all' }}
                 />
                 {/* Visible rotation circle */}
                 <circle
@@ -143,7 +145,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'n'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'n'))}
           >
-            <circle cx={midX} cy={y} r={hitR} fill="transparent" />
+            <circle cx={midX} cy={y} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <rect
               x={midX - 8}
               y={y - 4}
@@ -165,7 +167,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 's'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 's'))}
           >
-            <circle cx={midX} cy={y + height} r={hitR} fill="transparent" />
+            <circle cx={midX} cy={y + height} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <rect
               x={midX - 8}
               y={y + height - 4}
@@ -186,7 +188,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'w'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'w'))}
           >
-            <circle cx={x} cy={midY} r={hitR} fill="transparent" />
+            <circle cx={x} cy={midY} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <rect
               x={x - 4}
               y={midY - 8}
@@ -207,7 +209,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'e'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'e'))}
           >
-            <circle cx={x + width} cy={midY} r={hitR} fill="transparent" />
+            <circle cx={x + width} cy={midY} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <rect
               x={x + width - 4}
               y={midY - 8}
@@ -229,7 +231,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'nw'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'nw'))}
           >
-            <circle cx={x} cy={y} r={hitR} fill="transparent" />
+            <circle cx={x} cy={y} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <circle
               cx={x}
               cy={y}
@@ -247,7 +249,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'ne'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'ne'))}
           >
-            <circle cx={x + width} cy={y} r={hitR} fill="transparent" />
+            <circle cx={x + width} cy={y} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <circle
               cx={x + width}
               cy={y}
@@ -265,7 +267,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'se'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'se'))}
           >
-            <circle cx={x + width} cy={y + height} r={hitR} fill="transparent" />
+            <circle cx={x + width} cy={y + height} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <circle
               cx={x + width}
               cy={y + height}
@@ -283,7 +285,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'sw'))}
             onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'sw'))}
           >
-            <circle cx={x} cy={y + height} r={hitR} fill="transparent" />
+            <circle cx={x} cy={y + height} r={hitR} fill="transparent" pointerEvents="all" style={{ pointerEvents: 'all' }} />
             <circle
               cx={x}
               cy={y + height}

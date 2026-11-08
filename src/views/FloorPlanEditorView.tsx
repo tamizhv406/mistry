@@ -5051,14 +5051,16 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const roomEdgeDownProps = (roomId: string, edgeIndex: number) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    return supportsPointer
-      ? { onPointerDown: (e: React.PointerEvent) => beginRoomEdgeDrag(e, roomId, edgeIndex) }
-      : { onMouseDown: (e: React.MouseEvent) => beginRoomEdgeDrag(e, roomId, edgeIndex) };
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginRoomEdgeDrag(e, roomId, edgeIndex);
+    };
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
   const beginRoomRotation = (e: React.SyntheticEvent, roomId: string) => {
-    if (activeTool !== 'select') return;
+    if (activeTool !== 'select') setActiveTool('select');
     const pe = e as unknown as React.PointerEvent;
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
@@ -5079,10 +5081,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const roomRotationDownProps = (roomId: string) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    return supportsPointer
-      ? { onPointerDown: (e: React.PointerEvent) => beginRoomRotation(e, roomId) }
-      : { onMouseDown: (e: React.MouseEvent) => beginRoomRotation(e, roomId) };
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginRoomRotation(e, roomId);
+    };
+    return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
   const beginStairResize = (
@@ -5090,7 +5094,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     stair: FloorPlanStaircase,
     handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
   ) => {
-    if (activeTool !== 'select') return;
+    if (activeTool !== 'select') setActiveTool('select');
     const pe = e as unknown as React.PointerEvent;
     if (pe.pointerType === 'touch' && pe.isPrimary === false) return;
     elementHitRef.current = true;
@@ -5145,8 +5149,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const doorHandleDownProps = (door: FloorPlanDoor, handle: 'start' | 'end') => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    const down = (e: React.SyntheticEvent) => beginDoorResize(e, door, handle);
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginDoorResize(e, door, handle);
+    };
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -5176,8 +5183,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const windowHandleDownProps = (win: FloorPlanWindow, handle: 'start' | 'end') => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    const down = (e: React.SyntheticEvent) => beginWindowResize(e, win, handle);
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginWindowResize(e, win, handle);
+    };
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -5208,8 +5218,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   };
 
   const columnHandleDownProps = (col: FloorPlanColumn, handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n') => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    const down = (e: React.SyntheticEvent) => beginColumnResize(e, col, handle);
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginColumnResize(e, col, handle);
+    };
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -5217,8 +5230,11 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     stair: FloorPlanStaircase,
     handle: 'nw' | 'ne' | 'se' | 'sw' | 'e' | 's' | 'w' | 'n'
   ) => {
-    if (activeTool !== 'select') return { style: { pointerEvents: 'none' as const } };
-    const down = (e: React.SyntheticEvent) => beginStairResize(e, stair, handle);
+    if (activeTool === 'eraser' || activeTool === 'split') return { style: { pointerEvents: 'none' as const } };
+    const down = (e: React.SyntheticEvent) => {
+      if (activeTool !== 'select') setActiveTool('select');
+      beginStairResize(e, stair, handle);
+    };
     return supportsPointer ? { onPointerDown: down } : { onMouseDown: down };
   };
 
@@ -5620,7 +5636,7 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
   const onCanvasPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     const onElement = elementHitRef.current;
     elementHitRef.current = false;
-    const pendingSelect = pendingSelectRef.current;
+    let pendingSelect = pendingSelectRef.current;
     pendingSelectRef.current = null;
     const dimHit = dimHitRef.current;
     dimHitRef.current = null;
@@ -5681,14 +5697,19 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointersRef.current.size === 1) {
       let isElementHit = onElement;
-      // Smart Item Hit-Test: if touch missed thin SVG stroke or landed on canvas directly
+      // Smart Item Hit-Test: Mathematical coordinate-based hit testing (screenToWorld)
       if (!isElementHit && activeTool !== 'eraser' && activeTool !== 'split' && !(isDrawingWall && wallStart)) {
         const svgPos = getSvgPos(fakeMouse(e.clientX, e.clientY));
         const world = svgToWorld(svgPos.x, svgPos.y);
         const hitItem = findHitItemAtWorldPos(world);
         if (hitItem) {
-          handleElementMouseDown(fakeMouse(e.clientX, e.clientY), hitItem.type, hitItem.id);
-          isElementHit = true;
+          if (hitItem.type === 'room') {
+            // For room floor: stage as pendingSelect so a tap selects the room, while a drag pans the canvas!
+            pendingSelect = { type: 'room', id: hitItem.id };
+          } else {
+            handleElementMouseDown(fakeMouse(e.clientX, e.clientY), hitItem.type, hitItem.id);
+            isElementHit = true;
+          }
         } else if (!isDrawingWall && activeTool !== 'ai_draw') {
           // Empty canvas touch: deselect currently selected item cleanly
           if (selectedElement) {
@@ -9254,8 +9275,9 @@ _Shared via Building Mistry App_`;
 
           {showGrid && (
             <>
-              <rect width="100%" height="100%" fill="url(#fp-grid-pattern)" />
-              <rect width="100%" height="100%" fill="url(#fp-major-grid)" />
+              {/* Background grids MUST have pointerEvents: 'none' so all touch events pass to elements & canvas */}
+              <rect width="100%" height="100%" fill="url(#fp-grid-pattern)" style={{ pointerEvents: 'none' }} />
+              <rect width="100%" height="100%" fill="url(#fp-major-grid)" style={{ pointerEvents: 'none' }} />
             </>
           )}
 
@@ -9272,7 +9294,7 @@ _Shared via Building Mistry App_`;
             />
           )}
 
-          {/* ── Plot Boundary ────────────────────────── */}
+          {/* ── Plot Boundary (Non-interactive background fill) ────────── */}
           <rect
             x={panX}
             y={panY}
@@ -9282,6 +9304,7 @@ _Shared via Building Mistry App_`;
             stroke={viewMode === 'blueprint' ? '#93c5fd' : '#334155'}
             strokeWidth={2.5 * zoom}
             strokeDasharray={viewMode === 'blueprint' ? undefined : `${10 * zoom},${5 * zoom}`}
+            style={{ pointerEvents: 'none' }}
           />
 
           {/* Plot Dimension Labels */}
@@ -9335,10 +9358,11 @@ _Shared via Building Mistry App_`;
               >
                 {hasPoly ? (
                   <>
-                    {/* 1. One plain, light fill for every room (the floor finish is a property, not drawn) */}
+                    {/* 1. One plain, light fill for every room (pointerEvents: none prevents intercepting furniture & canvas) */}
                     <polygon
                       points={polyPointsStr}
                       fill={viewMode === 'blueprint' ? 'rgba(30,58,138,0.18)' : ROOM_FILL}
+                      style={{ pointerEvents: 'none' }}
                     />
                     {/* 2. Outline: only for a room placed by hand (a wall room's walls are drawn already) */}
                     <polygon
@@ -9362,7 +9386,7 @@ _Shared via Building Mistry App_`;
                   </>
                 ) : (
                   <>
-                    {/* 1. Plain light fill */}
+                    {/* 1. Plain light fill (pointerEvents: none prevents intercepting furniture & canvas) */}
                     <rect
                       x={rx}
                       y={ry}
@@ -9370,6 +9394,7 @@ _Shared via Building Mistry App_`;
                       height={rh}
                       fill={viewMode === 'blueprint' ? 'rgba(30,58,138,0.18)' : ROOM_FILL}
                       rx={2 * zoom}
+                      style={{ pointerEvents: 'none' }}
                     />
                     {/* 2. Planner 5D Perimeter Wall Border */}
                     <rect
@@ -9487,7 +9512,15 @@ _Shared via Building Mistry App_`;
                   const fontSize = Math.max(6.5, Math.min(10.5 * zoom, targetPillW / ((isNarrow ? nameOnly.length : (nameOnly.length + (hasArea ? 6 : 0))) * 0.65)));
 
                   return (
-                    <g style={{ pointerEvents: 'none' }}>
+                    <g
+                      style={{ cursor: 'pointer', pointerEvents: 'all' }}
+                      {...elementDownProps('room', room.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedElement({ type: 'room', id: room.id });
+                        setActiveTool('select');
+                      }}
+                    >
                       <rect
                         x={polyCenter.x - targetPillW / 2}
                         y={polyCenter.y - pillH / 2}

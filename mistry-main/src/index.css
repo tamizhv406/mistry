@@ -10558,6 +10558,7 @@ button.fp-mobile-zoom-text {
 .fp-touch-transform-box line,
 .fp-touch-transform-box rect {
   touch-action: none;
+  pointer-events: all;
 }
 
 /* Sleek Floating Mobile Contextual Action Bar */
