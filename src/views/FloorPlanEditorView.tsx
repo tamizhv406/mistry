@@ -2191,8 +2191,12 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
 
   const handleSelectShapeFromLibrary = useCallback(
     (item: ShapeLibraryItem) => {
-      const centerX = snapToGrid((plan?.plotLength || 30) / 2);
-      const centerY = snapToGrid((plan?.plotWidth || 20) / 2);
+      // Auto-place at the center of the user's visible viewport
+      const vw = containerRef.current?.clientWidth || window.innerWidth;
+      const vh = containerRef.current?.clientHeight || window.innerHeight;
+      const worldCenter = svgToWorld(vw / 2, vh / 2);
+      const centerX = snapToGrid(worldCenter.x || (plan?.plotLength || 30) / 2);
+      const centerY = snapToGrid(worldCenter.y || (plan?.plotWidth || 20) / 2);
       const res = createEntityFromShape(item, centerX, centerY, unit);
 
       if (res.entityType === 'wall') {
@@ -3702,17 +3706,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           const currentPointerAngle = Math.atan2(world.y - curFurnRotate.center.y, world.x - curFurnRotate.center.x) * (180 / Math.PI);
           const deltaAngle = currentPointerAngle - curFurnRotate.startPointerAngle;
           let rawAngle = Math.round((curFurnRotate.startAngle + deltaAngle + 360) % 360);
-          const SNAP_ANGLES = [0, 45, 90, 180, 270, 360];
+          const SNAP_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315, 360];
           let snapped = false;
           for (const s of SNAP_ANGLES) {
-            if (Math.abs(rawAngle - s) <= 5 || Math.abs(rawAngle - (s - 360)) <= 5) {
+            if (Math.abs(rawAngle - s) <= 6 || Math.abs(rawAngle - (s - 360)) <= 6) {
               rawAngle = s % 360;
               snapped = true;
               break;
             }
           }
           if (!snapped && !e.altKey) {
-            rawAngle = Math.round(rawAngle / 15) * 15 % 360;
+            rawAngle = (Math.round(rawAngle / 15) * 15) % 360;
           }
           dispatch({
             type: 'UPDATE_FURNITURE',
@@ -3740,17 +3744,17 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
           const currentPointerAngle = Math.atan2(world.y - curOpeningRotate.center.y, world.x - curOpeningRotate.center.x) * (180 / Math.PI);
           const deltaAngle = currentPointerAngle - curOpeningRotate.startPointerAngle;
           let rawAngle = Math.round((curOpeningRotate.startAngle + deltaAngle + 360) % 360);
-          const SNAP_ANGLES = [0, 45, 90, 180, 270, 360];
+          const SNAP_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315, 360];
           let snapped = false;
           for (const s of SNAP_ANGLES) {
-            if (Math.abs(rawAngle - s) <= 5 || Math.abs(rawAngle - (s - 360)) <= 5) {
+            if (Math.abs(rawAngle - s) <= 6 || Math.abs(rawAngle - (s - 360)) <= 6) {
               rawAngle = s % 360;
               snapped = true;
               break;
             }
           }
           if (!snapped && !e.altKey) {
-            rawAngle = Math.round(rawAngle / 15) * 15 % 360;
+            rawAngle = (Math.round(rawAngle / 15) * 15) % 360;
           }
           if (curOpeningRotate.type === 'door') {
             dispatch({ type: 'UPDATE_DOOR', id: item.id, changes: { rotation: rawAngle } });
@@ -5364,6 +5368,13 @@ export const FloorPlanEditorView: React.FC<FloorPlanEditorViewProps> = ({
     }
     dragStartStateRef.current = null;
     jointDragRef.current = null;
+    dragCandidateRef.current = null;
+    resizingFurnitureRef.current = null;
+    setResizingFurniture(null);
+    rotatingFurnitureRef.current = null;
+    setRotatingFurniture(null);
+    rotatingOpeningRef.current = null;
+    setRotatingOpening(null);
     setIsDragging(false);
     setDragStartPos(null);
     setDragElementSnapshot(null);
@@ -8725,6 +8736,8 @@ _Shared via Building Mistry App_`;
             overscrollBehavior: 'none',
             userSelect: 'none',
             WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
+            overflow: 'hidden',
           }}
         >
           {/* Mobile view switch (< 768px): a small pill in the top-left corner of the canvas */}
@@ -12191,6 +12204,19 @@ _Shared via Building Mistry App_`;
                       dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { rotation: ((w.rotation || 0) + 180) % 360 } });
                     }
                   }}
+                  onFlipVertical={() => {
+                    if (selectedElement.type === 'door') {
+                      const d = entity as FloorPlanDoor;
+                      dispatchWithHistory({ type: 'UPDATE_DOOR', id: d.id, changes: { rotation: ((d.rotation || 0) + 180) % 360 } });
+                    } else if (selectedElement.type === 'furniture') {
+                      const f = entity as FloorPlanFurniture;
+                      dispatchWithHistory({ type: 'UPDATE_FURNITURE', id: f.id, changes: { rotation: ((f.rotation || 0) + 180) % 360 } });
+                    } else if (selectedElement.type === 'window') {
+                      const w = entity as FloorPlanWindow;
+                      dispatchWithHistory({ type: 'UPDATE_WINDOW', id: w.id, changes: { rotation: ((w.rotation || 0) + 180) % 360 } });
+                    }
+                  }}
+                  onToggleLock={handleToggleLockSelected}
                   onDelete={handleDeleteSelected}
                   onDeselect={() => setSelectedElement(null)}
                   onToggleMore={() => setShowMobileMoreProperties(p => !p)}

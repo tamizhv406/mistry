@@ -1084,6 +1084,51 @@ export function renderCADSymbol(
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // 20. ELECTRICAL LIGHT / CEILING SPOT / LAMP / DOWNLIGHT (⨁)
+    // ═══════════════════════════════════════════════════════════════
+    case rawType.includes('light') ||
+      rawType.includes('spot') ||
+      rawType.includes('lamp') ||
+      rawType.includes('ceiling light') ||
+      rawType.includes('downlight') ||
+      rawType.includes('chandelier') ||
+      rawType === 'light' ||
+      rawType === 'spot': {
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = Math.min(w, h) * 0.42;
+
+      // Outer fixture circle
+      ctx.fillStyle = '#FEF9C3';
+      ctx.strokeStyle = '#D97706';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Crosshair lines forming architectural ⨁ symbol
+      ctx.strokeStyle = '#B45309';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy);
+      ctx.lineTo(cx + r, cy);
+      ctx.moveTo(cx, cy - r);
+      ctx.lineTo(cx, cy + r);
+      ctx.stroke();
+
+      // Center core bulb
+      ctx.fillStyle = '#F59E0B';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#92400E';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // DEFAULT FALLBACK: Clean architectural block with legible label
     // ═══════════════════════════════════════════════════════════════
     default: {
@@ -1107,13 +1152,14 @@ export function renderCADSymbol(
 }
 
 /**
- * Renders the floor plan to a high-resolution offscreen HTML5 canvas and returns a PNG Data URL.
- * Ensures willReadFrequently: true and complete bitmap capture so exported PDFs never have blank drawings.
+ * Renders the floor plan to a high-resolution 300 DPI offscreen HTML5 canvas and returns a PNG Data URL.
+ * Produces crisp, razor-sharp architectural CAD vector line-work (3508x2480 for A4 landscape).
+ * Ensures willReadFrequently: true and complete procedural CAD blocks so exported PDFs never have blank drawings.
  */
 export function renderFloorPlanToCanvas(
   options: FloorPlanPdfOptions,
-  width: number = 1600,
-  height: number = 880
+  width: number = 3508,
+  height: number = 2480
 ): string {
   if (typeof document === 'undefined') return '';
   const canvas = document.createElement('canvas');
@@ -1121,6 +1167,8 @@ export function renderFloorPlanToCanvas(
   canvas.height = height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return '';
+
+  const fontScale = width / 1600;
 
   // Background - Clean Architectural White
   ctx.fillStyle = '#ffffff';
@@ -1150,7 +1198,7 @@ export function renderFloorPlanToCanvas(
 
   const spanX = Math.max(10, maxX - minX);
   const spanY = Math.max(10, maxY - minY);
-  const pad = 60;
+  const pad = 100 * fontScale;
   const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
   const offsetX = (width - spanX * scale) / 2 - minX * scale;
   const offsetY = (height - spanY * scale) / 2 - minY * scale;
@@ -1160,7 +1208,7 @@ export function renderFloorPlanToCanvas(
 
   // Grid
   ctx.strokeStyle = '#f1f5f9';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = Math.max(1, 1 * fontScale);
   const gridStep = 5;
   for (let gx = Math.floor(minX / gridStep) * gridStep; gx <= maxX + gridStep; gx += gridStep) {
     ctx.beginPath();
@@ -1177,8 +1225,8 @@ export function renderFloorPlanToCanvas(
 
   // Plot Boundary
   ctx.strokeStyle = '#94a3b8';
-  ctx.setLineDash([8, 5]);
-  ctx.lineWidth = 1.5;
+  ctx.setLineDash([8 * fontScale, 5 * fontScale]);
+  ctx.lineWidth = 1.5 * fontScale;
   ctx.strokeRect(toScreenX(0), toScreenY(0), plotW * scale, plotH * scale);
   ctx.setLineDash([]);
 
@@ -1194,22 +1242,22 @@ export function renderFloorPlanToCanvas(
     ctx.fillRect(rx, ry, rw, rh);
 
     ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, 1 * fontScale);
     ctx.strokeRect(rx, ry, rw, rh);
 
     // Label
     ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 15px sans-serif';
+    ctx.font = `bold ${Math.round(15 * fontScale)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(r.label || `Room ${idx + 1}`, rx + rw / 2, ry + rh / 2 - 12);
+    ctx.fillText(r.label || `Room ${idx + 1}`, rx + rw / 2, ry + rh / 2 - 14 * fontScale);
 
     ctx.fillStyle = '#64748b';
-    ctx.font = '12px sans-serif';
+    ctx.font = `${Math.round(12 * fontScale)}px sans-serif`;
     const dimText = `${formatLength(r.width, options.unit)} × ${formatLength(r.height, options.unit)}`;
-    ctx.fillText(dimText, rx + rw / 2, ry + rh / 2 + 8);
+    ctx.fillText(dimText, rx + rw / 2, ry + rh / 2 + 8 * fontScale);
     const areaText = formatArea(r.width * r.height, options.unit);
-    ctx.fillText(areaText, rx + rw / 2, ry + rh / 2 + 26);
+    ctx.fillText(areaText, rx + rw / 2, ry + rh / 2 + 28 * fontScale);
   });
 
   // Walls (Exterior / Interior)
@@ -1217,7 +1265,7 @@ export function renderFloorPlanToCanvas(
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   (options.walls || []).forEach(w => {
-    const thicknessPx = Math.max(5, (w.thickness || 0.75) * scale);
+    const thicknessPx = Math.max(5 * fontScale, (w.thickness || 0.75) * scale);
     ctx.lineWidth = thicknessPx;
     ctx.beginPath();
     ctx.moveTo(toScreenX(w.x1), toScreenY(w.y1));
@@ -1225,33 +1273,72 @@ export function renderFloorPlanToCanvas(
     ctx.stroke();
   });
 
-  // Doors
+  // Doors (Procedural 90-degree swing arc with door leaf and jambs)
   (options.doors || []).forEach(d => {
+    ctx.save();
     const dx = toScreenX(d.x);
     const dy = toScreenY(d.y);
-    const dWidth = Math.max(12, (d.width || 3) * scale);
+    const dWidth = Math.max(16 * fontScale, (d.width || 3) * scale);
+    ctx.translate(dx, dy);
+    if (d.rotation) {
+      ctx.rotate((d.rotation * Math.PI) / 180);
+    }
+    // Hinge jamb
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(-2 * fontScale, -4 * fontScale, 4 * fontScale, 8 * fontScale);
+    // Door leaf (90-degree open line)
     ctx.strokeStyle = '#0284c7';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.5 * fontScale;
     ctx.beginPath();
-    ctx.arc(dx, dy, dWidth, 0, Math.PI / 2);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -dWidth);
     ctx.stroke();
+    // 90° Swing arc
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 1.2 * fontScale;
+    ctx.setLineDash([4 * fontScale, 3 * fontScale]);
     ctx.beginPath();
-    ctx.moveTo(dx, dy);
-    ctx.lineTo(dx + dWidth, dy);
+    ctx.arc(0, 0, dWidth, -Math.PI / 2, 0);
     ctx.stroke();
+    ctx.setLineDash([]);
+    // Stop jamb
+    ctx.fillRect(dWidth - 2 * fontScale, -4 * fontScale, 4 * fontScale, 8 * fontScale);
+    ctx.restore();
   });
 
-  // Windows
+  // Windows (Architectural Sliding Window Double-Lines with End Jambs)
   (options.windows || []).forEach(w => {
+    ctx.save();
     const wx = toScreenX(w.x);
     const wy = toScreenY(w.y);
-    const wWidth = Math.max(14, (w.width || 4) * scale);
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 4;
+    const wWidth = Math.max(16 * fontScale, (w.width || 4) * scale);
+    ctx.translate(wx, wy);
+    if (w.rotation) {
+      ctx.rotate((w.rotation * Math.PI) / 180);
+    }
+    const halfW = wWidth / 2;
+    // End jambs
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(-halfW - 3 * fontScale, -6 * fontScale, 6 * fontScale, 12 * fontScale);
+    ctx.fillRect(halfW - 3 * fontScale, -6 * fontScale, 6 * fontScale, 12 * fontScale);
+    // Window sill / outer frame
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.5 * fontScale;
+    ctx.strokeRect(-halfW, -5 * fontScale, wWidth, 10 * fontScale);
+    // Double sliding panes
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 2 * fontScale;
+    // Left pane (front)
     ctx.beginPath();
-    ctx.moveTo(wx, wy);
-    ctx.lineTo(wx + wWidth, wy);
+    ctx.moveTo(-halfW, -2 * fontScale);
+    ctx.lineTo(halfW * 0.1, -2 * fontScale);
     ctx.stroke();
+    // Right pane (back)
+    ctx.beginPath();
+    ctx.moveTo(-halfW * 0.1, 2 * fontScale);
+    ctx.lineTo(halfW, 2 * fontScale);
+    ctx.stroke();
+    ctx.restore();
   });
 
   // Furniture / Fixtures - High-Fidelity 2D Architectural CAD Blocks
@@ -1273,25 +1360,25 @@ export function renderFloorPlanToCanvas(
   });
 
   // North Compass
-  const compassX = width - 50;
-  const compassY = 50;
+  const compassX = width - 70 * fontScale;
+  const compassY = 70 * fontScale;
   ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2 * fontScale;
   ctx.beginPath();
-  ctx.moveTo(compassX, compassY + 22);
-  ctx.lineTo(compassX, compassY - 16);
+  ctx.moveTo(compassX, compassY + 28 * fontScale);
+  ctx.lineTo(compassX, compassY - 20 * fontScale);
   ctx.stroke();
   ctx.fillStyle = '#0284c7';
   ctx.beginPath();
-  ctx.moveTo(compassX, compassY - 24);
-  ctx.lineTo(compassX - 7, compassY - 10);
-  ctx.lineTo(compassX + 7, compassY - 10);
+  ctx.moveTo(compassX, compassY - 30 * fontScale);
+  ctx.lineTo(compassX - 9 * fontScale, compassY - 12 * fontScale);
+  ctx.lineTo(compassX + 9 * fontScale, compassY - 12 * fontScale);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 13px sans-serif';
+  ctx.font = `bold ${Math.round(15 * fontScale)}px sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText('N', compassX, compassY - 28);
+  ctx.fillText('N', compassX, compassY - 36 * fontScale);
 
   return canvas.toDataURL('image/png', 1.0);
 }
@@ -1359,10 +1446,10 @@ export async function generateFloorPlanPdfBlob(options: FloorPlanPdfOptions): Pr
   pdf.text(`${siteText}Date: ${dateStr} | Units: ${unitLabel}`, metaRight, margin + 6.5, { align: 'right' });
   pdf.text(`Plot Size: ${options.plan.plotLength} x ${options.plan.plotWidth} (${options.unit}) | Scale: As Noted on Dimensions`, metaRight, margin + 11.5, { align: 'right' });
 
-  // 3. Canvas Image Snapshot (Middle Area)
+  // 3. Canvas Image Snapshot (Middle Area - 300 DPI Vector-Fidelity)
   let canvasDataUrl = options.canvasImage;
   if (!canvasDataUrl && typeof document !== 'undefined') {
-    canvasDataUrl = renderFloorPlanToCanvas(options, 1600, 880);
+    canvasDataUrl = renderFloorPlanToCanvas(options, 3508, 2480);
   }
 
   if (canvasDataUrl && canvasDataUrl.startsWith('data:image/')) {

@@ -14,12 +14,14 @@ export interface TransformBoundingBoxProps {
 }
 
 /**
- * Universal AutoCAD / Figma Mobile Touch Transform Bounding Box.
+ * Universal Mobile-First AutoCAD / Figma Touch Transform Bounding Box.
  * Features:
  * - 2px solid #0284c7 border with 4px padding offset
- * - 4 Corner Handles with 32px touch target and 12px visible white pill with shadow
- * - Top Rotation Dial with 24px stem and tactile snapping handle
- * - Center drag surface for seamless touch dragging
+ * - 28px virtual touch tolerance radius for seamless touch dragging without jumping
+ * - 4 Corner Handles with generous 56px touch target and 13px visible pill with drop shadow
+ * - 4 Mid-Edge Directional Handles (N, S, E, W) for single-axis dimension adjustment
+ * - 30px Rotation Stem and Dial with tactile angle snapping
+ * - Center drag surface with touch-action: none for reliable dragging
  */
 export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
   x,
@@ -38,11 +40,12 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
   const bw = width + pad * 2;
   const bh = height + pad * 2;
 
-  // Touch hit area radius (16px radius = 32px diameter hit box)
-  const hitR = 16;
-  // Visible node radius (6px radius = 12px diameter circular white pill)
-  const nodeR = 6;
-  const stemLen = 24;
+  // Touch hit area radius (28px radius = 56px touch target diameter for mobile fingers)
+  const hitR = 28;
+  // Visible node radius
+  const nodeR = 6.5;
+  // 30px rotation stem extending outside top center
+  const stemLen = 30;
 
   const handlePointerDown = (
     e: React.SyntheticEvent,
@@ -61,6 +64,9 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
     }
     action();
   };
+
+  const midX = x + width / 2;
+  const midY = y + height / 2;
 
   return (
     <g className="fp-touch-transform-box" style={{ touchAction: 'none' }}>
@@ -82,45 +88,46 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
 
       {!isLocked && (
         <>
-          {/* 2. Top Rotation Dial Stem & Handle */}
+          {/* 2. Top Rotation Dial Stem & Handle (30px Stem) */}
           {!hideRotationDial && onRotateStart && (
             <g className="fp-rotation-dial-group">
-              {/* Stem line extending 24px above top center */}
+              {/* 30px Stem line extending above top center */}
               <line
-                x1={x + width / 2}
+                x1={midX}
                 y1={by}
-                x2={x + width / 2}
+                x2={midX}
                 y2={by - stemLen}
                 stroke="#0284c7"
                 strokeWidth={2}
-                strokeDasharray="3,2"
+                strokeDasharray="3 2"
               />
 
-              {/* 32px Invisible Touch Hit Target + 14px Visible Handle */}
+              {/* 56px Invisible Touch Hit Target + Visible Rotation Dial */}
               <g
                 style={{ cursor: 'grab', touchAction: 'none' }}
                 onPointerDown={(e) => handlePointerDown(e, () => onRotateStart(e))}
                 onMouseDown={(e) => handlePointerDown(e, () => onRotateStart(e))}
               >
-                {/* 32px hit area */}
+                {/* 56px touch target */}
                 <circle
-                  cx={x + width / 2}
+                  cx={midX}
                   cy={by - stemLen}
                   r={hitR}
                   fill="transparent"
                 />
                 {/* Visible rotation circle */}
                 <circle
-                  cx={x + width / 2}
+                  cx={midX}
                   cy={by - stemLen}
-                  r={nodeR + 1}
+                  r={nodeR + 2}
                   fill="#0284c7"
                   stroke="#ffffff"
                   strokeWidth={2}
-                  style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+                  style={{ filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.3))' }}
                 />
+                {/* Center dot / rotation icon accent */}
                 <circle
-                  cx={x + width / 2}
+                  cx={midX}
                   cy={by - stemLen}
                   r={2.5}
                   fill="#ffffff"
@@ -129,7 +136,93 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
             </g>
           )}
 
-          {/* 3. 4 Corner Resize Handles */}
+          {/* 3. 4 Mid-Edge Single-Axis Handles (N, S, E, W) */}
+          {/* North (N) Handle - Vertical Dimension */}
+          <g
+            style={{ cursor: 'ns-resize', touchAction: 'none' }}
+            onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'n'))}
+            onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'n'))}
+          >
+            <circle cx={midX} cy={y} r={hitR} fill="transparent" />
+            <rect
+              x={midX - 8}
+              y={y - 4}
+              width={16}
+              height={8}
+              rx={4}
+              fill="#ffffff"
+              stroke="#0284c7"
+              strokeWidth={1.8}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+            />
+            {/* Directional grip mark */}
+            <line x1={midX - 3} y1={y} x2={midX + 3} y2={y} stroke="#0284c7" strokeWidth={1.5} />
+          </g>
+
+          {/* South (S) Handle - Vertical Dimension */}
+          <g
+            style={{ cursor: 'ns-resize', touchAction: 'none' }}
+            onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 's'))}
+            onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 's'))}
+          >
+            <circle cx={midX} cy={y + height} r={hitR} fill="transparent" />
+            <rect
+              x={midX - 8}
+              y={y + height - 4}
+              width={16}
+              height={8}
+              rx={4}
+              fill="#ffffff"
+              stroke="#0284c7"
+              strokeWidth={1.8}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+            />
+            <line x1={midX - 3} y1={y + height} x2={midX + 3} y2={y + height} stroke="#0284c7" strokeWidth={1.5} />
+          </g>
+
+          {/* West (W) Handle - Horizontal Dimension */}
+          <g
+            style={{ cursor: 'ew-resize', touchAction: 'none' }}
+            onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'w'))}
+            onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'w'))}
+          >
+            <circle cx={x} cy={midY} r={hitR} fill="transparent" />
+            <rect
+              x={x - 4}
+              y={midY - 8}
+              width={8}
+              height={16}
+              rx={4}
+              fill="#ffffff"
+              stroke="#0284c7"
+              strokeWidth={1.8}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+            />
+            <line x1={x} y1={midY - 3} x2={x} y2={midY + 3} stroke="#0284c7" strokeWidth={1.5} />
+          </g>
+
+          {/* East (E) Handle - Horizontal Dimension */}
+          <g
+            style={{ cursor: 'ew-resize', touchAction: 'none' }}
+            onPointerDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'e'))}
+            onMouseDown={(e) => handlePointerDown(e, () => onResizeStart(e, 'e'))}
+          >
+            <circle cx={x + width} cy={midY} r={hitR} fill="transparent" />
+            <rect
+              x={x + width - 4}
+              y={midY - 8}
+              width={8}
+              height={16}
+              rx={4}
+              fill="#ffffff"
+              stroke="#0284c7"
+              strokeWidth={1.8}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+            />
+            <line x1={x + width} y1={midY - 3} x2={x + width} y2={midY + 3} stroke="#0284c7" strokeWidth={1.5} />
+          </g>
+
+          {/* 4. 4 Corner Dual-Axis Resize Handles */}
           {/* Top-Left (NW) */}
           <g
             style={{ cursor: 'nwse-resize', touchAction: 'none' }}
@@ -144,7 +237,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
               fill="#ffffff"
               stroke="#0284c7"
               strokeWidth={2}
-              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
             />
           </g>
 
@@ -162,7 +255,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
               fill="#ffffff"
               stroke="#0284c7"
               strokeWidth={2}
-              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
             />
           </g>
 
@@ -180,7 +273,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
               fill="#ffffff"
               stroke="#0284c7"
               strokeWidth={2}
-              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
             />
           </g>
 
@@ -198,7 +291,7 @@ export const TransformBoundingBox: React.FC<TransformBoundingBoxProps> = ({
               fill="#ffffff"
               stroke="#0284c7"
               strokeWidth={2}
-              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}
+              style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
             />
           </g>
         </>

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   RotateCw,
   Copy,
   FlipHorizontal,
+  FlipVertical,
   Trash2,
   Sliders,
   X,
@@ -13,6 +14,8 @@ import {
   Plus,
   Minus,
   Check,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import type { SelectedElement } from '../types';
 import type { FloorPlanDoor, FloorPlanFurniture, FloorPlanWindow, FloorPlanWall } from '../../../db/types';
@@ -24,8 +27,10 @@ export interface MobileContextBarProps {
   onRotate90: () => void;
   onDuplicate: () => void;
   onFlipHorizontal: () => void;
+  onFlipVertical?: () => void;
   onDelete: () => void;
   onDeselect: () => void;
+  onToggleLock?: () => void;
   onToggleMore: () => void;
   onQuickResize: (width: number, height?: number) => void;
   onNudge?: (dx: number, dy: number) => void;
@@ -39,69 +44,77 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
   onRotate90,
   onDuplicate,
   onFlipHorizontal,
+  onFlipVertical,
   onDelete,
   onDeselect,
+  onToggleLock,
   onToggleMore,
   onQuickResize,
   onNudge,
   onStepDimension,
 }) => {
+  const [showSteppers, setShowSteppers] = useState(false);
+
   if (!selectedElement || !entity) return null;
 
   const isLocked = !!entity.locked;
   const isFeet = unit === 'feet';
   const unitLabel = isFeet ? 'ft' : 'm';
 
-  // Compute title & current dimensions
+  // Compute title, current dimensions & angle
   const getItemDetails = () => {
+    let title = 'Element';
+    let widthVal = 0;
+    let heightVal = 0;
+    let angleVal = 0;
+    let hasHeight = false;
+
     if (selectedElement.type === 'furniture') {
       const furn = entity as FloorPlanFurniture;
-      const name = furn.label || furn.itemType || 'Furniture';
-      const w = Number(furn.width || 0).toFixed(1);
-      const h = Number(furn.height || 0).toFixed(1);
-      return {
-        title: name,
-        dimensions: `${w} × ${h} ${unitLabel}`,
-        hasHeight: true,
-      };
-    }
-    if (selectedElement.type === 'door') {
+      title = furn.label || furn.itemType || 'Furniture';
+      widthVal = Number(furn.width || 0);
+      heightVal = Number(furn.height || 0);
+      angleVal = Math.round(furn.rotation || 0) % 360;
+      hasHeight = true;
+    } else if (selectedElement.type === 'door') {
       const door = entity as FloorPlanDoor;
-      const name = door.doorType || 'Door';
-      const w = Number(door.width || 0).toFixed(1);
-      return {
-        title: name,
-        dimensions: `${w} ${unitLabel}`,
-        hasHeight: false,
-      };
-    }
-    if (selectedElement.type === 'window') {
+      title = door.doorType || 'Door';
+      widthVal = Number(door.width || 0);
+      angleVal = Math.round(door.rotation || 0) % 360;
+      hasHeight = false;
+    } else if (selectedElement.type === 'window') {
       const win = entity as FloorPlanWindow;
-      const name = win.windowType || 'Window';
-      const w = Number(win.width || 0).toFixed(1);
-      return {
-        title: name,
-        dimensions: `${w} ${unitLabel}`,
-        hasHeight: false,
-      };
-    }
-    if ((selectedElement as any).type === 'wall') {
+      title = win.windowType || 'Window';
+      widthVal = Number(win.width || 0);
+      angleVal = Math.round(win.rotation || 0) % 360;
+      hasHeight = false;
+    } else if ((selectedElement as any).type === 'wall') {
       const wall = entity as any;
       const x1 = wall.x1 ?? wall.start?.x ?? 0;
       const y1 = wall.y1 ?? wall.start?.y ?? 0;
       const x2 = wall.x2 ?? wall.end?.x ?? 0;
       const y2 = wall.y2 ?? wall.end?.y ?? 0;
-      const len = Math.hypot(x2 - x1, y2 - y1);
-      return {
-        title: wall.wallType === 'exterior' || wall.isExterior ? 'Exterior Wall' : 'Interior Wall',
-        dimensions: `${len.toFixed(1)} ${unitLabel}`,
-        hasHeight: false,
-      };
+      widthVal = Math.hypot(x2 - x1, y2 - y1);
+      angleVal = Math.round((Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI + 360) % 360;
+      title = wall.wallType === 'exterior' || wall.isExterior ? 'Exterior Wall' : 'Interior Wall';
+      hasHeight = false;
+    } else if ((selectedElement as any).type === 'column') {
+      const col = entity as any;
+      title = 'Column';
+      widthVal = Number(col.width || col.diameter || 1);
+      heightVal = Number(col.depth || col.diameter || 1);
+      hasHeight = true;
     }
+
     return {
-      title: 'Element',
-      dimensions: '',
-      hasHeight: false,
+      title,
+      widthVal,
+      heightVal,
+      angleVal,
+      hasHeight,
+      widthStr: `${widthVal.toFixed(1)} ${unitLabel}`,
+      heightStr: `${heightVal.toFixed(1)} ${unitLabel}`,
+      angleStr: `${angleVal}°`,
     };
   };
 
@@ -128,7 +141,7 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             ];
 
         return (
-          <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
             {presets.map((p) => {
               const active = Math.abs(furn.width - p.w) < 0.2 && Math.abs(furn.height - p.h) < 0.2;
               return (
@@ -173,7 +186,7 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             ];
 
         return (
-          <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
             {presets.map((p) => {
               const active = Math.abs(furn.width - p.w) < 0.2 && Math.abs(furn.height - p.h) < 0.2;
               return (
@@ -218,7 +231,7 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             ];
 
         return (
-          <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
             {presets.map((p) => {
               const active = Math.abs(furn.width - p.w) < 0.2 && Math.abs(furn.height - p.h) < 0.2;
               return (
@@ -264,7 +277,7 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
           ];
 
       return (
-        <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
           {presets.map((p) => {
             const active = Math.abs(door.width - p.w) < 0.1;
             return (
@@ -298,18 +311,20 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
       const win = entity as FloorPlanWindow;
       const presets = isFeet
         ? [
-            { label: "3'0\"", w: 3.0 },
-            { label: "4'0\"", w: 4.0 },
-            { label: "5'0\"", w: 5.0 },
+            { label: "3'0\" Window", w: 3.0 },
+            { label: "4'0\" Window", w: 4.0 },
+            { label: "5'0\" Window", w: 5.0 },
+            { label: "6'0\" Sliding", w: 6.0 },
           ]
         : [
-            { label: '0.9m', w: 0.9 },
-            { label: '1.2m', w: 1.2 },
-            { label: '1.5m', w: 1.5 },
+            { label: '0.9m Window', w: 0.9 },
+            { label: '1.2m Window', w: 1.2 },
+            { label: '1.5m Window', w: 1.5 },
+            { label: '1.8m Sliding', w: 1.8 },
           ];
 
       return (
-        <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="fp-context-quick-pills" style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
           {presets.map((p) => {
             const active = Math.abs(win.width - p.w) < 0.1;
             return (
@@ -344,41 +359,113 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
 
   return (
     <div
-      className="fp-mobile-context-bar no-print"
+      className="fp-mobile-context-bar"
       role="toolbar"
-      aria-label="Selected element actions"
+      aria-label="Element Transform Context Bar"
       style={{
         position: 'fixed',
-        bottom: '12px',
+        bottom: '80px',
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 1000,
-        width: 'calc(100% - 24px)',
-        maxWidth: '480px',
+        width: 'calc(100% - 20px)',
+        maxWidth: '490px',
         backgroundColor: 'rgba(255, 255, 255, 0.98)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         border: '1.5px solid #cbd5e1',
         borderRadius: '16px',
-        boxShadow: '0 12px 30px -4px rgba(15, 23, 42, 0.18), 0 4px 12px rgba(15, 23, 42, 0.08)',
-        padding: '10px 12px',
+        boxShadow: '0 12px 32px -4px rgba(15, 23, 42, 0.22), 0 4px 12px rgba(15, 23, 42, 0.08)',
+        padding: '8px 12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '6px',
+        touchAction: 'none',
       }}
     >
-      {/* 1. Header: Item Name, Current Dimensions, and Done/Deselect */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {/* 1. Top Dimension Chips Bar: [ Width ] [ Length ] [ Angle ] + Done Button */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0, overflowX: 'auto' }}>
+          <span style={{ fontWeight: 800, fontSize: '0.82rem', color: '#0f172a', whiteSpace: 'nowrap', marginRight: '2px' }}>
             {details.title}
           </span>
-          {details.dimensions && (
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0284c7', backgroundColor: '#e0f2fe', padding: '1px 7px', borderRadius: '8px', whiteSpace: 'nowrap' }}>
-              {details.dimensions}
-            </span>
+
+          {/* Width Chip */}
+          <button
+            type="button"
+            onClick={() => setShowSteppers(s => !s)}
+            title="Width dimension (Tap to adjust)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: '#0369a1',
+              backgroundColor: '#e0f2fe',
+              padding: '2px 7px',
+              borderRadius: '8px',
+              border: '1px solid #bae6fd',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ color: '#0284c7', fontWeight: 800 }}>W:</span>
+            <span>{details.widthStr}</span>
+          </button>
+
+          {/* Length / Depth Chip */}
+          {details.hasHeight && (
+            <button
+              type="button"
+              onClick={() => setShowSteppers(s => !s)}
+              title="Length dimension (Tap to adjust)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: '#0369a1',
+                backgroundColor: '#e0f2fe',
+                padding: '2px 7px',
+                borderRadius: '8px',
+                border: '1px solid #bae6fd',
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+              }}
+            >
+              <span style={{ color: '#0284c7', fontWeight: 800 }}>L:</span>
+              <span>{details.heightStr}</span>
+            </button>
           )}
+
+          {/* Angle Chip */}
+          <button
+            type="button"
+            onClick={onRotate90}
+            title="Rotation Angle (Tap to rotate 90°)"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: '#475569',
+              backgroundColor: '#f1f5f9',
+              padding: '2px 7px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              whiteSpace: 'nowrap',
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{ color: '#64748b' }}>∠</span>
+            <span>{details.angleStr}</span>
+          </button>
         </div>
+
+        {/* Done / Deselect Button */}
         <button
           type="button"
           onClick={onDeselect}
@@ -387,178 +474,125 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: '3px',
-            padding: '4px 10px',
+            padding: '3px 9px',
             borderRadius: '8px',
             border: '1px solid #cbd5e1',
             backgroundColor: '#f8fafc',
             color: '#334155',
-            fontSize: '0.75rem',
+            fontSize: '0.72rem',
             fontWeight: 700,
             cursor: 'pointer',
             flexShrink: 0,
           }}
         >
-          <Check size={14} color="#16a34a" />
+          <Check size={13} color="#16a34a" />
           <span>Done</span>
         </button>
       </div>
 
-      {/* 2. Directional Nudges & Dimension Steppers Row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-        {/* Nudge D-Pad: [ ⬅️ ] [ ⬆️ ] [ ⬇️ ] [ ➡️ ] */}
-        {onNudge && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#f1f5f9', padding: '3px 6px', borderRadius: '10px' }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', marginRight: '2px' }}>
-              Nudge ({isFeet ? '0.5\'' : '0.15m'})
-            </span>
-            <button
-              type="button"
-              disabled={isLocked}
-              onClick={() => onNudge(-1, 0)}
-              title="Nudge Left"
-              style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
-            >
-              <ArrowLeft size={14} />
-            </button>
-            <button
-              type="button"
-              disabled={isLocked}
-              onClick={() => onNudge(0, -1)}
-              title="Nudge Up"
-              style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
-            >
-              <ArrowUp size={14} />
-            </button>
-            <button
-              type="button"
-              disabled={isLocked}
-              onClick={() => onNudge(0, 1)}
-              title="Nudge Down"
-              style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
-            >
-              <ArrowDown size={14} />
-            </button>
-            <button
-              type="button"
-              disabled={isLocked}
-              onClick={() => onNudge(1, 0)}
-              title="Nudge Right"
-              style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
-            >
-              <ArrowRight size={14} />
-            </button>
-          </div>
-        )}
-
-        {/* Dimension Steppers: Width [ - ] [ + ] and Length [ - ] [ + ] */}
-        {onStepDimension && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {/* Width Stepper */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', backgroundColor: '#f1f5f9', padding: '3px 6px', borderRadius: '10px' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569' }}>W</span>
+      {/* 2. Optional Stepper and Nudge Panel (Collapsible or visible) */}
+      {showSteppers && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', flexWrap: 'wrap', backgroundColor: '#f8fafc', padding: '6px 8px', borderRadius: '10px' }}>
+          {/* Nudge D-Pad */}
+          {onNudge && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+              <span style={{ fontSize: '0.66rem', fontWeight: 700, color: '#64748b', marginRight: '2px' }}>
+                Nudge
+              </span>
               <button
                 type="button"
                 disabled={isLocked}
-                onClick={() => onStepDimension('width', -1)}
-                title="Decrease Width"
-                style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
+                onClick={() => onNudge(-1, 0)}
+                title="Nudge Left"
+                style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
               >
-                <Minus size={12} />
+                <ArrowLeft size={13} />
               </button>
               <button
                 type="button"
                 disabled={isLocked}
-                onClick={() => onStepDimension('width', 1)}
-                title="Increase Width"
-                style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
+                onClick={() => onNudge(0, -1)}
+                title="Nudge Up"
+                style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
               >
-                <Plus size={12} />
+                <ArrowUp size={13} />
+              </button>
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => onNudge(0, 1)}
+                title="Nudge Down"
+                style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
+              >
+                <ArrowDown size={13} />
+              </button>
+              <button
+                type="button"
+                disabled={isLocked}
+                onClick={() => onNudge(1, 0)}
+                title="Nudge Right"
+                style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
+              >
+                <ArrowRight size={13} />
               </button>
             </div>
+          )}
 
-            {/* Length/Height Stepper */}
-            {details.hasHeight && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '3px', backgroundColor: '#f1f5f9', padding: '3px 6px', borderRadius: '10px' }}>
-                <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#475569' }}>L</span>
+          {/* Steppers */}
+          {onStepDimension && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#475569' }}>W</span>
                 <button
                   type="button"
                   disabled={isLocked}
-                  onClick={() => onStepDimension('height', -1)}
-                  title="Decrease Length"
-                  style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
+                  onClick={() => onStepDimension('width', -1)}
+                  style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
                 >
-                  <Minus size={12} />
+                  <Minus size={11} />
                 </button>
                 <button
                   type="button"
                   disabled={isLocked}
-                  onClick={() => onStepDimension('height', 1)}
-                  title="Increase Length"
-                  style={{ width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer', color: '#1e293b' }}
+                  onClick={() => onStepDimension('width', 1)}
+                  style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
                 >
-                  <Plus size={12} />
+                  <Plus size={11} />
                 </button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
 
-      {/* 3. Quick Size Preset Pills (Beds, Tables, Sofas, Doors, Windows) */}
+              {details.hasHeight && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#475569' }}>L</span>
+                  <button
+                    type="button"
+                    disabled={isLocked}
+                    onClick={() => onStepDimension('height', -1)}
+                    style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
+                  >
+                    <Minus size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isLocked}
+                    onClick={() => onStepDimension('height', 1)}
+                    style={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#ffffff', cursor: 'pointer' }}
+                  >
+                    <Plus size={11} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 3. Quick Size Preset Pills */}
       {renderQuickPills()}
 
-      {/* 4. Action Buttons Row: Rotate, Flip, Duplicate, Delete, More */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', paddingTop: '2px' }}>
-        <button
-          type="button"
-          disabled={isLocked}
-          onClick={onRotate90}
-          title="Rotate 90°"
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            padding: '6px 4px',
-            borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            backgroundColor: '#ffffff',
-            color: '#1e293b',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          <RotateCw size={14} />
-          <span>Rotate</span>
-        </button>
-
-        <button
-          type="button"
-          disabled={isLocked}
-          onClick={onFlipHorizontal}
-          title="Flip Horizontal"
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            padding: '6px 4px',
-            borderRadius: '8px',
-            border: '1px solid #e2e8f0',
-            backgroundColor: '#ffffff',
-            color: '#1e293b',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          <FlipHorizontal size={14} />
-          <span>Flip</span>
-        </button>
-
+      {/* 4. Quick Action Buttons Row: [ Duplicate ] [ Flip H/V ] [ Lock ] [ Delete ] [ More ] */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '5px', paddingTop: '1px' }}>
+        {/* Duplicate */}
         <button
           type="button"
           disabled={isLocked}
@@ -569,21 +603,103 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
-            padding: '6px 4px',
+            gap: '3px',
+            padding: '6px 2px',
             borderRadius: '8px',
             border: '1px solid #e2e8f0',
             backgroundColor: '#ffffff',
             color: '#1e293b',
-            fontSize: '0.75rem',
+            fontSize: '0.72rem',
             fontWeight: 600,
             cursor: 'pointer',
           }}
         >
-          <Copy size={14} />
+          <Copy size={13} />
           <span>Copy</span>
         </button>
 
+        {/* Flip H/V */}
+        <button
+          type="button"
+          disabled={isLocked}
+          onClick={onFlipHorizontal}
+          title="Flip Horizontal (Mirror)"
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '3px',
+            padding: '6px 2px',
+            borderRadius: '8px',
+            border: '1px solid #e2e8f0',
+            backgroundColor: '#ffffff',
+            color: '#1e293b',
+            fontSize: '0.72rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <FlipHorizontal size={13} />
+          <span>Flip</span>
+        </button>
+
+        {/* Flip Vertical if provided */}
+        {onFlipVertical && (
+          <button
+            type="button"
+            disabled={isLocked}
+            onClick={onFlipVertical}
+            title="Flip Vertical"
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '3px',
+              padding: '6px 2px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#ffffff',
+              color: '#1e293b',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <FlipVertical size={13} />
+            <span>Flip V</span>
+          </button>
+        )}
+
+        {/* Lock / Unlock */}
+        {onToggleLock && (
+          <button
+            type="button"
+            onClick={onToggleLock}
+            title={isLocked ? 'Unlock Element' : 'Lock Element'}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '3px',
+              padding: '6px 2px',
+              borderRadius: '8px',
+              border: isLocked ? '1px solid #fde68a' : '1px solid #e2e8f0',
+              backgroundColor: isLocked ? '#fef3c7' : '#ffffff',
+              color: isLocked ? '#d97706' : '#1e293b',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {isLocked ? <Unlock size={13} /> : <Lock size={13} />}
+            <span>{isLocked ? 'Unlock' : 'Lock'}</span>
+          </button>
+        )}
+
+        {/* Delete */}
         <button
           type="button"
           disabled={isLocked}
@@ -594,21 +710,22 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
-            padding: '6px 4px',
+            gap: '3px',
+            padding: '6px 2px',
             borderRadius: '8px',
             border: '1px solid #fee2e2',
             backgroundColor: '#fef2f2',
             color: '#dc2626',
-            fontSize: '0.75rem',
+            fontSize: '0.72rem',
             fontWeight: 600,
             cursor: 'pointer',
           }}
         >
-          <Trash2 size={14} />
+          <Trash2 size={13} />
           <span>Delete</span>
         </button>
 
+        {/* More */}
         <button
           type="button"
           onClick={onToggleMore}
@@ -618,18 +735,18 @@ export const MobileContextBar: React.FC<MobileContextBarProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '4px',
-            padding: '6px 4px',
+            gap: '3px',
+            padding: '6px 2px',
             borderRadius: '8px',
             border: '1px solid #e2e8f0',
             backgroundColor: '#ffffff',
             color: '#475569',
-            fontSize: '0.75rem',
+            fontSize: '0.72rem',
             fontWeight: 600,
             cursor: 'pointer',
           }}
         >
-          <Sliders size={14} />
+          <Sliders size={13} />
           <span>More</span>
         </button>
       </div>
