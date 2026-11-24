@@ -3,21 +3,16 @@ import {
   X,
   ArrowDownCircle,
   ArrowUpCircle,
-  RotateCcw,
-  PlusCircle,
   Save,
   AlertCircle,
-  Building2,
-  Calendar,
-  Layers,
   ArrowRightLeft,
 } from 'lucide-react';
-import type { MaterialCategory, Site, StockMovementType, User } from '../db/types';
+import type { Site, StockMovementType } from '../db/types';
 import { todayKey } from '../utils/datetime';
-import { formatQty } from '../utils/money';
 import { getCurrentUser } from '../services/auth';
-import { recordStockMovement } from '../services/records';
-import { type StockItem } from '../domain/stock';
+import { recordStockMovement, voidStockMovement } from '../services/records';
+import { compatibleUnits, convertStockQuantity, displayStock, formatStock, validateMovementOn, type StockItem } from '../domain/stock';
+import { materialUnitsForCategory } from '../domain/catalog';
 
 export interface StockOperationModalProps {
   isOpen: boolean;
@@ -30,8 +25,11 @@ export interface StockOperationModalProps {
   onSuccess: (message: string) => void;
 }
 
-export const StockOperationModal: React.FC<StockOperationModalProps> = ({
-  isOpen,
+/** The form is mounted only while open, so every opening starts from a clean form. */
+export const StockOperationModal: React.FC<StockOperationModalProps> = props =>
+  props.isOpen ? <StockOperationForm key={`${props.preselectedItem?.key || ''}-${props.initialMode || 'usage'}`} {...props} /> : null;
+
+const StockOperationForm: React.FC<StockOperationModalProps> = ({
   siteId,
   sites,
   stockItems,
@@ -43,37 +41,20 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
   const currentUser = getCurrentUser();
 
   const [mode, setMode] = useState<StockMovementType | 'transfer'>(initialMode);
-  const [selectedItemKey, setSelectedItemKey] = useState<string>(preselectedItem?.key || (stockItems[0]?.key || ''));
-  const [quantity, setQuantity] = useState<string>('1');
+  const [selectedItemKey, setSelectedItemKey] = useState<string>(() => preselectedItem?.key || (stockItems[0]?.key || ''));
+  const [quantity, setQuantity] = useState<string>('');
+  const [unit, setUnit] = useState<string>('');
   const [date, setDate] = useState<string>(todayKey());
-  const [destinationSiteId, setDestinationSiteId] = useState<string>('');
+  const [destinationSiteId, setDestinationSiteId] = useState<string>(() => sites.find(s => s.id !== siteId)?.id || '');
   const [reason, setReason] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  React.useEffect(() => {
-    if (!isOpen) return;
-    if (preselectedItem) {
-      setSelectedItemKey(preselectedItem.key);
-    } else if (stockItems.length > 0 && !selectedItemKey) {
-      setSelectedItemKey(stockItems[0].key);
-    }
-    setMode(initialMode);
-    setDate(todayKey());
-    setQuantity('1');
-    setReason('');
-    setNotes('');
-    setError('');
-
-    // Preselect a destination site for transfer if available
-    const otherSites = sites.filter(s => s.id !== siteId);
-    if (otherSites.length > 0) {
-      setDestinationSiteId(otherSites[0].id);
-    }
-  }, [isOpen, preselectedItem, initialMode, siteId, sites]);
-
   const activeItem = stockItems.find(s => s.key === selectedItemKey) || stockItems[0];
+  // Cement is kept in kg but counted in bags: offer every unit that lands on the same item.
+  const unitChoices = activeItem ? compatibleUnits(activeItem.category, activeItem.unit, [...materialUnitsForCategory(activeItem.category), activeItem.unit]) : [];
+  const entryUnit = unitChoices.includes(unit) ? unit : (unitChoices.find(u => /bag/i.test(u)) || activeItem?.unit || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,15 +67,22 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
       return;
     }
 
-    const qNum = parseFloat(quantity);
-    if (!qNum || qNum <= 0) {
-      setError('Quantity must be greater than zero.');
+    const qNum = Number(quantity.replace(/,/g, '').trim());
+    if (!Number.isFinite(qNum) || qNum <= 0) {
+      setError('Enter a quantity greater than zero.');
       return;
     }
 
-    // Check available balance for outgoing movements
-    if ((mode === 'usage' || mode === 'return' || mode === 'adjust_out' || mode === 'transfer') && qNum > activeItem.onHand) {
-      setError(`Quantity (${qNum} ${activeItem.unit}) exceeds current on-hand stock (${formatQty(activeItem.onHand)} ${activeItem.unit}).`);
+    // The same check the save makes, so the message is the same on every screen. It counts the
+    // date too: stock that arrived after the chosen day can not be used on it.
+    const outType: StockMovementType = mode === 'transfer' ? 'adjust_out' : mode;
+    const check = validateMovementOn(activeItem, outType, convertStockQuantity(activeItem.category, entryUnit, qNum).quantity, date);
+    if (!check.ok) {
+      setError(check.error || 'Check the quantity.');
+      return;
+    }
+    if ((mode === 'adjust_in' || mode === 'adjust_out') && !reason.trim()) {
+      setError('Say why the stock is being adjusted.');
       return;
     }
 
@@ -113,7 +101,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
           itemKey: activeItem.key,
           itemName: activeItem.name,
           category: activeItem.category,
-          unit: activeItem.unit,
+          unit: entryUnit,
           movementType: 'adjust_out',
           quantity: qNum,
           eventDate: date,
@@ -132,28 +120,33 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
           itemKey: activeItem.key,
           itemName: activeItem.name,
           category: activeItem.category,
-          unit: activeItem.unit,
+          unit: entryUnit,
           movementType: 'adjust_in',
           quantity: qNum,
           eventDate: date,
           reason: `Transferred from ${sites.find(s => s.id === siteId)?.name || 'other site'}`,
           notes: notes.trim(),
+          // The outgoing half already passed the repeat check; a matching entry at the
+          // receiving site must not leave the stock taken out here and never added there.
+          allowDuplicate: true,
         });
 
         if (!inRes.ok) {
-          setError(inRes.error);
+          // Undo the outgoing half so the stock is not lost between sites.
+          await voidStockMovement(currentUser, siteId, outRes.value.id, 'Transfer could not be completed');
+          setError(`${inRes.error} Nothing was moved.`);
           setIsSubmitting(false);
           return;
         }
 
-        onSuccess(`Transferred ${qNum} ${activeItem.unit} ${activeItem.name} successfully.`);
+        onSuccess(`Transferred ${qNum} ${entryUnit} ${activeItem.name}.`);
         onClose();
       } else {
         const res = await recordStockMovement(currentUser, siteId, {
           itemKey: activeItem.key,
           itemName: activeItem.name,
           category: activeItem.category,
-          unit: activeItem.unit,
+          unit: entryUnit,
           movementType: mode as StockMovementType,
           quantity: qNum,
           eventDate: date,
@@ -178,7 +171,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
             ? 'Adjusted (− Stock Out)'
             : 'Recorded Opening Stock';
 
-        onSuccess(`${actionText}: ${qNum} ${activeItem.unit} ${activeItem.name} logged.`);
+        onSuccess(`${actionText}: ${qNum} ${entryUnit} ${activeItem.name} logged.`);
         onClose();
       }
     } catch (err: any) {
@@ -187,8 +180,6 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
       setIsSubmitting(false);
     }
   };
-
-  if (!isOpen) return null;
 
   return (
     <div
@@ -265,7 +256,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#0F172A' }}>
                 Inventory Movement
               </h2>
-              <p style={{ margin: 0, fontSize: '0.825rem', color: '#64748B' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748B' }}>
                 Record consumption, return, physical adjustment or site-to-site transfer
               </p>
             </div>
@@ -280,6 +271,8 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               cursor: 'pointer',
               padding: '6px',
               borderRadius: '8px',
+              minWidth: '44px',
+              minHeight: '44px',
             }}
           >
             <X size={20} />
@@ -309,7 +302,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
 
           {/* Operation Mode Selector */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
               Action Type
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px' }}>
@@ -326,8 +319,9 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
                   onClick={() => setMode(opt.id as any)}
                   style={{
                     padding: '8px 6px',
+                    minHeight: '44px',
                     borderRadius: '8px',
-                    fontSize: '0.8rem',
+                    fontSize: '0.875rem',
                     fontWeight: 600,
                     cursor: 'pointer',
                     border: mode === opt.id ? '2px solid #2563EB' : '1px solid #CBD5E1',
@@ -344,7 +338,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
 
           {/* Select Material */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
               Material <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <select
@@ -353,6 +347,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               style={{
                 width: '100%',
                 padding: '10px 12px',
+                  minHeight: '44px',
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
                 fontSize: '0.9rem',
@@ -363,7 +358,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
             >
               {stockItems.map(item => (
                 <option key={item.key} value={item.key}>
-                  {item.name} — On Hand: {formatQty(item.onHand)} {item.unit}
+                  {item.name} — in stock: {formatStock(item.category, item.unit, item.onHand)}
                 </option>
               ))}
             </select>
@@ -383,14 +378,14 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               }}
             >
               <div>
-                <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>Current Available Stock</span>
+                <span style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: 600 }}>Current Available Stock</span>
                 <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0F172A' }}>
-                  {formatQty(activeItem.onHand)} {activeItem.unit}
+                  {formatStock(activeItem.category, activeItem.unit, activeItem.onHand)}
                 </div>
               </div>
               <span
                 style={{
-                  fontSize: '0.75rem',
+                  fontSize: '0.875rem',
                   padding: '4px 8px',
                   borderRadius: '6px',
                   fontWeight: 600,
@@ -406,7 +401,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
           {/* Transfer Target Site */}
           {mode === 'transfer' && (
             <div>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                 Destination Project / Site <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <select
@@ -415,6 +410,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
                 style={{
                   width: '100%',
                   padding: '10px 12px',
+                  minHeight: '44px',
                   borderRadius: '8px',
                   border: '1px solid #CBD5E1',
                   fontSize: '0.9rem',
@@ -438,17 +434,22 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
           {/* Quantity & Date */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                Quantity ({activeItem?.unit || 'Unit'}) <span style={{ color: '#EF4444' }}>*</span>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                Quantity <span style={{ color: '#EF4444' }}>*</span>
               </label>
+              <div style={{ display: 'flex', gap: '6px' }}>
               <input
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder={activeItem ? `${displayStock(activeItem.category, activeItem.unit, activeItem.onHand).quantity} max` : '0'}
+                aria-label="Quantity"
                 value={quantity}
                 onChange={e => setQuantity(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
+                  minHeight: '44px',
                   borderRadius: '8px',
                   border: '1px solid #CBD5E1',
                   fontSize: '0.9rem',
@@ -457,19 +458,29 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
                 }}
                 required
               />
+              {unitChoices.length > 1 ? (
+                <select value={entryUnit} onChange={e => setUnit(e.target.value)} aria-label="Unit" style={{ minHeight: '44px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.9rem', padding: '0 8px', backgroundColor: '#FFFFFF' }}>
+                  {unitChoices.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              ) : (
+                <span style={{ alignSelf: 'center', fontSize: '0.9rem', color: '#475569' }}>{entryUnit}</span>
+              )}
+              </div>
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
                 Transaction Date <span style={{ color: '#EF4444' }}>*</span>
               </label>
               <input
                 type="date"
+                max={todayKey()}
                 value={date}
                 onChange={e => setDate(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
+                  minHeight: '44px',
                   borderRadius: '8px',
                   border: '1px solid #CBD5E1',
                   fontSize: '0.9rem',
@@ -483,12 +494,14 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
 
           {/* Work / Usage Location / Reason */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
               {mode === 'usage'
-                ? 'Used For / Work Stage'
+                ? 'Used For / Work Stage (optional)'
                 : mode === 'transfer'
-                ? 'Transfer Reason'
-                : 'Reason / Purpose'}
+                ? 'Transfer Reason (optional)'
+                : mode === 'adjust_in' || mode === 'adjust_out'
+                ? 'Reason'
+                : 'Reason (optional)'}
             </label>
             <input
               type="text"
@@ -502,6 +515,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               style={{
                 width: '100%',
                 padding: '10px 12px',
+                  minHeight: '44px',
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
                 fontSize: '0.9rem',
@@ -513,7 +527,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
 
           {/* Remarks */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.825rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
               Notes / Remarks
             </label>
             <textarea
@@ -524,6 +538,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               style={{
                 width: '100%',
                 padding: '10px 12px',
+                  minHeight: '44px',
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
                 fontSize: '0.9rem',
@@ -551,6 +566,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               disabled={isSubmitting}
               style={{
                 padding: '10px 18px',
+                minHeight: '44px',
                 borderRadius: '8px',
                 border: '1px solid #CBD5E1',
                 backgroundColor: '#FFFFFF',
@@ -567,6 +583,7 @@ export const StockOperationModal: React.FC<StockOperationModalProps> = ({
               disabled={isSubmitting}
               style={{
                 padding: '10px 22px',
+                minHeight: '44px',
                 borderRadius: '8px',
                 border: 'none',
                 backgroundColor:

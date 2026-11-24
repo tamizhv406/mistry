@@ -924,6 +924,43 @@ export async function saveCatalogItem(
   return { ok: true, value: record };
 }
 
+/**
+ * Sets the low-stock ("kammi") level of one stock item, in the unit the person typed it in.
+ * A catalog material with the item's name keeps the level; for items that have none (a cement
+ * brand and type, a steel size) a hidden catalog entry is added that only holds the level.
+ * `null` clears the level.
+ */
+export async function setLowStockLevel(
+  user: User,
+  item: { name: string; category: string },
+  level: number | null,
+  unit: string
+): Promise<Result<CatalogItem>> {
+  if (level !== null && (!Number.isFinite(level) || level < 0)) {
+    return fail('The low-stock level must be zero or more.');
+  }
+  if (!unit.trim()) return fail('Choose a unit.');
+  const name = item.name.trim();
+  const key = name.toLowerCase();
+  const existing = await db.catalogItems
+    .where('kind').equals('material')
+    .filter(c => !c.isDeleted && c.category.toLowerCase() === item.category.toLowerCase() && c.name.trim().toLowerCase() === key)
+    .first();
+  if (existing && !existing.isBuiltIn && !userCanAccessRecord(user, 'catalogItems', 'write', existing.userId)) {
+    return fail('You do not have permission to change this catalog item.');
+  }
+  const now = nowIso();
+  const record: CatalogItem = existing
+    ? { ...existing, lowStockThreshold: level, lowStockThresholdUnit: unit, updatedAt: now }
+    : {
+        id: newId('cat'), kind: 'material', name, category: item.category, unit,
+        lowStockThreshold: level, lowStockThresholdUnit: unit, stockOnly: true,
+        isBuiltIn: false, userId: user.id, isDeleted: false, createdAt: now, updatedAt: now,
+      };
+  await db.catalogItems.put(record);
+  return { ok: true, value: record };
+}
+
 export async function removeCatalogItem(user: User, id: string): Promise<Result> {
   const item = await db.catalogItems.get(id);
   if (!item) return fail('Catalog item not found.');

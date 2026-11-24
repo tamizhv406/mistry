@@ -4,32 +4,22 @@ import {
   Search,
   PlusCircle,
   ArrowDownCircle,
-  ArrowUpCircle,
-  ArrowRightLeft,
-  Filter,
   FileText,
-  Building2,
-  Calendar,
   AlertTriangle,
   Package,
   TrendingDown,
   TrendingUp,
   Receipt,
   RotateCcw,
-  SlidersHorizontal,
-  ChevronDown,
-  ExternalLink,
-  ChevronRight,
-  ShieldCheck,
-  CheckCircle,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import type { Material, MaterialCategory, RodEntry, Site, StockMovement, User } from '../db/types';
-import { buildStock, calculateStockValue, stockItemKey, type StockItem, type StockLine } from '../domain/stock';
+import type { Site, StockMovement, User } from '../db/types';
+import { buildStock, formatStock, STOCK_MOVEMENT_LABEL, stockStatus, summariseStock, type StockItem } from '../domain/stock';
+import { voidStockMovement } from '../services/records';
 import { MATERIAL_GROUPS, materialGroupId } from '../domain/catalog';
-import { formatDay, todayKey } from '../utils/datetime';
-import { formatINR, formatQty, roundMoney } from '../utils/money';
+import { formatDay } from '../utils/datetime';
+import { formatINR } from '../utils/money';
 import { RecordPurchaseModal } from '../components/RecordPurchaseModal';
 import { StockOperationModal } from '../components/StockOperationModal';
 
@@ -45,7 +35,6 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   user,
   sites,
   initialSiteId,
-  onNavigateSiteDetail,
   onNotify,
 }) => {
   // Active Project Selection (All Sites vs Specific Site)
@@ -59,8 +48,10 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
   // Modals state
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
-  const [materialToEdit, setMaterialToEdit] = useState<Material | null>(null);
-  const [rodToEdit, setRodToEdit] = useState<RodEntry | null>(null);
+  const [purchasePreset, setPurchasePreset] = useState<StockItem | null>(null);
+  const [voiding, setVoiding] = useState<StockMovement | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voidError, setVoidError] = useState('');
 
   const [isStockOpModalOpen, setIsStockOpModalOpen] = useState(false);
   const [stockOpItem, setStockOpItem] = useState<StockItem | null>(null);
@@ -81,50 +72,35 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
     return await db.rodEntries.where('siteId').equals(selectedSiteId).filter(r => !r.isDeleted).toArray();
   }, [selectedSiteId]);
 
+  // Cancelled entries are kept: the stock ignores them, the history shows them with their reason.
   const stockMovementsQuery = useLiveQuery(async () => {
     if (selectedSiteId === 'all') {
-      return await db.stockMovements.filter(m => !m.isDeleted).toArray();
+      return await db.stockMovements.toArray();
     }
-    return await db.stockMovements.where('siteId').equals(selectedSiteId).filter(m => !m.isDeleted).toArray();
+    return await db.stockMovements.where('siteId').equals(selectedSiteId).toArray();
   }, [selectedSiteId]);
 
   const catalogQuery = useLiveQuery(async () => {
     return await db.catalogItems.filter(c => !c.isDeleted && c.kind !== 'tool').toArray();
   }, []);
 
-  const materials = materialsQuery || [];
-  const rodEntries = rodEntriesQuery || [];
-  const movements = stockMovementsQuery || [];
-  const catalog = catalogQuery || [];
+  const materials = useMemo(() => materialsQuery || [], [materialsQuery]);
+  const rodEntries = useMemo(() => rodEntriesQuery || [], [rodEntriesQuery]);
+  const movements = useMemo(() => stockMovementsQuery || [], [stockMovementsQuery]);
+  const catalog = useMemo(() => catalogQuery || [], [catalogQuery]);
 
   // Compute live multi-site or single-site Stock Items
   const stockItems: StockItem[] = useMemo(() => {
     return buildStock(materials, rodEntries, movements, catalog);
   }, [materials, rodEntries, movements, catalog]);
 
-  // Compute Analytics Metrics
-  const metrics = useMemo(() => {
-    const stockVal = calculateStockValue(materials, rodEntries);
-    let lowStockCount = 0;
-    let outOfStockCount = 0;
-
-    stockItems.forEach(s => {
-      if (s.onHand <= 0) {
-        outOfStockCount++;
-      } else if (s.onHand < 20) {
-        // Threshold check for standard inventory
-        lowStockCount++;
-      }
-    });
-
-    return {
-      totalMaterialsCount: stockItems.length,
-      totalStockValue: stockVal.totalStockValue,
-      pendingPurchasesValue: stockVal.pendingPurchasesValue,
-      lowStockCount,
-      outOfStockCount,
-    };
-  }, [materials, rodEntries, stockItems]);
+  // The same figures the phone screen shows (domain/stock summariseStock).
+  const metrics = useMemo(() => summariseStock(stockItems, materials, rodEntries), [materials, rodEntries, stockItems]);
+  const isAllSites = selectedSiteId === 'all';
+  const movementLog = useMemo(
+    () => [...movements].sort((a, b) => b.eventDate.localeCompare(a.eventDate) || (b.createdAt || '').localeCompare(a.createdAt || '')),
+    [movements]
+  );
 
   // Filtered Stock Items
   const filteredStock = useMemo(() => {
@@ -141,9 +117,10 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         const itemShelf = materialGroupId(item.category);
         if (itemShelf !== selectedShelf) return false;
       }
-      // Stock Status
-      if (stockStatusFilter === 'out' && item.onHand > 0) return false;
-      if (stockStatusFilter === 'low' && (item.onHand <= 0 || item.onHand >= 20)) return false;
+      // Stock Status (low = at or below the item's own low-stock level)
+      const status = stockStatus(item);
+      if (stockStatusFilter === 'out' && status !== 'out' && status !== 'negative') return false;
+      if (stockStatusFilter === 'low' && status !== 'low') return false;
       if (stockStatusFilter === 'in' && item.onHand <= 0) return false;
 
       return true;
@@ -217,11 +194,32 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
     setIsStockOpModalOpen(true);
   };
 
+  const handleOpenPurchase = (item?: StockItem) => {
+    setPurchasePreset(item || null);
+    setIsPurchaseModalOpen(true);
+  };
+
+  const handleVoid = async () => {
+    if (!voiding) return;
+    if (!voidReason.trim()) {
+      setVoidError('Say why this entry is being cancelled.');
+      return;
+    }
+    const res = await voidStockMovement(user, voiding.siteId, voiding.id, voidReason);
+    if (!res.ok) {
+      setVoidError(res.error);
+      return;
+    }
+    onNotify('Entry cancelled. It stays in the history, marked as cancelled.', 'info');
+    setVoiding(null);
+    setVoidReason('');
+    setVoidError('');
+  };
+
   const handleExportPDF = () => {
     window.print();
   };
 
-  const activeSiteObj = sites.find(s => s.id === selectedSiteId);
 
   return (
     <div style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto', color: '#0F172A' }}>
@@ -288,7 +286,10 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
           <button
             onClick={() => handleOpenStockOut()}
+            disabled={isAllSites}
+            title={isAllSites ? 'Choose a project first' : undefined}
             style={{
+              opacity: isAllSites ? 0.5 : 1,
               padding: '9px 16px',
               borderRadius: '8px',
               border: '1px solid #CBD5E1',
@@ -308,11 +309,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           </button>
 
           <button
-            onClick={() => {
-              setMaterialToEdit(null);
-              setRodToEdit(null);
-              setIsPurchaseModalOpen(true);
-            }}
+            onClick={() => handleOpenPurchase()}
             style={{
               padding: '9px 20px',
               borderRadius: '8px',
@@ -334,107 +331,43 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         </div>
       </div>
 
-      {/* KPI Summary Cards */}
+      {/* KPI Summary Cards: same figures as the phone screen */}
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
           gap: '16px',
           marginBottom: '24px',
         }}
       >
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>TOTAL MATERIALS</span>
-            <Package size={18} color="#2563EB" />
+        {[
+          { label: 'MATERIALS', value: String(metrics.itemCount), hint: `${metrics.inStockCount} in stock`, color: '#0F172A', icon: <Package size={18} color="#2563EB" /> },
+          { label: 'STOCK VALUE', value: formatINR(metrics.stockValue), hint: 'On hand, at average purchase price', color: '#16A34A', icon: <TrendingUp size={18} color="#16A34A" /> },
+          { label: 'BOUGHT', value: formatINR(metrics.purchaseValue), hint: 'All purchases', color: '#0F172A', icon: <Receipt size={18} color="#2563EB" /> },
+          { label: 'LOW STOCK', value: String(metrics.lowCount), hint: 'At or below the low-stock level', color: metrics.lowCount > 0 ? '#D97706' : '#0F172A', icon: <AlertTriangle size={18} color="#F59E0B" /> },
+          { label: 'OUT OF STOCK', value: String(metrics.outCount), hint: 'Nothing left on site', color: metrics.outCount > 0 ? '#DC2626' : '#0F172A', icon: <TrendingDown size={18} color="#DC2626" /> },
+          { label: 'TO PAY', value: formatINR(metrics.payable), hint: 'Unpaid supplier balance', color: '#7C3AED', icon: <Receipt size={18} color="#7C3AED" /> },
+        ].map(card => (
+          <div
+            key={card.label}
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '12px',
+              border: '1px solid #E2E8F0',
+              padding: '18px 20px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              minWidth: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748B' }}>{card.label}</span>
+              {card.icon}
+            </div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: card.color, overflowWrap: 'anywhere' }}>{card.value}</div>
+            <div style={{ fontSize: '0.875rem', color: '#64748B', marginTop: '4px' }}>{card.hint}</div>
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A' }}>{metrics.totalMaterialsCount}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Active item catalog entries</div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>TOTAL STOCK VALUE</span>
-            <TrendingUp size={18} color="#16A34A" />
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#16A34A' }}>{formatINR(metrics.totalStockValue)}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Cumulative purchase ledger</div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>LOW STOCK ALERT</span>
-            <AlertTriangle size={18} color="#F59E0B" />
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: metrics.lowStockCount > 0 ? '#D97706' : '#0F172A' }}>
-            {metrics.lowStockCount}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Items approaching minimum buffer</div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>OUT OF STOCK</span>
-            <TrendingDown size={18} color="#DC2626" />
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: metrics.outOfStockCount > 0 ? '#DC2626' : '#0F172A' }}>
-            {metrics.outOfStockCount}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>0 quantity on hand</div>
-        </div>
-
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>PENDING PURCHASES</span>
-            <Receipt size={18} color="#7C3AED" />
-          </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#7C3AED' }}>
-            {formatINR(metrics.pendingPurchasesValue)}
-          </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Unpaid supplier balance</div>
-        </div>
+        ))}
       </div>
-
       {/* Control Bar: Project Filter, Search, Shelf Filter, and Tabs */}
       <div
         style={{
@@ -560,7 +493,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                 padding: '7px 14px',
                 borderRadius: '6px',
                 border: 'none',
-                fontSize: '0.825rem',
+                fontSize: '0.875rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 backgroundColor: activeTab === tab.id ? '#FFFFFF' : 'transparent',
@@ -589,7 +522,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Material Name</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Category</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Purchased</th>
@@ -605,15 +538,16 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     <td colSpan={7} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
                       <Package size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                       <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No material inventory records found</div>
-                      <div style={{ fontSize: '0.825rem', marginTop: '4px' }}>
+                      <div style={{ fontSize: '0.875rem', marginTop: '4px' }}>
                         Click "+ Record Purchase" to enter stock purchases for this site.
                       </div>
                     </td>
                   </tr>
                 ) : (
                   filteredStock.map(item => {
-                    const isOut = item.onHand <= 0;
-                    const isLow = !isOut && item.onHand < 20;
+                    const status = stockStatus(item);
+                    const isOut = status === 'out' || status === 'negative';
+                    const isLow = status === 'low';
 
                     return (
                       <tr
@@ -627,7 +561,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                       >
                         <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
                           <div>{item.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 400 }}>Unit: {item.unit}</div>
+                          <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: 400 }}>{item.lowStockThreshold !== undefined ? `Low-stock level: ${formatStock(item.category, item.unit, item.lowStockThreshold)}` : 'No low-stock level set'}</div>
                         </td>
                         <td style={{ padding: '14px 18px' }}>
                           <span
@@ -636,7 +570,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                               borderRadius: '6px',
                               backgroundColor: '#EFF6FF',
                               color: '#1D4ED8',
-                              fontSize: '0.75rem',
+                              fontSize: '0.875rem',
                               fontWeight: 600,
                               textTransform: 'capitalize',
                             }}
@@ -645,14 +579,14 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                           </span>
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'right', color: '#334155' }}>
-                          {formatQty(item.purchased)} {item.unit}
+                          {formatStock(item.category, item.unit, item.purchased)}
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'right', color: '#DC2626' }}>
-                          {formatQty(item.used + item.returned)} {item.unit}
+                          {formatStock(item.category, item.unit, item.used + item.returned)}
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, fontSize: '0.95rem' }}>
                           <span style={{ color: isOut ? '#DC2626' : isLow ? '#D97706' : '#16A34A' }}>
-                            {formatQty(item.onHand)} {item.unit}
+                            {formatStock(item.category, item.unit, item.onHand)}
                           </span>
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'center' }}>
@@ -661,27 +595,49 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                               display: 'inline-block',
                               padding: '4px 10px',
                               borderRadius: '999px',
-                              fontSize: '0.72rem',
+                              fontSize: '0.875rem',
                               fontWeight: 700,
                               backgroundColor: isOut ? '#FEE2E2' : isLow ? '#FEF3C7' : '#DCFCE7',
                               color: isOut ? '#991B1B' : isLow ? '#92400E' : '#166534',
                             }}
                           >
-                            {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'}
+                            {status === 'negative' ? 'Below zero' : isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'}
                           </span>
                         </td>
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                             <button
-                              onClick={() => handleOpenStockOut(item)}
-                              title="Stock Out / Use on site"
+                              onClick={() => handleOpenPurchase(item)}
+                              title="Record a purchase of this material"
                               style={{
+                                padding: '6px 10px',
+                                minHeight: '44px',
+                                whiteSpace: 'nowrap',
+                                borderRadius: '6px',
+                                border: '1px solid #CBD5E1',
+                                backgroundColor: '#FFFFFF',
+                                color: '#16A34A',
+                                fontSize: '0.875rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              + Purchase
+                            </button>
+                            <button
+                              onClick={() => handleOpenStockOut(item)}
+                              disabled={isAllSites || item.onHand <= 0}
+                              title={isAllSites ? 'Choose a project first' : 'Stock Out / Use on site'}
+                              style={{
+                                opacity: isAllSites || item.onHand <= 0 ? 0.5 : 1,
+                                minHeight: '44px',
+                                whiteSpace: 'nowrap',
                                 padding: '6px 10px',
                                 borderRadius: '6px',
                                 border: '1px solid #CBD5E1',
                                 backgroundColor: '#FFFFFF',
                                 color: '#DC2626',
-                                fontSize: '0.75rem',
+                                fontSize: '0.875rem',
                                 fontWeight: 600,
                                 cursor: 'pointer',
                               }}
@@ -690,14 +646,18 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                             </button>
                             <button
                               onClick={() => handleOpenTransfer(item)}
-                              title="Transfer stock to another site"
+                              disabled={isAllSites || item.onHand <= 0 || sites.length < 2}
+                              title={isAllSites ? 'Choose a project first' : 'Transfer stock to another site'}
                               style={{
+                                opacity: isAllSites || item.onHand <= 0 || sites.length < 2 ? 0.5 : 1,
+                                minHeight: '44px',
+                                whiteSpace: 'nowrap',
                                 padding: '6px 10px',
                                 borderRadius: '6px',
                                 border: '1px solid #CBD5E1',
                                 backgroundColor: '#FFFFFF',
                                 color: '#7C3AED',
-                                fontSize: '0.75rem',
+                                fontSize: '0.875rem',
                                 fontWeight: 600,
                                 cursor: 'pointer',
                               }}
@@ -730,7 +690,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Item Description</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Project</th>
@@ -757,7 +717,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         <td style={{ padding: '14px 18px', color: '#64748B' }}>{formatDay(p.date)}</td>
                         <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
                           <div>{p.name}</div>
-                          {p.invoiceNumber && <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Invoice: {p.invoiceNumber}</div>}
+                          {p.invoiceNumber && <div style={{ fontSize: '0.875rem', color: '#64748B' }}>Invoice: {p.invoiceNumber}</div>}
                         </td>
                         <td style={{ padding: '14px 18px', color: '#334155' }}>{siteObj?.name || 'Project'}</td>
                         <td style={{ padding: '14px 18px', color: '#64748B' }}>{p.supplier}</td>
@@ -795,25 +755,26 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Material</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Type</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Quantity</th>
                   <th style={{ padding: '14px 18px', fontWeight: 700 }}>Reason / Notes</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {movements.length === 0 ? (
+                {movementLog.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={6} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
                       <RotateCcw size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                       <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No stock movements recorded</div>
                     </td>
                   </tr>
                 ) : (
-                  movements.map(m => (
-                    <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                  movementLog.map(m => (
+                    <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9', opacity: m.isDeleted ? 0.75 : 1 }}>
                       <td style={{ padding: '14px 18px', color: '#64748B' }}>{formatDay(m.eventDate)}</td>
                       <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>{m.itemName}</td>
                       <td style={{ padding: '14px 18px' }}>
@@ -821,7 +782,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                           style={{
                             padding: '4px 8px',
                             borderRadius: '6px',
-                            fontSize: '0.75rem',
+                            fontSize: '0.875rem',
                             fontWeight: 600,
                             backgroundColor:
                               m.movementType === 'usage'
@@ -837,20 +798,29 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                                 : '#334155',
                           }}
                         >
-                          {m.movementType === 'usage'
-                            ? 'Stock Out (Used)'
-                            : m.movementType === 'adjust_in'
-                            ? 'Stock In (Adjust)'
-                            : m.movementType === 'adjust_out'
-                            ? 'Stock Out (Adjust)'
-                            : m.movementType}
+                          {STOCK_MOVEMENT_LABEL[m.movementType] || m.movementType}
                         </span>
                       </td>
                       <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700 }}>
-                        {formatQty(m.quantity)} {m.unit}
+                        <span style={{ textDecoration: m.isDeleted ? 'line-through' : undefined }}>{formatStock(m.category, m.unit, m.quantity)}</span>
                       </td>
-                      <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '0.825rem' }}>
+                      <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '0.875rem' }}>
                         {m.reason ? (m.notes ? `${m.reason} · ${m.notes}` : m.reason) : (m.notes || '—')}
+                        {m.isDeleted && (
+                          <div style={{ color: '#991B1B', fontWeight: 600 }}>
+                            Cancelled: {m.voidReason || 'no reason given'}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                        {!m.isDeleted && (
+                          <button
+                            onClick={() => { setVoiding(m); setVoidReason(''); setVoidError(''); }}
+                            style={{ minHeight: '44px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #FCA5A5', backgroundColor: '#FFFFFF', color: '#991B1B', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            Cancel entry
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -866,8 +836,8 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         isOpen={isPurchaseModalOpen}
         siteId={selectedSiteId === 'all' ? (sites[0]?.id || '') : selectedSiteId}
         sites={sites}
-        materialToEdit={materialToEdit}
-        rodToEdit={rodToEdit}
+        lockSite={!isAllSites}
+        preset={purchasePreset}
         onClose={() => setIsPurchaseModalOpen(false)}
         onSuccess={msg => {
           onNotify(msg, 'success');
@@ -887,6 +857,35 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           onNotify(msg, 'success');
         }}
       />
+
+      {/* Cancel (void) a stock entry: a reason is required, the entry stays in the history */}
+      {voiding && (
+        <div role="dialog" aria-modal="true" aria-label="Cancel stock entry" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', width: '100%', maxWidth: '440px', padding: '20px' }}>
+            <h2 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 700 }}>Cancel this entry?</h2>
+            <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+              {STOCK_MOVEMENT_LABEL[voiding.movementType]}: {formatStock(voiding.category, voiding.unit, voiding.quantity)} {voiding.itemName}, {formatDay(voiding.eventDate)}.
+              It stays in the history marked as cancelled and stops changing the stock.
+            </p>
+            {voidError && <div role="alert" style={{ marginBottom: '10px', padding: '10px 12px', borderRadius: '8px', backgroundColor: '#FEF2F2', color: '#991B1B', fontSize: '0.9rem' }}>{voidError}</div>}
+            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, marginBottom: '6px' }}>
+              Why is it being cancelled?
+              <input
+                type="text"
+                value={voidReason}
+                maxLength={120}
+                onChange={e => setVoidReason(e.target.value)}
+                placeholder="Entered twice, wrong item"
+                style={{ display: 'block', width: '100%', marginTop: '6px', minHeight: '44px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.95rem', boxSizing: 'border-box' }}
+              />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
+              <button onClick={() => setVoiding(null)} style={{ minHeight: '44px', padding: '0 16px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>Keep it</button>
+              <button onClick={handleVoid} disabled={!voidReason.trim()} style={{ minHeight: '44px', padding: '0 16px', borderRadius: '8px', border: 'none', backgroundColor: '#DC2626', color: '#FFFFFF', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', opacity: voidReason.trim() ? 1 : 0.5 }}>Cancel entry</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

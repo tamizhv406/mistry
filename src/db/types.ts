@@ -1007,6 +1007,8 @@ export interface CatalogItem {
   imageUrl?: string;       // bundled path or user-supplied data URL
   imageCredit?: string;    // author + license for bundled photos
   isBuiltIn?: boolean;
+  /** Only holds the low-stock level of one stock item (e.g. "Ramco PPC Cement"); not offered in material pickers. */
+  stockOnly?: boolean;
   userId?: string;         // who added a custom entry
   isDeleted: boolean;
   deletedAt?: string;

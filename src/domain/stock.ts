@@ -139,6 +139,31 @@ export interface StockItem {
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** What a purchase cost: the saved total, or quantity × price for older rows saved without one. */
+function purchaseAmount(totalAmount: unknown, quantity: unknown, rate: unknown): number {
+  const total = Number(totalAmount);
+  if (Number.isFinite(total) && total > 0) return total;
+  const value = (Number(quantity) || 0) * (Number(rate) || 0);
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+/**
+ * The catalog entry that sets an item's low-stock level. An entry with the item's own name
+ * wins (so "Ramco PPC Cement" can have its own level); otherwise the entry its purchases were
+ * picked from (plain "Cement" covers every brand). The level is converted to the item's unit
+ * and ignored when the units do not match (a level in tonnes for sand bought by cft).
+ */
+function lowStockLevelFor(item: StockItem, catalog: CatalogItem[], ids: Set<string> | undefined): number | undefined {
+  const usable = catalog.filter(c => c.kind === 'material' && !c.isDeleted && typeof c.lowStockThreshold === 'number');
+  const entry =
+    usable.find(c => norm(c.category) === norm(item.category) && norm(c.name) === norm(item.name)) ||
+    (ids ? usable.find(c => ids.has(c.id)) : undefined);
+  if (!entry || typeof entry.lowStockThreshold !== 'number') return undefined;
+  const level = convertStockQuantity(item.category, entry.lowStockThresholdUnit || entry.unit || item.unit, entry.lowStockThreshold);
+  return level.family === unitDefinition(item.category, item.unit).family ? level.quantity : undefined;
+}
 
 export function buildStock(
   materials: Material[],
@@ -148,17 +173,23 @@ export function buildStock(
 ): StockItem[] {
   const items = new Map<string, StockItem>();
 
-  const ensure = (key: string, name: string, category: string, unit: string, lowStockThreshold?: number): StockItem => {
+  // Catalog entries the purchases of each item were picked from (e.g. plain "Cement" for every brand).
+  const catalogIds = new Map<string, Set<string>>();
+  const catalogIdsOf = (key: string) => {
+    let ids = catalogIds.get(key);
+    if (!ids) catalogIds.set(key, (ids = new Set()));
+    return ids;
+  };
+
+  const ensure = (key: string, name: string, category: string, unit: string): StockItem => {
     let it = items.get(key);
     if (!it) {
       it = {
-        key, name, category, unit, lowStockThreshold, isLowStock: false,
+        key, name, category, unit, isLowStock: false,
         purchased: 0, opening: 0, used: 0, returned: 0, adjusted: 0, onHand: 0,
         purchaseCost: 0, lastActivityDate: '', lines: [], isNegative: false,
       };
       items.set(key, it);
-    } else if (lowStockThreshold !== undefined) {
-      it.lowStockThreshold = lowStockThreshold;
     }
     return it;
   };
@@ -168,24 +199,15 @@ export function buildStock(
     const name = (m.materialName || m.category).trim();
     const sourceUnit = (m.unit || 'Unit').trim();
     const normalized = convertStockQuantity(m.category, sourceUnit, 1);
-    const itemCatalog = catalog.find(c =>
-      c.kind === 'material' && !c.isDeleted &&
-      (c.id === m.catalogItemId || (c.category === m.category && norm(c.name) === norm(name)))
-    );
-    const thresholdUnit = itemCatalog?.lowStockThresholdUnit || itemCatalog?.unit || sourceUnit;
-    const threshold = itemCatalog?.lowStockThreshold;
-    const normalizedThreshold = typeof threshold !== 'number'
-      ? undefined
-      : convertStockQuantity(m.category, thresholdUnit, threshold);
-    const safeThreshold = normalizedThreshold?.family === normalized.family ? normalizedThreshold.quantity : undefined;
-    const it = ensure(stockItemKey({ category: m.category, name, unit: sourceUnit }), name, m.category, normalized.unit, safeThreshold);
+    const it = ensure(stockItemKey({ category: m.category, name, unit: sourceUnit }), name, m.category, normalized.unit);
     const quantity = convertStockQuantity(m.category, sourceUnit, Number(m.quantity) || 0).quantity;
     it.lines.push({
       id: m.id, type: 'purchase', source: 'purchase', date: purchaseDay(m.purchaseDate, m.createdAt),
       createdAt: m.createdAt || '', quantity, signed: quantity,
-      voided: false, balanceAfter: 0, supplier: m.supplier, cost: Number(m.totalAmount) || 0,
+      voided: false, balanceAfter: 0, supplier: m.supplier, cost: purchaseAmount(m.totalAmount, m.quantity, m.rate ?? (m as { unitPrice?: number }).unitPrice),
       reference: m.invoiceNumber, notes: m.notes,
     });
+    if (m.catalogItemId) catalogIdsOf(it.key).add(m.catalogItemId);
   }
 
   for (const r of rodEntries) {
@@ -195,7 +217,8 @@ export function buildStock(
     it.lines.push({
       id: r.id, type: 'purchase', source: 'purchase', date: purchaseDay(r.purchaseDate, r.createdAt),
       createdAt: r.createdAt || '', quantity: Number(r.weightKg) || 0, signed: Number(r.weightKg) || 0,
-      voided: false, balanceAfter: 0, supplier: r.supplier, cost: Number(r.totalAmount) || 0,
+      voided: false, balanceAfter: 0, supplier: r.supplier,
+      cost: purchaseAmount(r.totalAmount, r.weightKg, r.ratePerKg ?? (r as { pricePerKg?: number }).pricePerKg),
       reference: r.invoiceNumber, notes: r.notes,
     });
 
@@ -248,6 +271,7 @@ export function buildStock(
       }
     }
     it.onHand = balance;
+    it.lowStockThreshold = lowStockLevelFor(it, catalog, catalogIds.get(it.key));
     it.isLowStock = it.lowStockThreshold !== undefined && it.onHand <= it.lowStockThreshold;
     it.purchased = round3(it.purchased);
     it.used = round3(it.used);
@@ -269,17 +293,19 @@ export interface MovementCheck {
 export function validateMovement(
   onHand: number,
   type: StockMovementType,
-  quantity: number
+  quantity: number,
+  item?: Pick<StockItem, 'category' | 'unit'>
 ): MovementCheck {
   if (!Number.isFinite(quantity) || quantity <= 0) {
     return { ok: false, error: 'Enter a quantity greater than zero.' };
   }
   if (movementDirection(type) === -1 && quantity > onHand + 1e-9) {
     const shortBy = round3(quantity - onHand);
+    const left = Math.max(0, onHand);
     return {
       ok: false,
       shortBy,
-      error: `Only ${round3(Math.max(0, onHand))} in stock. Reduce the quantity, or record the missing purchase or opening stock first.`,
+      error: `Only ${item ? formatStock(item.category, item.unit, left) : round3(left)} in stock. Reduce the quantity, or record the missing purchase or opening stock first.`,
     };
   }
   return { ok: true };
@@ -310,14 +336,15 @@ export function validateMovementOn(
   quantity: number,
   eventDate: string
 ): MovementCheck {
-  const today = validateMovement(item?.onHand || 0, type, quantity);
+  const today = validateMovement(item?.onHand || 0, type, quantity, item);
   if (!today.ok || movementDirection(type) === 1) return today;
   const available = availableOn(item, eventDate);
   if (quantity > available + 1e-9) {
+    const left = Math.max(0, available);
     return {
       ok: false,
-      shortBy: round3(quantity - Math.max(0, available)),
-      error: `Only ${round3(Math.max(0, available))} can be taken out on ${formatDay(eventDate)}: the rest arrived later or is already used in later entries. Reduce the quantity or change the date.`,
+      shortBy: round3(quantity - left),
+      error: `Only ${item ? formatStock(item.category, item.unit, left) : round3(left)} can be taken out on ${formatDay(eventDate)}: the rest arrived later or is already used in later entries. Reduce the quantity or change the date.`,
     };
   }
   return { ok: true };
@@ -427,3 +454,101 @@ export function calculateStockValue(
   };
 }
 
+
+
+// ---------------------------------------------------------------------------
+// One set of numbers for every screen
+// ---------------------------------------------------------------------------
+
+/** Cement is kept in kilograms so bags and kg add up; people count it in 50 kg bags. */
+export function displayStock(category: string, unit: string, quantity: number): { quantity: number; unit: string } {
+  if (norm(category) === 'cement' && unit === 'kg') return { quantity: round3(quantity / 50), unit: 'bags' };
+  if (unit === 'piece') return { quantity: round3(quantity), unit: 'pcs' };
+  return { quantity: round3(quantity), unit };
+}
+
+/** "45 bags", "300 cft", "1,200 kg". */
+export function formatStock(category: string, unit: string, quantity: number): string {
+  const shown = displayStock(category, unit, quantity);
+  return `${shown.quantity.toLocaleString('en-IN', { maximumFractionDigits: 3 })} ${shown.unit}`;
+}
+
+export type StockStatus = 'ok' | 'low' | 'out' | 'negative';
+
+export function stockStatus(item: Pick<StockItem, 'onHand' | 'isLowStock'>): StockStatus {
+  if (item.onHand < 0) return 'negative';
+  if (item.onHand === 0) return 'out';
+  return item.isLowStock ? 'low' : 'ok';
+}
+
+/**
+ * Value of what is still on site: on-hand quantity × the weighted average purchase price.
+ * Stock with no purchase price (opening stock only, steel counted by length) is valued at ₹0
+ * rather than guessed. Less than zero is valued at ₹0, never negative.
+ */
+export function stockItemValue(item: Pick<StockItem, 'onHand' | 'purchased' | 'purchaseCost'>): number {
+  if (item.onHand <= 0 || item.purchased <= 0 || item.purchaseCost <= 0) return 0;
+  return round2((item.purchaseCost / item.purchased) * item.onHand);
+}
+
+export interface StockSummary {
+  itemCount: number;
+  inStockCount: number;
+  lowCount: number;
+  outCount: number;
+  negativeCount: number;
+  /** On-hand value at weighted average purchase price. */
+  stockValue: number;
+  /** Everything bought, used or not (same figure as calculateStockValue().totalStockValue). */
+  purchaseValue: number;
+  /** Still owed to suppliers. */
+  payable: number;
+}
+
+/** The figures both the desktop and the phone Materials screens show. */
+export function summariseStock(items: StockItem[], materials: Material[] = [], rodEntries: RodEntry[] = []): StockSummary {
+  const statuses = items.map(stockStatus);
+  const owed = calculateStockValue(materials, rodEntries).pendingPurchasesValue;
+  return {
+    itemCount: items.length,
+    inStockCount: items.filter(i => i.onHand > 0).length,
+    lowCount: statuses.filter(s => s === 'low').length,
+    outCount: statuses.filter(s => s === 'out' || s === 'negative').length,
+    negativeCount: statuses.filter(s => s === 'negative').length,
+    stockValue: round2(items.reduce((sum, i) => sum + stockItemValue(i), 0)),
+    purchaseValue: round2(items.reduce((sum, i) => sum + i.purchaseCost, 0)),
+    payable: owed,
+  };
+}
+
+/** The quick filter chips on the phone. */
+export const STOCK_CHIPS = ['all', 'cement', 'sand', 'steel', 'bricks', 'other'] as const;
+export type StockChip = typeof STOCK_CHIPS[number];
+
+export function stockChipOf(category: string): Exclude<StockChip, 'all'> {
+  const c = norm(category);
+  if (c === 'cement') return 'cement';
+  if (c === 'sand' || c === 'msand') return 'sand';
+  if (c === 'rod' || c === 'steel rods' || c === 'steel') return 'steel';
+  if (c === 'bricks') return 'bricks';
+  return 'other';
+}
+
+/** The latest purchase of each stock item, so its price and supplier can be offered again. */
+export function latestPurchaseByItem(materials: Material[]): Map<string, Material> {
+  const latest = new Map<string, Material>();
+  const rows = materials
+    .filter(m => !m.isDeleted)
+    .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
+  for (const m of rows) {
+    latest.set(stockItemKey({ category: m.category, name: (m.materialName || m.category).trim(), unit: (m.unit || 'Unit').trim() }), m);
+  }
+  return latest;
+}
+
+/** Units a purchase or entry for this item may be typed in: those that land on the same stock item. */
+export function compatibleUnits(category: string, itemUnit: string, offered: readonly string[]): string[] {
+  const family = unitDefinition(category, itemUnit).family;
+  const units = Array.from(new Set(offered.filter(u => unitDefinition(category, u).family === family)));
+  return units.length ? units : [itemUnit];
+}

@@ -7,6 +7,7 @@ import { HomeView } from './views/mobile/HomeView';
 import { LabourView } from './views/mobile/LabourView';
 import { WorkerProfileView } from './views/mobile/WorkerProfileView';
 import { StockView } from './views/mobile/StockView';
+import { useIsPhone } from './hooks/useIsPhone';
 import { ToolRoomView } from './views/mobile/ToolRoomView';
 import { ExpensesView } from './views/mobile/ExpensesView';
 import { ReportsView } from './views/mobile/ReportsView';
@@ -88,6 +89,7 @@ export function App() {
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [mergeTargetUser, setMergeTargetUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<AppViewName>('dashboard');
+  const isPhone = useIsPhone();
   // The current project is remembered on this device so the app reopens where the user left off.
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => {
     try { return localStorage.getItem(CURRENT_SITE_KEY); } catch { return null; }
@@ -672,6 +674,9 @@ export function App() {
     });
   };
 
+  // The phone stock list works on one project: the open one, or the first.
+  const phoneStockSiteId = selectedSiteId || userSites[0]?.id || null;
+
   // Active user: falls back to local workspace builder if currentUser is null
   const activeUser = currentUser || getLocalWorkspaceUser();
 
@@ -860,7 +865,23 @@ export function App() {
           />
         )}
 
-        {currentView === 'stock' && currentUser && (
+        {/* Phones get the quick stock list; wider screens the full materials table. Both use domain/stock. */}
+        {currentView === 'stock' && currentUser && isPhone && phoneStockSiteId && (
+          <StockView
+            user={currentUser}
+            siteId={phoneStockSiteId}
+            onBack={() => handleNavigate('dashboard')}
+            onOpenSteelPurchase={() => {
+              setSelectedSiteId(phoneStockSiteId);
+              setRodToEdit(null);
+              setRodModalOpen(true);
+            }}
+            onOpenLedger={() => handleNavigate('site-detail', phoneStockSiteId, 'materials')}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'stock' && currentUser && !(isPhone && phoneStockSiteId) && (
           <MaterialsView
             user={currentUser}
             sites={userSites}

@@ -1,32 +1,35 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, ChevronRight, MoreHorizontal, Package, Plus, RotateCcw, SlidersHorizontal, Trash2,
+  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, Boxes, BrickWall, ChevronDown, ChevronRight, Construction, MoreHorizontal, Mountain,
+  Package, Plus, RotateCcw, SlidersHorizontal, Trash2,
 } from 'lucide-react';
 import { db } from '../../db/db';
 import type { CatalogItem, Material, MaterialCategory, StockMovementType, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
-import { buildStock, stockItemKey, STOCK_MOVEMENT_LABEL, type StockItem, type StockLine } from '../../domain/stock';
+import {
+  buildStock, compatibleUnits, formatStock, latestPurchaseByItem, STOCK_CHIPS, stockChipOf, stockItemKey, stockItemValue,
+  STOCK_MOVEMENT_LABEL, stockStatus, summariseStock, displayStock, type StockChip, type StockItem, type StockLine,
+} from '../../domain/stock';
 import {
   CEMENT_TYPES, cementItemName, MATERIAL_GROUPS, MATERIAL_MAIN_GROUPS,
-  materialGroup, materialGroupId, materialGroupImage, materialUnitsForCategory,
+  materialGroup, materialGroupId, materialUnitsForCategory,
 } from '../../domain/catalog';
 import { MATERIAL_IMAGES } from '../../domain/materialImages';
 import {
-  ensureCatalogSeeded, recordPurchase, recordStockMovement, removeCatalogItem, saveCatalogItem, voidStockMovement,
+  ensureCatalogSeeded, recordPurchase, recordStockMovement, removeCatalogItem, saveCatalogItem, setLowStockLevel, voidStockMovement,
 } from '../../services/records';
+import { useLanguage } from '../../services/i18n';
+import '../../styles/materials-mobile.css';
 import { formatDateTime, formatDay, todayKey } from '../../utils/datetime';
 import { formatINR, formatQty, parseAmount, roundMoney } from '../../utils/money';
-import { Badge, CalcLine, Chips, ConfirmSheet, Empty, Field, Loading, Note, Page, SearchBox, Section, Sheet, Stat } from '../../components/mobile/kit';
+import { Badge, CalcLine, Chips, ConfirmSheet, Empty, Field, Loading, Note, Page, SearchBox, Section, Sheet } from '../../components/mobile/kit';
 
 type EntryMode = 'purchase' | 'usage' | 'return' | 'adjust' | 'opening';
 
 /** "Bags" -> "bag", "Nos" -> "piece"; other units are already singular. */
 const perUnit = (unit: string) => ({ Bags: 'bag', Nos: 'piece', Pieces: 'piece', Units: 'unit' } as Record<string, string>)[unit] || unit;
 const isOut = (type: StockLine['type']) => type === 'usage' || type === 'return' || type === 'adjust_out';
-
-/** Shelves where every item is the same kind of material, so the shelf photo fits each of them. */
-const ONE_MATERIAL_SHELVES = new Set(['cement', 'sand', 'msand', 'aggregate', 'rod']);
 
 /** Bundled photos are stored relative to the app base; user photos are data URLs. */
 const photoSrc = (url?: string) => (url ? (url.startsWith('data:') || url.startsWith('http') ? url : `./${url}`) : undefined);
@@ -40,12 +43,16 @@ const MaterialPhoto: React.FC<{ url?: string; alt: string; className: string }> 
   return <img className={className} src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />;
 };
 
-/** The photo for a stock item: its catalog entry's, or the shelf photo when the shelf holds one kind of material. */
-function stockPhoto(item: Pick<StockItem, 'name' | 'category'>, groupId: string, catalog: CatalogItem[]): string | undefined {
-  const wanted = item.name.trim().toLowerCase();
-  const entry = catalog.find(c => c.kind === 'material' && c.name.trim().toLowerCase() === wanted);
-  return entry?.imageUrl || (ONE_MATERIAL_SHELVES.has(groupId) ? materialGroupImage(groupId) : undefined);
-}
+/** Small category icon for a stock row: no photos in the list, so rows stay short. */
+const CategoryIcon: React.FC<{ category: string }> = ({ category }) => {
+  const chip = stockChipOf(category);
+  const icon = chip === 'cement' ? <Package size={18} /> : chip === 'sand' ? <Mountain size={18} />
+    : chip === 'steel' ? <Construction size={18} /> : chip === 'bricks' ? <BrickWall size={18} /> : <Boxes size={18} />;
+  return <span className="stk-icon" aria-hidden="true">{icon}</span>;
+};
+
+/** Cement is counted in bags on site; everything else in the unit its stock is kept in. */
+const preferredUnit = (item: Pick<StockItem, 'category' | 'unit'>) => (item.category === 'cement' && item.unit === 'kg' ? 'Bags' : item.unit);
 
 interface StockViewProps {
   user: User;
@@ -57,10 +64,11 @@ interface StockViewProps {
 }
 
 export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOpenSteelPurchase, onOpenLedger, onNotify }) => {
+  const { t } = useLanguage();
   const project = useProject(siteId);
   const catalog = useLiveQuery(() => db.catalogItems.filter(c => !c.isDeleted && c.kind !== 'tool').toArray(), []);
   const [query, setQuery] = useState('');
-  const [shelf, setShelf] = useState<string>('all');
+  const [chip, setChip] = useState<StockChip>('all');
   const [entry, setEntry] = useState<{ mode: EntryMode; itemKey?: string } | null>(null);
   const [chooser, setChooser] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -76,53 +84,36 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
     () => (project ? buildStock(project.materials, project.rodEntries, project.stockMovements, catalog || []) : []),
     [project, catalog]
   );
-  const shelfOf = useMemo(() => {
-    return new Map(stock.map(s => [s.key, materialGroupId(s.category)]));
-  }, [stock]);
+  const shelfOf = useMemo(() => new Map(stock.map(s => [s.key, materialGroupId(s.category)])), [stock]);
   // The latest purchase of each stock item: its price and supplier are offered again, and a
   // repeat cement purchase keeps the brand, type and grade it was first recorded with.
-  const lastPurchase = useMemo(() => {
-    const latest = new Map<string, Material>();
-    const rows = (project?.materials || []).filter(m => !m.isDeleted)
-      .sort((a, b) => (a.purchaseDate || '').localeCompare(b.purchaseDate || '') || (a.createdAt || '').localeCompare(b.createdAt || ''));
-    for (const m of rows) {
-      latest.set(stockItemKey({ category: m.category, name: (m.materialName || m.category).trim(), unit: (m.unit || 'Unit').trim() }), m);
-    }
-    return latest;
-  }, [project]);
+  const lastPurchase = useMemo(() => latestPurchaseByItem(project?.materials || []), [project]);
 
   if (project === undefined) return <Page title="Materials" onBack={onBack}><Loading rows={5} /></Page>;
   if (project === null) {
     return <Page title="Materials" onBack={onBack}><div className="m-card"><Empty icon={<Package size={26} />} title="Project not found" /></div></Page>;
   }
 
+  // The same figures the desktop Materials screen shows.
+  const summary = summariseStock(stock, project.materials, project.rodEntries);
   const q = query.trim().toLowerCase();
   const matches = (s: StockItem) => {
     if (!q) return true;
     const g = materialGroup(shelfOf.get(s.key) || 'other');
     return s.name.toLowerCase().includes(q) || g.label.toLowerCase().includes(q) || g.keywords.includes(q);
   };
-  const shown = stock.filter(s => (shelf === 'all' || shelfOf.get(s.key) === shelf) && matches(s));
-  const usedShelves = MATERIAL_GROUPS.filter(g => stock.some(s => shelfOf.get(s.key) === g.id));
-  const purchaseValue = roundMoney(stock.reduce((s, i) => s + i.purchaseCost, 0));
-  const payable = roundMoney(
-    project.materials.reduce((s, m) => s + (Number(m.balance) || 0), 0) + project.rodEntries.reduce((s, r) => s + (Number(r.balance) || 0), 0)
-  );
+  const countOf = (c: StockChip) => (c === 'all' ? stock.length : stock.filter(s => stockChipOf(s.category) === c).length);
+  const shown = stock.filter(s => (chip === 'all' || stockChipOf(s.category) === chip) && matches(s));
   const openItem = openKey ? stock.find(s => s.key === openKey) : undefined;
   const suppliers = Array.from(new Set(project.materials.map(m => (m.supplier || '').trim()).filter(Boolean))).slice(0, 30);
-  const hasStock = stock.some(s => s.onHand > 0);
 
-  const quick: [EntryMode | 'more', string, React.ReactNode, boolean][] = [
-    ['purchase', 'Purchase', <ArrowDownCircle size={22} key="i" />, false],
-    ['usage', 'Use', <ArrowUpCircle size={22} key="i" />, !hasStock],
-    ['return', 'Return', <RotateCcw size={22} key="i" />, !hasStock],
-    ['more', 'More', <MoreHorizontal size={22} key="i" />, false],
-  ];
+  const buy = (item: StockItem) => (item.category === 'rod' ? onOpenSteelPurchase() : setEntry({ mode: 'purchase', itemKey: item.key }));
 
   return (
     <Page
       title="Materials"
       subtitle={project.site.name}
+      className="stk-screen"
       onBack={onBack}
       right={
         <button type="button" className="m-icon-btn is-bordered" onClick={() => setCatalogOpen(true)} aria-label="Material catalog">
@@ -130,157 +121,139 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
         </button>
       }
     >
-      <div className="m-action-grid" role="group" aria-label="Add an entry">
-        {quick.map(([mode, label, icon, disabled]) => (
-          <button
-            key={mode}
-            type="button"
-            className="m-action"
-            disabled={disabled}
-            style={disabled ? { opacity: 0.45 } : undefined}
-            onClick={() => (mode === 'more' ? setChooser(true) : setEntry({ mode }))}
-          >
-            <span className="m-action-icon">{icon}</span>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="m-stats is-3" style={{ marginTop: 10 }}>
-        <Stat label="In stock" value={stock.filter(s => s.onHand > 0).length} hint="items" />
-        <Stat label="Bought" value={formatINR(purchaseValue)} hint="all purchases" />
-        <Stat label="To pay" value={formatINR(payable)} tone={payable > 0 ? 'bad' : 'ok'} hint="suppliers" />
-      </div>
-
-      {stock.some(s => s.isNegative) && (
-        <div style={{ marginTop: 10 }}>
-          <Note tone="warn">Some items show less than zero. A purchase or opening stock entry is probably missing. Open the item to check its history.</Note>
-        </div>
-      )}
-      {stock.some(s => s.isLowStock) && (
-        <div style={{ marginTop: 10 }}>
-          <Note tone="warn">
-            {stock.filter(s => s.isLowStock).length} item{stock.filter(s => s.isLowStock).length === 1 ? '' : 's'} at or below the reorder threshold.
-          </Note>
-        </div>
-      )}
-
-      {stock.length === 0 ? (
-        <div className="m-card" style={{ marginTop: 14 }}>
-          <Empty
-            icon={<Package size={26} />}
-            title="No materials yet"
-            action={
-              <div style={{ display: 'grid', gap: 10 }}>
-                <button type="button" className="m-btn is-primary is-block" onClick={() => setEntry({ mode: 'purchase' })}><Plus size={20} /> Record a purchase</button>
-                <button type="button" className="m-btn is-block" onClick={() => setEntry({ mode: 'opening' })}>Add stock already on site</button>
-              </div>
-            }
-          >
-            Record what you buy and what you use. The app keeps the balance and the full history.
-          </Empty>
-        </div>
-      ) : (
-        <>
-          <div style={{ marginTop: 12 }}><SearchBox value={query} onChange={setQuery} placeholder="Search materials or categories" /></div>
-          {usedShelves.length > 1 && (
-            <div style={{ marginTop: 10 }}>
-              <Chips
-                label="Category"
-                value={shelf}
-                onChange={setShelf}
-                options={[
-                  { value: 'all', label: `All (${stock.length})` },
-                  ...usedShelves.map(g => ({ value: g.id, label: `${g.label} (${stock.filter(s => shelfOf.get(s.key) === g.id).length})` })),
-                ]}
-              />
-            </div>
-          )}
-
-          <div className="m-card m-list" style={{ marginTop: 10 }}>
-            {shown.map(item => {
-              const groupId = shelfOf.get(item.key) || 'other';
-              return (
-                <button key={item.key} type="button" className="m-row" onClick={() => setOpenKey(item.key)}>
-                  <MaterialPhoto url={stockPhoto(item, groupId, catalog || [])} alt={item.name} className="m-thumb" />
-                  <span className="m-row-main">
-                    <span className="m-row-title" style={{ display: 'block' }}>{item.name}</span>
-                    <span className="m-row-sub">
-                      {materialGroup(groupId).label !== item.name
-                        ? materialGroup(groupId).label
-                        : item.lastActivityDate ? `Last entry ${formatDay(item.lastActivityDate)}` : ''}
-                    </span>
-                  </span>
-                  <span className="m-row-end">
-                    <span className={`m-qty ${item.onHand < 0 ? 'is-bad' : item.onHand === 0 ? 'is-muted' : ''}`} style={{ display: 'block' }}>
-                      {formatQty(item.onHand)}<small>{item.unit}</small>
-                    </span>
-                    <span className="m-row-sub">in stock</span>
-                    {item.isLowStock && <span className="m-row-sub" style={{ color: 'var(--bad, #dc2626)' }}>Low stock</span>}
-                  </span>
-                </button>
-              );
-            })}
-            {shown.length === 0 && <div className="m-row is-muted">No material matches your search.</div>}
+      <div className="stk-page">
+        {stock.length === 0 ? (
+          <div className="m-card">
+            <Empty
+              icon={<Package size={26} />}
+              title="No materials yet"
+              action={
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <button type="button" className="m-btn is-primary is-block" onClick={() => setEntry({ mode: 'purchase' })}><Plus size={20} /> Record a purchase</button>
+                  <button type="button" className="m-btn is-block" onClick={() => setEntry({ mode: 'opening' })}>Add stock already on site</button>
+                </div>
+              }
+            >
+              Record what you buy and what you use. The app keeps the balance and the full history.
+            </Empty>
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            <SearchBox value={query} onChange={setQuery} placeholder={t('stk_search', 'Search materials')} />
+            <div className="stk-chips" role="group" aria-label="Category">
+              {STOCK_CHIPS.map(c => (
+                <button key={c} type="button" className="stk-chip" aria-pressed={chip === c} onClick={() => setChip(c)}>
+                  {t(`stk_chip_${c}`)} ({countOf(c)})
+                </button>
+              ))}
+            </div>
 
-      {/* What kind of entry? */}
-      <Sheet open={chooser} title="Add entry" onClose={() => setChooser(false)}>
-        <div className="m-card m-list">
-          {([
-            ['purchase', 'Purchase', 'Bought from a supplier. Adds to stock and cost.', <ArrowDownCircle size={20} key="i" />],
-            ['usage', 'Used on site', 'Material consumed in the work. Reduces stock.', <ArrowUpCircle size={20} key="i" />],
-            ['return', 'Returned to supplier', 'Sent back. Reduces stock.', <RotateCcw size={20} key="i" />],
-            ['adjust', 'Adjust stock', 'Correct the count after checking the site.', <SlidersHorizontal size={20} key="i" />],
-            ['opening', 'Stock already on site', 'Material that was here before you started recording.', <Package size={20} key="i" />],
-          ] as [EntryMode, string, string, React.ReactNode][]).map(([mode, label, sub, icon]) => (
-            <button key={mode} type="button" className="m-row" onClick={() => { setChooser(false); setEntry({ mode }); }}>
-              <span className="m-row-icon">{icon}</span>
-              <span className="m-row-main">
-                <span className="m-row-title" style={{ display: 'block' }}>{label}</span>
-                <span className="m-row-sub" style={{ whiteSpace: 'normal' }}>{sub}</span>
-              </span>
-              <ChevronRight size={18} className="is-muted" />
-            </button>
-          ))}
-        </div>
-      </Sheet>
+            <div className="stk-summary">
+              <div><span>{t('stk_value', 'Stock value')}</span><strong>{formatINR(summary.stockValue)}</strong></div>
+              <div><span>{t('stk_bought', 'Bought')}</span><strong>{formatINR(summary.purchaseValue)}</strong></div>
+              <div><span>{t('stk_to_pay', 'To pay')}</span><strong className={summary.payable > 0 ? 'is-bad' : ''}>{formatINR(summary.payable)}</strong></div>
+            </div>
 
-      {entry && (
-        <EntrySheet
-          key={`${entry.mode}-${entry.itemKey || ''}`}
-          mode={entry.mode}
-          presetKey={entry.itemKey}
-          user={user}
-          siteId={siteId}
-          stock={stock}
-          shelfOf={shelfOf}
-          lastPurchase={lastPurchase}
-          catalog={catalog || []}
-          suppliers={suppliers}
-          onClose={() => setEntry(null)}
-          onSaved={msg => onNotify(msg, 'success')}
-          onNotify={onNotify}
-          onOpenSteelPurchase={() => { setEntry(null); onOpenSteelPurchase(); }}
-        />
-      )}
+            {summary.negativeCount > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <Note tone="warn">Some items show less than zero. A purchase or opening stock entry is probably missing. Open the item to check its history.</Note>
+              </div>
+            )}
 
-      {openItem && !entry && (
-        <ItemSheet
-          item={openItem}
-          shelfLabel={materialGroup(shelfOf.get(openItem.key) || 'other').label}
-          user={user}
-          siteId={siteId}
-          onClose={() => setOpenKey(null)}
-          onEntry={mode => (mode === 'purchase' && openItem.category === 'rod' ? onOpenSteelPurchase() : setEntry({ mode, itemKey: openItem.key }))}
-          onOpenLedger={onOpenLedger}
-          onNotify={onNotify}
-        />
-      )}
+            <div className="m-card stk-list">
+              {shown.map(item => {
+                const status = stockStatus(item);
+                return (
+                  <div key={item.key} className="stk-row">
+                    <button type="button" className="stk-row-main" onClick={() => setOpenKey(item.key)} aria-label={`${item.name}: ${formatStock(item.category, item.unit, item.onHand)}. Open history`}>
+                      <CategoryIcon category={item.category} />
+                      <span className="stk-text">
+                        <span className="stk-name">
+                          {status === 'low' && <span className="stk-low">{t('stk_low', 'Low')}</span>}
+                          {item.name}
+                        </span>
+                        <span className="stk-qty-line">
+                          <span className={`stk-qty ${status === 'negative' ? 'is-bad' : status === 'out' ? 'is-muted' : ''}`}>
+                            {formatStock(item.category, item.unit, item.onHand)}
+                          </span>
+                        </span>
+                      </span>
+                    </button>
+                    <button type="button" className="stk-act is-in" onClick={() => buy(item)} aria-label={`${t('stk_in', 'Arrived')}: ${item.name}`}>
+                      <span className="stk-act-word"><b aria-hidden="true">+</b>{' '}{t('stk_in', 'Arrived')}</span>
+                    </button>
+                    <button type="button" className="stk-act is-out" disabled={item.onHand <= 0} onClick={() => setEntry({ mode: 'usage', itemKey: item.key })} aria-label={`${t('stk_out', 'Used')}: ${item.name}`}>
+                      <span className="stk-act-word"><b aria-hidden="true">−</b>{' '}{t('stk_out', 'Used')}</span>
+                    </button>
+                  </div>
+                );
+              })}
+              {shown.length === 0 && <div className="m-row is-muted">{t('stk_no_match', 'No material matches.')}</div>}
+            </div>
 
-      <CatalogSheet open={catalogOpen} user={user} catalog={catalog || []} onClose={() => setCatalogOpen(false)} onNotify={onNotify} />
+            <div className="stk-tools">
+              <button type="button" className="m-btn" onClick={() => setEntry({ mode: 'purchase' })}><Plus size={18} /> {t('stk_new_material', 'New material')}</button>
+              <button type="button" className="m-btn" onClick={() => setChooser(true)}><MoreHorizontal size={18} /> {t('stk_other_entries', 'Other entries')}</button>
+            </div>
+          </>
+        )}
+
+        {/* What kind of entry? */}
+        <Sheet open={chooser} title="Add entry" onClose={() => setChooser(false)}>
+          <div className="m-card m-list">
+            {([
+              ['purchase', 'Purchase', 'Bought from a supplier. Adds to stock and cost.', <ArrowDownCircle size={20} key="i" />],
+              ['usage', 'Used on site', 'Material consumed in the work. Reduces stock.', <ArrowUpCircle size={20} key="i" />],
+              ['return', 'Returned to supplier', 'Sent back. Reduces stock.', <RotateCcw size={20} key="i" />],
+              ['adjust', 'Adjust stock', 'Correct the count after checking the site.', <SlidersHorizontal size={20} key="i" />],
+              ['opening', 'Stock already on site', 'Material that was here before you started recording.', <Package size={20} key="i" />],
+            ] as [EntryMode, string, string, React.ReactNode][]).map(([mode, label, sub, icon]) => (
+              <button key={mode} type="button" className="m-row" onClick={() => { setChooser(false); setEntry({ mode }); }}>
+                <span className="m-row-icon">{icon}</span>
+                <span className="m-row-main">
+                  <span className="m-row-title" style={{ display: 'block' }}>{label}</span>
+                  <span className="m-row-sub" style={{ whiteSpace: 'normal' }}>{sub}</span>
+                </span>
+                <ChevronRight size={18} className="is-muted" />
+              </button>
+            ))}
+          </div>
+        </Sheet>
+
+        {entry && (
+          <EntrySheet
+            key={`${entry.mode}-${entry.itemKey || ''}`}
+            mode={entry.mode}
+            presetKey={entry.itemKey}
+            user={user}
+            siteId={siteId}
+            stock={stock}
+            shelfOf={shelfOf}
+            lastPurchase={lastPurchase}
+            catalog={catalog || []}
+            suppliers={suppliers}
+            onClose={() => setEntry(null)}
+            onSaved={msg => onNotify(msg, 'success')}
+            onNotify={onNotify}
+            onOpenSteelPurchase={() => { setEntry(null); onOpenSteelPurchase(); }}
+          />
+        )}
+
+        {openItem && !entry && (
+          <ItemSheet
+            item={openItem}
+            shelfLabel={materialGroup(shelfOf.get(openItem.key) || 'other').label}
+            user={user}
+            siteId={siteId}
+            onClose={() => setOpenKey(null)}
+            onEntry={mode => (mode === 'purchase' && openItem.category === 'rod' ? onOpenSteelPurchase() : setEntry({ mode, itemKey: openItem.key }))}
+            onOpenLedger={onOpenLedger}
+            onNotify={onNotify}
+          />
+        )}
+
+        <CatalogSheet open={catalogOpen} user={user} catalog={catalog || []} onClose={() => setCatalogOpen(false)} onNotify={onNotify} />
+      </div>
     </Page>
   );
 };
@@ -321,11 +294,16 @@ const EntrySheet: React.FC<{
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
   onOpenSteelPurchase: () => void;
 }> = ({ mode, presetKey, user, siteId, stock, shelfOf, lastPurchase, catalog, suppliers, onClose, onSaved, onNotify, onOpenSteelPurchase }) => {
+  const { t } = useLanguage();
   const incoming = mode === 'purchase' || mode === 'opening';
   const preset = presetKey ? stock.find(s => s.key === presetKey) : undefined;
+  // From a row's "+" button: price, supplier and unit start from the last purchase of the item.
+  const presetLast = preset && mode === 'purchase' ? lastPurchase.get(preset.key) : undefined;
   const [chosen, setChosen] = useState<Chosen | null>(
     preset ? { key: preset.key, name: preset.name, category: preset.category, unit: preset.unit } : null
   );
+  const [showMore, setShowMore] = useState(false);
+  const [prefilledFor, setPrefilledFor] = useState(preset?.key || '');
   const [search, setSearch] = useState('');
   const [shelf, setShelf] = useState<string | null>(null);
   const [customShelf, setCustomShelf] = useState('legacy');
@@ -334,12 +312,12 @@ const EntrySheet: React.FC<{
   const [newBrand, setNewBrand] = useState('');
   const [cementTypeId, setCementTypeId] = useState('');
   const [quantity, setQuantity] = useState('');
-  const [unit, setUnit] = useState(preset?.unit || 'Nos');
-  const [rate, setRate] = useState('');
+  const [unit, setUnit] = useState(presetLast?.unit || (preset ? preferredUnit(preset) : 'Nos'));
+  const [rate, setRate] = useState(presetLast ? String(presetLast.rate) : '');
   const [payment, setPayment] = useState<'none' | 'full' | 'part'>('none');
   const [paidPart, setPaidPart] = useState('');
   const [paymentMode, setPaymentMode] = useState('Cash');
-  const [supplier, setSupplier] = useState('');
+  const [supplier, setSupplier] = useState(presetLast?.supplier || '');
   const [date, setDate] = useState(todayKey());
   const [invoice, setInvoice] = useState('');
   const [notes, setNotes] = useState('');
@@ -353,7 +331,7 @@ const EntrySheet: React.FC<{
   const availableEntryUnits = materialUnitsForCategory(chosen?.category || 'other');
 
   const brands = catalog.filter(c => c.kind === 'brand' && c.category === 'cement').sort((a, b) => a.name.localeCompare(b.name));
-  const materials = catalog.filter(c => c.kind === 'material');
+  const materials = catalog.filter(c => c.kind === 'material' && !c.stockOnly);
   const savedTypes = catalog.filter(c => c.kind === 'cement_type');
   // The four documented types stand in until the catalog has been seeded.
   const cementTypes: Pick<CatalogItem, 'id' | 'name' | 'description' | 'standard' | 'materialType' | 'grade'>[] = savedTypes.length
@@ -418,16 +396,17 @@ const EntrySheet: React.FC<{
           <SearchBox value={search} onChange={setSearch} placeholder="Search material or category" />
 
           {!q && !shelf && (
-            <div className="m-tool-grid" style={{ marginTop: 12 }}>
+            <div className="m-card m-list" style={{ marginTop: 12 }}>
               {shelves.map(g => {
                 const count = g.id === 'rod' ? 0 : inShelf(g.id).length;
                 return (
-                  <button key={g.id} type="button" className="m-card m-tool-card" onClick={() => openShelf(g.id)}>
-                    <MaterialPhoto url={materialGroupImage(g.id)} alt={g.label} className="m-tool-photo" />
-                    <div className="m-tool-body">
-                      <div className="m-tool-name">{g.label}</div>
-                      <div className="m-row-sub">{g.id === 'rod' ? 'By diameter and weight' : count === 1 ? inShelf(g.id)[0].unit : `${count} items`}</div>
-                    </div>
+                  <button key={g.id} type="button" className="m-row" onClick={() => openShelf(g.id)}>
+                    <CategoryIcon category={g.category} />
+                    <span className="m-row-main">
+                      <span className="m-row-title" style={{ display: 'block' }}>{g.label}</span>
+                      <span className="m-row-sub">{g.id === 'rod' ? 'By diameter and weight' : count === 1 ? inShelf(g.id)[0].unit : `${count} items`}</span>
+                    </span>
+                    <ChevronRight size={18} className="is-muted" />
                   </button>
                 );
               })}
@@ -444,7 +423,7 @@ const EntrySheet: React.FC<{
             <div className="m-card m-list" style={{ marginTop: 8 }}>
               {list.map(m => (
                 <button key={m.id} type="button" className="m-row" onClick={() => choose(m)}>
-                  <MaterialPhoto url={m.imageUrl} alt={m.name} className="m-thumb" />
+                  <CategoryIcon category={m.category} />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>{m.name}</span>
                     <span className="m-row-sub">{materialGroup(shelfIdOf(m)).label} · {m.unit}</span>
@@ -454,7 +433,7 @@ const EntrySheet: React.FC<{
               ))}
               {steelMatches && (
                 <button type="button" className="m-row" onClick={onOpenSteelPurchase}>
-                  <MaterialPhoto url={materialGroupImage('rod')} alt="Steel rods" className="m-thumb" />
+                  <CategoryIcon category="rod" />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>Steel Rods (TMT)</span>
                     <span className="m-row-sub">Recorded by diameter and weight</span>
@@ -506,13 +485,13 @@ const EntrySheet: React.FC<{
             {stock.length > 6 && <SearchBox value={search} onChange={setSearch} placeholder="Search materials" />}
             <div className="m-card m-list" style={{ marginTop: 10 }}>
               {options.map(s => (
-                <button key={s.key} type="button" className="m-row" onClick={() => { setChosen({ key: s.key, name: s.name, category: s.category, unit: s.unit }); setUnit(s.unit); }}>
-                  <MaterialPhoto url={stockPhoto(s, shelfOf.get(s.key) || 'other', catalog)} alt={s.name} className="m-thumb" />
+                <button key={s.key} type="button" className="m-row" onClick={() => { setChosen({ key: s.key, name: s.name, category: s.category, unit: s.unit }); setUnit(preferredUnit(s)); }}>
+                  <CategoryIcon category={s.category} />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>{s.name}</span>
                     <span className="m-row-sub">{materialGroup(shelfOf.get(s.key) || 'other').label}</span>
                   </span>
-                  <span className="m-row-end"><span className={`m-qty ${s.onHand <= 0 ? 'is-muted' : ''}`}>{formatQty(s.onHand)}<small>{s.unit}</small></span></span>
+                  <span className="m-row-end"><span className={`stk-qty ${s.onHand <= 0 ? 'is-muted' : ''}`}>{formatStock(s.category, s.unit, s.onHand)}</span></span>
                 </button>
               ))}
               {options.length === 0 && <div className="m-row is-muted">No material matches your search.</div>}
@@ -528,6 +507,16 @@ const EntrySheet: React.FC<{
   const current = existing || stock.find(s => s.key === stockItemKey({ category: chosen.category, name: finalName, unit }));
   const recent = current ? [...current.lines].filter(l => !l.voided).reverse().slice(0, 3) : [];
   const previous = current ? lastPurchase.get(current.key) : undefined;
+  // A material picked from the catalog: its last price and supplier, once, never over what was typed.
+  if (mode === 'purchase' && previous && current && prefilledFor !== current.key) {
+    setPrefilledFor(current.key);
+    if (!rate) setRate(String(previous.rate));
+    if (!supplier && previous.supplier) setSupplier(previous.supplier);
+    if (compatibleUnits(current.category, current.unit, [previous.unit]).includes(previous.unit)) setUnit(previous.unit);
+  }
+  const entryUnits = existing
+    ? compatibleUnits(existing.category, existing.unit, [...availableEntryUnits, existing.unit])
+    : availableEntryUnits;
 
   const submit = async (allowDuplicate = false) => {
     if (saving.current) return;
@@ -556,7 +545,7 @@ const EntrySheet: React.FC<{
             purchaseDate: date, invoiceNumber: invoice, notes, allowDuplicate,
           })
         : await recordStockMovement(user, siteId, {
-            itemKey: chosen.key, itemName: finalName, category: chosen.category, unit: existing?.unit || unit,
+            itemKey: chosen.key, itemName: finalName, category: chosen.category, unit: existing && !entryUnits.includes(unit) ? existing.unit : unit,
             movementType: type, quantity: qty, eventDate: date, reason, notes, allowDuplicate,
           });
       if (!res.ok) {
@@ -570,7 +559,7 @@ const EntrySheet: React.FC<{
       }
       onSaved(mode === 'purchase'
         ? `Purchase recorded: ${formatQty(qty)} ${unit} ${finalName}`
-        : `${STOCK_MOVEMENT_LABEL[type]}: ${formatQty(qty)} ${existing?.unit || unit} ${finalName}`);
+        : `${STOCK_MOVEMENT_LABEL[type]}: ${formatQty(qty)} ${unit} ${finalName}`);
       onClose();
     } catch {
       setError('Could not save. Nothing was changed. Please try again.');
@@ -636,17 +625,9 @@ const EntrySheet: React.FC<{
         <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
           <div className="m-stat-label">IN STOCK NOW</div>
           {current ? (
-            <>
-              <div className={`m-qty ${current.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.35rem' }}>
-                {formatQty(current.onHand)}<small>{current.unit}</small>
-              </div>
-              {recent.map(l => (
-                <div key={l.id} className="m-row-sub" style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
-                  <span>{STOCK_MOVEMENT_LABEL[l.type]} · {formatDay(l.date)}</span>
-                  <strong className={isOut(l.type) ? 'is-bad' : 'is-ok'}>{isOut(l.type) ? '−' : '+'}{formatQty(l.quantity)}</strong>
-                </div>
-              ))}
-            </>
+            <div className={`stk-qty ${current.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.25rem' }}>
+              {formatStock(current.category, current.unit, current.onHand)}
+            </div>
           ) : (
             <div className="m-row-sub" style={{ marginTop: 2 }}>
               {chosen.isCement && !brand ? 'Choose the brand to see its stock.' : `None yet${finalName ? ` of ${finalName}` : ''}. This will be the first entry.`}
@@ -659,14 +640,10 @@ const EntrySheet: React.FC<{
             <input type="text" inputMode="decimal" autoComplete="off" value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="0" aria-label="Quantity" />
           </Field>
           <Field label="Unit">
-            {existing ? (
-              <input type="text" value={existing.unit} readOnly aria-label="Unit" />
-            ) : (
-              <select value={unit} onChange={e => setUnit(e.target.value)} aria-label="Unit">
-                {availableEntryUnits.includes(unit) ? null : <option value={unit}>{unit}</option>}
-                {availableEntryUnits.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-            )}
+            <select value={unit} onChange={e => setUnit(e.target.value)} aria-label="Unit">
+              {entryUnits.includes(unit) ? null : <option value={unit}>{unit}</option>}
+              {entryUnits.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
           </Field>
         </div>
 
@@ -675,20 +652,15 @@ const EntrySheet: React.FC<{
             <Field label={`Unit price (₹ per ${perUnit(unit)})`}>
               <input type="text" inputMode="decimal" autoComplete="off" value={rate} onChange={e => setRate(e.target.value)} placeholder="0" aria-label="Unit price in rupees" />
             </Field>
-            {previous && !rate && (
-              <button
-                type="button"
-                className="m-btn is-quiet is-small"
-                style={{ margin: '-8px 0 10px', paddingLeft: 0, whiteSpace: 'normal', textAlign: 'left' }}
-                onClick={() => { setRate(String(previous.rate)); if (!supplier && previous.supplier) setSupplier(previous.supplier); }}
-              >
-                Last time: {formatINR(previous.rate)} per {perUnit(unit)}{previous.supplier ? ` from ${previous.supplier}` : ''} on {formatDay(previous.purchaseDate)}. Use it
-              </button>
+            {previous && (
+              <p className="m-field-hint" style={{ margin: '-8px 0 10px' }}>
+                Last time: {formatINR(previous.rate)} per {perUnit(previous.unit)}{previous.supplier ? ` from ${previous.supplier}` : ''} on {formatDay(previous.purchaseDate)}.
+              </p>
             )}
             <div className="m-card m-card-pad" style={{ marginBottom: 14, background: 'var(--m-surface-2)' }}>
               <CalcLine label={`${quantity || 0} × ${formatINR(Number.isNaN(price) ? 0 : price)}`} value={formatINR(total)} />
             </div>
-            <Field label="Supplier (optional)">
+            <Field label="Supplier">
               <input type="text" list="m-suppliers" value={supplier} onChange={e => setSupplier(e.target.value)} placeholder="Shop or dealer name" maxLength={80} />
               <datalist id="m-suppliers">{suppliers.map(s => <option key={s} value={s} />)}</datalist>
             </Field>
@@ -706,6 +678,23 @@ const EntrySheet: React.FC<{
           </Field>
         )}
 
+        {mode !== 'purchase' && (
+          <Field label={mode === 'usage' ? 'Used for (optional)' : mode === 'adjust' ? 'Reason' : 'Reason (optional)'}>
+            <input
+              type="text"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              placeholder={mode === 'usage' ? 'Roof slab, plastering' : mode === 'adjust' ? 'Bags damaged / rain' : ''}
+              maxLength={120}
+            />
+          </Field>
+        )}
+
+        <button type="button" className="stk-more-toggle" aria-expanded={showMore} onClick={() => setShowMore(v => !v)}>
+          <span>{t('stk_more', 'More details')}{date !== todayKey() ? ` · ${formatDay(date)}` : ''}</span>
+          <ChevronDown size={18} aria-hidden="true" style={{ transform: showMore ? 'rotate(180deg)' : undefined }} />
+        </button>
+        {showMore && (<>
         <Field label={mode === 'purchase' ? 'Purchase / receipt date' : 'Date'} hint={date !== todayKey() ? 'Past date selected. The entry time is still saved as now.' : undefined}>
           <input type="date" value={date} max={todayKey()} onChange={e => setDate(e.target.value)} />
         </Field>
@@ -733,27 +722,27 @@ const EntrySheet: React.FC<{
           </>
         )}
 
-        {mode !== 'purchase' && (
-          <Field label={mode === 'usage' ? 'Used for (optional)' : mode === 'adjust' ? 'Reason' : 'Reason (optional)'}>
-            <input
-              type="text"
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder={mode === 'usage' ? 'Roof slab, plastering' : mode === 'adjust' ? 'Bags damaged / rain' : ''}
-              maxLength={120}
-            />
-          </Field>
-        )}
-
         {mode === 'purchase' && (
           <Field label="Invoice / bill no. (optional)">
             <input type="text" value={invoice} onChange={e => setInvoice(e.target.value)} maxLength={40} />
           </Field>
         )}
 
-        <Field label="Notes (optional)">
+        <Field label={mode === 'purchase' ? 'Notes (vehicle no., transport, GST…)' : 'Notes (optional)'}>
           <input type="text" value={notes} onChange={e => setNotes(e.target.value)} maxLength={160} />
         </Field>
+        {recent.length > 0 && current && (
+          <div className="m-card m-card-pad" style={{ marginBottom: 10, background: 'var(--m-surface-2)' }}>
+            <div className="m-stat-label">LAST ENTRIES</div>
+            {recent.map(l => (
+              <div key={l.id} className="m-row-sub" style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
+                <span>{STOCK_MOVEMENT_LABEL[l.type]} · {formatDay(l.date)}</span>
+                <strong className={isOut(l.type) ? 'is-bad' : 'is-ok'}>{isOut(l.type) ? '−' : '+'}{formatStock(current.category, current.unit, l.quantity)}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+        </>)}
       </Sheet>
 
       <ConfirmSheet
@@ -786,7 +775,29 @@ const ItemSheet: React.FC<{
   onOpenLedger: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }> = ({ item, shelfLabel, user, siteId, onClose, onEntry, onOpenLedger, onNotify }) => {
+  const { t } = useLanguage();
   const [line, setLine] = useState<StockLine | null>(null);
+  // The low-stock level is typed in the unit people count in (bags for cement).
+  const levelUnit = preferredUnit(item);
+  const levelLabel = displayStock(item.category, item.unit, 0).unit;
+  const [level, setLevel] = useState(
+    item.lowStockThreshold !== undefined ? String(displayStock(item.category, item.unit, item.lowStockThreshold).quantity) : ''
+  );
+  const [savingLevel, setSavingLevel] = useState(false);
+  const status = stockStatus(item);
+  const show = (n: number) => formatStock(item.category, item.unit, n);
+  const qtyOnly = (n: number) => displayStock(item.category, item.unit, n).quantity.toLocaleString('en-IN', { maximumFractionDigits: 3 });
+
+  const saveLevel = async () => {
+    const text = level.trim();
+    const value = text ? parseAmount(text) : null;
+    if (value !== null && Number.isNaN(value)) return onNotify('Enter the low-stock level as a number.', 'error');
+    setSavingLevel(true);
+    const res = await setLowStockLevel(user, item, value, levelUnit);
+    setSavingLevel(false);
+    if (res.ok) onNotify(value === null ? 'Low-stock level removed.' : `Low-stock level set: ${value} ${levelLabel}.`, 'success');
+    else onNotify(res.error, 'error');
+  };
   const [voidReason, setVoidReason] = useState('');
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -811,26 +822,40 @@ const ItemSheet: React.FC<{
     <>
       <Sheet open={!line} title={item.name} subtitle={shelfLabel} onClose={onClose}>
         <div className="m-stat-label">IN STOCK</div>
-        <div className={`m-stat-value ${item.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.9rem' }}>
-          {formatQty(item.onHand)} <span style={{ fontSize: '1rem', fontWeight: 600 }} className="is-muted">{item.unit}</span>
+        <div className={`m-stat-value ${item.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.7rem', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {show(item.onHand)}
+          {status === 'low' && <span className="stk-low">{t('stk_low', 'Low')}</span>}
         </div>
 
         <div className="m-btn-row" style={{ marginTop: 12 }}>
-          <button type="button" className="m-btn is-small" onClick={() => onEntry('purchase')}>Buy</button>
-          <button type="button" className="m-btn is-primary is-small" onClick={() => onEntry('usage')} disabled={item.onHand <= 0}>Use</button>
-          <button type="button" className="m-btn is-small" onClick={() => onEntry('return')} disabled={item.onHand <= 0}>Return</button>
-          <button type="button" className="m-btn is-small" onClick={() => onEntry('adjust')}>Adjust</button>
+          <button type="button" className="m-btn" onClick={() => onEntry('purchase')}>+ {t('stk_in', 'Arrived')}</button>
+          <button type="button" className="m-btn is-primary" onClick={() => onEntry('usage')} disabled={item.onHand <= 0}>− {t('stk_out', 'Used')}</button>
+        </div>
+        <div className="m-btn-row" style={{ marginTop: 8 }}>
+          <button type="button" className="m-btn" onClick={() => onEntry('return')} disabled={item.onHand <= 0}>Return</button>
+          <button type="button" className="m-btn" onClick={() => onEntry('adjust')}>Adjust</button>
         </div>
 
         <div className="m-calc" style={{ marginTop: 12 }}>
-          <CalcLine label="Purchased" value={`+ ${formatQty(item.purchased)}`} />
-          {item.opening > 0 && <CalcLine label="Already on site" value={`+ ${formatQty(item.opening)}`} />}
-          <CalcLine label="Used on site" value={`− ${formatQty(item.used)}`} />
-          {item.returned > 0 && <CalcLine label="Returned to supplier" value={`− ${formatQty(item.returned)}`} />}
-          {item.adjusted !== 0 && <CalcLine label="Adjustments" value={`${item.adjusted > 0 ? '+' : '−'} ${formatQty(Math.abs(item.adjusted))}`} />}
-          <CalcLine total label="In stock" value={`${formatQty(item.onHand)} ${item.unit}`} tone={item.onHand < 0 ? 'bad' : undefined} />
+          <CalcLine label="Purchased" value={`+ ${qtyOnly(item.purchased)}`} />
+          {item.opening > 0 && <CalcLine label="Already on site" value={`+ ${qtyOnly(item.opening)}`} />}
+          <CalcLine label="Used on site" value={`− ${qtyOnly(item.used)}`} />
+          {item.returned > 0 && <CalcLine label="Returned to supplier" value={`− ${qtyOnly(item.returned)}`} />}
+          {item.adjusted !== 0 && <CalcLine label="Adjustments" value={`${item.adjusted > 0 ? '+' : '−'} ${qtyOnly(Math.abs(item.adjusted))}`} />}
+          <CalcLine total label="In stock" value={show(item.onHand)} tone={item.onHand < 0 ? 'bad' : undefined} />
         </div>
-        {item.purchaseCost > 0 && <p className="m-calc-note">Total purchase cost: {formatINR(item.purchaseCost)}.</p>}
+        {item.purchaseCost > 0 && (
+          <p className="m-calc-note">
+            Bought for {formatINR(item.purchaseCost)}. Value of what is left: {formatINR(stockItemValue(item))} (average price).
+          </p>
+        )}
+
+        <div className="stk-level" style={{ marginTop: 12 }}>
+          <Field label={`${t('stk_low_level', 'Low-stock level')} (${levelLabel})`} hint="Shows the red Low badge at or below this. Leave empty for none.">
+            <input type="text" inputMode="decimal" autoComplete="off" value={level} onChange={e => setLevel(e.target.value)} placeholder="e.g. 20" />
+          </Field>
+          <button type="button" className="m-btn" onClick={saveLevel} disabled={savingLevel} style={{ marginBottom: 26 }}>{savingLevel ? 'Saving…' : 'Save'}</button>
+        </div>
 
         <Section title={`History (${history.length})`}>
           <div className="m-card m-list">
@@ -840,14 +865,14 @@ const ItemSheet: React.FC<{
                   <span className={`m-row-title ${l.voided ? 'is-void' : ''}`} style={{ display: 'block' }}>{STOCK_MOVEMENT_LABEL[l.type]}</span>
                   <span className="m-row-sub">
                     {formatDay(l.date)}{l.supplier ? ' · ' + l.supplier : ''}{l.reference && l.source === 'movement' ? ' · ' + l.reference : ''}
-                    {l.voided ? ' · cancelled' : ''}
                   </span>
+                  {l.voided && <span className="m-row-sub stk-void-reason" style={{ display: 'block' }}>Cancelled: {l.voidReason || 'no reason given'}</span>}
                 </span>
                 <span className="m-row-end">
                   <span className={`m-qty ${l.voided ? 'is-void is-muted' : l.signed < 0 ? 'is-bad' : 'is-ok'}`} style={{ display: 'block' }}>
-                    {isOut(l.type) ? '−' : '+'}{formatQty(l.quantity)}
+                    {isOut(l.type) ? '−' : '+'}{qtyOnly(l.quantity)}
                   </span>
-                  {!l.voided && <span className="m-row-sub">bal {formatQty(l.balanceAfter)}</span>}
+                  {!l.voided && <span className="m-row-sub">bal {qtyOnly(l.balanceAfter)}</span>}
                 </span>
               </button>
             ))}
@@ -880,7 +905,7 @@ const ItemSheet: React.FC<{
       >
         {line && (
           <div className="m-calc">
-            <CalcLine label="Quantity" value={`${formatQty(line.quantity)} ${item.unit}`} />
+            <CalcLine label="Quantity" value={show(line.quantity)} />
             <CalcLine label="Date" value={formatDay(line.date)} />
             {line.supplier && <CalcLine label="Supplier" value={line.supplier} />}
             {line.cost !== undefined && line.source === 'purchase' && <CalcLine label="Cost" value={formatINR(line.cost)} />}
@@ -888,7 +913,7 @@ const ItemSheet: React.FC<{
             {line.notes && <CalcLine label="Notes" value={<span style={{ whiteSpace: 'normal', fontFamily: 'var(--font-body)', fontWeight: 600 }}>{line.notes}</span>} />}
             <CalcLine label="Entered" value={formatDateTime(line.createdAt)} />
             {line.createdByName && <CalcLine label="Entered by" value={line.createdByName} />}
-            {line.voided ? <CalcLine label="Cancelled" value={line.voidReason || 'Yes'} tone="bad" /> : <CalcLine label="Stock after this entry" value={`${formatQty(line.balanceAfter)} ${item.unit}`} />}
+            {line.voided ? <CalcLine label="Cancelled" value={line.voidReason || 'Yes'} tone="bad" /> : <CalcLine label="Stock after this entry" value={show(line.balanceAfter)} />}
           </div>
         )}
         {line?.source === 'purchase' && <p className="m-calc-note">Purchases carry cost and supplier payments. Correct or delete them in the Materials ledger so the payment history stays right.</p>}
@@ -944,7 +969,7 @@ const CatalogSheet: React.FC<{
     : availableUnits;
 
   const rows = catalog
-    .filter(c => (tab === 'material' ? c.kind === 'material' : c.kind === tab && c.category === 'cement'))
+    .filter(c => (tab === 'material' ? c.kind === 'material' && !c.stockOnly : c.kind === tab && c.category === 'cement'))
     .sort((a, b) => a.name.localeCompare(b.name));
   const shelfLabel = (c: CatalogItem) => materialGroup(c.category === 'other' ? c.group || 'other' : c.category).label;
 
