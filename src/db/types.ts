@@ -1004,8 +1004,8 @@ export interface CatalogItem {
   materialType?: string;   // cement types: composition, e.g. 'OPC' | 'PPC' | 'PSC'
   grade?: string;          // cement types: strength grade, e.g. '43' | '53'
   standard?: string;       // cement types: the Indian Standard, e.g. 'IS 269'
-  imageUrl?: string;       // bundled path or user-supplied data URL
-  imageCredit?: string;    // author + license for bundled photos
+  imageUrl?: string;       // user-supplied data URL (older rows may hold a removed bundled photo path; shown as the category icon)
+  imageCredit?: string;    // credit for a photo (older rows only)
   isBuiltIn?: boolean;
   /** Only holds the low-stock level of one stock item (e.g. "Ramco PPC Cement"); not offered in material pickers. */
   stockOnly?: boolean;

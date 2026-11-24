@@ -130,11 +130,11 @@ src/
   views/         Floor planner, project list, classic ledgers, admin
   components/mobile/  Shared phone UI: bottom sheet, day picker, navigation
   styles/mobile.css   Design system for the phone screens
-public/tool-images/   Tool photographs and CREDITS.md
 tests/           Run with `npm test`
 ```
 
-## Credits
+## Item icons
 
-Tool photographs are from Wikimedia Commons under CC0, public domain, CC BY and CC BY-SA licences.
-Authors, licences and source links are listed in [public/tool-images/CREDITS.md](public/tool-images/CREDITS.md).
+Materials and tools are shown with colour-coded category icons from
+[lucide-react](https://lucide.dev) (ISC licence), set in `src/domain/categoryIcons.ts`.
+A tool shows a photo only when the user adds their own. The app no longer bundles stock photographs.

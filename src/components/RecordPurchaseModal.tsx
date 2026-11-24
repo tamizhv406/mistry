@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertCircle, ChevronDown, Package, X } from 'lucide-react';
+import { AlertCircle, ChevronDown, X } from 'lucide-react';
 import type { CatalogItem, Material, MaterialCategory, RodEntry, Site } from '../db/types';
 import { db } from '../db/db';
 import { getCurrentUser } from '../services/auth';
@@ -11,6 +11,7 @@ import { formatINR, parseAmount, roundMoney } from '../utils/money';
 import { CEMENT_TYPES, cementItemName, materialUnitsForCategory } from '../domain/catalog';
 import { compatibleUnits, latestPurchaseByItem, rodItemName, stockItemKey, type StockItem } from '../domain/stock';
 import { useLanguage } from '../services/i18n';
+import { MaterialIcon } from './ui/CategoryIcon';
 import '../styles/materials-mobile.css';
 
 /**
@@ -245,7 +246,7 @@ const PurchaseForm: React.FC<RecordPurchaseModalProps> = ({
     <div className="rpm-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
       <div className="rpm-dialog" role="dialog" aria-modal="true" aria-labelledby="rpm-title">
         <div className="rpm-head">
-          <span className="rpm-head-icon" aria-hidden="true"><Package size={20} /></span>
+          <MaterialIcon size="md" category={category} name={preset?.name || name} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <h2 id="rpm-title">Record purchase</h2>
             {preset && <p className="rpm-sub">{preset.name}</p>}

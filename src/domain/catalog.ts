@@ -6,8 +6,6 @@
  * brand or cement type is stocked by every dealer. Users can add or remove entries.
  */
 import type { CatalogItem, MaterialCategory } from '../db/types';
-import { TOOL_IMAGES } from './toolImages';
-import { MATERIAL_IMAGES } from './materialImages';
 
 export const MATERIAL_UNITS = [
   'Bags', 'Pieces', 'Nos', 'kg', 'Tonne', 'CFT', 'm³', 'Unit (100 CFT)', 'Load', 'Litre', 'sq.ft', 'sq.m', 'Running ft', 'Metre', 'Box', 'Bundle', 'Length',
@@ -59,16 +57,15 @@ export interface MaterialGroup {
   id: string;
   label: string;
   category: MaterialCategory;
-  image?: string;        // key in MATERIAL_IMAGES
   keywords: string;      // extra words the search should find this shelf by
 }
 
 export const MATERIAL_MAIN_GROUPS: MaterialGroup[] = [
-  { id: 'cement', label: 'Cement', category: 'cement', image: 'cement', keywords: 'opc ppc psc bag' },
-  { id: 'sand', label: 'Sand', category: 'sand', image: 'river-sand', keywords: 'river sand plastering' },
-  { id: 'msand', label: 'M-Sand', category: 'msand', image: 'm-sand', keywords: 'p-sand manufactured crusher sand' },
-  { id: 'bricks', label: 'Bricks', category: 'bricks', image: 'bricks', keywords: 'red clay fly ash aac blocks' },
-  { id: 'rod', label: 'Steel Rods', category: 'rod', image: 'steel-rods', keywords: 'tmt rebar kambi iron' },
+  { id: 'cement', label: 'Cement', category: 'cement', keywords: 'opc ppc psc bag' },
+  { id: 'sand', label: 'Sand', category: 'sand', keywords: 'river sand plastering' },
+  { id: 'msand', label: 'M-Sand', category: 'msand', keywords: 'p-sand manufactured crusher sand' },
+  { id: 'bricks', label: 'Bricks', category: 'bricks', keywords: 'red clay fly ash aac blocks' },
+  { id: 'rod', label: 'Steel Rods', category: 'rod', keywords: 'tmt rebar kambi iron' },
 ];
 
 export const MATERIAL_GROUPS: MaterialGroup[] = [
@@ -78,12 +75,6 @@ export const MATERIAL_GROUPS: MaterialGroup[] = [
 
 export const materialGroup = (id: string): MaterialGroup =>
   MATERIAL_GROUPS.find(g => g.id === id) || MATERIAL_GROUPS[MATERIAL_GROUPS.length - 1];
-
-/** Path of the bundled photo for a shelf, if it has one. */
-export const materialGroupImage = (id: string): string | undefined => {
-  const key = materialGroup(id).image;
-  return key ? MATERIAL_IMAGES[key]?.file : undefined;
-};
 
 /**
  * Assign new supported categories to their main shelf and keep every historic category
@@ -113,7 +104,7 @@ export function materialUnitsForCategory(category: MaterialCategory | string): r
 }
 
 type Seed = Pick<CatalogItem, 'id' | 'kind' | 'name' | 'category'> &
-  Partial<Pick<CatalogItem, 'unit' | 'description' | 'group' | 'materialType' | 'grade' | 'standard'>> & { image?: string };
+  Partial<Pick<CatalogItem, 'unit' | 'description' | 'group' | 'materialType' | 'grade' | 'standard'>>;
 
 const CEMENT_BRANDS: Seed[] = [
   { id: 'brand-cement-ramco', kind: 'brand', category: 'cement', name: 'Ramco', description: 'The Ramco Cements' },
@@ -125,36 +116,36 @@ const CEMENT_BRANDS: Seed[] = [
   { id: 'brand-cement-acc', kind: 'brand', category: 'cement', name: 'ACC', description: 'ACC Cement' },
 ];
 
-// A photo is given only where it shows that material; the rest show the neutral placeholder.
+// Each material shows its category icon (see domain/categoryIcons.ts); there are no bundled photos.
 const MATERIALS: Seed[] = [
-  { id: 'mat-cement', kind: 'material', category: 'cement', name: 'Cement', unit: 'Bags', description: '50 kg bag. Choose brand and type when buying.', image: 'cement' },
-  { id: 'mat-river-sand', kind: 'material', category: 'sand', name: 'River Sand', unit: 'Unit (100 CFT)', image: 'river-sand' },
-  { id: 'mat-msand', kind: 'material', category: 'msand', name: 'M-Sand (Concrete)', unit: 'Unit (100 CFT)', image: 'm-sand' },
-  { id: 'mat-psand', kind: 'material', category: 'msand', name: 'P-Sand (Plastering)', unit: 'Unit (100 CFT)', image: 'm-sand' },
-  { id: 'mat-jelly-20', kind: 'material', category: 'aggregate', name: '20 mm Blue Metal (Jelly)', unit: 'Unit (100 CFT)', image: 'aggregate' },
-  { id: 'mat-jelly-40', kind: 'material', category: 'aggregate', name: '40 mm Blue Metal (Jelly)', unit: 'Unit (100 CFT)', image: 'aggregate' },
-  { id: 'mat-jelly-12', kind: 'material', category: 'aggregate', name: '12 mm Blue Metal (Jelly)', unit: 'Unit (100 CFT)', image: 'aggregate' },
-  { id: 'mat-brick-red', kind: 'material', category: 'bricks', name: 'Red Clay Bricks', unit: 'Nos', image: 'bricks' },
+  { id: 'mat-cement', kind: 'material', category: 'cement', name: 'Cement', unit: 'Bags', description: '50 kg bag. Choose brand and type when buying.' },
+  { id: 'mat-river-sand', kind: 'material', category: 'sand', name: 'River Sand', unit: 'Unit (100 CFT)' },
+  { id: 'mat-msand', kind: 'material', category: 'msand', name: 'M-Sand (Concrete)', unit: 'Unit (100 CFT)' },
+  { id: 'mat-psand', kind: 'material', category: 'msand', name: 'P-Sand (Plastering)', unit: 'Unit (100 CFT)' },
+  { id: 'mat-jelly-20', kind: 'material', category: 'aggregate', name: '20 mm Blue Metal (Jelly)', unit: 'Unit (100 CFT)' },
+  { id: 'mat-jelly-40', kind: 'material', category: 'aggregate', name: '40 mm Blue Metal (Jelly)', unit: 'Unit (100 CFT)' },
+  { id: 'mat-jelly-12', kind: 'material', category: 'aggregate', name: '12 mm Blue Metal (Jelly)', unit: 'Unit (100 CFT)' },
+  { id: 'mat-brick-red', kind: 'material', category: 'bricks', name: 'Red Clay Bricks', unit: 'Nos' },
   { id: 'mat-brick-flyash', kind: 'material', category: 'bricks', name: 'Fly Ash Bricks', unit: 'Nos' },
   { id: 'mat-block-aac', kind: 'material', category: 'bricks', name: 'AAC Blocks', unit: 'Nos' },
-  { id: 'mat-block-solid', kind: 'material', category: 'bricks', name: 'Solid Concrete Blocks', unit: 'Nos', image: 'blocks' },
-  { id: 'mat-block-hollow', kind: 'material', category: 'bricks', name: 'Hollow Concrete Blocks', unit: 'Nos', image: 'blocks' },
+  { id: 'mat-block-solid', kind: 'material', category: 'bricks', name: 'Solid Concrete Blocks', unit: 'Nos' },
+  { id: 'mat-block-hollow', kind: 'material', category: 'bricks', name: 'Hollow Concrete Blocks', unit: 'Nos' },
   { id: 'mat-binding-wire', kind: 'material', category: 'other', group: 'hardware', name: 'Binding Wire', unit: 'kg' },
   { id: 'mat-cover-blocks', kind: 'material', category: 'other', group: 'hardware', name: 'Cover Blocks', unit: 'Nos' },
-  { id: 'mat-nails', kind: 'material', category: 'other', group: 'hardware', name: 'Nails', unit: 'kg', image: 'hardware' },
-  { id: 'mat-shuttering-ply', kind: 'material', category: 'other', group: 'wood', name: 'Shuttering Plywood', unit: 'Nos', image: 'wood' },
+  { id: 'mat-nails', kind: 'material', category: 'other', group: 'hardware', name: 'Nails', unit: 'kg' },
+  { id: 'mat-shuttering-ply', kind: 'material', category: 'other', group: 'wood', name: 'Shuttering Plywood', unit: 'Nos' },
   { id: 'mat-waterproofing', kind: 'material', category: 'other', group: 'paint', name: 'Waterproofing Compound', unit: 'Litre' },
-  { id: 'mat-floor-tiles', kind: 'material', category: 'other', group: 'tiles', name: 'Floor Tiles', unit: 'Box', image: 'tiles' },
-  { id: 'mat-wall-tiles', kind: 'material', category: 'other', group: 'tiles', name: 'Wall Tiles', unit: 'Box', image: 'tiles' },
+  { id: 'mat-floor-tiles', kind: 'material', category: 'other', group: 'tiles', name: 'Floor Tiles', unit: 'Box' },
+  { id: 'mat-wall-tiles', kind: 'material', category: 'other', group: 'tiles', name: 'Wall Tiles', unit: 'Box' },
   { id: 'mat-granite', kind: 'material', category: 'other', group: 'tiles', name: 'Granite Slab', unit: 'sq.ft' },
   { id: 'mat-tile-adhesive', kind: 'material', category: 'other', group: 'tiles', name: 'Tile Adhesive', unit: 'Bags' },
   { id: 'mat-wall-putty', kind: 'material', category: 'other', group: 'paint', name: 'Wall Putty', unit: 'Bags' },
-  { id: 'mat-primer', kind: 'material', category: 'other', group: 'paint', name: 'Primer', unit: 'Litre', image: 'paint' },
-  { id: 'mat-paint', kind: 'material', category: 'other', group: 'paint', name: 'Paint', unit: 'Litre', image: 'paint' },
-  { id: 'mat-pvc-pipe', kind: 'material', category: 'other', group: 'plumbing', name: 'PVC Pipe', unit: 'Length', image: 'plumbing' },
+  { id: 'mat-primer', kind: 'material', category: 'other', group: 'paint', name: 'Primer', unit: 'Litre' },
+  { id: 'mat-paint', kind: 'material', category: 'other', group: 'paint', name: 'Paint', unit: 'Litre' },
+  { id: 'mat-pvc-pipe', kind: 'material', category: 'other', group: 'plumbing', name: 'PVC Pipe', unit: 'Length' },
   { id: 'mat-cpvc-pipe', kind: 'material', category: 'other', group: 'plumbing', name: 'CPVC Pipe', unit: 'Length' },
   { id: 'mat-conduit', kind: 'material', category: 'other', group: 'electrical', name: 'Electrical Conduit Pipe', unit: 'Length' },
-  { id: 'mat-wire', kind: 'material', category: 'other', group: 'electrical', name: 'Electrical Wire', unit: 'Bundle', image: 'electrical' },
+  { id: 'mat-wire', kind: 'material', category: 'other', group: 'electrical', name: 'Electrical Wire', unit: 'Bundle' },
 ];
 
 // Cement types start as the four documented ones and can be added to or removed like brands.
@@ -166,48 +157,44 @@ const CEMENT_TYPE_SEEDS: Seed[] = CEMENT_TYPES.map(c => ({
 export const TOOL_CATEGORIES = ['Hand tools', 'Measuring tools', 'Material handling', 'Power tools', 'Site equipment'] as const;
 
 const TOOLS: Seed[] = [
-  { id: 'tool-claw-hammer', kind: 'tool', category: 'Hand tools', name: 'Claw Hammer', image: 'claw-hammer' },
-  { id: 'tool-sledge-hammer', kind: 'tool', category: 'Hand tools', name: 'Sledge Hammer', image: 'sledge-hammer' },
-  { id: 'tool-pliers', kind: 'tool', category: 'Hand tools', name: 'Combination Pliers', image: 'pliers' },
-  { id: 'tool-spanner', kind: 'tool', category: 'Hand tools', name: 'Spanner Set', image: 'spanner' },
-  { id: 'tool-screwdriver', kind: 'tool', category: 'Hand tools', name: 'Screwdriver', image: 'screwdriver' },
-  { id: 'tool-brick-trowel', kind: 'tool', category: 'Hand tools', name: 'Brick Trowel', image: 'brick-trowel' },
-  { id: 'tool-plaster-trowel', kind: 'tool', category: 'Hand tools', name: 'Plastering Trowel', image: 'plastering-trowel' },
-  { id: 'tool-crowbar', kind: 'tool', category: 'Hand tools', name: 'Crowbar', image: 'crowbar' },
-  { id: 'tool-shovel', kind: 'tool', category: 'Hand tools', name: 'Shovel', image: 'shovel' },
-  { id: 'tool-pickaxe', kind: 'tool', category: 'Hand tools', name: 'Pickaxe', image: 'pickaxe' },
-  { id: 'tool-chisel', kind: 'tool', category: 'Hand tools', name: 'Chisel', image: 'chisel' },
-  { id: 'tool-hand-saw', kind: 'tool', category: 'Hand tools', name: 'Hand Saw', image: 'hand-saw' },
-  { id: 'tool-hacksaw', kind: 'tool', category: 'Hand tools', name: 'Hacksaw', image: 'hacksaw' },
-  { id: 'tool-measuring-tape', kind: 'tool', category: 'Measuring tools', name: 'Measuring Tape', image: 'measuring-tape' },
-  { id: 'tool-spirit-level', kind: 'tool', category: 'Measuring tools', name: 'Spirit Level', image: 'spirit-level' },
-  { id: 'tool-laser-measure', kind: 'tool', category: 'Measuring tools', name: 'Laser Distance Measure', image: 'laser-measure' },
-  { id: 'tool-plumb-bob', kind: 'tool', category: 'Measuring tools', name: 'Plumb Bob', image: 'plumb-bob' },
-  { id: 'tool-try-square', kind: 'tool', category: 'Measuring tools', name: 'Try Square', image: 'try-square' },
-  { id: 'tool-wheelbarrow', kind: 'tool', category: 'Material handling', name: 'Wheelbarrow', image: 'wheelbarrow' },
-  { id: 'tool-ladder', kind: 'tool', category: 'Material handling', name: 'Ladder', image: 'ladder' },
-  { id: 'tool-chain-block', kind: 'tool', category: 'Material handling', name: 'Chain Pulley Block', image: 'chain-block' },
-  { id: 'tool-bucket', kind: 'tool', category: 'Material handling', name: 'Bucket', image: 'bucket' },
-  { id: 'tool-drill', kind: 'tool', category: 'Power tools', name: 'Drill Machine', image: 'drill' },
-  { id: 'tool-angle-grinder', kind: 'tool', category: 'Power tools', name: 'Angle Grinder', image: 'angle-grinder' },
-  { id: 'tool-tile-cutter', kind: 'tool', category: 'Power tools', name: 'Tile Cutter', image: 'tile-cutter' },
-  { id: 'tool-vibrator', kind: 'tool', category: 'Power tools', name: 'Concrete Vibrator', image: 'concrete-vibrator' },
-  { id: 'tool-scaffolding', kind: 'tool', category: 'Site equipment', name: 'Scaffolding Pipes & Couplers', image: 'scaffolding' },
-  { id: 'tool-steel-props', kind: 'tool', category: 'Site equipment', name: 'Steel Props', image: 'steel-props' },
-  { id: 'tool-concrete-mixer', kind: 'tool', category: 'Site equipment', name: 'Concrete Mixer', image: 'concrete-mixer' },
-  { id: 'tool-safety-helmet', kind: 'tool', category: 'Site equipment', name: 'Safety Helmet', image: 'safety-helmet' },
+  { id: 'tool-claw-hammer', kind: 'tool', category: 'Hand tools', name: 'Claw Hammer' },
+  { id: 'tool-sledge-hammer', kind: 'tool', category: 'Hand tools', name: 'Sledge Hammer' },
+  { id: 'tool-pliers', kind: 'tool', category: 'Hand tools', name: 'Combination Pliers' },
+  { id: 'tool-spanner', kind: 'tool', category: 'Hand tools', name: 'Spanner Set' },
+  { id: 'tool-screwdriver', kind: 'tool', category: 'Hand tools', name: 'Screwdriver' },
+  { id: 'tool-brick-trowel', kind: 'tool', category: 'Hand tools', name: 'Brick Trowel' },
+  { id: 'tool-plaster-trowel', kind: 'tool', category: 'Hand tools', name: 'Plastering Trowel' },
+  { id: 'tool-crowbar', kind: 'tool', category: 'Hand tools', name: 'Crowbar' },
+  { id: 'tool-shovel', kind: 'tool', category: 'Hand tools', name: 'Shovel' },
+  { id: 'tool-pickaxe', kind: 'tool', category: 'Hand tools', name: 'Pickaxe' },
+  { id: 'tool-chisel', kind: 'tool', category: 'Hand tools', name: 'Chisel' },
+  { id: 'tool-hand-saw', kind: 'tool', category: 'Hand tools', name: 'Hand Saw' },
+  { id: 'tool-hacksaw', kind: 'tool', category: 'Hand tools', name: 'Hacksaw' },
+  { id: 'tool-measuring-tape', kind: 'tool', category: 'Measuring tools', name: 'Measuring Tape' },
+  { id: 'tool-spirit-level', kind: 'tool', category: 'Measuring tools', name: 'Spirit Level' },
+  { id: 'tool-laser-measure', kind: 'tool', category: 'Measuring tools', name: 'Laser Distance Measure' },
+  { id: 'tool-plumb-bob', kind: 'tool', category: 'Measuring tools', name: 'Plumb Bob' },
+  { id: 'tool-try-square', kind: 'tool', category: 'Measuring tools', name: 'Try Square' },
+  { id: 'tool-wheelbarrow', kind: 'tool', category: 'Material handling', name: 'Wheelbarrow' },
+  { id: 'tool-ladder', kind: 'tool', category: 'Material handling', name: 'Ladder' },
+  { id: 'tool-chain-block', kind: 'tool', category: 'Material handling', name: 'Chain Pulley Block' },
+  { id: 'tool-bucket', kind: 'tool', category: 'Material handling', name: 'Bucket' },
+  { id: 'tool-drill', kind: 'tool', category: 'Power tools', name: 'Drill Machine' },
+  { id: 'tool-angle-grinder', kind: 'tool', category: 'Power tools', name: 'Angle Grinder' },
+  { id: 'tool-tile-cutter', kind: 'tool', category: 'Power tools', name: 'Tile Cutter' },
+  { id: 'tool-vibrator', kind: 'tool', category: 'Power tools', name: 'Concrete Vibrator' },
+  { id: 'tool-scaffolding', kind: 'tool', category: 'Site equipment', name: 'Scaffolding Pipes & Couplers' },
+  { id: 'tool-steel-props', kind: 'tool', category: 'Site equipment', name: 'Steel Props' },
+  { id: 'tool-concrete-mixer', kind: 'tool', category: 'Site equipment', name: 'Concrete Mixer' },
+  { id: 'tool-safety-helmet', kind: 'tool', category: 'Site equipment', name: 'Safety Helmet' },
 ];
 
 const SEED_STAMP = '2026-01-01T00:00:00.000Z';
 
 export function builtInCatalog(): CatalogItem[] {
   return [...CEMENT_BRANDS, ...CEMENT_TYPE_SEEDS, ...MATERIALS, ...TOOLS].map(seed => {
-    const { image, ...rest } = seed;
-    const photo = image ? (seed.kind === 'tool' ? TOOL_IMAGES[image] : MATERIAL_IMAGES[image]) : undefined;
     return {
-      ...rest,
-      imageUrl: photo?.file,
-      imageCredit: photo ? `${photo.author} — ${photo.license}` : undefined,
+      ...seed,
       isBuiltIn: true,
       isDeleted: false,
       createdAt: SEED_STAMP,

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { isLegacyStockPhoto } from '../../domain/categoryIcons';
 import {
   SITE_VISUAL,
   getToolVisual,
@@ -126,15 +127,13 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   style,
   ...props
 }) => {
-  const [hasError, setHasError] = useState(false);
-
-  // Reset error state if image src changes
-  useEffect(() => {
-    setHasError(false);
-  }, [src]);
+  // The src that failed to load; a new src gets a fresh try.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const hasError = !!src && failedSrc === src;
 
   const fallback = fallbackSrc || getCategoryFallback(fallbackCategory);
-  const effectiveSrc = !src || hasError ? fallback : src;
+  // Paths to the removed bundled stock photos would only 404: go straight to the fallback.
+  const effectiveSrc = !src || hasError || isLegacyStockPhoto(src) ? fallback : src;
 
   return (
     <img
@@ -145,8 +144,8 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       style={style}
       loading={props.loading || 'lazy'}
       onError={e => {
-        if (!hasError) {
-          setHasError(true);
+        if (!hasError && src) {
+          setFailedSrc(src);
         } else {
           // If fallback also fails for any reason, force reliable embedded site visual
           e.currentTarget.src = SITE_VISUAL;

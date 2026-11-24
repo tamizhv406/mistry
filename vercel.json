@@ -6,7 +6,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/((?!assets/|icons/|tool-images/)[^.]*)",
+      "source": "/((?!assets/|icons/)[^.]*)",
       "destination": "/index.html"
     }
   ],

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowUpRight } from 'lucide-react';
 import { SITE_VISUAL } from '../../utils/constructionVisuals';
 import { getCategoryFallback, type FallbackCategory } from './SafeImage';
+import { isLegacyStockPhoto } from '../../domain/categoryIcons';
 
 export interface InteractiveHoverItem {
   id: string;
@@ -90,7 +91,7 @@ export const InteractiveHoverCard: React.FC<InteractiveHoverCardProps> = ({
     >
       <div className="interactive-card-heading">
         <motion.img
-          src={hasError || !imgSrc ? fallback : imgSrc}
+          src={hasError || !imgSrc || isLegacyStockPhoto(imgSrc) ? fallback : imgSrc}
           alt={item.imageAlt || item.title}
           animate={{ scale: isHovered ? 1.08 : 1 }}
           transition={{ duration: 0.4, ease: 'easeOut' }}

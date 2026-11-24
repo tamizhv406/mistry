@@ -21,6 +21,7 @@ import { calculateFinancialBalance, generatePaymentId, syncParentRecordFinances 
 import { isDayKey, nowIso, todayKey } from '../utils/datetime';
 import { roundMoney } from '../utils/money';
 import { builtInCatalog } from '../domain/catalog';
+import { isLegacyStockPhoto } from '../domain/categoryIcons';
 
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string; duplicateOf?: string };
 
@@ -575,6 +576,9 @@ export async function saveToolAsset(user: User, siteId: string, input: ToolAsset
     const min = minimumTotal(buildToolStatus(previous, issues));
     if (input.totalQuantity < min) return fail(`${min} are already issued, lost or kept aside as damaged, so the total cannot be less than ${min}.`);
   }
+  // A path to one of the removed bundled stock photos is not a photo: drop it (and its credit).
+  const imageUrl = input.imageUrl ?? previous?.imageUrl;
+  const stockPhoto = isLegacyStockPhoto(imageUrl);
   const record: ToolAsset = {
     ...(previous || {}),
     id: previous?.id || newId('tool'),
@@ -583,8 +587,8 @@ export async function saveToolAsset(user: User, siteId: string, input: ToolAsset
     catalogItemId: input.catalogItemId ?? previous?.catalogItemId,
     name: input.name.trim(),
     category: input.category.trim() || 'Other',
-    imageUrl: input.imageUrl ?? previous?.imageUrl,
-    imageCredit: input.imageCredit ?? previous?.imageCredit,
+    imageUrl: stockPhoto ? undefined : imageUrl,
+    imageCredit: stockPhoto ? undefined : input.imageCredit ?? previous?.imageCredit,
     totalQuantity: input.totalQuantity,
     condition: input.condition,
     notes: (input.notes || '').trim(),
@@ -1066,9 +1070,11 @@ export function ensureCatalogSeeded(): Promise<void> {
         if (!current) {
           missing.push(seed);
         } else if (current.isBuiltIn) {
-          // A photo or a shelf was added to this built-in entry after it was first seeded.
+          // A shelf was added to this built-in entry after it was first seeded.
           const patch: Partial<CatalogItem> = {};
-          if (!current.imageUrl && seed.imageUrl) { patch.imageUrl = seed.imageUrl; patch.imageCredit = seed.imageCredit; }
+          // Older versions pointed built-in entries at bundled stock photos that have since been
+          // removed; clear the dead path so the category icon is shown.
+          if (isLegacyStockPhoto(current.imageUrl)) { patch.imageUrl = undefined; patch.imageCredit = undefined; }
           if (!current.group && seed.group) patch.group = seed.group;
           if (Object.keys(patch).length) await db.catalogItems.update(seed.id, patch);
         }

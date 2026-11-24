@@ -22,6 +22,7 @@ import { formatDay } from '../utils/datetime';
 import { formatINR } from '../utils/money';
 import { RecordPurchaseModal } from '../components/RecordPurchaseModal';
 import { StockOperationModal } from '../components/StockOperationModal';
+import { MaterialIcon } from '../components/ui/CategoryIcon';
 
 export interface MaterialsViewProps {
   user: User;
@@ -560,8 +561,13 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                       >
                         <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
-                          <div>{item.name}</div>
-                          <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: 400 }}>{item.lowStockThreshold !== undefined ? `Low-stock level: ${formatStock(item.category, item.unit, item.lowStockThreshold)}` : 'No low-stock level set'}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <MaterialIcon size="md" category={item.category} name={item.name} />
+                            <div style={{ minWidth: 0 }}>
+                              <div>{item.name}</div>
+                              <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: 400 }}>{item.lowStockThreshold !== undefined ? `Low-stock level: ${formatStock(item.category, item.unit, item.lowStockThreshold)}` : 'No low-stock level set'}</div>
+                            </div>
+                          </div>
                         </td>
                         <td style={{ padding: '14px 18px' }}>
                           <span

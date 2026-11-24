@@ -23,7 +23,7 @@ async function run() {
   const svc = await import('../src/services/records');
   const stock = await import('../src/domain/stock');
   const catalog = await import('../src/domain/catalog');
-  const { MATERIAL_IMAGES } = await import('../src/domain/materialImages');
+  const icons = await import('../src/domain/categoryIcons');
   const { todayKey, addDays } = await import('../src/utils/datetime');
   await db.open();
 
@@ -215,19 +215,12 @@ async function run() {
   check('A removed brand is no longer offered', (await db.catalogItems.get(customBrand.ok ? customBrand.value.id : ''))?.isDeleted === true);
 
   const root = process.cwd();
-  const credits = fs.readFileSync(path.join(root, 'public/material-images/CREDITS.md'), 'utf8');
-  const allowed = /^(CC0|CC BY(-SA)? [1-4]\.0|Public domain)$/;
-  for (const [key, img] of Object.entries(MATERIAL_IMAGES)) {
-    const file = path.join(root, 'public', img.file);
-    if (!fs.existsSync(file) || fs.statSync(file).size < 5000) throw new Error(`Photo missing or empty: ${img.file}`);
-    if (!allowed.test(img.license)) throw new Error(`Photo ${key} has an unexpected licence: ${img.license}`);
-    if (!img.author || !img.source.startsWith('https://commons.wikimedia.org/wiki/File:')) throw new Error(`Photo ${key} has no author or source`);
-    if (!credits.includes(`${key}.jpg`) || !credits.includes(img.source)) throw new Error(`Photo ${key} is not in CREDITS.md`);
-  }
-  check('Every bundled photo exists, has a free licence, an author, a source, and a credit line', Object.keys(MATERIAL_IMAGES).length >= 12);
-  check('Every shelf photo is one of the bundled photos', catalog.MATERIAL_GROUPS.every(g => !g.image || !!MATERIAL_IMAGES[g.image]));
-  const withPhotos = (await db.catalogItems.toArray()).filter(r => r.kind === 'material' && r.imageUrl);
-  check('Catalog materials point at files that exist', withPhotos.length >= 10 && withPhotos.every(r => fs.existsSync(path.join(root, 'public', r.imageUrl as string))));
+  check('The blurry bundled stock photos are gone',
+    !fs.existsSync(path.join(root, 'public/material-images')) && !fs.existsSync(path.join(root, 'public/tool-images')));
+  const catalogRows = await db.catalogItems.toArray();
+  check('No catalog entry points at a removed stock photo', catalogRows.every(r => !icons.isLegacyStockPhoto(r.imageUrl)));
+  check('Every catalog material has a category icon', catalogRows.filter(r => r.kind === 'material')
+    .every(r => icons.ICON_CATEGORIES.includes(icons.materialIconCategory(r))));
 
   console.log(`\n✅ Materials stock rules: all ${passed} checks passed.\n`);
 }

@@ -13,28 +13,9 @@ import { ensureCatalogSeeded, issueTool, markToolRepaired, removeToolAsset, retu
 import { useLanguage } from '../../services/i18n';
 import { formatDateTime, formatDay, todayKey } from '../../utils/datetime';
 import { Badge, Chips, ConfirmSheet, Empty, Field, Loading, Note, Page, SearchBox, Section, Sheet } from '../../components/mobile/kit';
+import { ToolIcon } from '../../components/ui/CategoryIcon';
+import { customPhoto } from '../../domain/categoryIcons';
 import '../../styles/materials-mobile.css';
-
-/** Bundled photos are stored relative to the app base; user photos are data URLs. */
-const photoSrc = (url?: string) => (url ? (url.startsWith('data:') || url.startsWith('http') ? url : `./${url}`) : undefined);
-
-const ToolPhoto: React.FC<{ url?: string; alt: string; className: string }> = ({ url, alt, className }) => {
-  const [failed, setFailed] = useState(false);
-  const src = photoSrc(url);
-  if (!src || failed) {
-    return <div className={`${className} ${className === 'm-thumb' ? 'm-thumb-empty' : 'm-tool-photo-empty'}`} role="img" aria-label={`${alt} (no photo)`}><Wrench size={className === 'm-thumb' ? 22 : 34} /></div>;
-  }
-  return <img className={className} src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />;
-};
-
-/** The small square at the start of a row: the person's own photo when they added one, else an icon. */
-const ToolIcon: React.FC<{ tool: Pick<ToolAsset, 'imageUrl' | 'name'> }> = ({ tool }) => {
-  const [failed, setFailed] = useState(false);
-  if (tool.imageUrl?.startsWith('data:') && !failed) {
-    return <img className="stk-icon stk-icon-photo" src={tool.imageUrl} alt="" onError={() => setFailed(true)} />;
-  }
-  return <span className="stk-icon" aria-hidden="true"><Wrench size={18} /></span>;
-};
 
 const Stepper: React.FC<{ value: number; min?: number; max: number; onChange: (n: number) => void; label: string; hideMax?: boolean }> = ({ value, min = 1, max, onChange, label, hideMax }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} role="group" aria-label={label}>
@@ -55,14 +36,14 @@ const Stepper: React.FC<{ value: number; min?: number; max: number; onChange: (n
   </div>
 );
 
-/** Reads a photo from the device and shrinks it to a 480x360 JPEG so it stores small. */
+/** Reads a photo from the device and shrinks it to a 720x540 JPEG: sharp on a phone screen, still small to store. */
 async function fileToPhoto(file: File): Promise<string> {
   const bitmapUrl = URL.createObjectURL(file);
   try {
     const img = new Image();
     img.src = bitmapUrl;
     await img.decode();
-    const W = 480, H = 360;
+    const W = 720, H = 540;
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
@@ -180,7 +161,7 @@ export const ToolRoomView: React.FC<ToolRoomViewProps> = ({ user, siteId, onBack
                 return (
                   <div key={tool.id} className="stk-row">
                     <button type="button" className="stk-row-main" onClick={() => setOpenToolId(tool.id)} aria-label={`${tool.name}. Open history`}>
-                      <ToolIcon tool={tool} />
+                      <ToolIcon name={tool.name} photo={tool.imageUrl} />
                       <span className="stk-text">
                         <span className="stk-name">
                           {st.late && <span className="stk-low">{t('tl_late', 'Late')}</span>}
@@ -327,14 +308,17 @@ const ToolDetailSheet: React.FC<{
           </>
         }
       >
+        <div className="cat-head" style={{ marginBottom: 12 }}>
+          <ToolIcon size="lg" name={tool.name} photo={tool.imageUrl} title={customPhoto(tool.imageUrl) ? `Photo of ${tool.name}` : undefined} />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', minWidth: 0 }}>
+            <Badge tone={tool.condition === 'Good' ? 'ok' : 'bad'}>Condition: {tool.condition}</Badge>
+            {status.lost > 0 && <Badge tone="bad">{status.lost} lost</Badge>}
+          </div>
+        </div>
         <div className="stk-summary" style={{ marginTop: 0 }}>
           <div><span>Total</span><strong>{status.total}</strong></div>
           <div><span>{t('tl_chip_available', 'Available')}</span><strong>{status.unusable ? 0 : status.available}</strong></div>
           <div><span>{t('tl_out_now', 'Out now')}</span><strong>{status.issued}</strong></div>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          <Badge tone={tool.condition === 'Good' ? 'ok' : 'bad'}>Condition: {tool.condition}</Badge>
-          {status.lost > 0 && <Badge tone="bad">{status.lost} lost</Badge>}
         </div>
         {status.unusable && <div style={{ marginTop: 10 }}><Note tone="warn">Marked {tool.condition}. It can not be issued until you edit it back to Good.</Note></div>}
         {status.damaged > 0 && (
@@ -438,7 +422,7 @@ const AddToolSheet: React.FC<{
       <div className="m-card m-list" style={{ marginTop: 10 }}>
         {rows.map(c => (
           <button key={c.id} type="button" className="m-row" onClick={() => onPick(c)} disabled={ownedCatalogIds.has(c.id)}>
-            <span className="stk-icon" aria-hidden="true"><Wrench size={18} /></span>
+            <ToolIcon name={c.name} />
             <span className="m-row-main">
               <span className="m-row-title" style={{ display: 'block' }}>{c.name}</span>
               <span className="m-row-sub">{c.category}{ownedCatalogIds.has(c.id) ? ' · already added' : ''}</span>
@@ -648,8 +632,8 @@ const ToolEditSheet: React.FC<{
   const [quantity, setQuantity] = useState(tool?.totalQuantity || 1);
   const [condition, setCondition] = useState<ToolCondition>(tool?.condition || 'Good');
   const [notes, setNotes] = useState(tool?.notes || '');
-  const [photo, setPhoto] = useState<string | undefined>(tool?.imageUrl || from?.imageUrl);
-  const [credit, setCredit] = useState<string | undefined>(tool?.imageCredit || from?.imageCredit);
+  // Only the person's own photo is kept; old bundled stock paths count as no photo.
+  const [photo, setPhoto] = useState<string | undefined>(customPhoto(tool?.imageUrl));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -661,7 +645,6 @@ const ToolEditSheet: React.FC<{
     if (!file.type.startsWith('image/')) return setError('Choose an image file.');
     try {
       setPhoto(await fileToPhoto(file));
-      setCredit(undefined); // the user's own photo carries no third-party credit
       setError('');
     } catch {
       setError('That photo could not be read. Try another one.');
@@ -674,7 +657,7 @@ const ToolEditSheet: React.FC<{
     setError('');
     const res = await saveToolAsset(user, siteId, {
       id: tool?.id, name, category, totalQuantity: quantity, condition, notes,
-      catalogItemId: tool?.catalogItemId || from?.id, imageUrl: photo || '', imageCredit: credit || '',
+      catalogItemId: tool?.catalogItemId || from?.id, imageUrl: photo || '', imageCredit: '',
     });
     setBusy(false);
     if (!res.ok) return setError(res.error);
@@ -695,14 +678,15 @@ const ToolEditSheet: React.FC<{
       }
     >
       {error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{error}</Note></div>}
-      <ToolPhoto url={photo} alt={name || 'Tool'} className="m-tool-photo" />
-      {credit && <p className="m-calc-note" style={{ marginTop: 4 }}>Photo: {credit} (Wikimedia Commons)</p>}
+      {photo
+        ? <img className="cat-photo-lg" src={photo} alt={`Photo of ${name || 'the tool'}`} />
+        : <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}><ToolIcon size="xl" name={name} /></div>}
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pickPhoto} style={{ display: 'none' }} />
       <div className="m-btn-row" style={{ margin: '8px 0 14px' }}>
         <button type="button" className="m-btn" onClick={() => fileRef.current?.click()}>
           <Camera size={18} /> {photo ? 'Use my own photo' : 'Add a photo'}
         </button>
-        {photo && <button type="button" className="m-btn" onClick={() => { setPhoto(undefined); setCredit(undefined); }}>Remove photo</button>}
+        {photo && <button type="button" className="m-btn" onClick={() => setPhoto(undefined)}>Remove photo</button>}
       </div>
       <Field label="Tool name">
         <input type="text" value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="Tool / Equipment name" />

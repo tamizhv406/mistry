@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, Boxes, BrickWall, ChevronDown, ChevronRight, Construction, MoreHorizontal, Mountain,
+  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, ChevronDown, ChevronRight, MoreHorizontal,
   Package, Plus, RotateCcw, SlidersHorizontal, Trash2,
 } from 'lucide-react';
 import { db } from '../../db/db';
@@ -15,7 +15,7 @@ import {
   CEMENT_TYPES, cementItemName, MATERIAL_GROUPS, MATERIAL_MAIN_GROUPS,
   materialGroup, materialGroupId, materialUnitsForCategory,
 } from '../../domain/catalog';
-import { MATERIAL_IMAGES } from '../../domain/materialImages';
+import { MaterialIcon } from '../../components/ui/CategoryIcon';
 import {
   ensureCatalogSeeded, recordPurchase, recordStockMovement, removeCatalogItem, saveCatalogItem, setLowStockLevel, voidStockMovement,
 } from '../../services/records';
@@ -30,26 +30,6 @@ type EntryMode = 'purchase' | 'usage' | 'return' | 'adjust' | 'opening';
 /** "Bags" -> "bag", "Nos" -> "piece"; other units are already singular. */
 const perUnit = (unit: string) => ({ Bags: 'bag', Nos: 'piece', Pieces: 'piece', Units: 'unit' } as Record<string, string>)[unit] || unit;
 const isOut = (type: StockLine['type']) => type === 'usage' || type === 'return' || type === 'adjust_out';
-
-/** Bundled photos are stored relative to the app base; user photos are data URLs. */
-const photoSrc = (url?: string) => (url ? (url.startsWith('data:') || url.startsWith('http') ? url : `./${url}`) : undefined);
-
-const MaterialPhoto: React.FC<{ url?: string; alt: string; className: string }> = ({ url, alt, className }) => {
-  const [failed, setFailed] = useState(false);
-  const src = photoSrc(url);
-  if (!src || failed) {
-    return <div className={`${className} ${className === 'm-thumb' ? 'm-thumb-empty' : 'm-tool-photo-empty'}`} role="img" aria-label={`${alt} (no photo)`}><Package size={className === 'm-thumb' ? 22 : 34} /></div>;
-  }
-  return <img className={className} src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />;
-};
-
-/** Small category icon for a stock row: no photos in the list, so rows stay short. */
-const CategoryIcon: React.FC<{ category: string }> = ({ category }) => {
-  const chip = stockChipOf(category);
-  const icon = chip === 'cement' ? <Package size={18} /> : chip === 'sand' ? <Mountain size={18} />
-    : chip === 'steel' ? <Construction size={18} /> : chip === 'bricks' ? <BrickWall size={18} /> : <Boxes size={18} />;
-  return <span className="stk-icon" aria-hidden="true">{icon}</span>;
-};
 
 /** Cement is counted in bags on site; everything else in the unit its stock is kept in. */
 const preferredUnit = (item: Pick<StockItem, 'category' | 'unit'>) => (item.category === 'cement' && item.unit === 'kg' ? 'Bags' : item.unit);
@@ -166,7 +146,7 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
                 return (
                   <div key={item.key} className="stk-row">
                     <button type="button" className="stk-row-main" onClick={() => setOpenKey(item.key)} aria-label={`${item.name}: ${formatStock(item.category, item.unit, item.onHand)}. Open history`}>
-                      <CategoryIcon category={item.category} />
+                      <MaterialIcon category={item.category} name={item.name} />
                       <span className="stk-text">
                         <span className="stk-name">
                           {status === 'low' && <span className="stk-low">{t('stk_low', 'Low')}</span>}
@@ -401,7 +381,7 @@ const EntrySheet: React.FC<{
                 const count = g.id === 'rod' ? 0 : inShelf(g.id).length;
                 return (
                   <button key={g.id} type="button" className="m-row" onClick={() => openShelf(g.id)}>
-                    <CategoryIcon category={g.category} />
+                    <MaterialIcon category={g.category} group={g.id} name={g.label} />
                     <span className="m-row-main">
                       <span className="m-row-title" style={{ display: 'block' }}>{g.label}</span>
                       <span className="m-row-sub">{g.id === 'rod' ? 'By diameter and weight' : count === 1 ? inShelf(g.id)[0].unit : `${count} items`}</span>
@@ -423,7 +403,7 @@ const EntrySheet: React.FC<{
             <div className="m-card m-list" style={{ marginTop: 8 }}>
               {list.map(m => (
                 <button key={m.id} type="button" className="m-row" onClick={() => choose(m)}>
-                  <CategoryIcon category={m.category} />
+                  <MaterialIcon category={m.category} group={m.group} name={m.name} />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>{m.name}</span>
                     <span className="m-row-sub">{materialGroup(shelfIdOf(m)).label} · {m.unit}</span>
@@ -433,7 +413,7 @@ const EntrySheet: React.FC<{
               ))}
               {steelMatches && (
                 <button type="button" className="m-row" onClick={onOpenSteelPurchase}>
-                  <CategoryIcon category="rod" />
+                  <MaterialIcon category="rod" />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>Steel Rods (TMT)</span>
                     <span className="m-row-sub">Recorded by diameter and weight</span>
@@ -486,7 +466,7 @@ const EntrySheet: React.FC<{
             <div className="m-card m-list" style={{ marginTop: 10 }}>
               {options.map(s => (
                 <button key={s.key} type="button" className="m-row" onClick={() => { setChosen({ key: s.key, name: s.name, category: s.category, unit: s.unit }); setUnit(preferredUnit(s)); }}>
-                  <CategoryIcon category={s.category} />
+                  <MaterialIcon category={s.category} name={s.name} />
                   <span className="m-row-main">
                     <span className="m-row-title" style={{ display: 'block' }}>{s.name}</span>
                     <span className="m-row-sub">{materialGroup(shelfOf.get(s.key) || 'other').label}</span>
@@ -821,10 +801,15 @@ const ItemSheet: React.FC<{
   return (
     <>
       <Sheet open={!line} title={item.name} subtitle={shelfLabel} onClose={onClose}>
-        <div className="m-stat-label">IN STOCK</div>
-        <div className={`m-stat-value ${item.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.7rem', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {show(item.onHand)}
-          {status === 'low' && <span className="stk-low">{t('stk_low', 'Low')}</span>}
+        <div className="cat-head">
+          <MaterialIcon size="lg" category={item.category} name={item.name} />
+          <div style={{ minWidth: 0 }}>
+            <div className="m-stat-label">IN STOCK</div>
+            <div className={`m-stat-value ${item.onHand < 0 ? 'is-bad' : ''}`} style={{ fontSize: '1.7rem', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {show(item.onHand)}
+              {status === 'low' && <span className="stk-low">{t('stk_low', 'Low')}</span>}
+            </div>
+          </div>
         </div>
 
         <div className="m-btn-row" style={{ marginTop: 12 }}>
@@ -960,7 +945,6 @@ const CatalogSheet: React.FC<{
   const [lowStockThreshold, setLowStockThreshold] = useState('');
   const [editing, setEditing] = useState<CatalogItem | null>(null);
   const [removing, setRemoving] = useState<CatalogItem | null>(null);
-  const [credits, setCredits] = useState(false);
   const [busy, setBusy] = useState(false);
   const catalogCategory = editing?.category || materialGroup(shelf).category;
   const availableUnits = materialUnitsForCategory(catalogCategory);
@@ -1079,7 +1063,7 @@ const CatalogSheet: React.FC<{
         <div className="m-card m-list" style={{ marginTop: 12 }}>
           {rows.map(c => (
             <div key={c.id} className="m-row">
-              {tab === 'material' && <MaterialPhoto url={c.imageUrl} alt={c.name} className="m-thumb" />}
+              {tab === 'material' && <MaterialIcon size="md" category={c.category} group={c.group} name={c.name} photo={c.imageUrl} />}
               <span className="m-row-main">
                 <span className="m-row-title" style={{ display: 'block' }}>
                   {c.name} {tab === 'cement_type' && c.standard && <Badge>{c.standard}</Badge>}
@@ -1109,27 +1093,6 @@ const CatalogSheet: React.FC<{
           {rows.length === 0 && <div className="m-row is-muted">Nothing here yet.</div>}
         </div>
 
-        {tab === 'material' && (
-          <div style={{ marginTop: 12 }}>
-            <button type="button" className="m-btn is-quiet is-small" style={{ paddingLeft: 0 }} onClick={() => setCredits(v => !v)} aria-expanded={credits}>
-              {credits ? 'Hide photo credits' : 'Photo credits'}
-            </button>
-            {credits && (
-              <div className="m-calc-note" style={{ marginTop: 0 }}>
-                Photographs are from Wikimedia Commons and show the kind of material, not a brand or product on sale.
-                <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-                  {Object.entries(MATERIAL_IMAGES).map(([key, img]) => (
-                    <li key={key}>
-                      <a href={img.source} target="_blank" rel="noopener noreferrer">
-                        {MATERIAL_GROUPS.find(g => g.image === key)?.label || catalog.find(c => c.imageUrl === img.file)?.name || key}
-                      </a>: {img.author}, {img.license}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
       </Sheet>
 
       <ConfirmSheet
