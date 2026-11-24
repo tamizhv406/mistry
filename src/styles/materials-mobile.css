@@ -132,6 +132,13 @@
 .stk-qty { font-weight: 700; color: var(--m-ink, #0f172a); }
 .stk-qty.is-bad { color: var(--m-bad, #b91c1c); }
 .stk-qty.is-muted { color: var(--m-ink-3, #64748b); }
+.stk-qty.is-ok { color: var(--m-ok, #047857); }
+.stk-qty-line .stk-qty { overflow: hidden; text-overflow: ellipsis; }
+img.stk-icon-photo { object-fit: cover; padding: 0; }
+
+/* Tools: the people a tool can be given to, two per line, each one tap. */
+.tl-people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tl-people .m-btn { min-height: 48px; min-width: 0; white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
 .stk-low {
   display: inline-block;
   margin-right: 5px;

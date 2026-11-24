@@ -1055,6 +1055,8 @@ export interface ToolAsset {
   imageCredit?: string;
   totalQuantity: number;
   condition: ToolCondition;
+  /** Units returned Damaged / Needs Repair and not yet repaired: kept aside, not issuable. */
+  damagedQuantity?: number;
   notes?: string;
   createdBy?: string;
   isDeleted: boolean;

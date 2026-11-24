@@ -13,7 +13,7 @@ import type {
 } from '../db/types';
 import { buildSiteLabourSummary, type PayPolicy } from './salary';
 import { buildStock } from './stock';
-import { buildToolStatus, isOverdue, outstandingQuantity } from './toolTracking';
+import { buildToolStatus, isLate, outstandingQuantity } from './toolTracking';
 import { flattenExpenses, groupTotals, type ExpenseRow } from './expenses';
 import { inDayRange, monthKeyOf } from '../utils/datetime';
 import { roundMoney } from '../utils/money';
@@ -224,7 +224,7 @@ export function buildProjectReport(src: ReportSource, range: ReportRange, policy
     .filter(i => outstandingQuantity(i) > 0 && assetName.has(i.toolAssetId))
     .map(i => ({
       tool: assetName.get(i.toolAssetId) || '', issuedTo: i.issuedTo, quantity: outstandingQuantity(i),
-      issuedAt: i.issuedAt, expectedReturnDate: i.expectedReturnDate, overdue: isOverdue(i, todayKey),
+      issuedAt: i.issuedAt, expectedReturnDate: i.expectedReturnDate, overdue: isLate(i, todayKey),
     }));
 
   return {

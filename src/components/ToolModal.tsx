@@ -5,6 +5,7 @@ import { db } from '../db/db';
 import type { ToolItem } from '../db/types';
 import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
+import { newId } from '../services/records';
 import { compressImageFile } from '../utils/constructionVisuals';
 import { SafeImage } from './ui/SafeImage';
 
@@ -85,7 +86,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       setCustomName('');
       setQuantity('1');
       setType('Purchase');
-      setCost('500');
+      setCost(''); // no made-up amount: a forgotten cost must not save as ₹500
       setPaidAmount('0'); // Default: Paid Amount = 0
       setPaymentMode('Cash');
       setPurchaseDate(today);
@@ -117,12 +118,16 @@ export const ToolModal: React.FC<ToolModalProps> = ({
       setError('Cost must be greater than ₹0.');
       return;
     }
+    if (purchaseDate && purchaseDate > todayKey()) {
+      setError('The date cannot be in the future.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError('');
 
     const now = new Date().toISOString();
-    const id = toolToEdit ? toolToEdit.id : `tool-${Date.now()}`;
+    const id = toolToEdit ? toolToEdit.id : newId('tool');
 
     const record: ToolItem = {
       id,
@@ -310,6 +315,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
                   min="1"
                   value={cost}
                   onChange={e => setCost(e.target.value)}
+                  placeholder="Enter the amount"
                   required
                 />
               </div>
@@ -404,6 +410,7 @@ export const ToolModal: React.FC<ToolModalProps> = ({
                 <label>Date</label>
                 <input
                   type="date"
+                  max={todayKey()}
                   value={purchaseDate}
                   onChange={e => setPurchaseDate(e.target.value)}
                 />

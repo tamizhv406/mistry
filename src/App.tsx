@@ -674,8 +674,9 @@ export function App() {
     });
   };
 
-  // The phone stock list works on one project: the open one, or the first.
-  const phoneStockSiteId = selectedSiteId || userSites[0]?.id || null;
+  // Project screens (phone stock list, tool room) work on one project: the open one, or the first.
+  const projectSiteId = selectedSiteId || userSites[0]?.id || null;
+  const phoneStockSiteId = projectSiteId;
 
   // Active user: falls back to local workspace builder if currentUser is null
   const activeUser = currentUser || getLocalWorkspaceUser();
@@ -891,12 +892,16 @@ export function App() {
           />
         )}
 
-        {currentView === 'toolroom' && selectedSiteId && (
+        {currentView === 'toolroom' && !projectSiteId && (
+          <div className="m-card m-card-pad" style={{ margin: 16 }}>Add a project first. Tools are kept per project.</div>
+        )}
+        {/* Same screen at every width; with no project open it uses the first one instead of showing nothing. */}
+        {currentView === 'toolroom' && projectSiteId && (
           <ToolRoomView
             user={currentUser}
-            siteId={selectedSiteId}
+            siteId={projectSiteId}
             onBack={() => handleNavigate('dashboard')}
-            onOpenLedger={() => handleNavigate('site-detail', selectedSiteId, 'tools')}
+            onOpenLedger={() => handleNavigate('site-detail', projectSiteId, 'tools')}
             onNotify={addToast}
           />
         )}

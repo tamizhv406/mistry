@@ -16,7 +16,7 @@ import type {
 } from '../db/types';
 import { storedMultiplier, findDuplicateMoneyEntry } from '../domain/salary';
 import { buildStock, convertStockQuantity, findDuplicateMovement, findDuplicatePurchase, stockItemKey, validateMovementOn } from '../domain/stock';
-import { buildToolStatus, minimumTotal, validateIssue, validateReturn } from '../domain/toolTracking';
+import { buildToolStatus, checkToolDay, issueDay, minimumTotal, outstandingQuantity, timestampForDay, validateIssue, validateReturn } from '../domain/toolTracking';
 import { calculateFinancialBalance, generatePaymentId, syncParentRecordFinances } from '../utils/financial';
 import { isDayKey, nowIso, todayKey } from '../utils/datetime';
 import { roundMoney } from '../utils/money';
@@ -564,11 +564,16 @@ export async function saveToolAsset(user: User, siteId: string, input: ToolAsset
 
   const now = nowIso();
   const previous = input.id ? await db.toolAssets.get(input.id) : undefined;
-  if (input.id && !previous) return fail('Tool not found.');
+  if (input.id && (!previous || previous.isDeleted || previous.siteId !== siteId)) return fail('Tool not found.');
+  // Two tools with one name on a site make "who has the drill" ambiguous.
+  const sameName = await db.toolAssets.where('siteId').equals(siteId)
+    .filter(t => !t.isDeleted && t.id !== previous?.id && t.name.trim().toLowerCase() === input.name.trim().toLowerCase())
+    .first();
+  if (sameName) return fail(`"${sameName.name}" is already in this project. Change its quantity instead, or use a different name.`);
   if (previous) {
     const issues = await db.toolIssues.where('toolAssetId').equals(previous.id).toArray();
     const min = minimumTotal(buildToolStatus(previous, issues));
-    if (input.totalQuantity < min) return fail(`${min} are already issued or lost, so the total cannot be less than ${min}.`);
+    if (input.totalQuantity < min) return fail(`${min} are already issued, lost or kept aside as damaged, so the total cannot be less than ${min}.`);
   }
   const record: ToolAsset = {
     ...(previous || {}),
@@ -596,18 +601,26 @@ export async function saveToolAsset(user: User, siteId: string, input: ToolAsset
 export async function issueTool(
   user: User,
   siteId: string,
-  input: { toolAssetId: string; quantity: number; issuedTo: string; workerId?: string; expectedReturnDate?: string; notes?: string }
+  input: {
+    toolAssetId: string; quantity: number; issuedTo: string; workerId?: string; expectedReturnDate?: string; notes?: string;
+    /** The day it went out (default today). A past day is saved at midday of that day. */
+    issuedOn?: string;
+  }
 ): Promise<Result<ToolIssue>> {
   const site = await writableSite(user, siteId, 'toolIssues');
   if (!site) return fail(NO_ACCESS);
+  const today = todayKey();
+  const day = input.issuedOn || today;
+  const dayError = checkToolDay(day, today);
+  if (dayError) return fail(dayError);
   if (input.expectedReturnDate && !isDayKey(input.expectedReturnDate)) return fail('Choose a valid expected return date.');
-  if (input.expectedReturnDate && input.expectedReturnDate < todayKey()) return fail('Expected return date cannot be in the past.');
+  if (input.expectedReturnDate && input.expectedReturnDate < today) return fail('Expected return date cannot be in the past.');
 
   return db.transaction('rw', db.toolAssets, db.toolIssues, db.activityLogs, async () => {
     const tool = await db.toolAssets.get(input.toolAssetId);
     if (!tool || tool.isDeleted || tool.siteId !== siteId) return fail('Tool not found.');
     const issues = await db.toolIssues.where('toolAssetId').equals(tool.id).toArray();
-    const check = validateIssue(buildToolStatus(tool, issues), input.quantity, input.issuedTo);
+    const check = validateIssue(buildToolStatus(tool, issues), input.quantity, input.issuedTo, tool);
     if (!check.ok) return fail(check.error || 'Cannot issue.');
     const now = nowIso();
     const record: ToolIssue = {
@@ -618,7 +631,7 @@ export async function issueTool(
       quantity: input.quantity,
       issuedTo: input.issuedTo.trim(),
       workerId: input.workerId,
-      issuedAt: now,
+      issuedAt: timestampForDay(day, today, now),
       expectedReturnDate: input.expectedReturnDate || undefined,
       returns: [],
       notes: (input.notes || '').trim(),
@@ -636,28 +649,92 @@ export async function issueTool(
 export async function returnTool(
   user: User,
   siteId: string,
-  input: { issueId: string; quantity: number; condition: ToolCondition; notes?: string }
+  input: {
+    issueId: string; quantity: number; condition: ToolCondition; notes?: string;
+    /** The day it came back (default today); not before the day it was issued. */
+    returnedOn?: string;
+  }
 ): Promise<Result<ToolIssue>> {
   const site = await writableSite(user, siteId, 'toolIssues');
   if (!site) return fail(NO_ACCESS);
+  if (!['Good', 'Needs Repair', 'Damaged', 'Lost'].includes(input.condition)) return fail('Choose the condition it came back in.');
   return db.transaction('rw', db.toolAssets, db.toolIssues, db.activityLogs, async () => {
     const issue = await db.toolIssues.get(input.issueId);
     if (!issue || issue.isDeleted || issue.siteId !== siteId) return fail('Issue record not found.');
     const check = validateReturn(issue, input.quantity);
     if (!check.ok) return fail(check.error || 'Cannot return.');
+    const today = todayKey();
+    const day = input.returnedOn || today;
+    const dayError = checkToolDay(day, today, issueDay(issue));
+    if (dayError) return fail(dayError);
     const now = nowIso();
     const updated: ToolIssue = {
       ...issue,
       returns: [
         ...(issue.returns || []),
-        { id: newId('ret'), quantity: input.quantity, returnedAt: now, condition: input.condition, notes: (input.notes || '').trim(), recordedBy: user.id },
+        {
+          id: newId('ret'), quantity: input.quantity, returnedAt: timestampForDay(day, today, now), condition: input.condition,
+          notes: (input.notes || '').trim(), recordedBy: user.id,
+        },
       ],
       updatedAt: now,
     };
     await db.toolIssues.put(updated);
     const tool = await db.toolAssets.get(issue.toolAssetId);
+    if (tool && (input.condition === 'Damaged' || input.condition === 'Needs Repair')) {
+      // Kept aside until repaired, so it is not handed out again by mistake.
+      await db.toolAssets.update(tool.id, { damagedQuantity: (Number(tool.damagedQuantity) || 0) + input.quantity, updatedAt: now });
+    }
     await log(user, site, 'TOOL_RETURNED', `${input.quantity} × ${tool?.name || 'tool'} returned by ${issue.issuedTo} (${input.condition})`);
     return { ok: true as const, value: updated };
+  });
+}
+
+/** Puts tools kept aside as damaged back into use. */
+export async function markToolRepaired(user: User, siteId: string, toolAssetId: string, quantity: number): Promise<Result<ToolAsset>> {
+  const site = await writableSite(user, siteId, 'toolAssets');
+  if (!site) return fail(NO_ACCESS);
+  return db.transaction('rw', db.toolAssets, db.toolIssues, db.activityLogs, async () => {
+    const tool = await db.toolAssets.get(toolAssetId);
+    if (!tool || tool.isDeleted || tool.siteId !== siteId) return fail('Tool not found.');
+    const issues = await db.toolIssues.where('toolAssetId').equals(tool.id).toArray();
+    const damaged = buildToolStatus(tool, issues).damaged;
+    if (!Number.isInteger(quantity) || quantity <= 0) return fail('Enter a whole quantity of 1 or more.');
+    if (quantity > damaged) return fail(`Only ${damaged} kept aside as damaged.`);
+    const now = nowIso();
+    const updated: ToolAsset = {
+      ...tool,
+      damagedQuantity: damaged - quantity,
+      // A tool that was marked damaged as a whole is usable again once nothing is kept aside.
+      condition: damaged - quantity === 0 && tool.condition !== 'Good' ? 'Good' : tool.condition,
+      updatedAt: now,
+    };
+    await db.toolAssets.put(updated);
+    await log(user, site, 'TOOL_REPAIRED', `${quantity} × ${tool.name} repaired`);
+    return { ok: true as const, value: updated };
+  });
+}
+
+/**
+ * Removes a tool from the project (soft delete; its history stays in the database). Refused
+ * while any of it is out with someone: record the return first.
+ */
+export async function removeToolAsset(user: User, siteId: string, toolAssetId: string): Promise<Result> {
+  const site = await writableSite(user, siteId, 'toolAssets');
+  if (!site) return fail(NO_ACCESS);
+  return db.transaction('rw', db.toolAssets, db.toolIssues, db.activityLogs, async () => {
+    const tool = await db.toolAssets.get(toolAssetId);
+    if (!tool || tool.siteId !== siteId) return fail('Tool not found.');
+    if (tool.isDeleted) return { ok: true as const, value: undefined };
+    const open = (await db.toolIssues.where('toolAssetId').equals(tool.id).toArray())
+      .filter(i => !i.isDeleted && outstandingQuantity(i) > 0);
+    if (open.length) {
+      return fail(`${tool.name} is still with ${open.map(i => i.issuedTo).join(', ')}. Record the return before removing it.`);
+    }
+    const now = nowIso();
+    await db.toolAssets.update(tool.id, { isDeleted: true, deletedAt: now, updatedAt: now });
+    await log(user, site, 'TOOL_REMOVED', `${tool.name} removed from the tool room`);
+    return { ok: true as const, value: undefined };
   });
 }
 
