@@ -1,0 +1,75 @@
+{
+  "page": {
+    "title": "Estimate",
+    "downloadCsv": "Download CSV",
+    "newLine": "New item",
+    "newNote": "New note",
+    "addLine": "+ item",
+    "addNote": "+ note",
+    "total": "Total",
+    "notesTitle": "Order notes",
+    "noNotes": "No notes",
+    "openInStore": "Open in store",
+    "deleteLine": "Delete item",
+    "confirmDelete": "Delete “{{name}}”?",
+    "bought": "Purchased",
+    "boughtOn": "Purchased {{date}}",
+    "markBought": "Mark as purchased",
+    "delete": "Delete"
+  },
+  "columns": {
+    "n": "No.",
+    "name": "Item",
+    "qty": "Qty",
+    "unit": "Unit",
+    "price": "Price",
+    "sum": "Amount"
+  },
+  "colors": {
+    "title": "Colors (RAL)",
+    "empty": "No colors selected — set them in the 3D tab",
+    "joined": "{{a}} and {{b}}",
+    "slots": {
+      "walls": "Walls",
+      "gates": "Gates",
+      "roof": "Roof and gutters",
+      "windows": "Windows",
+      "accent": "Accent",
+      "plinth": "Plinth"
+    }
+  },
+  "csv": {
+    "fileName": "estimate-{{date}}.csv",
+    "yes": "yes",
+    "no": "no",
+    "total": "Total",
+    "sectionTotal": "Section total “{{section}}”",
+    "columns": {
+      "section": "Section",
+      "n": "No.",
+      "name": "Item",
+      "sku": "SKU",
+      "qty": "Qty",
+      "unit": "Unit",
+      "price": "Price",
+      "sum": "Amount",
+      "bought": "Purchased",
+      "url": "Link",
+      "note": "Note"
+    }
+  },
+  "sections": {
+    "manual": "Manual items",
+    "auto": "Walls, windows and doors"
+  },
+  "rows": {
+    "door": "Door {{w}}×{{h}} mm",
+    "gate": "Gate {{w}}×{{h}} mm",
+    "window": "Window {{w}}×{{h}} mm",
+    "priceBy": "price per: {{item}}",
+    "areaEstimate": "estimate by area from {{w}}×{{h}} mm: {{item}}"
+  },
+  "wallLine": {
+    "noMaterial": "Walls without material"
+  }
+}

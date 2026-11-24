@@ -1,0 +1,1703 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  Users,
+  Search,
+  Calendar,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  PlusCircle,
+  FileText,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  DollarSign,
+  UserCheck,
+  UserX,
+  AlertCircle,
+  Download,
+  IndianRupee,
+  Layers,
+  Edit2,
+  Check,
+  Sparkles,
+  Printer,
+} from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db/db';
+import type { AttendanceRecord, AttendanceStatus, LabourAdvance, LabourWorker, SalaryPayment, Site, User } from '../db/types';
+import {
+  ATTENDANCE_STATUS_META,
+  ATTENDANCE_STATUS_ORDER,
+  buildSiteLabourSummary,
+  buildWorkerLedger,
+  countByStatus,
+  dedupeAttendance,
+  summariseMonth,
+} from '../domain/salary';
+import { formatDay, formatMonth, monthKeyOf, todayKey, addMonths } from '../utils/datetime';
+import { formatINR, formatQty } from '../utils/money';
+import { markAttendance, setLeavePolicy } from '../services/records';
+import { AttendanceModal } from '../components/AttendanceModal';
+import { WorkerModal } from '../components/WorkerModal';
+import { AdvanceModal } from '../components/AdvanceModal';
+import { SalaryPaymentModal } from '../components/SalaryPaymentModal';
+import { WageSlipModal } from '../components/WageSlipModal';
+import { useLanguage } from '../services/i18n';
+import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
+
+export interface AttendanceSalaryViewProps {
+  user: User;
+  sites: Site[];
+  initialSiteId?: string | null;
+  onNavigateSiteDetail?: (siteId: string, tab: string) => void;
+  onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+}
+
+export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
+  user,
+  sites,
+  initialSiteId,
+  onNavigateSiteDetail,
+  onNotify,
+}) => {
+  const { lang, t, roleLabel, statusLabel } = useLanguage();
+
+  // Current Site Selection
+  const [selectedSiteId, setSelectedSiteId] = useState<string>(initialSiteId || (sites[0]?.id || ''));
+
+  // View state
+  const [activeTab, setActiveTab] = useState<'matrix' | 'attendance' | 'salary' | 'roster' | 'advances'>('matrix');
+  const [selectedDate, setSelectedDate] = useState<string>(todayKey());
+  const [selectedMonth, setSelectedMonth] = useState<string>(monthKeyOf(todayKey()));
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [bulkBusy, setBulkBusy] = useState<boolean>(false);
+  const [savingWorkerId, setSavingWorkerId] = useState<string | null>(null);
+
+  // Modals state
+  const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState<boolean>(false);
+  const [isWorkerModalOpen, setIsWorkerModalOpen] = useState<boolean>(false);
+  const [workerToEdit, setWorkerToEdit] = useState<LabourWorker | null>(null);
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState<boolean>(false);
+  const [advanceToEdit, setAdvanceToEdit] = useState<LabourAdvance | null>(null);
+  const [isSalaryModalOpen, setIsSalaryModalOpen] = useState<boolean>(false);
+  const [salaryToEdit, setSalaryToEdit] = useState<SalaryPayment | null>(null);
+  const [selectedWorkerForAction, setSelectedWorkerForAction] = useState<string | null>(null);
+  const [lastPaidWorkerId, setLastPaidWorkerId] = useState<string | null>(null);
+  const [isWageSlipModalOpen, setIsWageSlipModalOpen] = useState<boolean>(false);
+  const [selectedWorkerForSlip, setSelectedWorkerForSlip] = useState<LabourWorker | null>(null);
+
+  const handlePaymentSuccess = (msg: string, workerId?: string) => {
+    onNotify(msg, 'success');
+    if (workerId) {
+      setLastPaidWorkerId(workerId);
+      setSelectedWorkerForAction(workerId); // Preserves selection without requiring manual re-selection!
+    }
+  };
+
+  // Custom Back Navigation Listener for Mobile App
+  useEffect(() => {
+    const handleBackEvent = (e: Event) => {
+      if (isSalaryModalOpen) {
+        e.preventDefault();
+        setIsSalaryModalOpen(false);
+        setSalaryToEdit(null);
+        return;
+      }
+      if (isAdvanceModalOpen) {
+        e.preventDefault();
+        setIsAdvanceModalOpen(false);
+        setAdvanceToEdit(null);
+        return;
+      }
+      if (isAttendanceModalOpen) {
+        e.preventDefault();
+        setIsAttendanceModalOpen(false);
+        return;
+      }
+      if (isWorkerModalOpen) {
+        e.preventDefault();
+        setIsWorkerModalOpen(false);
+        setWorkerToEdit(null);
+        return;
+      }
+      if (selectedWorkerForAction) {
+        e.preventDefault();
+        setSelectedWorkerForAction(null);
+        return;
+      }
+    };
+    window.addEventListener('mistry:back', handleBackEvent);
+    return () => window.removeEventListener('mistry:back', handleBackEvent);
+  }, [isSalaryModalOpen, isAdvanceModalOpen, isAttendanceModalOpen, isWorkerModalOpen, selectedWorkerForAction]);
+
+  // Query project and active workers
+  const activeSite = sites.find(s => s.id === selectedSiteId) || sites[0];
+
+  const workersQuery = useLiveQuery(async () => {
+    if (!selectedSiteId) return [];
+    return await db.workers.where('siteId').equals(selectedSiteId).filter(w => !w.isDeleted).toArray();
+  }, [selectedSiteId]);
+
+  const attendanceQuery = useLiveQuery(async () => {
+    if (!selectedSiteId) return [];
+    return await db.attendance.where('siteId').equals(selectedSiteId).filter(a => !a.isDeleted).toArray();
+  }, [selectedSiteId]);
+
+  const advancesQuery = useLiveQuery(async () => {
+    if (!selectedSiteId) return [];
+    return await db.labourAdvances.where('siteId').equals(selectedSiteId).filter(a => !a.isDeleted).toArray();
+  }, [selectedSiteId]);
+
+  const salaryPaymentsQuery = useLiveQuery(async () => {
+    if (!selectedSiteId) return [];
+    return await db.salaryPayments.where('siteId').equals(selectedSiteId).filter(s => !s.isDeleted).toArray();
+  }, [selectedSiteId]);
+
+  const workers = workersQuery || [];
+  const attendance = attendanceQuery || [];
+  const advances = advancesQuery || [];
+  const salaryPayments = salaryPaymentsQuery || [];
+
+  // Pay policy for leave days
+  const policy = useMemo(() => ({ leavePaid: activeSite?.leavePaid }), [activeSite?.leavePaid]);
+
+  // Overall Labour Financial & Attendance Summary
+  const siteLabourSummary = useMemo(() => {
+    if (!workers.length && !attendance.length) return null;
+    return buildSiteLabourSummary(workers, attendance, advances, salaryPayments, policy);
+  }, [workers, attendance, advances, salaryPayments, policy]);
+
+  // Day marks map for selected date
+  const dayMarks = useMemo(() => {
+    const map = new Map<string, { status: AttendanceStatus; notes?: string }>();
+    const dateRecords = dedupeAttendance(attendance.filter(a => a.date === selectedDate)).records;
+    dateRecords.forEach(r => {
+      map.set(r.workerId, { status: r.status, notes: r.notes });
+    });
+    return map;
+  }, [attendance, selectedDate]);
+
+  // Attendance counts for selected date
+  const dayCounts = useMemo(() => {
+    return countByStatus(attendance.filter(a => a.date === selectedDate));
+  }, [attendance, selectedDate]);
+
+  const unmarkedWorkers = useMemo(() => {
+    return workers.filter(w => !dayMarks.has(w.id));
+  }, [workers, dayMarks]);
+
+  // Filtered workers list
+  const filteredWorkers = useMemo(() => {
+    return workers.filter(w => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matches = w.name.toLowerCase().includes(q) || (w.category || '').toLowerCase().includes(q) || (w.phone || '').includes(q);
+        if (!matches) return false;
+      }
+      if (statusFilter !== 'all') {
+        const currentMark = dayMarks.get(w.id)?.status;
+        if (statusFilter === 'unmarked' && currentMark) return false;
+        if (statusFilter !== 'unmarked' && currentMark !== statusFilter) return false;
+      }
+      return true;
+    });
+  }, [workers, searchQuery, statusFilter, dayMarks]);
+
+  // Single Worker Mark Attendance
+  const handleMarkStatus = async (worker: LabourWorker, status: AttendanceStatus) => {
+    if (!selectedSiteId || savingWorkerId) return;
+    setSavingWorkerId(worker.id);
+    const res = await markAttendance(user, selectedSiteId, worker, selectedDate, status);
+    setSavingWorkerId(null);
+    if (!res.ok) {
+      onNotify(res.error, 'error');
+    }
+  };
+
+  // Bulk Mark All Unmarked as Present
+  const handleBulkMarkPresent = async () => {
+    if (bulkBusy || unmarkedWorkers.length === 0 || !selectedSiteId) return;
+    setBulkBusy(true);
+    let failed = 0;
+    for (const w of unmarkedWorkers) {
+      const res = await markAttendance(user, selectedSiteId, w, selectedDate, 'present');
+      if (!res.ok) failed++;
+    }
+    setBulkBusy(false);
+    if (failed > 0) {
+      onNotify(`${failed} worker(s) could not be marked.`, 'error');
+    } else {
+      onNotify(`${unmarkedWorkers.length} worker(s) marked Present for ${formatDay(selectedDate)}.`, 'success');
+    }
+  };
+
+  // Toggle Leave Pay Rule
+  const handleToggleLeavePolicy = async (paid: boolean) => {
+    if (!selectedSiteId) return;
+    const res = await setLeavePolicy(user, selectedSiteId, paid);
+    if (res.ok) {
+      onNotify(`Leave pay policy updated: Leaves are now ${paid ? 'Paid' : 'Unpaid'}.`, 'success');
+    } else {
+      onNotify(res.error, 'error');
+    }
+  };
+
+  const handleExportPDF = () => {
+    window.print();
+  };
+
+  return (
+    <div
+      className="attendance-page-container"
+      style={{
+        padding: '24px',
+        maxWidth: '1440px',
+        margin: '0 auto',
+        color: '#0F172A',
+        boxSizing: 'border-box',
+        width: '100%',
+        overflowX: 'hidden',
+      }}
+    >
+      <style>{`
+        .attendance-page-container {
+          max-width: 100vw;
+          box-sizing: border-box;
+          overflow-x: hidden;
+        }
+        @media (max-width: 768px) {
+          .attendance-page-container {
+            padding: 12px 8px !important;
+          }
+          .attendance-desktop-table {
+            display: none !important;
+          }
+          .attendance-mobile-cards {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          .attendance-mobile-roster {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            gap: 10px !important;
+          }
+          .attendance-worker-card,
+          .salary-mobile-card {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            word-break: break-word !important;
+          }
+          .attendance-kpi-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 8px !important;
+          }
+        }
+        @media (min-width: 769px) {
+          .attendance-desktop-table {
+            display: block !important;
+          }
+          .attendance-mobile-cards {
+            display: none !important;
+          }
+          .attendance-mobile-roster {
+            display: none !important;
+          }
+        }
+        .attendance-desktop-table {
+          width: 100%;
+          max-width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .attendance-quick-cycle-cluster {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+      `}</style>
+      {/* Top Header & Actions */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          marginBottom: '24px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              backgroundColor: '#EFF6FF',
+              color: '#2563EB',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Users size={22} />
+          </div>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+              Attendance & Salary Management
+            </h1>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748B' }}>
+              Real-time worker roster, daily muster roll, wages, recoverable advances and salary disbursement.
+            </p>
+          </div>
+        </div>
+
+        {/* Global Action Buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            onClick={handleExportPDF}
+            style={{
+              padding: '9px 16px',
+              borderRadius: '8px',
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              color: '#334155',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            }}
+          >
+            <Download size={16} />
+            <span>Export Muster PDF</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setAdvanceToEdit(null);
+              setIsAdvanceModalOpen(true);
+            }}
+            style={{
+              padding: '9px 16px',
+              borderRadius: '8px',
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              color: '#334155',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            }}
+          >
+            <DollarSign size={16} color="#F59E0B" />
+            <span>Pay Advance</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSalaryToEdit(null);
+              setIsSalaryModalOpen(true);
+            }}
+            style={{
+              padding: '9px 16px',
+              borderRadius: '8px',
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              color: '#334155',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            }}
+          >
+            <IndianRupee size={16} color="#16A34A" />
+            <span>Disburse Salary</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setWorkerToEdit(null);
+              setIsWorkerModalOpen(true);
+            }}
+            style={{
+              padding: '9px 18px',
+              borderRadius: '8px',
+              border: 'none',
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.25)',
+            }}
+          >
+            <PlusCircle size={18} />
+            <span>+ Add Worker</span>
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div
+        className="attendance-kpi-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '12px',
+          marginBottom: '24px',
+        }}
+      >
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>TOTAL WORKERS</span>
+            <Users size={18} color="#2563EB" />
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A' }}>{workers.length}</div>
+          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Active site personnel</div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>PRESENT TODAY</span>
+            <CheckCircle2 size={18} color="#16A34A" />
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#16A34A' }}>
+            {dayCounts.present + dayCounts.overtime}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>
+            {dayCounts.overtime > 0 ? `Includes ${dayCounts.overtime} overtime shifts` : 'Full day attendance'}
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>ABSENT / HALF-DAY</span>
+            <XCircle size={18} color="#DC2626" />
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: dayCounts.absent > 0 ? '#DC2626' : '#0F172A' }}>
+            {dayCounts.absent} <span style={{ fontSize: '1rem', color: '#64748B', fontWeight: 500 }}>({dayCounts.half_day} half)</span>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Non-productive attendance</div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>ON LEAVE</span>
+            <Clock size={18} color="#F59E0B" />
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: dayCounts.leave > 0 ? '#D97706' : '#0F172A' }}>
+            {dayCounts.leave}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>
+            Policy: {activeSite?.leavePaid ? 'Paid Leave' : 'Unpaid Leave'}
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>PENDING WAGES</span>
+            <IndianRupee size={18} color="#7C3AED" />
+          </div>
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#7C3AED' }}>
+            {formatINR(siteLabourSummary?.pending || 0)}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>
+            Earned: {formatINR(siteLabourSummary?.earned || 0)}
+          </div>
+        </div>
+      </div>
+
+      {/* Control Bar: Project Selector, Date Picker, Search & View Tabs */}
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          padding: '16px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+          {/* Site Selector */}
+          <div style={{ minWidth: '180px' }}>
+            <select
+              value={selectedSiteId}
+              onChange={e => setSelectedSiteId(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '0.875rem',
+                backgroundColor: '#F8FAFC',
+                fontWeight: 600,
+                color: '#1E293B',
+                outline: 'none',
+              }}
+            >
+              {sites.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '0.875rem',
+                outline: 'none',
+                fontWeight: 600,
+                color: '#334155',
+              }}
+            />
+            {selectedDate !== todayKey() && (
+              <button
+                onClick={() => setSelectedDate(todayKey())}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#2563EB',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Today
+              </button>
+            )}
+          </div>
+
+          {/* Search */}
+          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+            <Search
+              size={16}
+              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
+            />
+            <input
+              type="text"
+              placeholder="Search worker by name, role or phone..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px 9px 36px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '0.875rem',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div style={{ minWidth: '130px' }}>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                borderRadius: '8px',
+                border: '1px solid #CBD5E1',
+                fontSize: '0.875rem',
+                backgroundColor: '#FFFFFF',
+                color: '#334155',
+                outline: 'none',
+              }}
+            >
+              <option value="all">All Workers</option>
+              <option value="present">Present</option>
+              <option value="half_day">Half Day</option>
+              <option value="overtime">Overtime</option>
+              <option value="absent">Absent</option>
+              <option value="leave">Leave</option>
+              <option value="unmarked">Unmarked Today</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Tab Switcher */}
+        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px', flexWrap: 'wrap', gap: '2px' }}>
+          {[
+            { id: 'matrix', label: lang === 'ta' ? 'வருகை மேட்ரிக்ஸ் (Weekly)' : 'Attendance Matrix (Weekly)' },
+            { id: 'attendance', label: lang === 'ta' ? 'தினசரி பதிவு' : 'Daily Mark' },
+            { id: 'salary', label: lang === 'ta' ? 'கூலி கணக்கு ஏடு' : 'Salary Ledger' },
+            { id: 'advances', label: lang === 'ta' ? 'அட்வான்ஸ்' : 'Advances' },
+            { id: 'roster', label: lang === 'ta' ? 'பணியாளர்கள்' : 'Worker Roster' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: '7px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.825rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                backgroundColor: activeTab === tab.id ? '#FFFFFF' : 'transparent',
+                color: activeTab === tab.id ? '#4F46E5' : '#64748B',
+                boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Leave Pay Policy Banner */}
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '10px',
+          border: '1px solid #E2E8F0',
+          padding: '12px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Sparkles size={18} color="#2563EB" />
+          <div>
+            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>
+              Project Leave Pay Policy: {activeSite?.leavePaid ? 'Leaves are Paid' : 'Leaves are Unpaid (Standard)'}
+            </span>
+            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+              Configurable per site. If paid, 1 full day wage is earned on approved leave days.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => handleToggleLeavePolicy(!activeSite?.leavePaid)}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#F8FAFC',
+              color: '#334155',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Switch to {activeSite?.leavePaid ? 'Unpaid Leaves' : 'Paid Leaves'}
+          </button>
+
+          {unmarkedWorkers.length > 0 && activeTab === 'attendance' && (
+            <button
+              onClick={handleBulkMarkPresent}
+              disabled={bulkBusy}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: '#16A34A',
+                color: '#FFFFFF',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <CheckCircle2 size={15} />
+              <span>{bulkBusy ? 'Marking...' : `Mark All ${unmarkedWorkers.length} Unmarked Present`}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tab 0: Mobile-First Attendance Matrix (Spreadsheet View) */}
+      {activeTab === 'matrix' && activeSite && (
+        <AttendanceMatrix
+          user={user}
+          activeSite={activeSite}
+          workers={workers}
+          attendance={attendance}
+          advances={advances}
+          salaryPayments={salaryPayments}
+          onNotify={onNotify}
+          onOpenWorkerModal={w => {
+            setWorkerToEdit(w || null);
+            setIsWorkerModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* Tab 1: Daily Attendance Table & Optimized Mobile Roster */}
+      {activeTab === 'attendance' && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          {/* Desktop Table View (> 768px) */}
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name & ID</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Role</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Daily Wage</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Daily Status ({formatDay(selectedDate)})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredWorkers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                      <Users size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No personnel found for this site</div>
+                      <div style={{ fontSize: '0.825rem', marginTop: '4px' }}>Click "+ Add Worker" to enroll personnel.</div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredWorkers.map(w => {
+                    const mark = dayMarks.get(w.id);
+                    const status = mark?.status;
+                    const isSaving = savingWorkerId === w.id;
+                    const statusMeta = status ? ATTENDANCE_STATUS_META[status] : null;
+
+                    return (
+                      <tr
+                        key={w.id}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          transition: 'background-color 0.15s ease',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                      >
+                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '50%',
+                                backgroundColor: '#E2E8F0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 700,
+                                color: '#475569',
+                                fontSize: '0.85rem',
+                              }}
+                            >
+                              {w.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div>{w.name}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 400 }}>
+                                ID: #{w.id.slice(-6).toUpperCase()} · {w.phone || 'No phone'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <span
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              backgroundColor: '#EFF6FF',
+                              color: '#1D4ED8',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {w.category}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#334155' }}>
+                          {formatINR(w.dailyWage)} / day
+                        </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                            {/* Primary 1-Tap Cycling Status Pill */}
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => {
+                                const nextOrder: AttendanceStatus[] = ['present', 'half_day', 'overtime', 'leave', 'absent'];
+                                const curIdx = status ? nextOrder.indexOf(status) : -1;
+                                const nextSt = nextOrder[(curIdx + 1) % nextOrder.length];
+                                handleMarkStatus(w, nextSt);
+                              }}
+                              className="attendance-status-pill-btn"
+                              title={`Click to cycle status (Current: ${statusMeta?.label || 'Not Marked'})`}
+                              style={{
+                                backgroundColor:
+                                  status === 'present'
+                                    ? '#DCFCE7'
+                                    : status === 'overtime'
+                                    ? '#EDE9FE'
+                                    : status === 'half_day'
+                                    ? '#FEF3C7'
+                                    : status === 'leave'
+                                    ? '#EFF6FF'
+                                    : status === 'absent'
+                                    ? '#FEE2E2'
+                                    : '#F1F5F9',
+                                color:
+                                  status === 'present'
+                                    ? '#15803D'
+                                    : status === 'overtime'
+                                    ? '#6D28D9'
+                                    : status === 'half_day'
+                                    ? '#B45309'
+                                    : status === 'leave'
+                                    ? '#1D4ED8'
+                                    : status === 'absent'
+                                    ? '#B91C1C'
+                                    : '#64748B',
+                                border:
+                                  status
+                                    ? '1px solid currentColor'
+                                    : '1px dashed #CBD5E1',
+                              }}
+                            >
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                              <span>{statusMeta?.label || 'Not Marked'}</span>
+                            </button>
+
+                            {/* Streamlined 1-Tap Status Selector Cluster */}
+                            <div className="attendance-quick-cycle-cluster">
+                              {(['present', 'half_day', 'overtime', 'leave', 'absent'] as AttendanceStatus[]).map(st => {
+                                const isCurrent = status === st;
+                                const meta = ATTENDANCE_STATUS_META[st];
+                                return (
+                                  <button
+                                    key={st}
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() => handleMarkStatus(w, st)}
+                                    title={`Mark as ${meta.label}`}
+                                    className={`attendance-mini-status-btn ${isCurrent ? `active-${st}` : ''}`}
+                                  >
+                                    {meta.short}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Simplified Mobile Worker Roster Cards (< 768px) */}
+          <div className="attendance-mobile-roster">
+            {filteredWorkers.length === 0 ? (
+              <div style={{ padding: '36px 16px', textAlign: 'center', color: '#94A3B8' }}>
+                <Users size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>No personnel enrolled</div>
+              </div>
+            ) : (
+              filteredWorkers.map(w => {
+                const mark = dayMarks.get(w.id);
+                const status = mark?.status;
+                const isSaving = savingWorkerId === w.id;
+                const statusMeta = status ? ATTENDANCE_STATUS_META[status] : null;
+
+                return (
+                  <div key={w.id} className="attendance-worker-card">
+                    <div className="attendance-worker-card-header">
+                      <div className="attendance-worker-card-info">
+                        <div
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            backgroundColor: '#E2E8F0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            color: '#334155',
+                            fontSize: '0.85rem',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {w.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="attendance-worker-card-meta">
+                          <span className="attendance-worker-card-name">{w.name}</span>
+                          <span className="attendance-worker-card-sub">
+                            <span
+                              style={{
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                backgroundColor: '#EFF6FF',
+                                color: '#1D4ED8',
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {w.category}
+                            </span>
+                            <span>{formatINR(w.dailyWage)}/day</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Prominent Mobile Cycling Status Pill */}
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => {
+                          const nextOrder: AttendanceStatus[] = ['present', 'half_day', 'overtime', 'leave', 'absent'];
+                          const curIdx = status ? nextOrder.indexOf(status) : -1;
+                          const nextSt = nextOrder[(curIdx + 1) % nextOrder.length];
+                          handleMarkStatus(w, nextSt);
+                        }}
+                        className="attendance-status-pill-btn"
+                        title="Tap to cycle status"
+                        style={{
+                          backgroundColor:
+                            status === 'present'
+                              ? '#DCFCE7'
+                              : status === 'overtime'
+                              ? '#EDE9FE'
+                              : status === 'half_day'
+                              ? '#FEF3C7'
+                              : status === 'leave'
+                              ? '#EFF6FF'
+                              : status === 'absent'
+                              ? '#FEE2E2'
+                              : '#F1F5F9',
+                          color:
+                            status === 'present'
+                              ? '#15803D'
+                              : status === 'overtime'
+                              ? '#6D28D9'
+                              : status === 'half_day'
+                              ? '#B45309'
+                              : status === 'leave'
+                              ? '#1D4ED8'
+                              : status === 'absent'
+                              ? '#B91C1C'
+                              : '#64748B',
+                          border: status ? '1px solid currentColor' : '1px dashed #CBD5E1',
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                        <span>{statusMeta?.label || 'Tap to Mark'}</span>
+                      </button>
+                    </div>
+
+                    {/* Quick 1-Tap Status Options for Mobile */}
+                    <div className="attendance-worker-card-actions">
+                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Quick Mark:</span>
+                      <div className="attendance-quick-cycle-cluster">
+                        {(['present', 'half_day', 'overtime', 'leave', 'absent'] as AttendanceStatus[]).map(st => {
+                          const isCurrent = status === st;
+                          const meta = ATTENDANCE_STATUS_META[st];
+                          return (
+                            <button
+                              key={st}
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleMarkStatus(w, st)}
+                              title={`Mark ${meta.label}`}
+                              className={`attendance-mini-status-btn ${isCurrent ? `active-${st}` : ''}`}
+                              style={{ width: '32px', height: '32px' }}
+                            >
+                              {meta.short}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Salary Ledger */}
+      {activeTab === 'salary' && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Days Worked</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Total Earned</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Advances (Recov.)</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Salary Paid</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Pending Wage</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                      <IndianRupee size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No salary records available</div>
+                    </td>
+                  </tr>
+                ) : (
+                  workers.map(w => {
+                    const workerAttendance = attendance.filter(a => a.workerId === w.id);
+                    const workerAdvances = advances.filter(a => a.workerId === w.id);
+                    const workerPayments = salaryPayments.filter(s => s.workerId === w.id);
+                    const ledger = buildWorkerLedger(w, workerAttendance, workerAdvances, workerPayments, policy);
+                    const isSelected = selectedWorkerForAction === w.id;
+                    const isRecentlyUpdated = lastPaidWorkerId === w.id;
+
+                    return (
+                      <tr
+                        key={w.id}
+                        id={`salary-table-row-${w.id}`}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          backgroundColor: isRecentlyUpdated ? '#F0FDF4' : isSelected ? '#EFF6FF' : undefined,
+                        }}
+                      >
+                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {w.name}
+                            {isRecentlyUpdated && (
+                              <span style={{ fontSize: '0.68rem', background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                ✓ Payment Updated
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                            {w.category} · {formatINR(w.dailyWage)}/day
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 18px', color: '#334155' }}>
+                          {ledger.workedDayEquivalents} days
+                        </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 600, color: '#0F172A' }}>
+                          {formatINR(ledger.earned)}
+                        </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#D97706', fontWeight: 600 }}>
+                          {formatINR(ledger.recoverableAdvances)}
+                        </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#16A34A', fontWeight: 600 }}>
+                          {formatINR(ledger.salaryPaid)}
+                        </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span style={{ color: ledger.pending > 0 ? '#DC2626' : '#16A34A' }}>
+                            {formatINR(ledger.pending)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button
+                              id={`salary-pay-btn-${w.id}`}
+                              onClick={() => {
+                                setSelectedWorkerForAction(w.id);
+                                setSalaryToEdit(null);
+                                setIsSalaryModalOpen(true);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #CBD5E1',
+                                backgroundColor: '#FFFFFF',
+                                color: '#16A34A',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Pay Wage
+                            </button>
+                            <button
+                              id={`salary-advance-btn-${w.id}`}
+                              onClick={() => {
+                                setSelectedWorkerForAction(w.id);
+                                setAdvanceToEdit(null);
+                                setIsAdvanceModalOpen(true);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #CBD5E1',
+                                backgroundColor: '#FFFFFF',
+                                color: '#D97706',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Advance
+                            </button>
+                            <button
+                              id={`salary-slip-btn-${w.id}`}
+                              onClick={() => {
+                                setSelectedWorkerForSlip(w);
+                                setIsWageSlipModalOpen(true);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #0284C7',
+                                backgroundColor: '#F0F9FF',
+                                color: '#0284C7',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                              title="1-Click Printable Wage Slip"
+                            >
+                              <Printer size={13} />
+                              <span>Slip</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card View (<= 768px - Requirement 4) */}
+          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+            {workers.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B' }}>
+                No worker salary records available
+              </div>
+            ) : (
+              workers.map(w => {
+                const workerAttendance = attendance.filter(a => a.workerId === w.id);
+                const workerAdvances = advances.filter(a => a.workerId === w.id);
+                const workerPayments = salaryPayments.filter(s => s.workerId === w.id);
+                const ledger = buildWorkerLedger(w, workerAttendance, workerAdvances, workerPayments, policy);
+                const isSelected = selectedWorkerForAction === w.id;
+                const isRecentlyUpdated = lastPaidWorkerId === w.id;
+
+                return (
+                  <div
+                    key={w.id}
+                    id={`salary-mobile-card-${w.id}`}
+                    className={`salary-mobile-card ${isSelected ? 'selected' : ''}`}
+                    style={{
+                      background: isRecentlyUpdated ? '#F0FDF4' : isSelected ? '#EFF6FF' : '#FFFFFF',
+                      border: isRecentlyUpdated ? '1.5px solid #16A34A' : isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '14px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '6px' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.95rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {w.name}
+                          {isRecentlyUpdated && (
+                            <span style={{ fontSize: '0.68rem', background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                              ✓ Payment Updated
+                            </span>
+                          )}
+                        </strong>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                          {w.category} · {formatINR(w.dailyWage)}/day · {ledger.workedDayEquivalents} days
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
+                          Pending Due
+                        </span>
+                        <strong style={{ fontSize: '1rem', color: ledger.pending > 0 ? '#DC2626' : '#16A34A' }}>
+                          {formatINR(ledger.pending)}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: '#F8FAFC', padding: '8px', borderRadius: '8px', textAlign: 'center', fontSize: '0.75rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Earned</span>
+                        <strong style={{ color: '#0F172A' }}>{formatINR(ledger.earned)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Advances</span>
+                        <strong style={{ color: '#D97706' }}>{formatINR(ledger.recoverableAdvances)}</strong>
+                      </div>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Paid</span>
+                        <strong style={{ color: '#16A34A' }}>{formatINR(ledger.salaryPaid)}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <button
+                        type="button"
+                        id={`mobile-pay-wage-${w.id}`}
+                        onClick={() => {
+                          setSelectedWorkerForAction(w.id);
+                          setSalaryToEdit(null);
+                          setIsSalaryModalOpen(true);
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: '1px solid #16A34A',
+                          backgroundColor: '#F0FDF4',
+                          color: '#15803D',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Pay Wage
+                      </button>
+                      <button
+                        type="button"
+                        id={`mobile-pay-advance-${w.id}`}
+                        onClick={() => {
+                          setSelectedWorkerForAction(w.id);
+                          setAdvanceToEdit(null);
+                          setIsAdvanceModalOpen(true);
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: '1px solid #D97706',
+                          backgroundColor: '#FEF3C7',
+                          color: '#B45309',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Advance
+                      </button>
+                      <button
+                        type="button"
+                        id={`mobile-wage-slip-${w.id}`}
+                        onClick={() => {
+                          setSelectedWorkerForSlip(w);
+                          setIsWageSlipModalOpen(true);
+                        }}
+                        style={{
+                          padding: '8px',
+                          borderRadius: '8px',
+                          border: '1px solid #0284C7',
+                          backgroundColor: '#F0F9FF',
+                          color: '#0284C7',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Printer size={14} />
+                        <span>Slip</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: Advances History */}
+      {activeTab === 'advances' && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Advance Type</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Reason / Purpose</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {advances.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                      <DollarSign size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No advances logged for this site</div>
+                    </td>
+                  </tr>
+                ) : (
+                  advances.map(a => {
+                    const w = workers.find(work => work.id === a.workerId);
+                    return (
+                      <tr key={a.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                        <td style={{ padding: '14px 18px', color: '#64748B' }}>{formatDay(a.date)}</td>
+                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>{w?.name || 'Worker'}</td>
+                        <td style={{ padding: '14px 18px' }}>
+                          <span
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              backgroundColor: a.advanceType === 'Non-Recoverable' ? '#EFF6FF' : '#FEF3C7',
+                              color: a.advanceType === 'Non-Recoverable' ? '#1D4ED8' : '#92400E',
+                            }}
+                          >
+                            {a.advanceType || 'Recoverable'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 18px', color: '#334155' }}>{a.reason || 'Weekly advance'}</td>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>
+                          {formatINR(a.amount)}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Advances Cards (<= 768px - Requirement 4) */}
+          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+            {advances.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B' }}>
+                No advances logged for this site
+              </div>
+            ) : (
+              advances.map(a => {
+                const w = workers.find(work => work.id === a.workerId);
+                return (
+                  <div
+                    key={a.id}
+                    style={{
+                      background: '#FFFFFF',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <strong style={{ fontSize: '0.92rem', color: '#0F172A' }}>{w?.name || 'Worker'}</strong>
+                        <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block' }}>{formatDay(a.date)}</span>
+                      </div>
+                      <span style={{ fontSize: '1rem', fontWeight: 800, color: '#DC2626' }}>
+                        {formatINR(a.amount)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          backgroundColor: a.advanceType === 'Non-Recoverable' ? '#EFF6FF' : '#FEF3C7',
+                          color: a.advanceType === 'Non-Recoverable' ? '#1D4ED8' : '#92400E',
+                        }}
+                      >
+                        {a.advanceType || 'Recoverable'}
+                      </span>
+                      <span style={{ fontSize: '0.78rem', color: '#475569' }}>{a.reason || 'Weekly advance'}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 4: Worker Roster */}
+      {activeTab === 'roster' && (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Personnel Name</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Designation / Skill</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Phone</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Joining Date</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Daily Wage</th>
+                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workers.map(w => (
+                  <tr key={w.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                    <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>{w.name}</td>
+                    <td style={{ padding: '14px 18px', color: '#334155' }}>{w.category}</td>
+                    <td style={{ padding: '14px 18px', color: '#64748B' }}>{w.phone || '—'}</td>
+                    <td style={{ padding: '14px 18px', color: '#64748B' }}>{w.joiningDate ? formatDay(w.joiningDate) : '—'}</td>
+                    <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, color: '#0F172A' }}>
+                      {formatINR(w.dailyWage)}
+                    </td>
+                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <button
+                        onClick={() => {
+                          setWorkerToEdit(w);
+                          setIsWorkerModalOpen(true);
+                        }}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1',
+                          backgroundColor: '#FFFFFF',
+                          color: '#475569',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Edit Profile
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Roster Cards (<= 768px - Requirement 4) */}
+          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+            {workers.map(w => (
+              <div
+                key={w.id}
+                style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: '0.92rem', color: '#0F172A', display: 'block' }}>{w.name}</strong>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                    {w.category} · Phone: {w.phone || '—'}
+                  </span>
+                  <span style={{ fontSize: '0.78rem', color: '#2563EB', fontWeight: 700, display: 'block', marginTop: '2px' }}>
+                    {formatINR(w.dailyWage)} / day
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWorkerToEdit(w);
+                    setIsWorkerModalOpen(true);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#F8FAFC',
+                    color: '#334155',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Edit Profile
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Attendance Modal */}
+      <AttendanceModal
+        isOpen={isAttendanceModalOpen}
+        siteId={selectedSiteId}
+        workers={workers}
+        onClose={() => setIsAttendanceModalOpen(false)}
+        onSuccess={msg => onNotify(msg, 'success')}
+      />
+
+      {/* Worker Modal */}
+      <WorkerModal
+        isOpen={isWorkerModalOpen}
+        siteId={selectedSiteId}
+        workerToEdit={workerToEdit}
+        onClose={() => setIsWorkerModalOpen(false)}
+        onSuccess={msg => onNotify(msg, 'success')}
+      />
+
+      {/* Advance Modal */}
+      <AdvanceModal
+        isOpen={isAdvanceModalOpen}
+        siteId={selectedSiteId}
+        workers={workers}
+        advanceToEdit={advanceToEdit}
+        initialWorkerId={selectedWorkerForAction}
+        onClose={() => setIsAdvanceModalOpen(false)}
+        onSuccess={handlePaymentSuccess}
+      />
+
+      {/* Salary Modal */}
+      <SalaryPaymentModal
+        isOpen={isSalaryModalOpen}
+        siteId={selectedSiteId}
+        workers={workers}
+        attendance={attendance}
+        advances={advances}
+        pastPayments={salaryPayments}
+        paymentToEdit={salaryToEdit}
+        initialWorkerId={selectedWorkerForAction}
+        onClose={() => setIsSalaryModalOpen(false)}
+        onSuccess={handlePaymentSuccess}
+      />
+
+      {/* 1-Click Printable Wage Slip Modal */}
+      <WageSlipModal
+        isOpen={isWageSlipModalOpen}
+        onClose={() => {
+          setIsWageSlipModalOpen(false);
+          setSelectedWorkerForSlip(null);
+        }}
+        worker={selectedWorkerForSlip}
+        siteName={sites.find(s => s.id === selectedSiteId)?.name || 'Building Mistry Project'}
+        attendance={attendance}
+        advances={advances}
+        salaryPayments={salaryPayments}
+      />
+    </div>
+  );
+};

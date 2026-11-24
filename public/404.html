@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Building Mistry - Redirecting...</title>
+    <script>
+      // Single Page App redirect for GitHub Pages
+      // https://github.com/rafgraph/spa-github-pages
+      var pathSegmentsToKeep = 1; // 1 for repo root e.g. /mistry/
+      var l = window.location;
+      var repoPath = '/' + l.pathname.split('/').slice(1, 1 + pathSegmentsToKeep).join('/') + '/';
+      var subPath = l.pathname.slice(repoPath.length);
+      var query = l.search ? '&' + l.search.slice(1) : '';
+      l.replace(
+        repoPath + '?p=/' + encodeURIComponent(subPath) + query + l.hash
+      );
+    </script>
+  </head>
+  <body>
+    <p>Loading Building Mistry...</p>
+  </body>
+</html>
+
