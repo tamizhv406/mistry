@@ -44,6 +44,31 @@ export const STATUS_TRANSLATIONS: Record<string, { en: string; ta: string; code:
 };
 
 export const DICTIONARY: Record<string, { en: string; ta: string }> = {
+  // Building Calculator: quick estimate
+  'calc_title': { en: 'Building Calculator', ta: 'கட்டிட கணக்கீடு' },
+  'calc_subtitle': { en: 'Quick cost estimate', ta: 'விரைவு செலவு மதிப்பீடு' },
+  'calc_step': { en: 'Step', ta: 'படி' },
+  'calc_q_size': { en: 'How big is one floor?', ta: 'ஒரு தளத்தின் அளவு என்ன?' },
+  'calc_q_size_help': { en: 'Size of one floor. You choose floors next.', ta: 'ஒரு தளத்தின் அளவு. அடுத்து தளங்கள் தேர்வு செய்யலாம்.' },
+  'calc_q_floors': { en: 'How many floors?', ta: 'எத்தனை தளங்கள்?' },
+  'calc_q_type': { en: 'What kind of building?', ta: 'என்ன வகை கட்டிடம்?' },
+  'calc_q_quality': { en: 'Construction quality?', ta: 'கட்டுமான தரம்?' },
+  'calc_back': { en: 'Back', ta: 'பின்' },
+  'calc_next': { en: 'Next', ta: 'அடுத்து' },
+  'calc_calculate': { en: 'Calculate', ta: 'கணக்கிடு' },
+  'calc_total': { en: 'Approximate total cost', ta: 'தோராயமான மொத்த செலவு' },
+  'calc_breakdown': { en: 'Breakdown', ta: 'விவரம்' },
+  'calc_labour': { en: 'Labour', ta: 'கூலி' },
+  'calc_materials': { en: 'Materials', ta: 'பொருட்கள்' },
+  'calc_approx_note': { en: 'This is an approximate estimate only. Actual cost may vary.', ta: 'இது தோராயமான மதிப்பீடு மட்டுமே. உண்மையான செலவு மாறலாம்.' },
+  'calc_excluded_title': { en: 'Not included', ta: 'இதில் சேர்க்கப்படவில்லை' },
+  'calc_excluded_list': { en: 'Painting, interior furniture, compound wall, borewell, government approvals', ta: 'பெயிண்டிங், உள் ஃபர்னிச்சர், சுற்றுச்சுவர், போர்வெல், அரசு அனுமதிகள்' },
+  'calc_excluded_list_finish': { en: 'Interior furniture, compound wall, borewell, government approvals', ta: 'உள் ஃபர்னிச்சர், சுற்றுச்சுவர், போர்வெல், அரசு அனுமதிகள்' },
+  'calc_edit_rates': { en: 'Edit rates', ta: 'ரேட் மாற்று' },
+  'calc_view_details': { en: 'Detail estimate', ta: 'விவரம் பார்' },
+  'calc_quick_estimate': { en: 'Quick estimate', ta: 'விரைவு மதிப்பீடு' },
+  'calc_start_again': { en: 'Start again', ta: 'மீண்டும் தொடங்கு' },
+  'calc_saved': { en: 'Saved estimates', ta: 'சேமித்த மதிப்பீடுகள்' },
   // Navigation & Headers
   'attendance_salary': { en: 'Attendance & Salary Management', ta: 'வருகைப்பதிவு & கூலிப்பட்டியல் மேலாண்மை' },
   'attendance_matrix': { en: 'Mobile Attendance Matrix', ta: 'தள வருகைப்பதிவு மேட்ரிக்ஸ்' },

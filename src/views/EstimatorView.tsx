@@ -1,39 +1,43 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowLeft, ArrowRight, BrickWall, Building2, Calculator, Check, ChevronDown, ChevronRight, Download, ExternalLink, Hammer, House, Layers, Mic, MicOff,
-  Mountain, Package, PaintRoller, Printer, Ruler, Save, SlidersHorizontal, Tag, Trash2, Users,
+  ArrowLeft, ArrowRight, BrickWall, Building2, Calculator, ChevronDown, Download, ExternalLink, Hammer, House, Mic, MicOff,
+  Mountain, Package, PaintRoller, Printer, RotateCcw, Save, SlidersHorizontal, Store, Tag, Trash2, Users,
 } from 'lucide-react';
 import { db } from '../db/db';
 import type {
   AreaUnit, BuildingEstimate, ConcreteGrade, ConstructionQuality, EstimateMaterial, MaterialPriceQuote, SteelGrade, StructureType, User,
 } from '../db/types';
 import {
-  buildEstimate, emptySize, ENGINEERING_DEFAULTS, estimateReportRows, EXAMPLE_PRICES, HOUSE_TYPES, houseTypeLabel, MAX_FLOORS, PRICE_FIELDS, RATE_FIELDS,
-  sizeSqFt, toCsv, type EstimateInput, type EstimatePrices, type LengthUnit, type RateField, type SizeInput,
+  BUILDING_TYPES, buildEstimate, emptySize, ENGINEERING_DEFAULTS, EXAMPLE_PRICES, FLOOR_CHOICES, floorsCode, HOUSE_TYPES, houseTypeLabel,
+  MAX_FLOORS, PRICE_FIELDS, QUALITY_CHOICES, QUICK_DEFAULTS, RATE_FIELDS, sizeSqFt,
+  type EstimateInput, type EstimatePrices, type LengthUnit, type RateField, type SizeInput,
 } from '../domain/estimate';
 import { fromSqFt, getQualityFactors, STARTING_LABOUR_RATE, THUMB_RULE_SOURCES } from '../utils/estimator';
 import { estimatesFor, removeBuildingEstimate, saveBuildingEstimate } from '../services/estimates';
 import { isSpeechRecognitionSupported, parseVoiceInput, startVoiceRecognition, type ParsedVoiceEstimate } from '../utils/voiceParser';
 import { formatDay, todayKey } from '../utils/datetime';
 import { formatINR, formatQty, parseAmount } from '../utils/money';
+import { useLanguage } from '../services/i18n';
 import { SupplierPriceModal } from '../components/SupplierPriceModal';
 import { PriceComparisonCard } from '../components/PriceComparisonCard';
-import { Badge, CalcLine, ConfirmSheet, Empty, Field, Note, Page, Section, Segmented, Sheet } from '../components/mobile/kit';
+import { ConfirmSheet, Empty, Field, Note, Page, Section, Segmented, Sheet } from '../components/mobile/kit';
 import { generateBuildingEstimatePdfBlob, downloadFile } from '../utils/pdfGenerator';
 import { AdvancedCalculatorDashboard } from '../components/calculator/AdvancedCalculatorDashboard';
+import '../styles/calculator-simple.css';
 
 /**
- * Building Calculator: four plain questions, then an approximate estimate.
+ * Building Calculator.
  *
- *   1. How many square feet are you planning to build?   (one floor)
- *   2. How many floors do you need?
- *   3. What type of house do you prefer?                  (pillar & beam, or pillar-free)
- *   4. Which materials will you use?                      (full M-sand, or river sand for plastering)
+ * Simple mode (the default): four questions, one per screen, each already answered with a
+ * sensible default so it can be tapped through, then the approximate cost.
+ *   1. Size of one floor   2. Floors (G … G+3)   3. Building type   4. Construction quality
+ * Prices, material rates, sand and structure type wait in "Edit rates" under the result.
  *
- * The arithmetic and every assumption live in domain/estimate.ts. Concrete and steel grades are
- * not asked for: the rates do not depend on them, so ENGINEERING_DEFAULTS are used and written
- * only into the saved estimate and the exported file.
+ * Detail mode: the engineering calculators (walls, slabs, beams, plaster, flooring, sand, BOQ),
+ * opened only from "Detail estimate".
+ *
+ * The arithmetic and every assumption live in domain/estimate.ts.
  */
 
 interface EstimatorViewProps {
@@ -63,21 +67,16 @@ const fromSize = (s: SizeInput): SizeText => {
   const t = (n: number) => (Number.isFinite(n) ? String(n) : '');
   return { mode: s.mode, length: t(s.length), width: t(s.width), lengthUnit: s.lengthUnit, area: t(s.area), areaUnit: s.areaUnit, percent: t(s.percent) };
 };
-
-const LEVELS: { value: ConstructionQuality; label: string; hint: string }[] = [
-  { value: 'Economy', label: 'Basic', hint: 'Lean specification: the low end of each published range.' },
-  { value: 'Standard', label: 'Standard', hint: 'The middle of each published range.' },
-  { value: 'Premium', label: 'Premium', hint: 'Heavier specification: the high end of each published range.' },
-];
-
-const AREA_UNITS: { value: AreaUnit; label: string }[] = [
-  { value: 'sq.ft', label: 'sq.ft' }, { value: 'sq.m', label: 'sq.m' }, { value: 'cent', label: 'cent' }, { value: 'ground', label: 'ground' },
-];
+const startSize = (sqFt?: number | null): SizeText => ({
+  ...blankSize('area'),
+  area: String(sqFt && sqFt > 0 ? Math.round(sqFt) : QUICK_DEFAULTS.footprintSqFt),
+});
 
 const SIZE_PRESETS = ['600', '800', '1000', '1200', '1500', '2000'];
 
-const STEPS = ['Size', 'Floors', 'House', 'Materials', 'Estimate'];
-const RESULT = STEPS.length - 1;
+/** Questions 1–4, then the result. */
+const QUESTIONS = 4;
+const RESULT = QUESTIONS;
 
 const QUOTE_FIELD: Record<EstimateMaterial, { field: keyof EstimatePrices; unit: RegExp; per: string }> = {
   Cement: { field: 'cementPerBag', unit: /^bags?$/i, per: 'bag' },
@@ -89,32 +88,54 @@ const QUOTE_FIELD: Record<EstimateMaterial, { field: keyof EstimatePrices; unit:
 };
 
 const MATERIAL_SHOW: Record<string, { name: string; icon: React.ReactNode }> = {
-  Cement: { name: 'Cement', icon: <Package size={20} /> },
-  Steel: { name: 'Steel (TMT bars)', icon: <Hammer size={20} /> },
-  'M-Sand': { name: 'M-Sand (crusher sand)', icon: <Mountain size={20} /> },
-  Sand: { name: 'River sand (plastering)', icon: <PaintRoller size={20} /> },
-  Aggregate: { name: 'Jelly (aggregate)', icon: <Mountain size={20} /> },
-  Bricks: { name: 'Bricks', icon: <BrickWall size={20} /> },
+  Cement: { name: 'Cement', icon: <Package size={18} /> },
+  Steel: { name: 'Steel (TMT)', icon: <Hammer size={18} /> },
+  'M-Sand': { name: 'M-Sand', icon: <Mountain size={18} /> },
+  Sand: { name: 'River sand', icon: <PaintRoller size={18} /> },
+  Aggregate: { name: 'Jelly (aggregate)', icon: <Mountain size={18} /> },
+  Bricks: { name: 'Bricks', icon: <BrickWall size={18} /> },
 };
 
-const floorsLabel = (n: number) => (n === 1 ? 'Ground floor only' : `Ground + ${n - 1}`);
+/**
+ * On a phone the detail calculators' tables are shown one card per row (calculator-simple.css).
+ * Each cell gets its column's name as `data-label`, so a value like "18%" still says what it is.
+ */
+function labelTableCells(root: HTMLElement) {
+  for (const table of Array.from(root.querySelectorAll('table'))) {
+    const heads = Array.from(table.querySelectorAll('thead th')).map(th => (th.textContent || '').trim());
+    if (!heads.some(Boolean)) continue;
+    for (const row of Array.from(table.querySelectorAll('tbody tr, tfoot tr'))) {
+      Array.from(row.children).forEach((cell, i) => {
+        const name = heads[i];
+        if (name && (cell as HTMLElement).dataset.label !== name) (cell as HTMLElement).dataset.label = name;
+      });
+    }
+  }
+}
+
+const unitWord = (unit: string) => (unit === 'Kg' ? 'kg' : unit === 'CFT' ? 'cft' : unit === 'Bags' ? 'bags' : unit === 'Pieces' ? 'nos' : unit.toLowerCase());
 const priceText = (p: EstimatePrices) => Object.fromEntries(PRICE_FIELDS.map(f => [f.field, String(p[f.field])])) as Record<keyof EstimatePrices, string>;
+const qualityLabel = (q: ConstructionQuality) => QUALITY_CHOICES.find(c => c.value === q)?.label ?? q;
+const buildingLabel = (b: string) => BUILDING_TYPES.find(t => t.value === b)?.label ?? b;
+const BUILDING_ICON: Record<string, React.ReactNode> = {
+  'Residential House': <House size={22} />,
+  'Duplex / Villa': <Building2 size={22} />,
+  'Commercial Building': <Store size={22} />,
+};
 
 export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuildingSqFt, onBack, onOpenSite, onNotify }) => {
-  const [calculatorMode, setCalculatorMode] = useState<'advanced' | 'whole_house'>('advanced');
+  const { t } = useLanguage();
+  const [mode, setMode] = useState<'simple' | 'detail'>('simple');
   const [step, setStep] = useState(0);
   const [tried, setTried] = useState(false);   // show field errors once Next has been pressed on a step
 
-  // Not asked any more (the rates are for houses); kept for estimates saved earlier and the file.
-  const [buildingType, setBuildingType] = useState('Residential Villa');
+  const [buildingType, setBuildingType] = useState(QUICK_DEFAULTS.buildingType);
   const [plot, setPlot] = useState<SizeText>(blankSize());
   const [showPlot, setShowPlot] = useState(false);
-  const [footprint, setFootprint] = useState<SizeText>(() =>
-    initialBuildingSqFt && initialBuildingSqFt > 0 ? { ...blankSize('area'), area: String(Math.round(initialBuildingSqFt)) } : blankSize('area')
-  );
-  const [floors, setFloors] = useState(1);
+  const [footprint, setFootprint] = useState<SizeText>(() => startSize(initialBuildingSqFt));
+  const [floors, setFloors] = useState(QUICK_DEFAULTS.floors);
   const [structureType, setStructureType] = useState<StructureType>('Framed Structure (RCC)');
-  const [quality, setQuality] = useState<ConstructionQuality>('Standard');
+  const [quality, setQuality] = useState<ConstructionQuality>(QUICK_DEFAULTS.quality);
   // Engineering defaults: used for every estimate, never asked for on these screens.
   const [concreteGrade, setConcreteGrade] = useState<ConcreteGrade>(ENGINEERING_DEFAULTS.concreteGrade);
   const [steelGrade, setSteelGrade] = useState<SteelGrade>(ENGINEERING_DEFAULTS.steelGrade);
@@ -123,7 +144,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
   const [prices, setPrices] = useState(() => priceText(EXAMPLE_PRICES));
   const [rateText, setRateText] = useState<Partial<Record<RateField, string>>>({});
 
-  const [showAdjust, setShowAdjust] = useState(false);
+  const [showRates, setShowRates] = useState(false);
   const [showHow, setShowHow] = useState(false);
   const [quotesOpen, setQuotesOpen] = useState(false);
   const [quoteModal, setQuoteModal] = useState<EstimateMaterial | null>(null);
@@ -138,6 +159,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
   const savingRef = useRef(false);
   const [removing, setRemoving] = useState<BuildingEstimate | null>(null);
 
+  const detailRef = useRef<HTMLDivElement>(null);
   const [listening, setListening] = useState(false);
   const [voice, setVoice] = useState<ParsedVoiceEstimate | null>(null);
   const recognition = useRef<{ stop: () => void } | null>(null);
@@ -147,6 +169,16 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
   const saved = useLiveQuery(() => estimatesFor(user), [user.id]) || [];
 
   useEffect(() => () => { try { recognition.current?.stop(); } catch { /* already stopped */ } }, []);
+
+  // Detail mode: keep table cells labelled as the panels render and change.
+  useEffect(() => {
+    const root = detailRef.current;
+    if (mode !== 'detail' || !root) return;
+    labelTableCells(root);
+    const watch = new MutationObserver(() => labelTableCells(root));
+    watch.observe(root, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, [mode]);
 
   // A price or rate box that is empty or half-typed must not make the whole estimate vanish
   // while it is being edited: it is named in a message, and until it is filled an empty price
@@ -195,10 +227,23 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
     setQuality(level);
   };
 
+  const startAgain = () => {
+    setBuildingType(QUICK_DEFAULTS.buildingType);
+    setShowPlot(false);
+    setPlot(blankSize());
+    setFootprint(startSize());
+    setFloors(QUICK_DEFAULTS.floors);
+    setStructureType('Framed Structure (RCC)');
+    changeLevel(QUICK_DEFAULTS.quality);
+    setIncludeRiverSand(false);
+    setShowRates(false);
+    goTo(0);
+  };
+
   const applyQuote = (quote: MaterialPriceQuote) => {
     const target = QUOTE_FIELD[quote.material];
-    if (!target.unit.test((quote.unit || '').trim())) {
-      return onNotify(`That quote is per ${quote.unit}. The calculator needs a price per ${target.per}, so it was not applied.`, 'error');
+    if (!target || !target.unit.test((quote.unit || '').trim())) {
+      return onNotify(`That quote is per ${quote.unit}. The calculator needs a price per ${target?.per ?? 'unit'}, so it was not applied.`, 'error');
     }
     setSelectedQuoteIds(prev => ({ ...prev, [quote.material]: quote.id }));
     setPrices(p => ({ ...p, [target.field]: String(quote.price) }));
@@ -231,12 +276,12 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
     if (voice.includeRiverSand !== undefined) setIncludeRiverSand(voice.includeRiverSand);
     setVoice(null);
     goTo(0);
-    onNotify('Filled in what was heard. Check the plot and enter the building size.', 'info');
+    onNotify('Filled in what was heard. Check the plot and the building size.', 'info');
   };
 
   const openSave = () => {
     if (!result) return;
-    setSaveName(`${houseTypeLabel(structureType)}, ${formatQty(result.areas.builtUpSqFt)} sq.ft`);
+    setSaveName(`${buildingLabel(buildingType)} ${floorsCode(result.areas.floors)}, ${formatQty(result.areas.builtUpSqFt)} sq.ft`);
     setSaveError('');
     setSaveOpen(true);
   };
@@ -292,11 +337,16 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
       setSteelGrade(est.steelGrade);
       setIncludeRiverSand(est.includeRiverSand);
       const p = { ...EXAMPLE_PRICES };
-      for (const m of est.materialEstimates) p[QUOTE_FIELD[m.material].field] = m.rate;
+      // An unknown material in an old estimate is skipped rather than crashing the screen.
+      for (const m of est.materialEstimates) {
+        const target = QUOTE_FIELD[m.material];
+        if (target && Number.isFinite(m.rate)) p[target.field] = m.rate;
+      }
       setPrices(priceText(p));
       setRateText({});
       setFinishing('');
     }
+    setMode('simple');
     goTo(RESULT);
     onNotify(
       kept ? `Opened "${est.estimateName}"` : `Opened "${est.estimateName}". It was saved by the earlier calculator, so the quantities are worked out again with the current rates.`,
@@ -309,7 +359,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
     const siteObj = sites.find(s => s.id === saveSiteId);
     const pdfBlob = generateBuildingEstimatePdfBlob({
       projectName: siteObj?.name,
-      estimateName: saveName || `${houseTypeLabel(structureType)}, ${formatQty(result.areas.builtUpSqFt)} sq.ft`,
+      estimateName: saveName || `${buildingLabel(buildingType)} ${floorsCode(result.areas.floors)}, ${formatQty(result.areas.builtUpSqFt)} sq.ft`,
       buildingType,
       structureType: houseTypeLabel(structureType) || structureType,
       quality,
@@ -335,173 +385,161 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
 
     const filename = `Building_Estimate_${Math.round(result.areas.builtUpSqFt)}sqft_${todayKey()}.pdf`;
     downloadFile(pdfBlob, filename);
-    onNotify('Estimate PDF downloaded successfully', 'success');
+    onNotify('Estimate PDF downloaded', 'success');
   };
 
   const areaLine = (sqFt: number) =>
     Number.isNaN(sqFt) ? null : (
-      <p className="m-calc-note" style={{ marginTop: 6 }}>
+      <p className="calc-area-line">
         = <strong>{formatQty(sqFt)} sq.ft</strong> ({formatQty(fromSqFt(sqFt, 'sq.m'))} sq.m)
       </p>
     );
 
-  /** A large tappable choice: icon, title and a short explanation. */
-  const choice = (key: string, picked: boolean, onPick: () => void, icon: React.ReactNode, title: string, detail: string) => (
-    <button key={key} type="button" className={`calc-choice ${picked ? 'is-picked' : ''}`} aria-pressed={picked} onClick={onPick}>
-      <span className="calc-choice-icon" aria-hidden="true">{icon}</span>
-      <span className="calc-choice-text">
-        <span className="calc-choice-title">{title}</span>
-        <span className="calc-choice-detail">{detail}</span>
+  /** One compact, tappable answer: icon, label, one short line. */
+  const option = (key: string, picked: boolean, onPick: () => void, icon: React.ReactNode, title: string, detail: string) => (
+    <button key={key} type="button" className={`calc-opt ${picked ? 'is-picked' : ''}`} aria-pressed={picked} onClick={onPick}>
+      <span className="calc-opt-icon" aria-hidden="true">{icon}</span>
+      <span className="calc-opt-text">
+        <span className="calc-opt-title">{title}</span>
+        <span className="calc-opt-detail">{detail}</span>
       </span>
-      <span className="calc-choice-mark" aria-hidden="true">{picked ? <Check size={18} /> : null}</span>
+      <span className="calc-opt-mark" aria-hidden="true" />
     </button>
   );
 
-  const level = LEVELS.find(l => l.value === quality) || LEVELS[1];
+  const floorOptions = floors > FLOOR_CHOICES.length
+    ? [...FLOOR_CHOICES, ...Array.from({ length: floors - FLOOR_CHOICES.length }, (_, i) => ({ value: FLOOR_CHOICES.length + i + 1, label: floorsCode(FLOOR_CHOICES.length + i + 1) }))]
+    : FLOOR_CHOICES;
 
+  // ---------------------------------------------------------------------- Detail mode
+  if (mode === 'detail') {
+    return (
+      <Page className="container calc-detail" title={t('calc_title')} subtitle={t('calc_view_details')} onBack={onBack}>
+        <button type="button" className="m-btn is-block calc-detail-back no-print" onClick={() => setMode('simple')}>
+          <ArrowLeft size={18} /> {t('calc_quick_estimate')}
+        </button>
+        <div ref={detailRef}>
+          <AdvancedCalculatorDashboard
+            user={user}
+            onNotify={onNotify}
+            onSelectSite={onOpenSite}
+            initialBuildingSqFt={result?.areas.footprintSqFt ?? initialBuildingSqFt}
+          />
+        </div>
+      </Page>
+    );
+  }
+
+  // ---------------------------------------------------------------------- Simple mode
   return (
     <Page
-      className="container"
-      title="Building Calculator"
-      subtitle="Approximate materials and cost"
+      className="container calc-simple"
+      title={t('calc_title')}
+      subtitle={t('calc_subtitle')}
       onBack={onBack}
       right={
-        isSpeechRecognitionSupported() && calculatorMode === 'whole_house' ? (
+        isSpeechRecognitionSupported() && step < RESULT ? (
           <button type="button" className={`m-icon-btn is-bordered no-print ${listening ? 'is-bad' : ''}`} onClick={toggleVoice} aria-label={listening ? 'Stop listening' : 'Fill by voice'} aria-pressed={listening}>
             {listening ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
         ) : undefined
       }
     >
-      {/* Top Segmented Mode Switcher */}
-      <div className="max-w-md mx-auto mb-6 no-print">
-        <div className="flex items-center justify-center p-1 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-          <button
-            type="button"
-            onClick={() => setCalculatorMode('advanced')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-              calculatorMode === 'advanced'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-            }`}
-          >
-            <Calculator size={14} /> Advanced Calculator (IS)
-          </button>
-          <button
-            type="button"
-            onClick={() => setCalculatorMode('whole_house')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-              calculatorMode === 'whole_house'
-                ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-            }`}
-          >
-            <House size={14} /> Whole House Quick Estimator
-          </button>
+      {step < RESULT && (
+        <div className="calc-progress no-print" aria-label={`${t('calc_step')} ${step + 1} / ${QUESTIONS}`}>
+          <span className="calc-progress-count">{step + 1}/{QUESTIONS}</span>
+          <span className="calc-progress-bar" aria-hidden="true">
+            <span style={{ width: `${((step + 1) / QUESTIONS) * 100}%` }} />
+          </span>
         </div>
-      </div>
+      )}
 
-      {calculatorMode === 'advanced' ? (
-        <AdvancedCalculatorDashboard
-          user={user}
-          onNotify={onNotify}
-          onSelectSite={onOpenSite}
-          initialBuildingSqFt={initialBuildingSqFt}
-        />
-      ) : (
-        <>
-          <ol className="m-steps calc-steps no-print" aria-label="Steps">
-        {STEPS.map((label, i) => (
-          <li key={label} className={i === step ? 'is-current' : i < step ? 'is-done' : ''} aria-current={i === step ? 'step' : undefined}>
-            <button type="button" onClick={() => (i < step ? goTo(i) : undefined)} disabled={i > step} aria-label={`Step ${i + 1}: ${label}`}>
-              <span className="m-step-dot">{i < step ? <Check size={14} /> : i + 1}</span>
-              <span className="m-step-label">{label}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      {listening && <div style={{ marginBottom: 10 }}><Note>Listening. Say the plot size, floors and quality, for example “3 cent, ground plus one, standard”.</Note></div>}
 
-      {listening && <div style={{ marginBottom: 10 }}><Note>Listening. Say the plot size, floors and type, for example “3 cent, ground plus one, standard”.</Note></div>}
-
-      {/* ---------------------------------------------------------------- 1. Size */}
+      {/* ------------------------------------------------------------ 1. Size */}
       {step === 0 && (
-        <>
-          <h2 className="m-step-title calc-question"><Ruler size={22} aria-hidden="true" /> How many square feet are you planning to build?</h2>
-          <p className="calc-help">The size of one floor of the house. Floors are added in the next step.</p>
-          <div className="m-card m-card-pad">
-            <Segmented
-              label="Enter the size as"
-              value={footprint.mode === 'dimensions' ? 'dimensions' : 'area'}
-              onChange={mode => setFootprint({ ...footprint, mode })}
-              options={[{ value: 'area', label: 'Square feet' }, { value: 'dimensions', label: 'Length × width' }]}
-            />
-            <div style={{ height: 12 }} />
-            {footprint.mode !== 'dimensions' ? (
-              <>
-                <Field label="Square feet of one floor">
-                  <input
-                    type="text" inputMode="decimal" autoComplete="off" className="calc-big-input" placeholder="e.g. 1000"
-                    value={footprint.area}
-                    onChange={e => setFootprint({ ...footprint, mode: 'area', areaUnit: 'sq.ft', area: e.target.value })}
-                    aria-label="Square feet of one floor" id="calc-sqft"
-                  />
-                </Field>
-                <div className="m-chips calc-presets" role="group" aria-label="Common sizes">
+        <div className="calc-q">
+          <h2 className="calc-q-title">{t('calc_q_size')}</h2>
+          <p className="calc-q-help">{t('calc_q_size_help')}</p>
+          <Segmented
+            label="Enter the size as"
+            value={footprint.mode === 'dimensions' ? 'dimensions' : 'area'}
+            onChange={m => setFootprint({ ...footprint, mode: m })}
+            options={[{ value: 'area', label: 'Area' }, { value: 'dimensions', label: 'Length × Width' }]}
+          />
+          {footprint.mode !== 'dimensions' ? (
+            <>
+              <div className="calc-size-row">
+                <input
+                  type="text" inputMode="decimal" autoComplete="off" className="calc-big-input"
+                  value={footprint.area}
+                  onChange={e => setFootprint({ ...footprint, mode: 'area', area: e.target.value })}
+                  aria-label="Area of one floor" id="calc-sqft"
+                />
+                <Segmented
+                  label="Area unit"
+                  value={footprint.areaUnit === 'sq.m' ? 'sq.m' : 'sq.ft'}
+                  onChange={u => setFootprint({ ...footprint, mode: 'area', areaUnit: u })}
+                  options={[{ value: 'sq.ft', label: 'sq.ft' }, { value: 'sq.m', label: 'sq.m' }]}
+                />
+              </div>
+              {footprint.areaUnit === 'sq.ft' && (
+                <div className="calc-presets" role="group" aria-label="Common sizes">
                   {SIZE_PRESETS.map(v => (
-                    <button key={v} type="button" className="m-chip" aria-pressed={footprint.area === v && footprint.areaUnit === 'sq.ft'}
+                    <button key={v} type="button" className="calc-chip" aria-pressed={footprint.area === v}
                       onClick={() => setFootprint({ ...footprint, mode: 'area', areaUnit: 'sq.ft', area: v })}>
-                      {Number(v).toLocaleString('en-IN')} sq.ft
+                      {Number(v).toLocaleString('en-IN')}
                     </button>
                   ))}
                 </div>
-              </>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 84px', gap: 10 }}>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="calc-dims">
                 <Field label="Length">
                   <input type="text" inputMode="decimal" autoComplete="off" value={footprint.length} onChange={e => setFootprint({ ...footprint, length: e.target.value })} placeholder="40" aria-label="Building length" />
                 </Field>
                 <Field label="Width">
                   <input type="text" inputMode="decimal" autoComplete="off" value={footprint.width} onChange={e => setFootprint({ ...footprint, width: e.target.value })} placeholder="25" aria-label="Building width" />
                 </Field>
-                <Field label="Unit">
-                  <select value={footprint.lengthUnit} onChange={e => setFootprint({ ...footprint, lengthUnit: e.target.value as LengthUnit })} aria-label="Length unit">
-                    <option value="ft">ft</option>
-                    <option value="m">m</option>
-                  </select>
-                </Field>
               </div>
-            )}
-            {areaLine(footprintSqFt)}
-            {tried && errors.footprint && <Note tone="bad" role="alert">{errors.footprint}</Note>}
-          </div>
+              <Segmented
+                label="Length unit"
+                value={footprint.lengthUnit}
+                onChange={u => setFootprint({ ...footprint, lengthUnit: u })}
+                options={[{ value: 'ft', label: 'Feet' }, { value: 'm', label: 'Metres' }]}
+              />
+            </>
+          )}
+          {areaLine(footprintSqFt)}
+          {tried && errors.footprint && <Note tone="bad" role="alert">{errors.footprint}</Note>}
 
-          <div className="m-card m-card-pad" style={{ marginTop: 10 }}>
+          <div className="calc-fold">
             <button type="button" className="calc-toggle" aria-expanded={showPlot} onClick={() => setShowPlot(v => !v)}>
-              <span>I know my plot size <span className="is-muted">(optional)</span></span>
+              <span>Plot size <span className="is-muted">(optional)</span></span>
               <ChevronDown size={18} className={showPlot ? 'is-open' : ''} aria-hidden="true" />
             </button>
             {showPlot && (
-              <div style={{ marginTop: 12 }}>
-                <p className="m-calc-note" style={{ marginTop: 0 }}>The land. Used only to check the house fits on it; it does not change the estimate.</p>
-                <Segmented label="Plot size entered as" value={plot.mode === 'area' ? 'area' : 'dimensions'} onChange={mode => setPlot({ ...plot, mode })}
-                  options={[{ value: 'dimensions', label: 'Length × width' }, { value: 'area', label: 'Area' }]} />
-                <div style={{ height: 10 }} />
+              <div className="calc-fold-body">
+                <p className="calc-note">The land. Only used to check the building fits; it does not change the estimate.</p>
+                <Segmented label="Plot size entered as" value={plot.mode === 'area' ? 'area' : 'dimensions'} onChange={m => setPlot({ ...plot, mode: m })}
+                  options={[{ value: 'dimensions', label: 'Length × Width' }, { value: 'area', label: 'Area' }]} />
                 {plot.mode !== 'area' ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 84px', gap: 10 }}>
-                    <Field label="Length"><input type="text" inputMode="decimal" autoComplete="off" value={plot.length} onChange={e => setPlot({ ...plot, length: e.target.value })} placeholder="60" aria-label="Plot length" /></Field>
-                    <Field label="Width"><input type="text" inputMode="decimal" autoComplete="off" value={plot.width} onChange={e => setPlot({ ...plot, width: e.target.value })} placeholder="40" aria-label="Plot width" /></Field>
-                    <Field label="Unit">
-                      <select value={plot.lengthUnit} onChange={e => setPlot({ ...plot, lengthUnit: e.target.value as LengthUnit })} aria-label="Plot length unit">
-                        <option value="ft">ft</option><option value="m">m</option>
-                      </select>
-                    </Field>
-                  </div>
+                  <>
+                    <div className="calc-dims">
+                      <Field label="Length"><input type="text" inputMode="decimal" autoComplete="off" value={plot.length} onChange={e => setPlot({ ...plot, length: e.target.value })} placeholder="60" aria-label="Plot length" /></Field>
+                      <Field label="Width"><input type="text" inputMode="decimal" autoComplete="off" value={plot.width} onChange={e => setPlot({ ...plot, width: e.target.value })} placeholder="40" aria-label="Plot width" /></Field>
+                    </div>
+                    <Segmented label="Plot length unit" value={plot.lengthUnit} onChange={u => setPlot({ ...plot, lengthUnit: u })}
+                      options={[{ value: 'ft', label: 'Feet' }, { value: 'm', label: 'Metres' }]} />
+                  </>
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 112px', gap: 10 }}>
+                  <div className="calc-dims">
                     <Field label="Area"><input type="text" inputMode="decimal" autoComplete="off" value={plot.area} onChange={e => setPlot({ ...plot, area: e.target.value })} placeholder="2400" aria-label="Plot area" /></Field>
                     <Field label="Unit">
                       <select value={plot.areaUnit} onChange={e => setPlot({ ...plot, areaUnit: e.target.value as AreaUnit })} aria-label="Plot area unit">
-                        {AREA_UNITS.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                        <option value="sq.ft">sq.ft</option><option value="sq.m">sq.m</option><option value="cent">cent</option><option value="ground">ground</option>
                       </select>
                     </Field>
                   </div>
@@ -511,221 +549,220 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
 
-      {/* ---------------------------------------------------------------- 2. Floors */}
+      {/* ------------------------------------------------------------ 2. Floors */}
       {step === 1 && (
-        <>
-          <h2 className="m-step-title calc-question"><Layers size={22} aria-hidden="true" /> How many floors do you need?</h2>
-          <p className="calc-help">Every floor is taken to be the same size as the first.</p>
-          <div className="calc-floor-grid" role="group" aria-label="Number of floors">
-            {Array.from({ length: MAX_FLOORS }, (_, i) => i + 1).map(n => (
-              <button key={n} type="button" className={`calc-floor ${floors === n ? 'is-picked' : ''}`} aria-pressed={floors === n} onClick={() => setFloors(n)}>
-                <span className="calc-floor-num">{n}</span>
-                <span className="calc-floor-label">{floorsLabel(n)}</span>
+        <div className="calc-q">
+          <h2 className="calc-q-title">{t('calc_q_floors')}</h2>
+          <div className="calc-floors" role="group" aria-label="Number of floors">
+            {floorOptions.map(f => (
+              <button key={f.value} type="button" className={`calc-floor-btn ${floors === f.value ? 'is-picked' : ''}`} aria-pressed={floors === f.value} onClick={() => setFloors(f.value)}>
+                <span className="calc-floor-code">{f.label}</span>
+                <span className="calc-floor-sub">{f.value} floor{f.value > 1 ? 's' : ''}</span>
               </button>
             ))}
           </div>
           {result && (
-            <div className="m-card m-card-pad" style={{ marginTop: 12 }}>
-              <div className="m-calc">
-                <CalcLine label="One floor" value={`${formatQty(result.areas.footprintSqFt)} sq.ft`} />
-                <CalcLine label="Floors" value={`× ${result.areas.floors}`} />
-                <CalcLine total label="Total built-up area" value={`${formatQty(result.areas.builtUpSqFt)} sq.ft`} />
-              </div>
-            </div>
+            <p className="calc-area-line">
+              {formatQty(result.areas.footprintSqFt)} sq.ft × {result.areas.floors} = <strong>{formatQty(result.areas.builtUpSqFt)} sq.ft</strong> built-up
+            </p>
           )}
           {tried && errors.floors && <Note tone="bad" role="alert">{errors.floors}</Note>}
-        </>
+        </div>
       )}
 
-      {/* ---------------------------------------------------------------- 3. House type */}
+      {/* ------------------------------------------------------------ 3. Building type */}
       {step === 2 && (
-        <>
-          <h2 className="m-step-title calc-question"><House size={22} aria-hidden="true" /> What type of house do you prefer?</h2>
-          <div className="calc-choices">
-            {HOUSE_TYPES.map((h, i) => choice(h.value, structureType === h.value, () => setStructureType(h.value), i === 0 ? <Building2 size={26} /> : <House size={26} />, h.label, h.detail))}
+        <div className="calc-q">
+          <h2 className="calc-q-title">{t('calc_q_type')}</h2>
+          <div className="calc-opts">
+            {BUILDING_TYPES.map(b => option(b.value, buildingType === b.value, () => setBuildingType(b.value), BUILDING_ICON[b.value] ?? <House size={22} />, b.label, b.detail))}
           </div>
-          {structureType === 'Load Bearing' && floors > 2 && (
-            <div style={{ marginTop: 10 }}>
-              <Note tone="warn">For {floors} floors, a pillar & beam house with professional structural design is the usual choice. Check with an engineer before planning a pillar-free house this tall.</Note>
-            </div>
-          )}
-          {structureType !== 'Framed Structure (RCC)' && structureType !== 'Load Bearing' && (
-            <div style={{ marginTop: 10 }}>
-              <Note tone="warn">This estimate was saved as a {houseTypeLabel(structureType).toLowerCase()}. Pick one of the two house types above to work it out again.</Note>
-            </div>
-          )}
-          <p className="m-calc-note">Either way, the house must be designed and checked by a qualified engineer. This calculator does not do that.</p>
-        </>
+        </div>
       )}
 
-      {/* ---------------------------------------------------------------- 4. Materials */}
+      {/* ------------------------------------------------------------ 4. Quality */}
       {step === 3 && (
-        <>
-          <h2 className="m-step-title calc-question"><Mountain size={22} aria-hidden="true" /> Which materials will you use?</h2>
-          <div className="calc-choices">
-            {choice('msand', !includeRiverSand, () => setIncludeRiverSand(false), <Mountain size={26} />, 'Full M-Sand (Crusher Sand)', 'M-sand for concrete, brickwork and plastering.')}
-            {choice('river', includeRiverSand, () => setIncludeRiverSand(true), <PaintRoller size={26} />, 'River Sand for Plastering Only', 'M-sand for concrete and brickwork; river sand only for plastering.')}
+        <div className="calc-q">
+          <h2 className="calc-q-title">{t('calc_q_quality')}</h2>
+          <div className="calc-opts">
+            {QUALITY_CHOICES.map((q, i) => option(q.value, quality === q.value, () => changeLevel(q.value), <span className="calc-opt-stars">{'★'.repeat(i + 1)}</span>, q.label, q.detail))}
           </div>
-        </>
+        </div>
       )}
 
-      {/* ---------------------------------------------------------------- 5. Estimate */}
+      {/* ------------------------------------------------------------ Result: not possible */}
       {step === RESULT && !result && (
         <div className="m-card">
           <Empty icon={<Building2 size={26} />} title="The estimate can not be shown yet">
             {errors.prices || errors.rates || errors.finishing || errors.footprint || errors.plot || errors.floors}
           </Empty>
           <div className="m-btn-row" style={{ padding: '0 16px 16px' }}>
-            <button type="button" className="m-btn is-primary" onClick={() => goTo(0)}>Go to the size</button>
+            <button type="button" className="m-btn is-primary" onClick={() => (errors.footprint || errors.plot || errors.floors ? goTo(0) : setShowRates(true))}>
+              {errors.footprint || errors.plot || errors.floors ? 'Go to the size' : t('calc_edit_rates')}
+            </button>
           </div>
         </div>
       )}
 
+      {/* ------------------------------------------------------------ Result */}
       {step === RESULT && result && (
         <>
-          <div className="m-estimate-hero calc-hero">
-            <Badge tone="warn">Approximate</Badge>
-            <div className="m-estimate-total" id="calc-total">{formatINR(result.total)}</div>
-            <div className="m-row-sub">
-              about {formatINR(result.costPerSqFt)} per sq.ft · {formatQty(result.areas.builtUpSqFt)} sq.ft built-up · {floorsLabel(result.areas.floors)}
+          <div className="calc-hero">
+            <div className="calc-hero-label">{t('calc_total')}</div>
+            <div className="calc-hero-total" id="calc-total">{formatINR(result.total)}</div>
+            <div className="calc-hero-sub">
+              {formatINR(result.costPerSqFt)}/sq.ft · {formatQty(result.areas.builtUpSqFt)} sq.ft · {floorsCode(result.areas.floors)}
             </div>
-            <div className="calc-hero-note" role="note">Approximate estimate only. Actual cost may vary.</div>
           </div>
 
-          <div className="calc-summary">
-            <span><House size={15} aria-hidden="true" /> {houseTypeLabel(structureType)}</span>
-            <span><Mountain size={15} aria-hidden="true" /> {includeRiverSand ? 'River sand for plastering only' : 'Full M-Sand'}</span>
+          <div className="calc-approx" role="note">{t('calc_approx_note')}</div>
+
+          <div className="calc-tags">
+            <span>{buildingLabel(buildingType)}</span>
+            <span>{qualityLabel(quality)}</span>
+            <span>{includeRiverSand ? 'River sand + M-sand' : 'M-sand'}</span>
           </div>
 
           {result.warnings.length > 0 && (
-            <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+            <div className="calc-warnings">
               {result.warnings.map(w => <Note key={w} tone="warn">{w}</Note>)}
             </div>
           )}
 
-          <Section title="Estimated quantities">
-            <div className="m-card m-list">
+          <Section title={t('calc_breakdown')}>
+            <div className="m-card calc-lines">
               {result.lines.map(l => {
-                const show = MATERIAL_SHOW[l.material] || { name: l.material, icon: <Package size={20} /> };
-                const unit = l.unit === 'Kg' ? 'kg' : l.unit === 'CFT' ? 'cft' : l.unit === 'Bags' ? 'bags' : l.unit.toLowerCase();
+                const show = MATERIAL_SHOW[l.material] || { name: l.material, icon: <Package size={18} /> };
                 return (
-                  <div key={l.material} className="m-row" style={{ alignItems: 'center' }}>
-                    <span className="m-row-icon">{show.icon}</span>
-                    <span className="m-row-main">
-                      <span className="m-row-title" style={{ display: 'block' }}>{show.name}</span>
-                      <span className="m-row-sub" style={{ whiteSpace: 'normal' }}>
-                        {formatINR(l.rate)} per {l.unit === 'Bags' ? 'bag' : l.unit === 'Pieces' ? 'piece' : l.unit.toLowerCase()}{l.rateChanged ? ' · your rate' : ''}
-                      </span>
+                  <div key={l.material} className="calc-line">
+                    <span className="calc-line-icon" aria-hidden="true">{show.icon}</span>
+                    <span className="calc-line-main">
+                      <span className="calc-line-name">{show.name}</span>
+                      <span className="calc-line-qty">{formatQty(l.quantity)} {unitWord(l.unit)}{l.rateChanged ? ' · your rate' : ''}</span>
                     </span>
-                    <span className="m-row-end">
-                      <span className="m-qty" style={{ display: 'block' }}>{formatQty(l.quantity)}<small>{unit}</small></span>
-                      <span className="m-row-sub">{formatINR(l.estimatedCost)}</span>
-                    </span>
+                    <span className="calc-line-cost">{formatINR(l.estimatedCost)}</span>
                   </div>
                 );
               })}
-            </div>
-            <p className="m-calc-note">
-              Steel is about {formatQty((result.lines.find(l => l.material === 'Steel')?.quantity || 0) / 1000)} tonnes. Sand and jelly are in cubic feet (100 cft is one unit).
-            </p>
-          </Section>
-
-          <Section title="Cost">
-            <div className="m-card m-card-pad">
-              <div className="m-calc">
-                <CalcLine label="Materials" value={formatINR(result.materialCost)} />
-                <CalcLine label={<><Users size={14} aria-hidden="true" /> Labour ({formatQty(result.areas.builtUpSqFt)} sq.ft × {formatINR(input.prices.labourPerSqFt)})</>} value={formatINR(result.labourCost)} />
-                {result.finishingCost > 0 && (
-                  <CalcLine label={`Finishes allowance (${formatQty(result.areas.builtUpSqFt)} sq.ft × ${formatINR(input.finishingPerSqFt)})`} value={formatINR(result.finishingCost)} />
-                )}
-                <CalcLine total label="Total (approximate)" value={formatINR(result.total)} />
+              <div className="calc-line is-sum">
+                <span className="calc-line-main"><span className="calc-line-name">{t('calc_materials')}</span></span>
+                <span className="calc-line-cost">{formatINR(result.materialCost)}</span>
+              </div>
+              <div className="calc-line">
+                <span className="calc-line-icon" aria-hidden="true"><Users size={18} /></span>
+                <span className="calc-line-main">
+                  <span className="calc-line-name">{t('calc_labour')}</span>
+                  <span className="calc-line-qty">{formatQty(result.areas.builtUpSqFt)} sq.ft × {formatINR(input.prices.labourPerSqFt)}</span>
+                </span>
+                <span className="calc-line-cost">{formatINR(result.labourCost)}</span>
+              </div>
+              {result.finishingCost > 0 && (
+                <div className="calc-line">
+                  <span className="calc-line-icon" aria-hidden="true"><PaintRoller size={18} /></span>
+                  <span className="calc-line-main">
+                    <span className="calc-line-name">Finishes allowance</span>
+                    <span className="calc-line-qty">{formatQty(result.areas.builtUpSqFt)} sq.ft × {formatINR(input.finishingPerSqFt)}</span>
+                  </span>
+                  <span className="calc-line-cost">{formatINR(result.finishingCost)}</span>
+                </div>
+              )}
+              <div className="calc-line is-total">
+                <span className="calc-line-main"><span className="calc-line-name">Total</span></span>
+                <span className="calc-line-cost">{formatINR(result.total)}</span>
               </div>
             </div>
           </Section>
 
-          <Section title="Not included">
-            <div className="m-card m-card-pad" id="calc-not-included">
-              <ul className="calc-excluded">
-                {result.notIncluded.map(n => <li key={n}>{n}</li>)}
-              </ul>
-              <p className="m-calc-note">{result.disclaimer}</p>
-            </div>
-          </Section>
-
-          <div className="m-btn-row no-print" style={{ marginTop: 14 }}>
-            <button type="button" className="m-btn is-primary" onClick={openSave} disabled={unreadPrices.length > 0}><Save size={18} /> Save</button>
-            <button type="button" className="m-btn" onClick={downloadPdf} disabled={unreadPrices.length > 0}><Download size={18} /> Download PDF</button>
-            <button type="button" className="m-btn" onClick={() => window.print()}><Printer size={18} /> Print</button>
+          <div className="calc-excluded-note" id="calc-not-included">
+            <strong>{t('calc_excluded_title')}:</strong>{' '}
+            {result.finishingCost > 0 ? t('calc_excluded_list_finish') : t('calc_excluded_list')}
           </div>
 
-          {/* Everything a first-time user does not need, folded away: prices, level, rates. */}
-          <div className="m-card m-card-pad no-print" style={{ marginTop: 14 }}>
-            <button type="button" className="calc-toggle" aria-expanded={showAdjust} onClick={() => setShowAdjust(v => !v)} id="calc-adjust">
-              <span><SlidersHorizontal size={16} aria-hidden="true" /> Change prices and details</span>
-              <ChevronDown size={18} className={showAdjust ? 'is-open' : ''} aria-hidden="true" />
+          <div className="calc-actions no-print">
+            <button type="button" className="m-btn is-primary" onClick={openSave} disabled={unreadPrices.length > 0}><Save size={18} /> Save</button>
+            <button type="button" className="m-btn" onClick={downloadPdf} disabled={unreadPrices.length > 0} aria-label="Download PDF"><Download size={18} /> PDF</button>
+            <button type="button" className="m-btn" onClick={() => window.print()} aria-label="Print"><Printer size={18} /></button>
+          </div>
+
+          {/* Edit rates: everything a first-time user does not need. */}
+          <div className="calc-fold no-print">
+            <button type="button" className="calc-toggle" aria-expanded={showRates} onClick={() => setShowRates(v => !v)} id="calc-adjust">
+              <span><SlidersHorizontal size={18} aria-hidden="true" /> {t('calc_edit_rates')}</span>
+              <ChevronDown size={18} className={showRates ? 'is-open' : ''} aria-hidden="true" />
             </button>
-            {showAdjust && (
-              <div style={{ marginTop: 12 }}>
-                <p className="m-calc-note" style={{ marginTop: 0 }}>The prices start as examples, not today's market prices. Put in your dealer's and contractor's rates; the estimate updates as you type.</p>
-                <div className="m-field-2">
+            {showRates && (
+              <div className="calc-fold-body">
+                <Field label="Sand">
+                  <Segmented label="Sand" value={includeRiverSand ? 'river' : 'msand'} onChange={v => setIncludeRiverSand(v === 'river')}
+                    options={[{ value: 'msand', label: 'M-Sand only' }, { value: 'river', label: 'River sand' }]} />
+                </Field>
+                <p className="calc-note">River sand: used for plastering only (30% of the sand); M-sand for the rest.</p>
+
+                <Field label="Structure">
+                  <Segmented label="Structure" value={structureType === 'Load Bearing' ? 'Load Bearing' : 'Framed Structure (RCC)'}
+                    onChange={v => setStructureType(v as StructureType)}
+                    options={HOUSE_TYPES.map(h => ({ value: h.value as string, label: h.value === 'Load Bearing' ? 'Pillar-free' : 'Pillar & beam' }))} />
+                </Field>
+
+                <div className="calc-sub-title">Prices (₹)</div>
+                <p className="calc-note">They start as examples, not today's market prices. Put in your dealer's and contractor's rates.</p>
+                <div className="calc-fields">
                   {PRICE_FIELDS.filter(p => p.field !== 'sandPerCft' || result.rates.sandCftPerSqFt > 0).map(p => (
-                    <Field key={p.field} label={`${p.label} (₹ per ${p.per})`}>
+                    <Field key={p.field} label={`${p.label} / ${p.per}`}>
                       <input type="text" inputMode="decimal" autoComplete="off" value={prices[p.field]}
                         onChange={e => setPrices(prev => ({ ...prev, [p.field]: e.target.value }))} aria-label={`${p.label} price per ${p.per}`} />
                     </Field>
                   ))}
                 </div>
                 {unreadPrices.length > 0 && (
-                  <div style={{ marginBottom: 10 }}>
-                    <Note tone="bad" role="alert">Enter a price for {unreadPrices.join(', ').toLowerCase()}. Until then it is counted as ₹0 and the estimate can not be saved.</Note>
-                  </div>
+                  <Note tone="bad" role="alert">Enter a price for {unreadPrices.join(', ').toLowerCase()}. Until then it is counted as ₹0 and the estimate can not be saved.</Note>
                 )}
-                <button type="button" className="m-btn is-small" onClick={() => setQuotesOpen(true)} style={{ marginBottom: 12 }}><Tag size={16} /> Use a supplier quote</button>
+                <button type="button" className="m-btn is-block" onClick={() => setQuotesOpen(true)}><Tag size={18} /> Use a supplier quote</button>
 
-                <Segmented label="Finish level" value={level.value} onChange={changeLevel} options={LEVELS.map(l => ({ value: l.value, label: l.label }))} />
-                <p className="m-calc-note">{level.hint}</p>
-
-                <Field label="Finishes allowance (₹ per sq.ft, optional)" hint="One rate for tiles, paint, doors, windows, electrical work and plumbing. Leave empty to keep them out of the estimate.">
+                <Field label="Finishes allowance (₹ per sq.ft)" hint="Tiles, paint, doors, windows, electrical and plumbing as one rate. Leave empty to keep them out.">
                   <input type="text" inputMode="decimal" autoComplete="off" value={finishing} onChange={e => setFinishing(e.target.value)} placeholder="Not included" aria-label="Finishes allowance per square foot" />
                 </Field>
                 {errors.finishing && <Note tone="bad" role="alert">{errors.finishing}</Note>}
 
-                <div className="m-step-card-title" style={{ marginTop: 14 }}>Material per sq.ft</div>
-                <p className="m-calc-note" style={{ marginTop: 0 }}>How much of each material one sq.ft of built-up area needs. The usual range is under each.</p>
-                <div className="m-field-2">
+                <div className="calc-sub-title">Material per sq.ft</div>
+                <div className="calc-fields">
                   {RATE_FIELDS.filter(r => r.field !== 'sandCftPerSqFt' || includeRiverSand || rateText.sandCftPerSqFt !== undefined).map(r => (
-                    <Field key={r.field} label={`${r.label} (${r.unit})`} hint={`Usual: ${r.range}`}>
+                    <Field key={r.field} label={`${r.label} (${r.unit})`} hint={`Usual ${r.range}`}>
                       <input type="text" inputMode="decimal" autoComplete="off" value={rateText[r.field] ?? String(published[r.field])}
                         onChange={e => setRateText(prev => ({ ...prev, [r.field]: e.target.value }))} aria-label={`${r.label} per square foot`} />
                     </Field>
                   ))}
                 </div>
                 {unreadRates.length > 0 && (
-                  <div style={{ marginBottom: 10 }}>
-                    <Note tone="bad" role="alert">Enter a rate for {unreadRates.join(', ').toLowerCase()}. Until then the published rate is used.</Note>
-                  </div>
+                  <Note tone="bad" role="alert">Enter a rate for {unreadRates.join(', ').toLowerCase()}. Until then the published rate is used.</Note>
                 )}
+                {(errors.prices || errors.rates) && <Note tone="bad" role="alert">{errors.prices || errors.rates}</Note>}
                 {Object.keys(rateText).length > 0 && (
-                  <button type="button" className="m-btn is-small" onClick={() => setRateText({})}>Back to the published rates</button>
+                  <button type="button" className="m-btn is-block" onClick={() => setRateText({})}><RotateCcw size={18} /> Back to the published rates</button>
                 )}
               </div>
             )}
           </div>
 
-          <div className="m-card m-card-pad" style={{ marginTop: 10 }}>
+          <div className="calc-fold">
             <button type="button" className="calc-toggle" aria-expanded={showHow} onClick={() => setShowHow(v => !v)}>
               <span>How this is worked out</span>
               <ChevronDown size={18} className={showHow ? 'is-open' : ''} aria-hidden="true" />
             </button>
             {showHow && (
-              <div style={{ marginTop: 10 }}>
-                <ul className="m-plain-list">
+              <div className="calc-fold-body">
+                <ul className="calc-plain-list">
                   {result.assumptions.map(a => <li key={a}>{a}</li>)}
                 </ul>
-                <p className="m-calc-note">
+                <div className="calc-sub-title">{t('calc_excluded_title')}</div>
+                <ul className="calc-plain-list">
+                  {result.notIncluded.map(n => <li key={n}>{n}</li>)}
+                </ul>
+                <p className="calc-note">{result.disclaimer}</p>
+                <p className="calc-note">
                   Rates are from:{' '}
                   {THUMB_RULE_SOURCES.map((s, i) => (
                     <React.Fragment key={s.url}>
@@ -733,46 +770,53 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
                       <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a>
                     </React.Fragment>
                   ))}
-                  . The sources do not agree exactly, which is why each rate is a range.
+                  .
                 </p>
               </div>
             )}
           </div>
+
+          <div className="calc-actions no-print">
+            <button type="button" className="m-btn" onClick={() => setMode('detail')} id="calc-detail"><Calculator size={18} /> {t('calc_view_details')}</button>
+            <button type="button" className="m-btn" onClick={startAgain}><RotateCcw size={18} /> {t('calc_start_again')}</button>
+          </div>
         </>
       )}
 
-      {/* ---------------------------------------------------------------- Step buttons */}
-      <div className="m-btn-row no-print calc-nav" style={{ marginTop: 16 }}>
-        {step > 0 && <button type="button" className="m-btn" onClick={() => goTo(step - 1)}><ArrowLeft size={18} /> Back</button>}
-        {step < RESULT && (
+      {/* ------------------------------------------------------------ Step buttons */}
+      {step < RESULT ? (
+        <div className="calc-nav no-print">
+          {step > 0 && <button type="button" className="m-btn" onClick={() => goTo(step - 1)}><ArrowLeft size={18} /> {t('calc_back')}</button>}
           <button type="button" className="m-btn is-primary" onClick={next} id="calc-next">
-            {step === RESULT - 1 ? 'Show estimate' : 'Next'} <ArrowRight size={18} />
+            {step === QUESTIONS - 1 ? t('calc_calculate') : t('calc_next')} <ArrowRight size={18} />
           </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="calc-nav no-print">
+          <button type="button" className="m-btn" onClick={() => goTo(QUESTIONS - 1)}><ArrowLeft size={18} /> {t('calc_back')}</button>
+        </div>
+      )}
 
-      {/* ---------------------------------------------------------------- Saved estimates */}
+      {/* ------------------------------------------------------------ Saved estimates */}
       {(step === 0 || step === RESULT) && (
         <div className="no-print">
-          <Section title={`Saved estimates (${saved.length})`}>
+          <Section title={`${t('calc_saved')} (${saved.length})`}>
             {saved.length === 0 ? (
-              <div className="m-card"><Empty icon={<Save size={24} />} title="None saved yet">Answer the four questions, then save the estimate to a project.</Empty></div>
+              <p className="calc-note">None saved yet. Answer the four questions, then save the estimate to a site.</p>
             ) : (
-              <div className="m-card m-list">
+              <div className="m-card calc-saved">
                 {saved.map(est => (
-                  <div key={est.id} className="m-row">
-                    <button type="button" className="m-row-main" style={{ textAlign: 'left' }} onClick={() => load(est)}>
-                      <span className="m-row-title" style={{ display: 'block' }}>{est.estimateName}</span>
-                      <span className="m-row-sub" style={{ whiteSpace: 'normal' }}>
-                        {formatQty(est.convertedBuiltUpSqFt)} sq.ft · {formatINR(est.totalEstimatedCost)} · {formatDay((est.createdAt || '').slice(0, 10))}
-                        {est.siteName ? ` · ${est.siteName}` : ''}
+                  <div key={est.id} className="calc-saved-row">
+                    <button type="button" className="calc-saved-main" onClick={() => load(est)}>
+                      <span className="calc-saved-name">{est.estimateName}</span>
+                      <span className="calc-saved-sub">
+                        {formatINR(est.totalEstimatedCost)} · {formatQty(est.convertedBuiltUpSqFt)} sq.ft{est.siteName ? ` · ${est.siteName}` : ''}
                       </span>
                     </button>
                     {est.siteId && onOpenSite && (
-                      <button type="button" className="m-icon-btn" onClick={() => onOpenSite(est.siteId!)} aria-label={`Open project ${est.siteName || ''}`}><ExternalLink size={18} /></button>
+                      <button type="button" className="m-icon-btn" onClick={() => onOpenSite(est.siteId!)} aria-label={`Open site ${est.siteName || ''}`}><ExternalLink size={18} /></button>
                     )}
                     <button type="button" className="m-icon-btn" onClick={() => setRemoving(est)} aria-label={`Delete ${est.estimateName}`}><Trash2 size={18} /></button>
-                    <ChevronRight size={18} className="is-muted" aria-hidden="true" />
                   </div>
                 ))}
               </div>
@@ -780,10 +824,8 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
           </Section>
         </div>
       )}
-      </>
-      )}
 
-      {/* ---------------------------------------------------------------- Save */}
+      {/* ------------------------------------------------------------ Save */}
       <Sheet
         open={saveOpen && !saveDuplicate}
         title="Save estimate"
@@ -800,9 +842,9 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
         <Field label="Name">
           <input type="text" value={saveName} onChange={e => setSaveName(e.target.value)} maxLength={80} />
         </Field>
-        <Field label="Project" hint="Saved to a project, the estimate can be compared with what is actually bought there.">
+        <Field label="Site" hint="Saved to a site, the estimate can be compared with what is actually bought there.">
           <select value={saveSiteId} onChange={e => setSaveSiteId(e.target.value)}>
-            <option value="">No project</option>
+            <option value="">No site</option>
             {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </Field>
@@ -837,7 +879,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
         onCancel={() => setRemoving(null)}
       />
 
-      {/* ---------------------------------------------------------------- Supplier quotes */}
+      {/* ------------------------------------------------------------ Supplier quotes */}
       <Sheet open={quotesOpen && !quoteModal} title="Supplier quotes" subtitle="Tap a quote to use its price" onClose={() => setQuotesOpen(false)}>
         <div style={{ display: 'grid', gap: 12 }}>
           {(['Cement', 'Steel', 'M-Sand', 'Sand', 'Aggregate', 'Bricks'] as EstimateMaterial[]).map(material => (
@@ -860,7 +902,7 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
         onSaved={() => onNotify('Supplier quote saved', 'success')}
       />
 
-      {/* ---------------------------------------------------------------- Voice */}
+      {/* ------------------------------------------------------------ Voice */}
       <Sheet
         open={!!voice}
         title="What was heard"
@@ -876,13 +918,13 @@ export const EstimatorView: React.FC<EstimatorViewProps> = ({ user, initialBuild
           <>
             <Note>“{voice.transcript}”</Note>
             {voice.confidenceNotes.length ? (
-              <ul className="m-plain-list" style={{ marginTop: 12 }}>
+              <ul className="calc-plain-list" style={{ marginTop: 12 }}>
                 {voice.confidenceNotes.filter(n => !/\b(M\d\d|Fe\s?\d{3})\b/i.test(n)).map(n => <li key={n}>{n}</li>)}
               </ul>
             ) : (
-              <p className="m-calc-note">Nothing usable was found. Try: “3 cent, ground plus one, standard quality”.</p>
+              <p className="calc-note">Nothing usable was found. Try: “3 cent, ground plus one, standard quality”.</p>
             )}
-            <p className="m-calc-note">A spoken size is taken as the plot. The size of the house is entered in step 1.</p>
+            <p className="calc-note">A spoken size is taken as the plot. The size of one floor is set in step 1.</p>
           </>
         )}
       </Sheet>

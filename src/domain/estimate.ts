@@ -42,6 +42,27 @@ export const HOUSE_TYPES: { value: StructureType; label: string; detail: string 
   },
 ];
 
+/** Floors as people say them: G, G+1, G+2 … */
+export const floorsCode = (floors: number) => (floors <= 1 ? 'G' : `G+${floors - 1}`);
+
+/** The floor choices the quick estimate offers (G to G+3). */
+export const FLOOR_CHOICES = [1, 2, 3, 4].map(value => ({ value, label: floorsCode(value) }));
+
+/** Construction quality, as the quick estimate asks it. */
+export const QUALITY_CHOICES: { value: ConstructionQuality; label: string; detail: string }[] = [
+  { value: 'Economy', label: 'Basic', detail: 'Low end of each published rate' },
+  { value: 'Standard', label: 'Standard', detail: 'Middle of each published rate' },
+  { value: 'Premium', label: 'Premium', detail: 'High end of each published rate' },
+];
+
+/** What every quick-estimate question starts at, so it can be tapped through. */
+export const QUICK_DEFAULTS = {
+  footprintSqFt: 1000,
+  floors: 1,
+  buildingType: 'Residential House',
+  quality: 'Standard' as ConstructionQuality,
+};
+
 export const houseTypeLabel = (s: StructureType) => HOUSE_TYPES.find(h => h.value === s)?.label
   ?? (s === 'Steel Frame' ? 'Steel frame building' : s === 'Composite' ? 'Steel and concrete building' : s);
 
@@ -58,6 +79,25 @@ export const ENGINEERING_DEFAULTS: { concreteGrade: ConcreteGrade; steelGrade: S
 
 /** Finishes and services the material quantities do not cover, one per line. */
 export const FINISHES_NOT_COUNTED = ['Tiles', 'Paint', 'Doors', 'Windows', 'Electrical work', 'Plumbing'];
+
+/** Never in the estimate, whatever the finishing allowance. */
+export const ALWAYS_EXCLUDED = [
+  'Interior furniture',
+  'Compound wall, water tank, sump and septic tank',
+  'Borewell',
+  'Earth filling, deep or special foundations',
+  'Government approvals, design fees, taxes and price changes',
+];
+
+/**
+ * The building types the quick estimate asks about. The rates are for houses, so the type does
+ * not change a quantity; a commercial building is flagged as a rough guide (NON_HOUSE below).
+ */
+export const BUILDING_TYPES: { value: string; label: string; detail: string }[] = [
+  { value: 'Residential House', label: 'Residential', detail: 'Independent house' },
+  { value: 'Duplex / Villa', label: 'Duplex / Villa', detail: 'Two-level home or villa' },
+  { value: 'Commercial Building', label: 'Commercial', detail: 'Shops or offices (rough guide)' },
+];
 
 /** One foot is exactly 0.3048 m. */
 export const FT_PER_M = 1 / 0.3048;
@@ -85,15 +125,21 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Area in sq.ft, or NaN when the size is incomplete. `plotSqFt` is needed for a percent size. */
 export function sizeSqFt(size: SizeInput, plotSqFt?: number | null): number {
+  // A product of two huge numbers overflows to Infinity: that is not a size either.
+  const finite = (n: number) => (Number.isFinite(n) ? n : NaN);
   if (size.mode === 'dimensions') {
     if (!positive(size.length) || !positive(size.width)) return NaN;
     const raw = size.length * size.width;
-    return round2(size.lengthUnit === 'm' ? raw * SQFT_PER_SQM : raw);
+    return finite(round2(size.lengthUnit === 'm' ? raw * SQFT_PER_SQM : raw));
   }
-  if (size.mode === 'area') return positive(size.area) ? round2(toSqFt(size.area, size.areaUnit)) : NaN;
+  if (size.mode === 'area') return positive(size.area) ? finite(round2(toSqFt(size.area, size.areaUnit))) : NaN;
   if (!positive(size.percent) || !positive(plotSqFt ?? NaN)) return NaN;
-  return round2(((plotSqFt as number) * size.percent) / 100);
+  return finite(round2(((plotSqFt as number) * size.percent) / 100));
 }
+
+/** True when every number the size needs is a positive, finite value (the result may still overflow). */
+const fieldsFilled = (size: SizeInput) =>
+  size.mode === 'dimensions' ? positive(size.length) && positive(size.width) : size.mode === 'area' ? positive(size.area) : positive(size.percent);
 
 /** True when nothing has been typed into the size yet. */
 export const isBlankSize = (size: SizeInput) =>
@@ -103,6 +149,14 @@ export const isBlankSize = (size: SizeInput) =>
 export const MAX_FLOORS = 5;
 /** Below this a "building" is almost certainly a typing or unit mistake. */
 export const MIN_FOOTPRINT_SQFT = 50;
+/** Above this (about 2.3 acres on one floor) the size is a typing or unit mistake, not a building. */
+export const MAX_FOOTPRINT_SQFT = 100000;
+/** Above this (about 230 acres) the plot size is a typing or unit mistake. */
+export const MAX_PLOT_SQFT = 10000000;
+/** Highest price accepted for one unit (bag, kg, cft, piece, sq.ft). Anything above is a typo. */
+export const MAX_UNIT_PRICE = 100000;
+/** Highest material rate accepted per sq.ft (the published rates are all under 10). */
+export const MAX_RATE_PER_SQFT = 100;
 /** Above this the house rates are a rough guide at best. */
 export const LARGE_BUILDING_SQFT = 10000;
 
@@ -133,6 +187,7 @@ export function planAreas(input: { plot: SizeInput | null; footprint: SizeInput;
   if (input.plot && !isBlankSize(input.plot)) {
     const p = sizeSqFt(input.plot);
     if (Number.isNaN(p)) errors.plot = 'Enter the full plot size, or clear it if you do not know it.';
+    else if (p > MAX_PLOT_SQFT) errors.plot = `That is ${fmt(p)} sq.ft. Check the numbers and the unit.`;
     else plotSqFt = p;
   }
 
@@ -144,11 +199,15 @@ export function planAreas(input: { plot: SizeInput | null; footprint: SizeInput;
     if (Number.isNaN(footprintSqFt)) {
       errors.footprint = input.footprint.mode === 'percent'
         ? 'Choose how much of the plot the building covers.'
-        : 'Enter the size of the building on one floor.';
+        : fieldsFilled(input.footprint)
+          ? 'That size is too large to be a building. Check the numbers and the unit.'
+          : 'Enter the size of the building on one floor.';
     } else if (input.footprint.mode === 'percent' && input.footprint.percent > 100) {
       errors.footprint = 'The building can not cover more than 100% of the plot.';
     } else if (footprintSqFt < MIN_FOOTPRINT_SQFT) {
       errors.footprint = `That is only ${footprintSqFt} sq.ft. Check the numbers and the unit.`;
+    } else if (footprintSqFt > MAX_FOOTPRINT_SQFT) {
+      errors.footprint = `That is ${fmt(footprintSqFt)} sq.ft on one floor. Check the numbers and the unit.`;
     } else if (plotSqFt !== null && footprintSqFt > plotSqFt + 0.5) {
       errors.footprint = `The building (${footprintSqFt} sq.ft) is larger than the plot (${plotSqFt} sq.ft).`;
     }
@@ -280,6 +339,7 @@ const LEVEL_WORD: Record<ConstructionQuality, string> = {
 };
 
 const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+const formatRupees = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 
 /** Buildings the house rates were not written for. */
 const NON_HOUSE = /commercial|industrial|shed|warehouse|shop/i;
@@ -293,14 +353,23 @@ export function buildEstimate(input: EstimateInput): { ok: true; value: Estimate
   const errors: EstimateErrors = { ...areaCheck.errors };
 
   const badPrice = PRICE_FIELDS.find(p => !Number.isFinite(input.prices[p.field]) || input.prices[p.field] < 0);
+  const hugePrice = PRICE_FIELDS.find(p => input.prices[p.field] > MAX_UNIT_PRICE);
   if (badPrice) errors.prices = `Enter a price for ${badPrice.label.toLowerCase()} (0 if it should not be counted).`;
+  else if (hugePrice) errors.prices = `The ${hugePrice.label.toLowerCase()} price is more than ${formatRupees(MAX_UNIT_PRICE)} per ${hugePrice.per}. Check it.`;
 
   const overrides = Object.entries(input.rateOverrides) as [RateField, number][];
-  const badRate = overrides.find(([, v]) => !Number.isFinite(v) || v < 0);
-  if (badRate) errors.rates = `Enter a rate for ${RATE_FIELDS.find(r => r.field === badRate[0])?.label.toLowerCase() || 'the material'} (0 if none is used).`;
+  const badRate = overrides.find(([, v]) => !Number.isFinite(v) || v < 0 || v > MAX_RATE_PER_SQFT);
+  if (badRate) {
+    const label = RATE_FIELDS.find(r => r.field === badRate[0])?.label.toLowerCase() || 'the material';
+    errors.rates = badRate[1] > MAX_RATE_PER_SQFT
+      ? `The rate for ${label} is more than ${MAX_RATE_PER_SQFT} per sq.ft. Check it.`
+      : `Enter a rate for ${label} (0 if none is used).`;
+  }
 
   if (!Number.isFinite(input.finishingPerSqFt) || input.finishingPerSqFt < 0) {
     errors.finishing = 'Enter the finishing allowance per sq.ft, or leave it empty to leave finishes out.';
+  } else if (input.finishingPerSqFt > MAX_UNIT_PRICE) {
+    errors.finishing = `The finishing allowance is more than ${formatRupees(MAX_UNIT_PRICE)} per sq.ft. Check it.`;
   }
 
   if (!areaCheck.plan || Object.values(errors).some(Boolean)) return { ok: false, errors };
@@ -382,12 +451,7 @@ export function buildEstimate(input: EstimateInput): { ok: true; value: Estimate
     `Labour = built-up area × ₹${fmt(input.prices.labourPerSqFt)} per sq.ft.`,
   ];
 
-  const notIncluded = [
-    ...(finishingCost > 0 ? [] : FINISHES_NOT_COUNTED),
-    'Compound wall, water tank, sump and septic tank',
-    'Earth filling, deep or special foundations',
-    'Approvals, design fees, taxes and price changes',
-  ];
+  const notIncluded = [...(finishingCost > 0 ? [] : FINISHES_NOT_COUNTED), ...ALWAYS_EXCLUDED];
 
   return {
     ok: true,

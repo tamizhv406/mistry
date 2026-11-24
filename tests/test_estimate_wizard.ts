@@ -194,6 +194,128 @@ async function run() {
   check('Another user can not delete it', !(await svc.removeBuildingEstimate(owner, mine.id)).ok && (await db.estimates.get(mine.id))?.isDeleted === false);
   check('Its owner can: it goes to the Recycle Bin', (await svc.removeBuildingEstimate(stranger, mine.id)).ok && (await db.estimates.get(mine.id))?.isDeleted === true && (await svc.estimatesFor(stranger)).length === 0);
 
+  console.log('\n--- 10. Quick estimate: house sizes and floors ---');
+  const quick = (sqft: number, floors: number, extra: Record<string, unknown> = {}) =>
+    value({ ...base, plot: null, footprint: area(sqft), floors, ...extra });
+  const small = quick(600, 1);
+  const medium = quick(1200, 1);
+  check('600 sq.ft, G: built-up 600 sq.ft', small.areas.builtUpSqFt === 600);
+  check('600 sq.ft, G: 270 bags, 2,400 kg steel, 4,800 bricks', qty(small, 'Cement') === 270 && qty(small, 'Steel') === 2400 && qty(small, 'Bricks') === 4800);
+  check('1,200 sq.ft, G: exactly twice the 600 sq.ft quantities', ['Cement', 'Steel', 'M-Sand', 'Aggregate', 'Bricks'].every(m => qty(medium, m) === 2 * (qty(small, m) || 0)));
+  const g1 = quick(1200, 2);
+  const g2 = quick(1200, 3);
+  check('1,200 sq.ft, G+1: 2,400 sq.ft built-up, 1,080 bags', g1.areas.builtUpSqFt === 2400 && qty(g1, 'Cement') === 1080);
+  check('1,200 sq.ft, G+2: 3,600 sq.ft built-up, 1,620 bags, 14,400 kg steel', g2.areas.builtUpSqFt === 3600 && qty(g2, 'Cement') === 1620 && qty(g2, 'Steel') === 14400);
+  check('Cost grows with floors: G < G+1 < G+2', medium.total < g1.total && g1.total < g2.total);
+  const withPlot = value({ ...base, plot: dims(30, 40), footprint: dims(30, 30), floors: 2 });
+  check('Plot 30×40, building 30×30 on G+1: 1,800 sq.ft built-up, plot not used for quantities',
+    withPlot.areas.plotSqFt === 1200 && withPlot.areas.builtUpSqFt === 1800 && qty(withPlot, 'Cement') === 810);
+
+  console.log('\n--- 11. Realistic Indian ranges per sq.ft ---');
+  for (const level of ['Economy', 'Standard', 'Premium'] as const) {
+    const o = quick(1000, 1, { quality: level });
+    const per = (m: string) => (qty(o, m) || 0) / 1000;
+    check(`${level}: cement 0.4–0.5 bags, steel 3.5–4.5 kg, bricks 5–10, sand 0.8–1 cft per sq.ft`,
+      per('Cement') >= 0.4 && per('Cement') <= 0.5 && per('Steel') >= 3.5 && per('Steel') <= 4.5 &&
+      per('Bricks') >= 5 && per('Bricks') <= 10 && per('M-Sand') >= 0.8 && per('M-Sand') <= 1,
+      { cement: per('Cement'), steel: per('Steel'), bricks: per('Bricks'), sand: per('M-Sand') });
+    check(`${level}: cost per sq.ft between ₹800 and ₹3,500 with example prices`, o.costPerSqFt >= 800 && o.costPerSqFt <= 3500, o.costPerSqFt);
+  }
+
+  console.log('\n--- 12. Edge cases are refused, never shown as a broken number ---');
+  check('0 sq.ft is refused', !!errorsOf({ ...base, plot: null, footprint: area(0) }).footprint);
+  check('A blank size is refused', !!errorsOf({ ...base, plot: null, footprint: emptySize('area') }).footprint);
+  check('A negative size is refused', !!errorsOf({ ...base, plot: null, footprint: area(-1200) }).footprint);
+  check('Infinity is refused', !!errorsOf({ ...base, plot: null, footprint: area(Infinity) }).footprint);
+  check('Length × width that overflows is refused (bug: gave Infinity bags)',
+    /Check the numbers/.test(errorsOf({ ...base, plot: null, footprint: dims(1e200, 1e200) }).footprint || ''));
+  check('A building of 10 lakh sq.ft on one floor is refused (bug: was only a warning)',
+    /Check the numbers/.test(errorsOf({ ...base, plot: null, footprint: area(1000000) }).footprint || ''));
+  check('1,00,000 sq.ft on one floor is still accepted', !errorsOf({ ...base, plot: null, footprint: area(100000) }).footprint);
+  check('A plot of a billion sq.ft is refused', !!errorsOf({ ...base, plot: area(1e9), footprint: area(1000) }).plot);
+  check('A price of ₹10 crore per bag is refused (bug: total became Infinity)', /Check it/.test(errorsOf({ ...base, prices: { ...EXAMPLE_PRICES, cementPerBag: 1e8 } }).prices || ''));
+  check('A huge material rate is refused', /Check it/.test(errorsOf({ ...base, rateOverrides: { cementBagsPerSqFt: 1e6 } }).rates || ''));
+  check('A huge finishing allowance is refused', /Check it/.test(errorsOf({ ...base, finishingPerSqFt: 1e9 }).finishing || ''));
+  check('Every accepted result is a finite number', [small, medium, g1, g2, std, high, low].every(o =>
+    [o.total, o.materialCost, o.labourCost, o.costPerSqFt, ...o.lines.map(l => l.quantity), ...o.lines.map(l => l.estimatedCost)].every(Number.isFinite)));
+
+  console.log('\n--- 13. Feet and metres ---');
+  check('30 ft × 40 ft = 1,200 sq.ft', sizeSqFt(dims(30, 40)) === 1200);
+  check('9.144 m × 12.192 m (30 ft × 40 ft) ≈ 1,200 sq.ft', near(sizeSqFt(dims(9.144, 12.192, 'm')), 1200, 0.1), sizeSqFt(dims(9.144, 12.192, 'm')));
+  check('111.48 sq.m ≈ 1,200 sq.ft', near(sizeSqFt(area(111.48, 'sq.m')), 1200, 0.1), sizeSqFt(area(111.48, 'sq.m')));
+  check('Same building in feet and metres gives the same cement', (() => {
+    const ft = value({ ...base, plot: null, footprint: dims(30, 40) });
+    const m = value({ ...base, plot: null, footprint: dims(9.144, 12.192, 'm') });
+    return qty(ft, 'Cement') === qty(m, 'Cement');
+  })());
+
+  console.log('\n--- 14. River sand vs M-sand ---');
+  const ms = quick(1000, 1);
+  const rs = quick(1000, 1, { includeRiverSand: true });
+  check('M-sand only: no river sand line', qty(ms, 'Sand') === undefined && qty(ms, 'M-Sand') === 900);
+  check('River sand: 270 cft river + 630 cft M-sand = the same 900 cft', qty(rs, 'Sand') === 270 && qty(rs, 'M-Sand') === 630);
+  check('River sand costs more: + 270 × (₹135 − ₹45)', rs.materialCost - ms.materialCost === 270 * (135 - 45), rs.materialCost - ms.materialCost);
+  check('…and the total follows', rs.total - ms.total === 270 * 90);
+  check('Other materials do not change', ['Cement', 'Steel', 'Aggregate', 'Bricks'].every(m => qty(rs, m) === qty(ms, m)));
+  check('The river sand price only counts when river sand is used', (() => {
+    const o = quick(1000, 1, { prices: { ...EXAMPLE_PRICES, sandPerCft: 999 } });
+    return o.total === ms.total;
+  })());
+
+  console.log('\n--- 15. Totals, rounding and rupee format ---');
+  const money = await import('../src/utils/money');
+  for (const o of [small, medium, g1, g2, rs]) {
+    if (o.total !== o.materialCost + o.labourCost + o.finishingCost) throw new Error('Total is not materials + labour + finishes');
+    if (o.materialCost !== o.lines.reduce((s, l) => s + l.estimatedCost, 0)) throw new Error('Materials is not the sum of the lines');
+    if (!o.lines.every(l => Number.isInteger(l.quantity) && Number.isInteger(l.estimatedCost))) throw new Error('Quantities and line costs must be whole numbers');
+  }
+  check('Total = materials + labour (+ finishes), every scenario', true);
+  check('Materials = sum of the lines, whole rupees and whole units', true);
+  check('₹12,34,567 (Indian grouping)', money.formatINR(1234567) === '₹12,34,567', money.formatINR(1234567));
+  check('₹1,00,00,000 for one crore', money.formatINR(10000000) === '₹1,00,00,000', money.formatINR(10000000));
+  check('Paise shown only when there are paise', money.formatINR(10.5) === '₹10.50' && money.formatINR(420) === '₹420');
+
+  console.log('\n--- 16. Quick estimate choices ---');
+  check('Floors offered: G, G+1, G+2, G+3', est.FLOOR_CHOICES.map(f => f.label).join() === 'G,G+1,G+2,G+3');
+  check('Floor codes: 1 → G, 3 → G+2', est.floorsCode(1) === 'G' && est.floorsCode(3) === 'G+2');
+  check('House types: Residential, Duplex / Villa, Commercial', est.BUILDING_TYPES.map(b => b.label).join() === 'Residential,Duplex / Villa,Commercial');
+  check('Quality: Basic, Standard, Premium', est.QUALITY_CHOICES.map(q => q.label).join() === 'Basic,Standard,Premium');
+  check('Defaults: 1,000 sq.ft, G, Residential, Standard', est.QUICK_DEFAULTS.footprintSqFt === 1000 && est.QUICK_DEFAULTS.floors === 1 &&
+    est.QUICK_DEFAULTS.buildingType === 'Residential House' && est.QUICK_DEFAULTS.quality === 'Standard');
+  check('The defaults give an estimate straight away', (() => {
+    const o = value({ ...base, plot: null, footprint: area(est.QUICK_DEFAULTS.footprintSqFt), floors: est.QUICK_DEFAULTS.floors,
+      buildingType: est.QUICK_DEFAULTS.buildingType, quality: est.QUICK_DEFAULTS.quality });
+    return o.areas.builtUpSqFt === 1000 && o.total > 0;
+  })());
+  check('Every house type is accepted; only Commercial is flagged as a rough guide', est.BUILDING_TYPES.every(b => {
+    const o = value({ ...base, buildingType: b.value });
+    const flagged = o.warnings.some(w => /rough guide/.test(w));
+    return b.label === 'Commercial' ? flagged : !flagged;
+  }));
+  check('House type does not change a quantity', est.BUILDING_TYPES.every(b => qty(value({ ...base, buildingType: b.value }), 'Cement') === qty(std, 'Cement')));
+  check('Not included lists painting, furniture, compound wall, borewell and approvals',
+    ['Paint', 'Interior furniture', 'Borewell'].every(t => std.notIncluded.includes(t)) &&
+    std.notIncluded.some(t => /Compound wall/.test(t)) && std.notIncluded.some(t => /Government approvals/.test(t)), std.notIncluded);
+  check('…and furniture, borewell and approvals stay excluded with a finishing allowance',
+    ['Interior furniture', 'Borewell'].every(t => fin.notIncluded.includes(t)) && fin.notIncluded.some(t => /approvals/.test(t)));
+
+  console.log('\n--- 17. Saving a quick estimate to a site ---');
+  const site2: Site = { ...site, id: 's2', name: 'Murugan House' };
+  await db.sites.put(site2);
+  const quickInput = { ...base, plot: null, footprint: area(1200), floors: 2, buildingType: 'Duplex / Villa', quality: 'Premium' as const } as Parameters<typeof buildEstimate>[0];
+  const quickResult = value(quickInput as unknown as Record<string, unknown>);
+  const q1 = await svc.saveBuildingEstimate(owner, { name: 'Murugan G+1', siteId: 's2', input: quickInput, result: quickResult });
+  check('A quick estimate saves to its site', q1.ok && q1.value.siteId === 's2' && q1.value.siteName === 'Murugan House' && q1.value.buildingType === 'Duplex / Villa');
+  const q1Stored = q1.ok ? await db.estimates.get(q1.value.id) : undefined;
+  check('…with no plot, and 2,400 sq.ft built-up', q1Stored?.plotSqFt === null && q1Stored?.convertedBuiltUpSqFt === 2400 && q1Stored?.floors === 2);
+  check('…and opens again to the same total', (() => {
+    const again = buildEstimate(q1Stored?.inputs as Parameters<typeof buildEstimate>[0]);
+    return again.ok && again.value.total === quickResult.total;
+  })());
+  check('Deleting it removes it from the list', q1.ok && (await svc.removeBuildingEstimate(owner, q1.value.id)).ok &&
+    !(await svc.estimatesFor(owner)).some(e => e.id === (q1.ok ? q1.value.id : '')));
+  check('Deleting it twice says it is gone', q1.ok && !(await svc.removeBuildingEstimate(owner, q1.value.id)).ok);
+
   console.log(`\n✅ Building Calculator: all ${passed} checks passed.\n`);
 }
 
