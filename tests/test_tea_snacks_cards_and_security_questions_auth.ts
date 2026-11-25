@@ -57,7 +57,8 @@ async function runTeaSnacksAndSecurityQuestionsAuthTests() {
   // ───────────────────────────────────────────────────────────────────────────
   console.log('[Test 2] Verifying Login Page fields, Create Account, and Forget Password links...');
   const loginViewPath = path.resolve('src/views/LoginView.tsx');
-  const loginViewContent = fs.readFileSync(loginViewPath, 'utf8');
+  // The screen's words (English / Tamil) live in src/services/authText.ts since the Task 3 redesign.
+  const loginViewContent = [loginViewPath, path.resolve('src/services/authText.ts')].map(f => fs.readFileSync(f, 'utf8')).join('\n');
 
   // Email ID & Password fields in Login form
   if (!loginViewContent.includes('id="login-identifier"') || !loginViewContent.includes('id="login-password"')) {

@@ -18,17 +18,22 @@ import {
   RefreshCw,
   AlertCircle,
   Layers,
+  LogOut,
 } from 'lucide-react';
 import type { User } from '../db/types';
 import { storageService, DB_VERSION } from '../services/storage';
 import { BRAND_COLORS } from '../config/brand';
 import BrandLogo from '../components/BrandLogo';
+import { useLanguage } from '../services/i18n';
 
 interface SettingsViewProps {
   user: User | null;
   onBack: () => void;
   onNavigate: (view: string) => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  /** Signs out and returns to the Welcome screen. */
+  onSignOut?: () => void;
+  signingOut?: boolean;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -36,7 +41,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onBack,
   onNavigate,
   onNotify,
+  onSignOut,
+  signingOut = false,
 }) => {
+  const { t } = useLanguage();
   const [unitSystem, setUnitSystem] = useState<'feet' | 'meter'>(() => {
     try {
       return (localStorage.getItem('bm_unit_system') as 'feet' | 'meter') || 'feet';
@@ -200,6 +208,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>{user?.mobile || (user as any)?.phone || 'Not configured'}</strong>
             </div>
           </div>
+          {onSignOut && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E7E5E4' }}>
+              <span style={{ fontSize: '0.9rem', color: '#57534E', minWidth: 0, overflowWrap: 'anywhere' }}>
+                {t('auth_signed_in_as')} <strong style={{ color: '#1F2937' }}>{user?.email || user?.mobile || user?.fullName}</strong>
+              </span>
+              <button
+                type="button"
+                id="settings-sign-out"
+                onClick={onSignOut}
+                disabled={signingOut}
+                aria-busy={signingOut}
+                style={{ minHeight: 44, padding: '0 18px', borderRadius: 12, border: '2px solid #DC2626', background: '#FFFFFF', color: '#B91C1C', fontWeight: 700, fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: signingOut ? 'not-allowed' : 'pointer' }}
+              >
+                <LogOut size={18} aria-hidden="true" />
+                {signingOut ? t('auth_signing_out') : t('auth_sign_out')}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Card 2: Regional & Financial Conventions */}

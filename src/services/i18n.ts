@@ -16,6 +16,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { AUTH_DICTIONARY } from './authText';
 
 export type Language = 'en' | 'ta';
 
@@ -203,6 +204,8 @@ export const DICTIONARY: Record<string, { en: string; ta: string }> = {
   'marked_success': { en: 'Attendance updated successfully', ta: 'வருகைப்பதிவு வெற்றிகரமாக சேமிக்கப்பட்டது' },
   'copied_yesterday': { en: 'Copied previous day attendance marks', ta: 'நேற்றைய வருகைப்பதிவு நகலெடுக்கப்பட்டது' },
   'all_present_marked': { en: 'All active workers marked Present for today', ta: 'அனைத்து பணியாளர்களுக்கும் இன்று முழு நாள் குறிக்கப்பட்டது' },
+  // Splash, Welcome, Create Account and Log In (src/services/authText.ts)
+  ...AUTH_DICTIONARY,
 };
 
 let memoryLang: Language = 'en';

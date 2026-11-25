@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useReducer } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, X, Download, Building2 } from 'lucide-react';
 import { db } from './db/db';
@@ -16,7 +16,8 @@ import { Toast, type ToastMessage } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AppShell } from './components/AppShell';
 
-import { LoginView } from './views/LoginView';
+import { LoginView, type AuthNotice } from './views/LoginView';
+import { SplashScreen } from './components/auth/SplashScreen';
 import { DashboardView } from './views/DashboardView';
 import { ProjectsView } from './views/ProjectsView';
 import { SiteDetailView } from './views/SiteDetailView';
@@ -51,8 +52,9 @@ import { OtherExpenseModal } from './components/OtherExpenseModal';
 import { CommentModal } from './components/CommentModal';
 
 import { useSiteData } from './hooks/useSiteData';
-import { getCurrentUser, logoutUser, initAuth, isAdmin, getLocalWorkspaceUser } from './services/auth';
-import { resolveAuthenticatedUser } from './services/cloudAuth';
+import { logoutUser, initAuth, isAdmin, LOCAL_BUILDER_ID } from './services/auth';
+import { InactiveAccountError } from './services/cloudAuth';
+import { authGateReducer, initialAuthGateState } from './services/authFlow';
 import { performFullSync } from './services/cloudSyncService';
 
 import type {
@@ -83,9 +85,21 @@ type AppViewName =
 
 const PROJECT_VIEWS: AppViewName[] = ['labour', 'worker', 'stock', 'toolroom', 'expenses', 'reports'];
 
-export function App() {
-  const [currentUser, setCurrentUser] = useState<User>(() => getCurrentUser() || getLocalWorkspaceUser());
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+interface WorkspaceProps {
+  /** The signed-in account (the workspace never opens without one). */
+  user: User;
+  /** Signed in during this visit: offer to move projects made on this device without an account. */
+  justSignedIn: boolean;
+  /** Opened from a password-reset email link. */
+  recoveryRequested: boolean;
+  onRecoveryHandled: () => void;
+  onSignOut: () => Promise<void>;
+}
+
+/** The app itself: projects, labour, stock and the rest. Rendered by App only for a signed-in account. */
+function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, onSignOut }: WorkspaceProps) {
+  // App remounts the workspace (key = account id) when the account changes.
+  const [currentUser, setCurrentUser] = useState<User>(user);
   const [localSitesToMerge, setLocalSitesToMerge] = useState<Site[]>([]);
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [mergeTargetUser, setMergeTargetUser] = useState<User | null>(null);
@@ -142,48 +156,16 @@ export function App() {
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(() => checkPasswordRecoveryUrl());
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(recoveryRequested);
+  // A reset link can also arrive after the workspace opened (Supabase PASSWORD_RECOVERY event).
+  const [seenRecoveryRequest, setSeenRecoveryRequest] = useState(recoveryRequested);
+  if (recoveryRequested !== seenRecoveryRequest) {
+    setSeenRecoveryRequest(recoveryRequested);
+    if (recoveryRequested) setIsRecoveryModalOpen(true);
+  }
 
-  // Initialize Auth, Network status & PWA install listeners
+  // Network status & PWA install listeners (sign-in is handled by App before this screen opens)
   useEffect(() => {
-    initAuth().then(() => {
-      const u = getCurrentUser();
-      if (u) {
-        setCurrentUser(u);
-        if (u.offlineLimited) {
-          addToast('Cloud profile unavailable. Using local records only; elevated access is disabled until reconnected.', 'info');
-        }
-      }
-    }).catch(error => {
-      setCurrentUser(getLocalWorkspaceUser());
-      addToast(error instanceof Error ? error.message : 'Could not verify cloud account. Using local workspace.', 'info');
-    });
-
-    if (checkPasswordRecoveryUrl()) {
-      setIsRecoveryModalOpen(true);
-    }
-
-    let authSub: { unsubscribe: () => void } | null = null;
-    if (isSupabaseConfigured() && supabase) {
-      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'PASSWORD_RECOVERY') {
-          setIsRecoveryModalOpen(true);
-        }
-        if (event === 'SIGNED_IN' && session?.user) {
-          try {
-            const user = await resolveAuthenticatedUser(session.user);
-            setCurrentUser(user);
-            performFullSync(user.id).catch(() => {});
-          } catch {
-            // Retain local session
-          }
-        }
-        if (event === 'SIGNED_OUT') {
-          setCurrentUser(getLocalWorkspaceUser());
-        }
-      });
-      authSub = data?.subscription || null;
-    }
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -212,7 +194,6 @@ export function App() {
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      if (authSub) authSub.unsubscribe();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -336,13 +317,54 @@ export function App() {
     };
   }, [currentUser]);
 
-  const handleLogout = () => {
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutNow = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
     // The next person to use this device must not sync into this person's cloud account.
-    if (supabase) void supabase.auth.signOut();
-    logoutUser();
-    setCurrentUser(getLocalWorkspaceUser());
-    addToast('Signed out of cloud account. Switched to Local Builder mode.', 'info');
+    await onSignOut();
   };
+  const handleLogout = () => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      // Offline, signing out locks the device until it is online again: ask first.
+      setConfirmModalState({
+        isOpen: true,
+        title: 'Sign out while offline?',
+        message: 'You are offline. After signing out you cannot log back in until you are online. Your records stay saved on this device.',
+        confirmLabel: 'Sign out',
+        isDanger: true,
+        type: 'general',
+        onConfirm: () => {
+          setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+          void signOutNow();
+        },
+      });
+      return;
+    }
+    void signOutNow();
+  };
+
+  // Opened with limited rights (offline, or the cloud profile could not be loaded).
+  useEffect(() => {
+    if (user.offlineLimited) {
+      addToast('Cloud profile unavailable. Using records saved on this device; admin access returns when you reconnect.', 'info');
+    }
+    // Projects made on this device before sign-in was required: offer to move them into the account.
+    if (justSignedIn) {
+      db.sites
+        .filter(s => s.userId === LOCAL_BUILDER_ID || s.userId === 'local-builder-user')
+        .toArray()
+        .then(localSites => {
+          if (localSites.length > 0) {
+            setLocalSitesToMerge(localSites);
+            setMergeTargetUser(user);
+            setIsMergeModalOpen(true);
+          }
+        })
+        .catch(err => console.error('Failed checking local sites for merge:', err));
+    }
+    // Once, when the workspace opens for this account (App remounts it for another account).
+  }, [user, justSignedIn]);
 
   // ── Custom Mobile Back Navigation & History Stack (Requirement 3) ──
   const currentViewRef = React.useRef(currentView);
@@ -353,7 +375,6 @@ export function App() {
   const viewHistoryRef = React.useRef<Array<{ view: AppViewName; siteId?: string | null; tab?: string; subTab?: string }>>([]);
 
   const isAnyModalOpen =
-    isAuthModalOpen ||
     isRecoveryModalOpen ||
     isSitePickerOpen ||
     siteModalOpen ||
@@ -381,7 +402,6 @@ export function App() {
   }, [isAnyModalOpen]);
 
   const closeAllModals = React.useCallback(() => {
-    setIsAuthModalOpen(false);
     setIsRecoveryModalOpen(false);
     setIsSitePickerOpen(false);
     setSiteModalOpen(false);
@@ -480,10 +500,7 @@ export function App() {
   // Navigation Helper with deep tab and sub-tab support
   const handleNavigate = (view: string, siteId?: string, tab?: string, subTab?: string) => {
     setQuickAction(null);
-    if (view === 'login' || view === 'auth') {
-      setIsAuthModalOpen(true);
-      return;
-    }
+    if (view === 'login' || view === 'auth') return; // already signed in
 
     const targetView = (PROJECT_VIEWS.includes(view as AppViewName) ? view : view) as AppViewName;
     if (currentView !== targetView) {
@@ -676,8 +693,7 @@ export function App() {
   const projectSiteId = selectedSiteId || userSites[0]?.id || null;
   const phoneStockSiteId = projectSiteId;
 
-  // Active user: falls back to local workspace builder if currentUser is null
-  const activeUser = currentUser || getLocalWorkspaceUser();
+  const activeUser = currentUser;
 
   const navProps = {
     user: activeUser,
@@ -1028,6 +1044,8 @@ export function App() {
             onBack={() => handleNavigate('dashboard')}
             onNavigate={handleNavigate}
             onNotify={addToast}
+            onSignOut={handleLogout}
+            signingOut={signingOut}
           />
         )}
       </main>
@@ -1327,87 +1345,9 @@ export function App() {
       {/* Supabase Password Recovery Flow Modal */}
       <ResetPasswordModal
         isOpen={isRecoveryModalOpen}
-        onClose={() => setIsRecoveryModalOpen(false)}
+        onClose={() => { setIsRecoveryModalOpen(false); onRecoveryHandled(); }}
         onSuccess={msg => addToast(msg, 'success')}
       />
-
-      {/* Optional Supabase Cloud Account Modal */}
-      {isAuthModalOpen && (
-        <div
-          className="bm-modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15, 23, 42, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: 16,
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsAuthModalOpen(false);
-          }}
-        >
-          <div
-            style={{
-              position: 'relative',
-              width: '100%',
-              maxWidth: 460,
-              background: '#ffffff',
-              borderRadius: 16,
-              overflow: 'hidden',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setIsAuthModalOpen(false)}
-              style={{
-                position: 'absolute',
-                top: 14,
-                right: 14,
-                background: '#f1f5f9',
-                border: 'none',
-                borderRadius: '50%',
-                width: 32,
-                height: 32,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 10,
-              }}
-              title="Close"
-              aria-label="Close"
-            >
-              <X size={18} color="#475569" />
-            </button>
-            <LoginView
-              onLoginSuccess={async user => {
-                setCurrentUser(user);
-                setIsAuthModalOpen(false);
-                addToast(`Connected to cloud profile: ${user.fullName || user.username}!`, 'success');
-                try {
-                  const localSites = await db.sites
-                    .filter(s => s.userId === 'local_builder' || s.userId === 'local-builder-user')
-                    .toArray();
-                  if (localSites.length > 0) {
-                    setLocalSitesToMerge(localSites);
-                    setMergeTargetUser(user);
-                    setIsMergeModalOpen(true);
-                  }
-                } catch (err) {
-                  console.error('Failed checking local sites for merge:', err);
-                }
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Post-Authentication Merge Local Sites Dialog (Module 4) */}
       {isMergeModalOpen && mergeTargetUser && (
@@ -1511,6 +1451,71 @@ export function App() {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Start-up and sign-in gate: splash while the saved sign-in is checked, then the Welcome /
+ * Create Account / Log In screens, and the workspace only for a signed-in account.
+ */
+export function App() {
+  const [gate, dispatch] = useReducer(authGateReducer, initialAuthGateState);
+  const [notice, setNotice] = useState<AuthNotice | null>(null);
+  // Read before Supabase tidies the reset link out of the address bar.
+  const [recoveryRequested, setRecoveryRequested] = useState(() => checkPasswordRecoveryUrl());
+
+  useEffect(() => {
+    let alive = true;
+    initAuth()
+      .then(user => { if (alive) dispatch({ type: 'RESTORED', user }); })
+      .catch(error => {
+        if (!alive) return;
+        setNotice({ kind: 'error', key: error instanceof InactiveAccountError ? 'auth_err_account_disabled' : 'auth_err_restore' });
+        dispatch({ type: 'RESTORED', user: null });
+      });
+
+    let unsubscribe = () => {};
+    if (isSupabaseConfigured() && supabase) {
+      const { data } = supabase.auth.onAuthStateChange(event => {
+        if (event === 'PASSWORD_RECOVERY') setRecoveryRequested(true);
+        // Signed out elsewhere, the session expired, or the account was disabled.
+        if (event === 'SIGNED_OUT' && alive) dispatch({ type: 'SIGNED_OUT' });
+      });
+      unsubscribe = () => data?.subscription?.unsubscribe();
+    }
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const signOut = async () => {
+    await logoutUser();
+    setNotice({ kind: 'success', key: 'auth_signed_out' });
+    dispatch({ type: 'SIGNED_OUT' });
+  };
+
+  if (gate.status === 'checking') return <SplashScreen />;
+  if (gate.status !== 'signed-in' || !gate.user) {
+    return (
+      <LoginView
+        notice={notice}
+        onSignedIn={user => {
+          setNotice(null);
+          dispatch({ type: 'SIGNED_IN', user });
+        }}
+      />
+    );
+  }
+  return (
+    <Workspace
+      key={gate.user.id}
+      user={gate.user}
+      justSignedIn={gate.justSignedIn}
+      recoveryRequested={recoveryRequested}
+      onRecoveryHandled={() => setRecoveryRequested(false)}
+      onSignOut={signOut}
+    />
   );
 }
 

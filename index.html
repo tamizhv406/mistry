@@ -29,33 +29,23 @@
       })();
     </script>
     <style>
-      .boot-shell { min-height: 100vh; background: %BRAND_BACKGROUND%; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
-      .boot-bar { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px; background: %BRAND_CARD%; border-bottom: 1px solid #E7E5E4; }
-      .boot-logo { display: flex; width: 32px; height: 32px; flex-shrink: 0; }
-      .boot-logo svg { width: 32px; height: 32px; }
-      .boot-name { font-weight: 800; font-size: 17px; color: %BRAND_DARK%; letter-spacing: -0.01em; margin-right: auto; }
-      .boot-pill { flex: 0 1 160px; height: 36px; border-radius: 10px; background: #F5F5F4; }
-      .boot-body { max-width: 720px; margin: 0 auto; padding: 16px; }
-      .boot-block { height: 72px; border-radius: 14px; background: linear-gradient(90deg, #F0EFED 25%, %BRAND_CARD% 50%, #F0EFED 75%); background-size: 200% 100%; animation: bootShimmer 1.2s ease-in-out infinite; }
-      .boot-title { height: 24px; width: 60%; margin-bottom: 12px; }
-      .boot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      .boot-list { height: 160px; margin-top: 14px; }
-      .boot-text { margin: 16px 0 0; text-align: center; color: #57534E; font-size: 15px; }
-      .boot-text::after { content: ''; display: block; width: 48px; height: 3px; margin: 10px auto 0; border-radius: 2px; background: %BRAND_PRIMARY%; }
-      @keyframes bootShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
-      @media (prefers-reduced-motion: reduce) { .boot-block { animation: none; } }
+      /* Shown until the app starts (also offline): the same splash the app shows while it checks the sign-in. */
+      .boot-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px; background: %BRAND_BACKGROUND%; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; text-align: center; }
+      .boot-logo { display: flex; width: 80px; height: 80px; }
+      .boot-logo svg { width: 80px; height: 80px; }
+      .boot-name { margin-top: -2px; font-weight: 800; font-size: 30px; color: %BRAND_DARK%; letter-spacing: -0.01em; }
+      .boot-text { display: inline-flex; align-items: center; gap: 10px; margin: 0; color: #57534E; font-size: 15px; font-weight: 600; }
+      .boot-spinner { width: 18px; height: 18px; border: 2.5px solid %BRAND_PRIMARY%; border-right-color: transparent; border-radius: 50%; animation: bootSpin 0.7s linear infinite; }
+      @keyframes bootSpin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .boot-spinner { animation-duration: 2s; } }
     </style>
   </head>
   <body>
     <!-- Shown until the app starts (also offline), so opening the app never shows a blank screen. -->
     <div id="root"><div class="boot-shell" aria-busy="true" aria-label="Loading %APP_NAME%">
-      <div class="boot-bar"><span class="boot-logo">%APP_LOGO_SVG%</span><span class="boot-name">%APP_NAME%</span><span class="boot-pill"></span></div>
-      <div class="boot-body">
-        <div class="boot-block boot-title"></div>
-        <div class="boot-grid"><div class="boot-block"></div><div class="boot-block"></div><div class="boot-block"></div><div class="boot-block"></div></div>
-        <div class="boot-block boot-list"></div>
-        <p class="boot-text">Opening your project…</p>
-      </div>
+      <span class="boot-logo">%APP_LOGO_SVG%</span>
+      <span class="boot-name">%APP_NAME%</span>
+      <p class="boot-text"><span class="boot-spinner" aria-hidden="true"></span>Loading…</p>
     </div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

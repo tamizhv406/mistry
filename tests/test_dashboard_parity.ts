@@ -174,7 +174,7 @@ async function run() {
   check('Online and the cloud says signed out: not kept', !keepSignedInOffline(cloudUser, { online: true, cloudUnreachable: false }));
   check('The local workspace and no user need nothing kept', !keepSignedInOffline({ id: 'local_builder', isLocal: true }, { online: false, cloudUnreachable: true }) && !keepSignedInOffline(null, { online: false, cloudUnreachable: true }));
   const html = fs.readFileSync(path.join(process.cwd(), 'index.html'), 'utf8');
-  check('index.html shows a loading skeleton inside #root until the app starts (never blank)', /<div id="root"><div class="boot-shell"/.test(html) && html.includes('.boot-block'));
+  check('index.html shows the splash (logo, name, loading) inside #root until the app starts (never blank)', /<div id="root"><div class="boot-shell"/.test(html) && html.includes('%APP_LOGO_SVG%') && html.includes('boot-spinner'));
   const sw = fs.readFileSync(path.join(process.cwd(), 'public/sw.js'), 'utf8');
   check('The service worker keeps the app page and its scripts/styles for offline starts', sw.includes('cacheShellAssets') && sw.includes("caches.match('./')") && /building-mistry-v\d+/.test(sw));
 

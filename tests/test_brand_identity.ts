@@ -76,7 +76,7 @@ walk('src');
 check('No "Building Mistry" / "Mistry ERP" text left in the app (backup file marker and Floor Planner excepted)', oldName.length === 0, oldName);
 for (const [file, mustUse] of [
   ['src/components/TopNav.tsx', 'BrandMark'], ['src/components/AppSidebar.tsx', 'BrandMark'],
-  ['src/views/LoginView.tsx', 'BrandMark'], ['src/views/SettingsView.tsx', 'BrandLogo'],
+  ['src/views/LoginView.tsx', 'BrandLogo'], ['src/views/SettingsView.tsx', 'BrandLogo'],
 ] as const) {
   const src = read(file);
   check(`${file} shows the logo and the name from brand.ts`, src.includes(`<${mustUse}`) && (mustUse === 'BrandLogo' || src.includes('APP_NAME')));
@@ -137,6 +137,6 @@ check('No user record keeps a password', after.every(u => u.passwordHash === '' 
 check('No profile was deleted and names / emails / roles are unchanged', after.length === 3 &&
   after.find(u => u.id === 'u-old')?.fullName === 'Old Local' && after.find(u => u.id === 'u-field')?.email === 'f@example.test' && after.every(u => u.role === 'MISTRY'));
 check('It runs once per device (flag set; a second run does nothing)', mem.get(LEGACY_PASSWORD_CLEANUP_FLAG) === 'done' && (await clearLegacyLocalPasswords(db, storage)) === 0);
-check('Start-up runs the cleanup before sign-in', /initDefaultUser\(\): Promise<void> \{[\s\S]{0,200}clearLegacyLocalPasswords\(\)/.test(read('src/services/auth.ts')));
+check('Start-up runs the cleanup before sign-in', /restoreSession\(deps: RestoreDeps = \{\}\): Promise<User \| null> \{[\s\S]{0,200}clearLegacyLocalPasswords\(\)/.test(read('src/services/auth.ts')));
 
 console.log(`\n✅ Brand identity: all ${passed} checks passed.\n`);

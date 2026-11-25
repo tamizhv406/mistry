@@ -1,12 +1,13 @@
+import type { AuthUser } from '@supabase/supabase-js';
 import { db } from '../db/db';
 import type { User, UserRole } from '../db/types';
 import { normalizeIndianPhone, validatePasswordStrength } from './otpService';
 import { isSupabaseConfigured, supabase } from './supabase';
 import { InactiveAccountError, resolveAuthenticatedUser, resolveOfflineWorkspaceUser } from './cloudAuth';
 import { getAuthorizedRecords, getMemberProfiles } from './adminData';
-import { performFullSync } from './cloudSyncService';
 import { APP_NAME } from '../config/brand';
 import { clearLegacyLocalPasswords } from '../db/legacyPasswordCleanup';
+import type { FlowDeps } from './authFlow';
 
 const SESSION_KEY = 'building_mistry_auth_user';
 
@@ -61,7 +62,35 @@ export function keepSignedInOffline(
   return !!cached && !!cached.id && !cached.isLocal && (!state.online || state.cloudUnreachable);
 }
 
-export async function initDefaultUser(): Promise<void> {
+export interface RestoreDeps {
+  auth?: Pick<NonNullable<typeof supabase>['auth'], 'getSession'>;
+  configured?: boolean;
+  resolveUser?: (authUser: AuthUser) => Promise<User>;
+  resolveOffline?: (userId: string) => Promise<User>;
+  online?: boolean;
+  /** How long to wait for the cloud profile before opening with the copy saved on this device. */
+  timeoutMs?: number;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('network timeout')), ms);
+    promise.then(v => { clearTimeout(timer); resolve(v); }, e => { clearTimeout(timer); reject(e); });
+  });
+}
+
+const limited = (user: User): User => ({ ...user, passwordHash: '', role: 'MISTRY', permissions: {}, offlineLimited: true });
+
+/**
+ * Start-up: the signed-in account, or null when nobody is signed in (the app then shows the
+ * Welcome screen). There is no automatic on-device account any more.
+ *
+ * - A Supabase session saved in this browser (it survives a refresh) opens the app directly.
+ * - Offline, or when the cloud can't be reached, an account that signed in before stays signed
+ *   in with limited rights (cloudAuth.resolveOfflineWorkspaceUser) until it reconnects.
+ * - A disabled account throws InactiveAccountError.
+ */
+export async function restoreSession(deps: RestoreDeps = {}): Promise<User | null> {
   // Blank any plain-text passwords older versions saved on this device (profiles are kept).
   try {
     await clearLegacyLocalPasswords();
@@ -69,71 +98,91 @@ export async function initDefaultUser(): Promise<void> {
     // A storage error must not stop the app from opening; it runs again next start.
   }
 
-  // If user already has a valid session cached in localStorage, verify or retain it
-  const cached = getCurrentUser();
-  let cloudUnreachable = false;
-  if (cached && cached.id && !cached.isLocal) {
-    if (supabase && isSupabaseConfigured()) {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) cloudUnreachable = true;
-        if (!error && data.session?.user) {
-          let user: User;
-          try {
-            user = await resolveAuthenticatedUser(data.session.user);
-          } catch (error) {
-            if (error instanceof InactiveAccountError) throw error;
-            user = await resolveOfflineWorkspaceUser(data.session.user.id);
-          }
-          setCurrentUser(user);
-          return;
-        }
-      } catch {
-        // Fall back to cached or local profile
-        cloudUnreachable = true;
-      }
-    }
+  const configured = deps.configured ?? isSupabaseConfigured();
+  const auth = deps.auth ?? supabase?.auth;
+  const resolveUser = deps.resolveUser ?? ((u: AuthUser) => resolveAuthenticatedUser(u));
+  const resolveOffline = deps.resolveOffline ?? resolveOfflineWorkspaceUser;
+  const online = deps.online ?? (typeof navigator === 'undefined' || navigator.onLine !== false);
+
+  let cached = getCurrentUser();
+  if (cached && (cached.isLocal || cached.id === LOCAL_BUILDER_ID)) {
+    // The old on-device workspace is not a sign-in: forget it (its projects stay on the device).
+    setCurrentUser(null);
+    cached = null;
   }
 
-  if (supabase && isSupabaseConfigured()) {
+  let cloudUnreachable = false;
+  if (configured && auth) {
     try {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session?.user) {
-        let user: User;
+      const { data, error } = await auth.getSession();
+      if (error) cloudUnreachable = true;
+      const authUser = data?.session?.user;
+      if (authUser) {
         try {
-          user = await resolveAuthenticatedUser(data.session.user);
-        } catch (error) {
-          if (error instanceof InactiveAccountError) throw error;
-          user = await resolveOfflineWorkspaceUser(data.session.user.id);
+          const user = await withTimeout(resolveUser(authUser), deps.timeoutMs ?? 10000);
+          setCurrentUser(user);
+          return user;
+        } catch (err) {
+          if (err instanceof InactiveAccountError) {
+            setCurrentUser(null);
+            throw err;
+          }
+          // Signed in, but the profile could not be loaded: open with the copy saved on this device.
+          try {
+            const user = await resolveOffline(authUser.id);
+            setCurrentUser(user);
+            return user;
+          } catch {
+            if (cached && cached.id === authUser.id) {
+              const user = limited(cached);
+              setCurrentUser(user);
+              return user;
+            }
+            setCurrentUser(null);
+            return null;
+          }
         }
-        setCurrentUser(user);
-        return;
       }
-    } catch {
-      // Continue to local user fallback
+    } catch (err) {
+      if (err instanceof InactiveAccountError) throw err;
       cloudUnreachable = true;
     }
   }
 
-  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
   if (cached && keepSignedInOffline(cached, { online, cloudUnreachable })) {
-    const remembered = typeof localStorage !== 'undefined' && !!localStorage.getItem(SESSION_KEY);
     // Same limits as an unverified offline profile (cloudAuth.resolveOfflineWorkspaceUser): no elevated rights.
-    setCurrentUser({ ...cached, role: 'MISTRY', permissions: {}, offlineLimited: true }, remembered);
-    return;
+    const user = limited(cached);
+    setCurrentUser(user);
+    return user;
   }
 
-  // Open application directly in Local Builder mode (no mandatory login)
-  const localUser = getLocalWorkspaceUser();
-  try {
-    await db.users.put(localUser);
-  } catch {
-    // Storage quota or index error
-  }
-  setCurrentUser(localUser);
+  setCurrentUser(null);
+  return null;
 }
 
-export const initAuth = initDefaultUser;
+/** @deprecated name kept for older imports. */
+export const initDefaultUser = restoreSession;
+export const initAuth = restoreSession;
+
+/** What the sign-in screens need to talk to Supabase Auth. */
+export function defaultAuthDeps(): FlowDeps {
+  return {
+    auth: supabase.auth,
+    configured: isSupabaseConfigured(),
+    resolveUser: (authUser: AuthUser) => resolveAuthenticatedUser(authUser),
+    isOnline: () => typeof navigator === 'undefined' || navigator.onLine !== false,
+  };
+}
+
+/** Keeps a signed-in profile (e.g. after the name step) on this device and as the session user. */
+export async function rememberSignedInUser(user: User): Promise<void> {
+  try {
+    await db.users.put({ ...user, passwordHash: '' });
+  } catch {
+    // The Supabase session is still the authority if the device database is unavailable.
+  }
+  setCurrentUser(user);
+}
 
 /**
  * Authenticates user credentials
@@ -420,97 +469,15 @@ export function setCurrentUser(user: User | null, remember: boolean = true): voi
   }
 }
 
-export async function logoutUser(): Promise<void> {
-  if (supabase) {
+export async function logoutUser(auth: Pick<NonNullable<typeof supabase>['auth'], 'signOut'> | null = supabase?.auth ?? null): Promise<void> {
+  // Forget the session on this device first, so the Welcome screen shows even if the network is down.
+  setCurrentUser(null);
+  if (auth) {
     try {
-      await supabase.auth.signOut();
+      await auth.signOut({ scope: 'local' });
     } catch {
-      // Ignore network errors on sign out
+      // Offline: the saved session was already removed from this device.
     }
-  }
-  const localUser = getLocalWorkspaceUser();
-  setCurrentUser(localUser);
-}
-
-/**
- * Initiates Phone OTP login via Supabase SMS
- */
-export async function sendPhoneOtp(phone: string): Promise<{ success: boolean; error?: string }> {
-  if (!supabase || !isSupabaseConfigured()) {
-    return { success: false, error: 'Supabase is not configured or in offline mode.' };
-  }
-  let formattedPhone = phone.trim();
-  const digits = formattedPhone.replace(/\D/g, '');
-  if (digits.length === 10) {
-    formattedPhone = `+91${digits}`;
-  } else if (!formattedPhone.startsWith('+')) {
-    formattedPhone = `+${digits}`;
-  }
-
-  try {
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: formattedPhone,
-    });
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to send OTP' };
-  }
-}
-
-/**
- * Verifies SMS OTP and signs in user
- */
-export async function verifyPhoneOtp(
-  phone: string,
-  token: string,
-  role: 'contractor' | 'engineer' = 'contractor',
-  fullName?: string
-): Promise<{ success: boolean; user?: User; error?: string }> {
-  if (!supabase || !isSupabaseConfigured()) {
-    return { success: false, error: 'Supabase is not configured or in offline mode.' };
-  }
-  let formattedPhone = phone.trim();
-  const digits = formattedPhone.replace(/\D/g, '');
-  if (digits.length === 10) {
-    formattedPhone = `+91${digits}`;
-  } else if (!formattedPhone.startsWith('+')) {
-    formattedPhone = `+${digits}`;
-  }
-
-  try {
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone: formattedPhone,
-      token: token.trim(),
-      type: 'sms',
-    });
-    if (error) {
-      return { success: false, error: error.message };
-    }
-    if (!data.user) {
-      return { success: false, error: 'Failed to verify phone OTP.' };
-    }
-
-    // Upsert profile in Supabase
-    try {
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        full_name: fullName || data.user.user_metadata?.full_name || formattedPhone,
-        phone: formattedPhone,
-        role,
-      });
-    } catch {
-      // Trigger or table may handle
-    }
-
-    const resolvedUser = await resolveAuthenticatedUser(data.user);
-    setCurrentUser(resolvedUser);
-    performFullSync(resolvedUser.id).catch(() => {});
-    return { success: true, user: resolvedUser };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'OTP verification failed' };
   }
 }
 

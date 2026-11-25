@@ -15,7 +15,8 @@ const changed: string[] = [];
 
 function write(p: string, next: string) {
   const prev = fs.existsSync(file(p)) ? fs.readFileSync(file(p), 'utf8') : null;
-  if (prev === next) return;
+  // Same content with Windows line endings (git checkout on Windows) counts as unchanged.
+  if (prev !== null && prev.replace(/\r\n/g, '\n') === next.replace(/\r\n/g, '\n')) return;
   fs.writeFileSync(file(p), next);
   changed.push(p);
 }
