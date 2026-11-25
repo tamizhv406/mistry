@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import type { User } from '../db/types';
 import { storageService, DB_VERSION } from '../services/storage';
+import { BRAND_COLORS } from '../config/brand';
+import BrandLogo from '../components/BrandLogo';
 
 interface SettingsViewProps {
   user: User | null;
@@ -172,6 +174,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '840px' }}>
+        {/* About: the app's name and logo (from src/config/brand.ts) */}
+        <div className="settings-about" style={{ background: BRAND_COLORS.card, border: '1px solid #E7E5E4', borderRadius: '14px', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <BrandLogo size={48} showTagline />
+          <span style={{ fontSize: '0.85rem', color: '#57534E' }}>Data version {DB_VERSION}</span>
+        </div>
+
         {/* Card 1: User Profile */}
         <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>

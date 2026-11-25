@@ -1,6 +1,7 @@
 import React from 'react';
 import { Printer, X, CheckCircle2, ShieldCheck, HardHat, Calendar, DollarSign } from 'lucide-react';
 import type { LabourWorker, AttendanceRecord, LabourAdvance, SalaryPayment } from '../db/types';
+import { APP_NAME } from '../config/brand';
 
 interface WageSlipModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
   isOpen,
   onClose,
   worker,
-  siteName = 'Building Mistry Project',
+  siteName = `${APP_NAME} Project`,
   attendance,
   advances,
   salaryPayments = [],
@@ -119,7 +120,7 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
           <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                BUILDING MISTRY
+                {APP_NAME}
               </h2>
               <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
                 தொழிலாளர் சம்பள பட்டுவாடா ரசீது • Worker Wage Settlement Slip

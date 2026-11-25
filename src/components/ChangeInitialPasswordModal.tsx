@@ -3,6 +3,7 @@ import { Lock, Eye, EyeOff, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import type { User } from '../db/types';
 import { completeInitialPasswordSetup } from '../services/auth';
 import { validatePasswordStrength } from '../services/otpService';
+import { APP_NAME } from '../config/brand';
 
 interface ChangeInitialPasswordModalProps {
   isOpen: boolean;
@@ -90,7 +91,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
 
         <div className="modal-body" style={{ padding: '20px' }}>
           <p style={{ fontSize: '0.86rem', color: '#475569', marginBottom: '14px' }}>
-            Hello <strong>{user.fullName || user.username}</strong>, for your security, you must set a new private password before accessing the Building Mistry system.
+            Hello <strong>{user.fullName || user.username}</strong>, for your security, you must set a new private password before accessing {APP_NAME}.
           </p>
 
           {error && (

@@ -74,6 +74,7 @@ import type {
   EntityTable,
   User,
 } from './db/types';
+import { APP_NAME } from './config/brand';
 
 type AppViewName =
   | 'dashboard' | 'my-sites' | 'site-detail' | 'trash' | 'backup' | 'settings' | 'estimator' | 'admin'
@@ -206,7 +207,7 @@ export function App() {
     const handleAppInstalled = () => {
       setIsPwaInstalled(true);
       setInstallPromptEvent(null);
-      addToast('Building Mistry installed successfully!', 'success');
+      addToast(`${APP_NAME} installed successfully!`, 'success');
     };
     window.addEventListener('appinstalled', handleAppInstalled);
 
@@ -225,7 +226,7 @@ export function App() {
     const choice = await installPromptEvent.userChoice;
     if (choice.outcome === 'accepted') {
       setIsPwaInstalled(true);
-      addToast('Installing Building Mistry app...', 'info');
+      addToast(`Installing ${APP_NAME} app...`, 'info');
     }
     setInstallPromptEvent(null);
   };

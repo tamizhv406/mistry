@@ -5,6 +5,7 @@ import { db } from '../src/db/db';
 import { calculateFinancialBalance } from '../src/utils/financial';
 import { parseSiteVoiceInput, parseVoiceInput } from '../src/utils/voiceParser';
 import type { LabourAdvance, LabourWorker } from '../src/db/types';
+import { APP_NAME, APP_SHORT_NAME } from '../src/config/brand';
 
 async function runPwaAndMobileTests() {
   console.log('📱 Starting Building Mistry Mobile-First & PWA Verification Tests...\n');
@@ -18,11 +19,11 @@ async function runPwaAndMobileTests() {
   const manifestRaw = fs.readFileSync(manifestPath, 'utf8');
   const manifest = JSON.parse(manifestRaw);
 
-  if (!manifest.name.startsWith('Building Mistry')) {
-    throw new Error(`Expected manifest name starting with "Building Mistry", got "${manifest.name}"`);
+  if (manifest.name !== APP_NAME) {
+    throw new Error(`Expected manifest name "${APP_NAME}" (src/config/brand.ts), got "${manifest.name}"`);
   }
-  if (!manifest.short_name.startsWith('Mistry')) {
-    throw new Error(`Expected manifest short_name starting with "Mistry", got "${manifest.short_name}"`);
+  if (manifest.short_name !== APP_SHORT_NAME) {
+    throw new Error(`Expected manifest short_name "${APP_SHORT_NAME}", got "${manifest.short_name}"`);
   }
   if (manifest.display !== 'standalone') {
     throw new Error(`Expected display "standalone", got "${manifest.display}"`);

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  HardHat,
   Search,
   Bell,
   HelpCircle,
@@ -33,6 +32,8 @@ import type { User, Site, LabourWorker, Material, FloorPlan } from '../db/types'
 import { todayKey, DEFAULT_TIME_ZONE } from '../utils/datetime';
 import { buildStock } from '../domain/stock';
 import { useLanguage } from '../services/i18n';
+import { APP_NAME } from '../config/brand';
+import { BrandMark } from './BrandLogo';
 
 interface TopNavProps {
   user: User | null;
@@ -203,7 +204,7 @@ export const TopNav: React.FC<TopNavProps> = ({
     trash: 'Recycle Bin & Safe Recovery',
   };
 
-  const currentTitle = viewTitles[currentView] || 'Building Mistry ERP';
+  const currentTitle = viewTitles[currentView] || APP_NAME;
 
   // Global search filtering
   const q = searchQuery.trim().toLowerCase();
@@ -232,10 +233,8 @@ export const TopNav: React.FC<TopNavProps> = ({
         )}
 
         <div className="erp-brand-badge">
-          <div className="erp-brand-icon">
-            <HardHat size={18} strokeWidth={2.4} />
-          </div>
-          <span className="erp-brand-name">Building Mistry</span>
+          <BrandMark size={32} title="" />
+          <span className="erp-brand-name">{APP_NAME}</span>
         </div>
 
         <div className="erp-nav-divider" />
@@ -489,7 +488,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 <div className="erp-help-header">
                   <div className="flex items-center gap-2">
                     <HelpCircle size={20} className="text-blue-600" />
-                    <h3 className="font-bold text-slate-900 text-base">Building Mistry ERP Guide</h3>
+                    <h3 className="font-bold text-slate-900 text-base">{APP_NAME} Guide</h3>
                   </div>
                   <button type="button" onClick={() => setIsHelpOpen(false)} className="text-slate-400 hover:text-slate-600">
                     <X size={18} />

@@ -16,6 +16,7 @@ import type {
   OtherExpense,
   SiteFinancialSummary,
 } from '../../db/types';
+import { APP_NAME } from '../../config/brand';
 
 interface ReportsTabProps {
   site: Site;
@@ -62,7 +63,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const handleExportCSV = () => {
     // Generate CSV for materials & expenses
     const rows = [
-      ['BUILDING MISTRY - SITE COST STATEMENT'],
+      [`${APP_NAME.toUpperCase()} - SITE COST STATEMENT`],
       ['Site Name', site.name],
       ['Owner', `${site.ownerName} (${site.ownerPhone || ''})`],
       ['Address', `${site.address || ''}, ${site.area || ''}`],
@@ -279,7 +280,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
             <div>
               <h2 style={{ fontSize: '1.8rem', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                BUILDING MISTRY
+                {APP_NAME}
               </h2>
               <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
                 Civil Engineering & Construction Management Statement
@@ -621,7 +622,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
         <div style={{ marginTop: '48px', display: 'flex', justifyContent: 'space-between', paddingTop: '24px', borderTop: '1px dashed #94a3b8' }}>
           <div>
             <div style={{ borderTop: '1px solid #0f172a', width: '180px', marginTop: '30px', textAlign: 'center', fontSize: '0.85rem' }}>
-              Building Mistry Signature
+              {APP_NAME} Signature
             </div>
           </div>
           <div>

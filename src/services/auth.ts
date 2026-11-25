@@ -5,6 +5,8 @@ import { isSupabaseConfigured, supabase } from './supabase';
 import { InactiveAccountError, resolveAuthenticatedUser, resolveOfflineWorkspaceUser } from './cloudAuth';
 import { getAuthorizedRecords, getMemberProfiles } from './adminData';
 import { performFullSync } from './cloudSyncService';
+import { APP_NAME } from '../config/brand';
+import { clearLegacyLocalPasswords } from '../db/legacyPasswordCleanup';
 
 const SESSION_KEY = 'building_mistry_auth_user';
 
@@ -34,7 +36,7 @@ export function getLocalWorkspaceUser(): User {
   return {
     id: LOCAL_BUILDER_ID,
     username: 'builder',
-    fullName: 'Building Mistry Builder',
+    fullName: `${APP_NAME} Builder`,
     mobile: '',
     email: 'builder@local.device',
     passwordHash: '',
@@ -60,6 +62,13 @@ export function keepSignedInOffline(
 }
 
 export async function initDefaultUser(): Promise<void> {
+  // Blank any plain-text passwords older versions saved on this device (profiles are kept).
+  try {
+    await clearLegacyLocalPasswords();
+  } catch {
+    // A storage error must not stop the app from opening; it runs again next start.
+  }
+
   // If user already has a valid session cached in localStorage, verify or retain it
   const cached = getCurrentUser();
   let cloudUnreachable = false;

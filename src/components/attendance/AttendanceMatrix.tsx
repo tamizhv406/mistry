@@ -29,6 +29,7 @@ import { markAllPresent, markAttendance } from '../../services/records';
 import { generateWorkerPayslipPdfBlob, downloadFile } from '../../utils/pdfGenerator';
 import { formatDay, todayKey, addDays } from '../../utils/datetime';
 import { storageService } from '../../services/storage';
+import { APP_NAME } from '../../config/brand';
 
 interface AttendanceMatrixProps {
   user: User;
@@ -385,7 +386,7 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
     const w = payslipData.worker;
     const phone = cleanPhoneNumber(w.phone);
     const msg = [
-      `*BUILDING MISTRY — WAGE PAYSLIP / சம்பள ரசீது*`,
+      `*${APP_NAME.toUpperCase()} — WAGE PAYSLIP / சம்பள ரசீது*`,
       `═════════════════════════════════`,
       `👤 *Worker / பணியாளர்:* ${w.name}`,
       `🛠️ *Role / வேலை:* ${roleLabel(w.category)}`,
@@ -405,7 +406,7 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
       `═════════════════════════════════`,
       `💵 *NET CASH IN HAND (கையில் கொடுத்த நிகர கூலி):* *${formatINR(payslipData.netPayout)}*`,
       `═════════════════════════════════`,
-      `_Issued by ${user.fullName || user.username} via Building Mistry ERP_`,
+      `_Issued by ${user.fullName || user.username} via ${APP_NAME}_`,
     ].join('\n');
 
     const url = phone.length === 10
@@ -420,7 +421,7 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
     if (!payslipData) return;
     const w = payslipData.worker;
     const msg = [
-      `*BUILDING MISTRY — WAGE PAYSLIP / சம்பள ரசீது*`,
+      `*${APP_NAME.toUpperCase()} — WAGE PAYSLIP / சம்பள ரசீது*`,
       `Worker: ${w.name} (${roleLabel(w.category)})`,
       `Site: ${activeSite.name} | Period: ${payslipData.periodStr}`,
       `Daily Wage: ${formatINR(w.dailyWage)}`,

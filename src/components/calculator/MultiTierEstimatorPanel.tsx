@@ -37,6 +37,7 @@ import {
 } from '../../domain/buildingCalculator/multiTierEstimator';
 import { generateTurnkeyQuotationPdfBlob, downloadFile } from '../../utils/pdfGenerator';
 import { storageService } from '../../services/storage';
+import { APP_NAME } from '../../config/brand';
 
 interface MultiTierEstimatorPanelProps {
   user?: User;
@@ -142,7 +143,7 @@ export const MultiTierEstimatorPanel: React.FC<MultiTierEstimatorPanelProps> = (
         siteName: activeSite?.name || 'Turnkey Construction Project',
         clientName: clientName || siteOwner || 'Valued Client',
         location: activeSite?.address || activeSite?.area || 'Tamil Nadu',
-        preparedBy: userName ? `${userName} (Building Mistry)` : 'Building Mistry Construction ERP',
+        preparedBy: userName ? `${userName} (${APP_NAME})` : APP_NAME,
       });
       const filename = `Building_Mistry_Quotation_${(activeSite?.name || 'Project').replace(/\s+/g, '_')}_${packageType}.pdf`;
       downloadFile(pdfBlob, filename);

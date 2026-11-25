@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  HardHat,
   Eye,
   EyeOff,
   Lock,
@@ -28,6 +27,8 @@ import {
 import { performFullSync } from '../services/cloudSyncService';
 import { requestEmailPasswordReset } from '../services/emailRecoveryService';
 import { isSupabaseConfigured, supabase, updateSupabasePassword } from '../services/supabase';
+import { APP_NAME, APP_TAGLINE, BRAND_COLORS } from '../config/brand';
+import { BrandMark } from '../components/BrandLogo';
 import { db } from '../db/db';
 import type { User as UserType } from '../db/types';
 
@@ -491,38 +492,24 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       >
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div
-            style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-              border: '2px solid #f59e0b',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#f59e0b',
-              boxShadow: '0 8px 20px rgba(15, 23, 42, 0.18)',
-              marginBottom: '14px',
-            }}
-          >
-            <HardHat size={32} strokeWidth={2.4} />
+          <div style={{ display: 'inline-flex', marginBottom: '14px', borderRadius: '16px', boxShadow: '0 8px 20px rgba(31, 41, 55, 0.18)' }}>
+            <BrandMark size={60} title="" />
           </div>
 
           <h2
             style={{
               fontSize: '1.65rem',
               fontWeight: 800,
-              color: '#0f172a',
+              color: BRAND_COLORS.dark,
               letterSpacing: '-0.02em',
               margin: '0 0 4px',
             }}
           >
-            Building Mistry
+            {APP_NAME}
           </h2>
           <p style={{ fontSize: '0.86rem', color: '#64748b', margin: 0, fontWeight: 500 }}>
             {mode === 'login'
-              ? 'Plan Better. Build Smarter. • Architectural Planning & Construction Platform'
+              ? `${APP_TAGLINE} • Architectural Planning & Construction Platform`
               : mode === 'register'
               ? 'Create New Account with Security Verification'
               : mode === 'forget_password'

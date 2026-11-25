@@ -1,5 +1,6 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
+import { APP_DESCRIPTION, APP_NAME, APP_SHORT_NAME, APP_TAGLINE, BRAND_COLORS, logoSvg } from './src/config/brand.ts'
 
 // Relative paths suit the Android app and GitHub Pages, which serve from a folder. Vercel
 // serves from the domain root and answers unknown paths with index.html, which only finds
@@ -13,10 +14,28 @@ const rootLinks: Plugin = {
   transformIndexHtml: html => html.replaceAll('href="./', 'href="/'),
 }
 
+// The app name, colours and logo in index.html come from src/config/brand.ts (%APP_NAME% etc.).
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const brandTokens: Record<string, string> = {
+  '%APP_NAME%': escapeHtml(APP_NAME),
+  '%APP_SHORT_NAME%': escapeHtml(APP_SHORT_NAME),
+  '%APP_TAGLINE%': escapeHtml(APP_TAGLINE),
+  '%APP_DESCRIPTION%': escapeHtml(APP_DESCRIPTION),
+  '%BRAND_PRIMARY%': BRAND_COLORS.primary,
+  '%BRAND_DARK%': BRAND_COLORS.dark,
+  '%BRAND_BACKGROUND%': BRAND_COLORS.background,
+  '%BRAND_CARD%': BRAND_COLORS.card,
+  '%APP_LOGO_SVG%': logoSvg({ size: 40 }),
+}
+const brandHtml: Plugin = {
+  name: 'app-brand',
+  transformIndexHtml: html => Object.entries(brandTokens).reduce((out, [token, value]) => out.replaceAll(token, value), html),
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: servedFromRoot ? '/' : './',
-  plugins: [react(), ...(servedFromRoot ? [rootLinks] : [])],
+  plugins: [react(), brandHtml, ...(servedFromRoot ? [rootLinks] : [])],
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   define: {
     // From the environment only (no built-in project URL or key).

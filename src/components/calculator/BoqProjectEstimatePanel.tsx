@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { SavedBuildingCalculation, ProjectBOQEstimate } from '../../domain/buildingCalculator/types';
 import { consolidateBOQ, type SiteMaterialRecordSummary } from '../../domain/buildingCalculator/boq';
+import { APP_NAME } from '../../config/brand';
 
 interface BoqProjectEstimatePanelProps {
   savedCalculations: SavedBuildingCalculation[];
@@ -147,7 +148,7 @@ export const BoqProjectEstimatePanel: React.FC<BoqProjectEstimatePanelProps> = (
 
   const exportCSV = () => {
     const rows = [
-      ['Building Mistry — Bill of Quantities (BOQ)'],
+      [`${APP_NAME} — Bill of Quantities (BOQ)`],
       ['Project Name', projectName],
       ['Date', new Date().toLocaleDateString()],
       [''],

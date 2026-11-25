@@ -2,6 +2,7 @@ import { db } from './db';
 import { userCanAccessRecord, type User } from './types';
 import { USER_TABLES } from '../services/syncTombstones';
 import { todayKey } from '../utils/datetime';
+import { APP_NAME } from '../config/brand';
 
 export interface BackupData {
   version: number;
@@ -196,6 +197,7 @@ export async function exportDatabaseBackup(user: User): Promise<void> {
 
   const backup: BackupData = {
     version: 6,
+    // Backup file format marker (not the display name): kept so old and new backups restore.
     appName: 'Building Mistry',
     exportedAt: new Date().toISOString(),
     data,
@@ -220,7 +222,7 @@ export async function importDatabaseBackup(file: File): Promise<{ success: boole
     const backup: BackupData = JSON.parse(text);
 
     if (!backup || typeof backup !== 'object' || !backup.appName || backup.appName !== 'Building Mistry' || !backup.data || typeof backup.data !== 'object') {
-      throw new Error('Invalid backup file format. Must be an official Building Mistry backup.');
+      throw new Error(`Invalid backup file format. Must be a ${APP_NAME} backup file.`);
     }
 
     const { data } = backup;

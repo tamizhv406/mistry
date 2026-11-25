@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { MinimalPdfDocument, generateBuildingEstimatePdfBlob } from '../src/utils/pdfGenerator';
+import { APP_NAME } from '../src/config/brand';
 
 describe('[PDF Export Engine] Genuine PDF File & MIME Type Verification', () => {
   it('generates standard PDF 1.4 binary structure with valid xref table', () => {
@@ -81,7 +82,7 @@ describe('[PDF Export Engine] Genuine PDF File & MIME Type Verification', () => 
     // Verify PDF 1.4 specification compliance
     assert.ok(text.startsWith('%PDF-1.4'), 'Exported blob must be standard %PDF-1.4');
     assert.ok(text.includes('/MediaBox [0 0 595.28 841.89]'), 'Must be formatted for standard A4 Portrait');
-    assert.ok(text.includes('BUILDING MISTRY'), 'Must include branding banner');
+    assert.ok(text.includes(APP_NAME.toUpperCase()), 'Must include branding banner');
     assert.ok(text.includes('CONSTRUCTION ESTIMATE REPORT'), 'Must include report title');
 
     // Verify Project Details & Calculation Metadata

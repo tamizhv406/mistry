@@ -20,6 +20,7 @@ import {
   type PackageType,
 } from '../src/domain/buildingCalculator/multiTierEstimator';
 import { generateTurnkeyQuotationPdfBlob } from '../src/utils/pdfGenerator';
+import { APP_NAME } from '../src/config/brand';
 
 let passed = 0;
 let failed = 0;
@@ -160,7 +161,7 @@ console.log('\nTest 7: Client Quotation Exports (WhatsApp & PDF)');
   const est = calculateMultiTierEstimate(1200, 'premium');
   const waText = generateWhatsAppQuoteText(est, 'Mr. Shanmugam', 'Villa Greenwoods');
 
-  assert(waText.includes('BUILDING MISTRY'), 'WhatsApp text has header');
+  assert(waText.includes(APP_NAME.toUpperCase()), 'WhatsApp text has header');
   assert(waText.includes('Villa Greenwoods'), 'WhatsApp text includes project name');
   assert(waText.includes('Mr. Shanmugam'), 'WhatsApp text includes client name');
   assert(waText.includes('1,200 sq.ft'), 'WhatsApp text includes area');

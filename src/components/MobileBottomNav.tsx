@@ -25,6 +25,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { User } from '../db/types';
 import { isAdmin } from '../services/auth';
+import { APP_NAME } from '../config/brand';
 
 interface MobileBottomNavProps {
   currentView: string;
@@ -197,7 +198,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                     <Download size={18} />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-100">Install Building Mistry</h4>
+                    <h4 className="text-xs font-bold text-slate-100">Install {APP_NAME}</h4>
                     <p className="text-[11px] text-slate-400">Install app on Android phone for quick access</p>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import type { MultiTierEstimateResult } from '../domain/buildingCalculator/multiTierEstimator';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { APP_NAME } from '../config/brand';
 
 /**
  * Escapes characters for PDF literal strings enclosed in parentheses.
@@ -274,7 +275,7 @@ export function generateBuildingEstimatePdfBlob(options: BuildingEstimatePdfOpti
 
   // Title
   pdf.setFillColor(255, 255, 255);
-  pdf.drawText('BUILDING MISTRY - CONSTRUCTION ESTIMATE REPORT', margin + 18, headerY + 44, 13, 'F2');
+  pdf.drawText(`${APP_NAME.toUpperCase()} - CONSTRUCTION ESTIMATE REPORT`, margin + 18, headerY + 44, 13, 'F2');
 
   pdf.setFillColor(148, 163, 184); // slate-400
   const proj = options.projectName ? `Project: ${options.projectName} | ` : '';
@@ -429,7 +430,7 @@ export function generateBuildingEstimatePdfBlob(options: BuildingEstimatePdfOpti
     'F1'
   );
   pdf.drawText(
-    `Building Mistry | Verified Estimation Document | Generated on ${dateStr}`,
+    `${APP_NAME} | Verified Estimation Document | Generated on ${dateStr}`,
     margin + 12,
     margin + 8,
     6.8,
@@ -485,7 +486,7 @@ export function generateTurnkeyQuotationPdfBlob(options: TurnkeyQuotationPdfOpti
 
   // Title
   pdf.setFillColor(255, 255, 255);
-  pdf.drawText('BUILDING MISTRY QUOTATION', margin + 14, headerY + 36, 13, 'F2');
+  pdf.drawText(`${APP_NAME.toUpperCase()} QUOTATION`, margin + 14, headerY + 36, 13, 'F2');
   pdf.setFillColor(203, 213, 225);
   pdf.drawText(`Commercial Turnkey Estimation Sheet | Ref: ${quoteRef}`, margin + 14, headerY + 22, 8, 'F1');
   pdf.setFillColor(148, 163, 184);
@@ -661,7 +662,7 @@ export function generateTurnkeyQuotationPdfBlob(options: TurnkeyQuotationPdfOpti
   pdf.setFillColor(148, 163, 184);
   pdf.drawText('Prepared By / Authorized Contractor:', margin + 14, curY - 12, 7, 'F1');
   pdf.setFillColor(15, 23, 42);
-  pdf.drawText(options.preparedBy || 'Building Mistry Construction Co.', margin + 14, curY - 24, 7.5, 'F2');
+  pdf.drawText(options.preparedBy || APP_NAME, margin + 14, curY - 24, 7.5, 'F2');
 
   pdf.setFillColor(148, 163, 184);
   pdf.drawText('Client Acceptance & Signature:', margin + contentWidth - 180, curY - 12, 7, 'F1');
@@ -677,7 +678,7 @@ export function generateTurnkeyQuotationPdfBlob(options: TurnkeyQuotationPdfOpti
     'F1'
   );
   pdf.drawText(
-    `Building Mistry ERP | Verified Civil Engineering Estimates | ${quoteRef}`,
+    `${APP_NAME} | Verified Civil Engineering Estimates | ${quoteRef}`,
     margin + 12,
     margin + 4,
     6.5,
@@ -736,7 +737,7 @@ export function generateWorkerPayslipPdfBlob(options: WorkerPayslipPdfOptions): 
   pdf.drawRect(margin, headerY, contentWidth, headerH, true, false);
 
   pdf.setFillColor(255, 255, 255);
-  pdf.drawText('BUILDING MISTRY - LABOUR WAGE SETTLEMENT SLIP', margin + 18, headerY + 42, 12, 'F2');
+  pdf.drawText(`${APP_NAME.toUpperCase()} - LABOUR WAGE SETTLEMENT SLIP`, margin + 18, headerY + 42, 12, 'F2');
   pdf.setFillColor(203, 213, 225);
   pdf.drawText(`Site Personnel Muster Roll & Official Payment Voucher | Ref: ${voucherRef}`, margin + 18, headerY + 26, 8, 'F1');
   pdf.setFillColor(148, 163, 184);
@@ -875,20 +876,20 @@ export function generateWorkerPayslipPdfBlob(options: WorkerPayslipPdfOptions): 
 
   pdf.drawText('Authorized Contractor / Site Supervisor:', margin + contentWidth - 210, curY - 14, 7.5, 'F1');
   pdf.setFillColor(15, 23, 42);
-  pdf.drawText(options.preparedBy || 'Building Mistry Construction Co.', margin + contentWidth - 210, curY - 26, 8, 'F2');
+  pdf.drawText(options.preparedBy || APP_NAME, margin + contentWidth - 210, curY - 26, 8, 'F2');
   pdf.drawLine(margin + contentWidth - 210, curY - 48, margin + contentWidth - 20, curY - 48);
 
   // 7. Footer
   pdf.setFillColor(148, 163, 184);
   pdf.drawText(
-    'Mistry ERP Automated Wage Settlement Slip. Keep copy for tax and audit records.',
+    `${APP_NAME} automated wage settlement slip. Keep a copy for tax and audit records.`,
     margin + 18,
     margin + 130,
     6.5,
     'F1'
   );
   pdf.drawText(
-    `Building Mistry | Tamil Nadu Construction Management System | ${voucherRef}`,
+    `${APP_NAME} | Tamil Nadu Construction Management System | ${voucherRef}`,
     margin + 18,
     margin + 122,
     6.5,

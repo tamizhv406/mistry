@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  HardHat,
   LayoutDashboard,
   Building2,
   PenTool,
@@ -25,6 +24,8 @@ import { db } from '../db/db';
 import { isAdmin, isSuperAdmin, isHouseOwner } from '../services/auth';
 import type { User } from '../db/types';
 import { useLanguage } from '../services/i18n';
+import { APP_NAME, APP_TAGLINE } from '../config/brand';
+import { BrandMark } from './BrandLogo';
 
 interface SidebarItem {
   id: string;
@@ -226,13 +227,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     >
       {/* Brand */}
       <div className="sidebar-brand" onClick={() => onNavigate('dashboard')}>
-        <div className="sidebar-brand-icon">
-          <HardHat size={22} strokeWidth={2.5} />
-        </div>
+        <BrandMark size={38} title={collapsed ? APP_NAME : ''} />
         {!collapsed && (
           <div className="sidebar-brand-text">
-            <span className="sidebar-brand-name">Building Mistry</span>
-            <span className="sidebar-brand-sub">Plan Better. Build Smarter.</span>
+            <span className="sidebar-brand-name">{APP_NAME}</span>
+            <span className="sidebar-brand-sub">{APP_TAGLINE}</span>
           </div>
         )}
       </div>
@@ -358,7 +357,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               {!collapsed && (
                 <div className="sidebar-user-info">
                   <span className="sidebar-user-name">
-                    {isLocalUser ? 'Building Mistry Builder (Local)' : user.fullName || user.mobile || user.username}
+                    {isLocalUser ? `${APP_NAME} Builder (Local)` : user.fullName || user.mobile || user.username}
                   </span>
                   <span
                     className="sidebar-user-role"
@@ -403,8 +402,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     type="button"
                     className="sidebar-logout-btn"
                     onClick={onLogout}
-                    title="Sign out of Building Mistry"
-                    aria-label="Sign out of Building Mistry"
+                    title={`Sign out of ${APP_NAME}`}
+                    aria-label={`Sign out of ${APP_NAME}`}
                   >
                     <LogOut size={16} />
                   </button>

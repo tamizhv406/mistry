@@ -1,5 +1,5 @@
-// Building Mistry Service Worker
-const CACHE_NAME = 'building-mistry-v5';
+// App service worker (offline shell). Bump the version when cached files such as icons change.
+const CACHE_NAME = 'building-mistry-v6';
 
 const STATIC_ASSETS = [
   './',

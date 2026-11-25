@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  HardHat,
   Home,
   Trash2,
   Database,
@@ -14,6 +13,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { User } from '../db/types';
 import { isAdmin, isSuperAdmin } from '../services/auth';
+import { APP_NAME } from '../config/brand';
+import { BrandMark } from './BrandLogo';
 
 interface NavbarProps {
   currentView: string;
@@ -53,11 +54,9 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="header-inner">
         {/* Brand */}
         <div className="brand" onClick={() => onNavigate('dashboard')}>
-          <div className="brand-icon-box">
-            <HardHat size={24} strokeWidth={2.5} />
-          </div>
+          <BrandMark size={40} title="" />
           <div className="brand-text">
-            <h1>Building Mistry</h1>
+            <h1>{APP_NAME}</h1>
             <span className="brand-sub-text">Construction Site Manager</span>
           </div>
         </div>
@@ -239,7 +238,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }}
                   >
                     {(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
-                      ? 'Building Mistry Builder (Local)'
+                      ? `${APP_NAME} Builder (Local)`
                       : user.fullName || user.mobile || user.username}
                   </span>
                   <span
@@ -292,7 +291,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <button
                       className="btn btn-sm btn-outline"
                       onClick={onLogout}
-                      title="Sign out of Building Mistry"
+                      title={`Sign out of ${APP_NAME}`}
                       style={{
                         color: '#ef4444',
                         borderColor: '#475569',

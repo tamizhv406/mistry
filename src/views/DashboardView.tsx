@@ -47,6 +47,7 @@ import { SITE_VISUAL } from '../utils/constructionVisuals';
 import { calculateFinancialBalance } from '../utils/financial';
 import { SafeImage } from '../components/ui/SafeImage';
 import { formatDay, todayKey, DEFAULT_TIME_ZONE } from '../utils/datetime';
+import { APP_NAME } from '../config/brand';
 
 const formatTargetDate = (dateVal?: string | null): string => {
   if (!dateVal) return 'Target unset';
@@ -243,7 +244,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="erp-dashboard-container">
         <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--erp-text-muted)' }}>
           <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>Loading Building Mistry ERP...</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>Loading {APP_NAME}...</h3>
           <p style={{ fontSize: '0.85rem' }}>Aggregating live projects, workforce ledgers, and inventory balances...</p>
         </div>
       </div>

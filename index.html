@@ -5,18 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="manifest" href="./manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="description" content="Building Mistry — Your Complete Building Planning & Construction Management Platform. Plan Better. Build Smarter." />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="%APP_DESCRIPTION%" />
+    <meta name="theme-color" content="%BRAND_PRIMARY%" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Building Mistry" />
-    <meta name="application-name" content="Building Mistry" />
+    <meta name="apple-mobile-web-app-title" content="%APP_SHORT_NAME%" />
+    <meta name="application-name" content="%APP_NAME%" />
     <link rel="apple-touch-icon" href="./icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Tamil:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>Building Mistry — Plan Better. Build Smarter.</title>
+    <title>%APP_NAME% — %APP_TAGLINE%</title>
     <script>
       (function() {
         var params = new URLSearchParams(window.location.search);
@@ -29,24 +29,27 @@
       })();
     </script>
     <style>
-      .boot-shell { min-height: 100vh; background: #f8fafc; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
-      .boot-bar { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #fff; border-bottom: 1px solid #e2e8f0; }
-      .boot-logo { width: 32px; height: 32px; border-radius: 9px; background: #0f172a; }
-      .boot-pill { flex: 0 1 220px; height: 36px; border-radius: 10px; background: #eef2f7; }
+      .boot-shell { min-height: 100vh; background: %BRAND_BACKGROUND%; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+      .boot-bar { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 16px; background: %BRAND_CARD%; border-bottom: 1px solid #E7E5E4; }
+      .boot-logo { display: flex; width: 32px; height: 32px; flex-shrink: 0; }
+      .boot-logo svg { width: 32px; height: 32px; }
+      .boot-name { font-weight: 800; font-size: 17px; color: %BRAND_DARK%; letter-spacing: -0.01em; margin-right: auto; }
+      .boot-pill { flex: 0 1 160px; height: 36px; border-radius: 10px; background: #F5F5F4; }
       .boot-body { max-width: 720px; margin: 0 auto; padding: 16px; }
-      .boot-block { height: 72px; border-radius: 14px; background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%); background-size: 200% 100%; animation: bootShimmer 1.2s ease-in-out infinite; }
+      .boot-block { height: 72px; border-radius: 14px; background: linear-gradient(90deg, #F0EFED 25%, %BRAND_CARD% 50%, #F0EFED 75%); background-size: 200% 100%; animation: bootShimmer 1.2s ease-in-out infinite; }
       .boot-title { height: 24px; width: 60%; margin-bottom: 12px; }
       .boot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       .boot-list { height: 160px; margin-top: 14px; }
-      .boot-text { margin: 16px 0 0; text-align: center; color: #475569; font-size: 15px; }
+      .boot-text { margin: 16px 0 0; text-align: center; color: #57534E; font-size: 15px; }
+      .boot-text::after { content: ''; display: block; width: 48px; height: 3px; margin: 10px auto 0; border-radius: 2px; background: %BRAND_PRIMARY%; }
       @keyframes bootShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
       @media (prefers-reduced-motion: reduce) { .boot-block { animation: none; } }
     </style>
   </head>
   <body>
     <!-- Shown until the app starts (also offline), so opening the app never shows a blank screen. -->
-    <div id="root"><div class="boot-shell" aria-busy="true" aria-label="Loading Building Mistry">
-      <div class="boot-bar"><span class="boot-logo"></span><span class="boot-pill"></span></div>
+    <div id="root"><div class="boot-shell" aria-busy="true" aria-label="Loading %APP_NAME%">
+      <div class="boot-bar"><span class="boot-logo">%APP_LOGO_SVG%</span><span class="boot-name">%APP_NAME%</span><span class="boot-pill"></span></div>
       <div class="boot-body">
         <div class="boot-block boot-title"></div>
         <div class="boot-grid"><div class="boot-block"></div><div class="boot-block"></div><div class="boot-block"></div><div class="boot-block"></div></div>

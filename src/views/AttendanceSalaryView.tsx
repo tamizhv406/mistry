@@ -47,6 +47,7 @@ import { SalaryPaymentModal } from '../components/SalaryPaymentModal';
 import { WageSlipModal } from '../components/WageSlipModal';
 import { useLanguage } from '../services/i18n';
 import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
+import { APP_NAME } from '../config/brand';
 
 export interface AttendanceSalaryViewProps {
   user: User;
@@ -1696,7 +1697,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           setSelectedWorkerForSlip(null);
         }}
         worker={selectedWorkerForSlip}
-        siteName={sites.find(s => s.id === selectedSiteId)?.name || 'Building Mistry Project'}
+        siteName={sites.find(s => s.id === selectedSiteId)?.name || `${APP_NAME} Project`}
         attendance={attendance}
         advances={advances}
         salaryPayments={salaryPayments}

@@ -20,6 +20,7 @@ import { db } from '../db/db';
 import type { User } from '../db/types';
 import { AccountPanel } from '../components/mobile/AccountPanel';
 import { getStorageSafetyStatus, recordBackupSuccess } from '../utils/backupStatus';
+import { APP_NAME } from '../config/brand';
 
 interface BackupViewProps {
   user: User | null;
@@ -198,7 +199,7 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
             Guaranteed Permanent Local Storage
           </h3>
           <p style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>
-            Building Mistry uses an industrial-strength browser database (<strong>IndexedDB via Dexie.js</strong>).
+            {APP_NAME} uses an industrial-strength browser database (<strong>IndexedDB via Dexie.js</strong>).
             Your data is stored directly on your computer and <strong>never automatically resets</strong>. It remains intact even after closing the browser, refreshing, or restarting your computer.
           </p>
         </div>

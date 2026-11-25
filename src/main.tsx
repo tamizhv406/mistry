@@ -9,6 +9,7 @@ import './styles/record-cards.css';
 import './styles/advanced-calculator.css';
 import './styles/phone-floor.css';
 import App from './App.tsx';
+import { APP_NAME } from './config/brand';
 
 // Register Service Worker for PWA offline capabilities
 if ('serviceWorker' in navigator) {
@@ -16,7 +17,7 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker
       .register(`${import.meta.env.BASE_URL}sw.js`)
       .then(reg => {
-        console.log('✓ Building Mistry Service Worker active:', reg.scope);
+        console.log(`✓ ${APP_NAME} service worker active:`, reg.scope);
       })
       .catch(err => {
         console.warn('Service worker registration failed:', err);

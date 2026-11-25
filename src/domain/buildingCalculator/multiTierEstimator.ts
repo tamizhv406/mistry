@@ -1,5 +1,5 @@
 /**
- * Building Mistry — Multi-Tier Construction Cost Estimator Engine
+ * Multi-Tier Construction Cost Estimator Engine
  * 
  * Supports:
  * - 3 Quality Packages: Standard (~₹1,550–₹1,650/sq.ft), Premium (~₹1,950–₹2,100/sq.ft) [Default], Luxury (~₹2,450–₹2,800+/sq.ft)
@@ -10,6 +10,8 @@
  * - Milestone payment schedule (20%, 20%, 25%, 15%, 15%, 5%)
  * - Scannable WhatsApp quotation text generator
  */
+
+import { APP_NAME } from '../../config/brand';
 
 export type PackageType = 'standard' | 'premium' | 'luxury';
 
@@ -589,7 +591,7 @@ export function generateWhatsAppQuoteText(
   });
 
   const lines = [
-    `*BUILDING MISTRY — TURNKEY CONSTRUCTION ESTIMATE*`,
+    `*${APP_NAME.toUpperCase()} — TURNKEY CONSTRUCTION ESTIMATE*`,
     `═════════════════════════════════`,
     `📋 *Project:* ${projectName}`,
     `👤 *Client:* ${clientName}`,
@@ -622,7 +624,7 @@ export function generateWhatsAppQuoteText(
     ),
     ``,
     `═════════════════════════════════`,
-    `_Generated via Building Mistry ERP — Verified Civil Engineering Estimation Engine_`,
+    `_Generated via ${APP_NAME} — Verified Civil Engineering Estimation Engine_`,
   ];
 
   return lines.join('\n');

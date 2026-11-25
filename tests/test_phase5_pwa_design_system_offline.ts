@@ -12,6 +12,7 @@
 import fs from 'fs';
 import path from 'path';
 import { storageService, type StorageSite } from '../src/services/storage';
+import { APP_NAME, APP_SHORT_NAME, BRAND_COLORS } from '../src/config/brand';
 
 let passed = 0;
 let failed = 0;
@@ -36,10 +37,10 @@ async function runTests() {
     assert(fs.existsSync(manifestPath), 'public/manifest.json exists on disk');
 
     const manifestContent = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-    assert(manifestContent.name === 'Building Mistry — Construction ERP', 'Manifest name is "Building Mistry — Construction ERP"');
-    assert(manifestContent.short_name === 'Mistry ERP', 'Manifest short_name is "Mistry ERP"');
-    assert(manifestContent.theme_color === '#0f172a', 'Theme color is deep slate navy (#0f172a)');
-    assert(manifestContent.background_color === '#f8fafc', 'Background color is architectural light slate (#f8fafc)');
+    assert(manifestContent.name === APP_NAME, `Manifest name is the app name from brand.ts ("${APP_NAME}")`);
+    assert(manifestContent.short_name === APP_SHORT_NAME, `Manifest short_name is "${APP_SHORT_NAME}"`);
+    assert(manifestContent.theme_color === BRAND_COLORS.primary, `Theme color is the brand orange (${BRAND_COLORS.primary})`);
+    assert(manifestContent.background_color === BRAND_COLORS.background, `Background color is the app background (${BRAND_COLORS.background})`);
     assert(manifestContent.display === 'standalone', 'Display mode is standalone for native app experience');
     assert(manifestContent.orientation === 'any', 'Orientation supports both portrait and landscape CAD viewports');
 
@@ -79,7 +80,7 @@ async function runTests() {
     const htmlCode = fs.readFileSync(htmlPath, 'utf8');
 
     assert(htmlCode.includes('rel="manifest"'), 'index.html links to manifest.json');
-    assert(htmlCode.includes('content="#0f172a"'), 'index.html defines theme-color #0f172a');
+    assert(htmlCode.includes('<meta name="theme-color" content="%BRAND_PRIMARY%" />'), 'index.html takes its theme-color from brand.ts (brand orange)');
     assert(htmlCode.includes('apple-mobile-web-app-capable'), 'iOS standalone web app meta tag present');
     assert(htmlCode.includes('viewport-fit=cover'), 'Viewport includes viewport-fit=cover for iPhone notch/home bar');
     assert(htmlCode.includes('apple-touch-icon'), 'Apple touch icon link present');

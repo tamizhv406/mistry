@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import type { SavedBuildingCalculation, CalculatorModule } from '../../domain/buildingCalculator/types';
+import { APP_NAME } from '../../config/brand';
 
 interface SavedCalculationsPanelProps {
   savedCalculations: SavedBuildingCalculation[];
@@ -113,7 +114,7 @@ export const SavedCalculationsPanel: React.FC<SavedCalculationsPanelProps> = ({
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(savedCalculations, null, 2));
     const dlAnchor = document.createElement('a');
     dlAnchor.setAttribute('href', dataStr);
-    dlAnchor.setAttribute('download', `BuildingMistry_Calculations_${new Date().toISOString().slice(0, 10)}.json`);
+    dlAnchor.setAttribute('download', `${APP_NAME.replace(/\s+/g, '')}_Calculations_${new Date().toISOString().slice(0, 10)}.json`);
     dlAnchor.click();
   };
 

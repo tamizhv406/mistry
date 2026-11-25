@@ -7,6 +7,7 @@
 
 import { db } from '../db/db';
 import type { User } from '../db/types';
+import { APP_NAME } from '../config/brand';
 
 export const DB_VERSION = 2;
 
@@ -745,6 +746,7 @@ export class UnifiedStorageService {
 
     const backupPayload: BackupPayload = {
       version: DB_VERSION,
+      // Backup file format marker (not the display name): kept so old and new backups restore.
       appName: 'Building Mistry',
       exportedAt: currentISOTime(),
       data: {
@@ -793,7 +795,7 @@ export class UnifiedStorageService {
     ]);
 
     const rows: string[] = [];
-    rows.push('--- BUILDING MISTRY EXECUTIVE SUMMARY ---');
+    rows.push(`--- ${APP_NAME.toUpperCase()} EXECUTIVE SUMMARY ---`);
     rows.push(`Exported At,${new Date().toISOString()}`);
     rows.push('');
 
