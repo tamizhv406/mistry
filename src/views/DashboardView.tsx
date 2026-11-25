@@ -36,6 +36,7 @@ import {
   Calculator,
 } from 'lucide-react';
 import { useOverallStats, type DashboardExpenseItem } from '../hooks/useOverallStats';
+import { DashboardToday } from '../components/DashboardToday';
 import { loadDemoData } from '../db/seedData';
 import { db } from '../db/db';
 import { isAdmin, isSuperAdmin } from '../services/auth';
@@ -242,7 +243,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const handleLoadDemo = async () => {
     setLoadingDemo(true);
     try {
-      await loadDemoData();
+      await loadDemoData(user?.id);
       onNotify('Sample site "Sri Murugan Illam" loaded successfully! (Marked as DEMO)', 'success');
     } catch (err: any) {
       onNotify('Failed to load demo data: ' + err.message, 'error');
@@ -358,6 +359,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Today at a glance: the same numbers as the phone Home screen. */}
+      <DashboardToday
+        summary={stats.dashboard}
+        activity={stats.activityLog}
+        scopeName={stats.filteredSiteName || 'All projects'}
+        onNavigate={view => onNavigate?.(view)}
+      />
 
       {/* 4.5 Mode Toggle: Mastri Field Mode vs Engineer Mode */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
@@ -1863,7 +1872,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {stats.materialStock.lowStockItems.slice(0, 4).map(item => (
+                {stats.dashboard.lowStockTop.map(item => (
                   <div
                     key={item.key}
                     style={{
@@ -1907,87 +1916,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* 11. Recent Activities Feed */}
-      {stats.recentActivities.length > 0 && (
-        <div className="erp-section-card" id="dashboard-recent-activities-card">
-          <div className="erp-section-header">
-            <div className="erp-section-title-wrap">
-              <TrendingUp size={20} className="erp-section-icon" />
-              <div>
-                <h3 className="erp-section-title">
-                  Recent Construction Activities & Audit Trail {selectedSiteFilterId && stats.filteredSiteName ? `• ${stats.filteredSiteName}` : ''}
-                </h3>
-                <p className="erp-section-subtitle">
-                  {selectedSiteFilterId && stats.filteredSiteName
-                    ? `Real-time transaction feed for ${stats.filteredSiteName}`
-                    : 'Real-time transaction feed across all active sites'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="erp-table-responsive">
-            <table className="erp-table">
-              <thead>
-                <tr>
-                  <th>Event Type</th>
-                  <th>Activity Description</th>
-                  <th>Details</th>
-                  <th>Site Name</th>
-                  <th>Date</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats.recentActivities.map(act => (
-                  <tr
-                    key={act.id}
-                    onClick={() => onOpenSite(act.siteId)}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <td>
-                      <span
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          background: act.type === 'material' ? '#FEF3C7' : act.type === 'rod' ? '#E0E7FF' : act.type === 'advance' ? '#DCFCE7' : act.type === 'floorplan' ? '#F3E8FF' : '#F1F5F9',
-                          color: act.type === 'material' ? '#B45309' : act.type === 'rod' ? '#4338CA' : act.type === 'advance' ? '#15803D' : act.type === 'floorplan' ? '#6B21A8' : '#334155',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {act.type}
-                      </span>
-                    </td>
-                    <td>
-                      <strong style={{ fontSize: '0.84rem', color: '#111827' }}>{act.title}</strong>
-                    </td>
-                    <td style={{ fontSize: '0.78rem', color: '#64748B' }}>{act.description}</td>
-                    <td>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#2563EB' }}>
-                        {act.siteName}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: '0.76rem', color: '#64748B' }}>
-                      {act.date ? formatDay(act.date) : '—'}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      {act.amount !== undefined ? (
-                        <strong style={{ fontSize: '0.84rem', color: '#111827', fontFamily: 'var(--font-heading)' }}>
-                          ₹{act.amount.toLocaleString('en-IN')}
-                        </strong>
-                      ) : (
-                        <span style={{ color: '#94A3B8' }}>—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

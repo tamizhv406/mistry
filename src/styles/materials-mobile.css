@@ -334,3 +334,48 @@ img.stk-icon-photo { object-fit: cover; padding: 0; }
 /* Category icon (or the person's own photo) beside a detail sheet's headline. */
 .cat-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .cat-photo-lg { width: 100%; max-height: 240px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; display: block; background: #f1f5f9; }
+
+/* ------------------------------------------------------------------ Home (Task 5) */
+/* Everything for today on one phone screen: 2-column cards no taller than 80px. */
+.hm-screen .m-page-head h1 { font-size: 18px; }
+.hm-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.hm-card {
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 1px;
+  min-height: 64px; max-height: 80px; padding: 8px 12px; overflow: hidden; text-align: left;
+  background: var(--m-surface, #fff); border: 1px solid var(--m-line, #e2e8f0); border-radius: 14px;
+  color: var(--m-ink, #0f172a); font: inherit;
+}
+.hm-card:active { background: var(--m-surface-2, #f8fafc); }
+.hm-card-label { font-size: 14px; font-weight: 600; color: var(--m-ink-2, #334155); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hm-card-value { font-size: 22px; font-weight: 800; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hm-card-hint { font-size: 14px; color: var(--m-ink-3, #64748b); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hm-card-hint.is-warn { color: #b45309; font-weight: 600; }
+.hm-card.is-ok .hm-card-value { color: var(--m-ok, #047857); }
+.hm-card.is-bad { border-color: #fecaca; background: #fef2f2; }
+.hm-card.is-bad .hm-card-value { color: var(--m-bad, #b91c1c); }
+.hm-action {
+  display: flex; align-items: center; gap: 10px; min-height: 56px; max-height: 80px; padding: 8px 10px;
+  background: var(--m-surface, #fff); border: 1px solid var(--m-line, #e2e8f0); border-radius: 14px;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--m-ink, #0f172a); text-align: left; line-height: 1.2; overflow: hidden;
+}
+.hm-action:active { background: var(--m-surface-2, #f8fafc); }
+.hm-action-icon { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+.hm-action-icon.is-green { background: #dcfce7; color: #15803d; }
+.hm-action-icon.is-amber { background: #fef3c7; color: #92400e; }
+.hm-action-icon.is-blue { background: #dbeafe; color: #1d4ed8; }
+.hm-action-icon.is-teal { background: #ccfbf1; color: #0f766e; }
+.hm-block { margin-top: 10px; }
+.hm-row-amount { font-weight: 800; font-size: 15px; white-space: nowrap; margin-left: auto; padding-left: 8px; }
+.hm-row-amount.is-bad { color: var(--m-bad, #b91c1c); }
+.hm-screen .m-row-title { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.hm-stock-row { gap: 10px; min-height: 52px; }
+.hm-link { font-size: 14px; min-height: 44px; display: inline-flex; align-items: center; gap: 2px; }
+.hm-activity { min-height: 52px; }
+.hm-activity-text { display: block; font-size: 14px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.hm-screen .m-section { margin-top: 14px; }
+.hm-skel { background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%); background-size: 200% 100%; animation: hmShimmer 1.2s ease-in-out infinite; border-radius: 14px; }
+.hm-skel-title { height: 24px; width: 60%; margin: 6px 0 4px; }
+.hm-skel-card { height: 72px; }
+.hm-skel-list { height: 180px; margin-top: 14px; }
+@keyframes hmShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .hm-skel { animation: none; } }

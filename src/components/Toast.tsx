@@ -49,7 +49,7 @@ const SingleToast: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => vo
         type="button"
         onClick={() => onDismiss(toast.id)}
         aria-label="Dismiss message"
-        style={{ color: '#94a3b8', padding: '10px', margin: '-10px -6px -10px 0', display: 'flex', alignItems: 'center' }}
+        style={{ color: '#64748b', minWidth: 44, minHeight: 44, margin: '-10px -8px -10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         <X size={16} />
       </button>

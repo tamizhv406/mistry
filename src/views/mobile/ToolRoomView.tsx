@@ -67,14 +67,16 @@ interface ToolRoomViewProps {
   onBack: () => void;
   onOpenLedger: () => void;
   onNotify: Notify;
+  /** Open on this filter ("available" for the home screen's "Give tool": tap Issue, then the person). */
+  startFilter?: ToolFilter;
 }
 
-export const ToolRoomView: React.FC<ToolRoomViewProps> = ({ user, siteId, onBack, onOpenLedger, onNotify }) => {
+export const ToolRoomView: React.FC<ToolRoomViewProps> = ({ user, siteId, onBack, onOpenLedger, onNotify, startFilter }) => {
   const { t } = useLanguage();
   const project = useProject(siteId);
   const catalog = useLiveQuery(() => db.catalogItems.filter(c => !c.isDeleted && c.kind === 'tool').toArray(), []);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<ToolFilter>('all');
+  const [filter, setFilter] = useState<ToolFilter>(startFilter || 'all');
   const [openToolId, setOpenToolId] = useState<string | null>(null);
   const [issueFor, setIssueFor] = useState<ToolAsset | null>(null);
   const [returnFor, setReturnFor] = useState<{ tool: ToolAsset; issueId?: string } | null>(null);

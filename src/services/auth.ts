@@ -46,13 +46,28 @@ export function getLocalWorkspaceUser(): User {
   };
 }
 
+/**
+ * A signed-in account stays signed in when the app opens offline (or the cloud can't be reached):
+ * its session can't be checked, but switching to the local workspace would hide its projects.
+ * It opens with limited rights until it reconnects. Only an account the cloud says has signed
+ * out (online, no session) falls back to the local workspace.
+ */
+export function keepSignedInOffline(
+  cached: Pick<User, 'id' | 'isLocal'> | null | undefined,
+  state: { online: boolean; cloudUnreachable: boolean },
+): boolean {
+  return !!cached && !!cached.id && !cached.isLocal && (!state.online || state.cloudUnreachable);
+}
+
 export async function initDefaultUser(): Promise<void> {
   // If user already has a valid session cached in localStorage, verify or retain it
   const cached = getCurrentUser();
+  let cloudUnreachable = false;
   if (cached && cached.id && !cached.isLocal) {
     if (supabase && isSupabaseConfigured()) {
       try {
         const { data, error } = await supabase.auth.getSession();
+        if (error) cloudUnreachable = true;
         if (!error && data.session?.user) {
           let user: User;
           try {
@@ -66,6 +81,7 @@ export async function initDefaultUser(): Promise<void> {
         }
       } catch {
         // Fall back to cached or local profile
+        cloudUnreachable = true;
       }
     }
   }
@@ -86,7 +102,16 @@ export async function initDefaultUser(): Promise<void> {
       }
     } catch {
       // Continue to local user fallback
+      cloudUnreachable = true;
     }
+  }
+
+  const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+  if (cached && keepSignedInOffline(cached, { online, cloudUnreachable })) {
+    const remembered = typeof localStorage !== 'undefined' && !!localStorage.getItem(SESSION_KEY);
+    // Same limits as an unverified offline profile (cloudAuth.resolveOfflineWorkspaceUser): no elevated rights.
+    setCurrentUser({ ...cached, role: 'MISTRY', permissions: {}, offlineLimited: true }, remembered);
+    return;
   }
 
   // Open application directly in Local Builder mode (no mandatory login)

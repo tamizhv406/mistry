@@ -165,7 +165,7 @@
   #app-mobile-nav,
   .m-nav {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     align-items: center;
     position: fixed;
     left: 0;

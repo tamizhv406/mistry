@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, X, Download, Building2 } from 'lucide-react';
 import { db } from './db/db';
-import { MobileTopBar, MobileBottomNav } from './components/mobile/MobileChrome';
-import { HomeView } from './views/mobile/HomeView';
+import { MobileBottomNav, ProjectSwitcher } from './components/mobile/MobileChrome';
+import { HomeView, type AppView as HomeTarget, type QuickAction } from './views/mobile/HomeView';
+import { pickStartProject, readLastProject, rememberLastProject } from './domain/dashboard';
 import { LabourView } from './views/mobile/LabourView';
 import { WorkerProfileView } from './views/mobile/WorkerProfileView';
 import { StockView } from './views/mobile/StockView';
@@ -80,7 +81,6 @@ type AppViewName =
   | 'labour' | 'worker' | 'stock' | 'toolroom' | 'expenses' | 'reports';
 
 const PROJECT_VIEWS: AppViewName[] = ['labour', 'worker', 'stock', 'toolroom', 'expenses', 'reports'];
-const CURRENT_SITE_KEY = 'mistry_current_site';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User>(() => getCurrentUser() || getLocalWorkspaceUser());
@@ -90,10 +90,11 @@ export function App() {
   const [mergeTargetUser, setMergeTargetUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<AppViewName>('dashboard');
   const isPhone = useIsPhone();
-  // The current project is remembered on this device so the app reopens where the user left off.
-  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => {
-    try { return localStorage.getItem(CURRENT_SITE_KEY); } catch { return null; }
-  });
+  // The current project is remembered on this device so the app reopens on it, straight to its
+  // dashboard (no project list first).
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(() => readLastProject(typeof localStorage === 'undefined' ? null : localStorage));
+  // A form a home-screen quick action asked the next screen to open with.
+  const [quickAction, setQuickAction] = useState<QuickAction | null>(null);
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   // A floor area handed from the Floor Planner to the Building Calculator.
   const [estimatorAreaSqFt, setEstimatorAreaSqFt] = useState<number | null>(null);
@@ -126,22 +127,16 @@ export function App() {
   }, [currentUser]);
   const userSites = userSitesQuery || [];
 
-  // Keep the remembered project valid: drop it if it was deleted or belongs to another
-  // account, and pick the only project automatically when there is just one.
+  // Keep the open project valid: the last viewed one while it exists for this account,
+  // otherwise the first active project; none only when there are no projects.
   useEffect(() => {
     if (!userSitesQuery) return;
-    const stillThere = selectedSiteId && userSitesQuery.some(s => s.id === selectedSiteId);
-    if (!stillThere) {
-      const next = userSitesQuery.length === 1 ? userSitesQuery[0].id : null;
-      if (next !== selectedSiteId) setSelectedSiteId(next);
-    }
+    const next = pickStartProject(userSitesQuery, selectedSiteId);
+    if (next !== selectedSiteId) setSelectedSiteId(next);
   }, [userSitesQuery, selectedSiteId]);
 
   useEffect(() => {
-    try {
-      if (selectedSiteId) localStorage.setItem(CURRENT_SITE_KEY, selectedSiteId);
-      else localStorage.removeItem(CURRENT_SITE_KEY);
-    } catch { /* storage unavailable */ }
+    rememberLastProject(typeof localStorage === 'undefined' ? null : localStorage, selectedSiteId);
   }, [selectedSiteId]);
 
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -483,6 +478,7 @@ export function App() {
 
   // Navigation Helper with deep tab and sub-tab support
   const handleNavigate = (view: string, siteId?: string, tab?: string, subTab?: string) => {
+    setQuickAction(null);
     if (view === 'login' || view === 'auth') {
       setIsAuthModalOpen(true);
       return;
@@ -681,18 +677,21 @@ export function App() {
   // Active user: falls back to local workspace builder if currentUser is null
   const activeUser = currentUser || getLocalWorkspaceUser();
 
-  const chromeProps = {
+  const navProps = {
     user: activeUser,
     currentView,
-    sites: userSites,
     siteId: selectedSiteId,
-    onSelectSite: handleSelectSite,
     onNavigate: (view: string) => handleNavigate(view),
-    onOpenClassic: () => selectedSiteId && handleNavigate('site-detail', selectedSiteId, 'overview'),
-    onNewSite: openNewSiteModal,
+    onOpenClassic: () => { if (selectedSiteId) handleNavigate('site-detail', selectedSiteId, 'overview'); },
     onLogout: handleLogout,
     canInstall: !!installPromptEvent && !isPwaInstalled,
     onInstall: handleInstallPwa,
+  };
+
+  // Home screen buttons: open a screen, optionally with its form already started.
+  const goFromHome = (view: HomeTarget, action?: QuickAction) => {
+    handleNavigate(view);
+    if (action) setQuickAction(action);
   };
 
   return (
@@ -709,10 +708,23 @@ export function App() {
         installPromptEvent={installPromptEvent}
         onInstallPwa={handleInstallPwa}
         isPwaInstalled={isPwaInstalled}
+        projectSwitcher={<ProjectSwitcher sites={userSites} siteId={selectedSiteId} onSelectSite={handleSelectSite} onNewSite={openNewSiteModal} />}
       >
         {/* Main View Router */}
         <main>
-        {currentView === 'dashboard' && (
+        {/* Phones: today's numbers and quick actions for the open project. */}
+        {currentView === 'dashboard' && isPhone && (
+          <HomeView
+            user={activeUser}
+            sites={userSitesQuery}
+            siteId={selectedSiteId}
+            onGo={goFromHome}
+            onNewSite={openNewSiteModal}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'dashboard' && !isPhone && (
           <DashboardView
             onlySites={false}
             selectedSiteId={selectedSiteId}
@@ -879,6 +891,7 @@ export function App() {
             }}
             onOpenLedger={() => handleNavigate('site-detail', phoneStockSiteId, 'materials')}
             onNotify={addToast}
+            startWith={quickAction === 'purchase' ? 'purchase' : undefined}
           />
         )}
 
@@ -892,7 +905,7 @@ export function App() {
           />
         )}
 
-        {currentView === 'toolroom' && !projectSiteId && (
+        {currentView === 'toolroom' && userSitesQuery && !projectSiteId && (
           <div className="m-card m-card-pad" style={{ margin: 16 }}>Add a project first. Tools are kept per project.</div>
         )}
         {/* Same screen at every width; with no project open it uses the first one instead of showing nothing. */}
@@ -903,6 +916,7 @@ export function App() {
             onBack={() => handleNavigate('dashboard')}
             onOpenLedger={() => handleNavigate('site-detail', projectSiteId, 'tools')}
             onNotify={addToast}
+            startFilter={quickAction === 'issue-tool' ? 'available' : undefined}
           />
         )}
 
@@ -913,6 +927,7 @@ export function App() {
             onBack={() => handleNavigate('dashboard')}
             onOpenLedger={() => handleNavigate('site-detail', selectedSiteId || '', 'expenses')}
             onNotify={addToast}
+            startWith={quickAction === 'expense' ? 'add' : undefined}
           />
         )}
 
@@ -994,6 +1009,9 @@ export function App() {
         )}
       </main>
       </AppShell>
+
+      {/* Phones: Home | Labour | Stock | Tools | More */}
+      {isPhone && <MobileBottomNav {...navProps} />}
 
       {/* Fast Mobile Site Selector Sheet */}
       {isSitePickerOpen && (

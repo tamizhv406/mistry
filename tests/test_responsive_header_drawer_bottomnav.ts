@@ -2,18 +2,19 @@ import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 
-console.log('--- TEST: RESPONSIVE HEADER, LEFT SLIDE-IN DRAWER & BOTTOM NAV REMOVAL ---');
+console.log('--- TEST: RESPONSIVE HEADER, LEFT SLIDE-IN DRAWER & PHONE BOTTOM NAV ---');
 
-// 1. App.tsx should not render MobileBottomNav or duplicate MobileTopBar
-console.log('\nTest 1: App.tsx clean chrome hierarchy (No duplicate headers, no bottom nav)');
+// 1. One header (TopNav, with the project switcher); the 5-tab bottom bar on phones only (Task 5)
+console.log('\nTest 1: App.tsx chrome hierarchy (one header, bottom nav on phones only)');
 {
   const appPath = path.resolve(process.cwd(), 'src', 'App.tsx');
   const appCode = fs.readFileSync(appPath, 'utf8');
 
-  assert(!appCode.includes('<MobileTopBar'), 'MobileTopBar duplicate header removed from App.tsx');
-  assert(!appCode.includes('<MobileBottomNav'), 'MobileBottomNav bottom navigation bar removed from App.tsx');
-  console.log('  ✓ Duplicate MobileTopBar eliminated');
-  console.log('  ✓ MobileBottomNav removed from App.tsx');
+  assert(!appCode.includes('<MobileTopBar'), 'No second header: MobileTopBar is not rendered');
+  assert(appCode.includes('{isPhone && <MobileBottomNav'), 'Bottom navigation is rendered on phones only');
+  assert(appCode.includes('<ProjectSwitcher'), 'The project switcher sits in the one header');
+  console.log('  ✓ One header with the project switcher');
+  console.log('  ✓ Bottom navigation on phones only');
 }
 
 // 2. Responsive TopNav Header with Hamburger, Streamlined Language Pill & Mobile Search
@@ -67,17 +68,20 @@ console.log('\nTest 4: In-drawer bilingual language switcher in AppSidebar');
   console.log('  ✓ AppSidebar includes bilingual language toggle inside drawer');
 }
 
-// 5. Bottom Navigation Bar Completely Removed & Hidden in CSS
-console.log('\nTest 5: Bottom Navigation Bar removal in CSS');
+// 5. Bottom navigation: hidden on tablets/desktops, 5 columns on phones (Task 5)
+console.log('\nTest 5: Bottom navigation CSS');
 {
   const cssPath = path.resolve(process.cwd(), 'src', 'styles', 'erp-dashboard.css');
   const css = fs.readFileSync(cssPath, 'utf8');
+  const wide = css.slice(css.indexOf('@media (min-width: 769px)'));
+  const phone = css.slice(css.indexOf('#app-mobile-nav.m-nav'));
 
   assert(css.includes('#app-mobile-nav'), 'CSS targets #app-mobile-nav');
-  assert(css.includes('display: none !important;'), 'Bottom navigation bar hidden with display: none !important');
-  assert(css.includes('--m-nav-h: 0px !important'), 'Bottom navigation height reset to 0px');
-  console.log('  ✓ #app-mobile-nav has display: none !important');
-  console.log('  ✓ --m-nav-h reset to 0px !important');
+  assert(wide.indexOf('display: none !important;') > 0 && wide.indexOf('display: none !important;') < 200, 'Hidden from 769px up');
+  assert(css.includes('--m-nav-h: 0px !important'), 'No space kept for it from 769px up');
+  assert(phone.includes('repeat(5, minmax(0, 1fr))'), 'Five equal tabs on phones');
+  assert(css.includes('font-size: 14px !important'), 'Tab labels are 14px');
+  console.log('  ✓ Hidden from 769px; 5 tabs with 14px labels on phones');
 }
 
 console.log('\n========================================');

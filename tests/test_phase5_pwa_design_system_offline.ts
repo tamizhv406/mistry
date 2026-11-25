@@ -85,24 +85,26 @@ async function runTests() {
     assert(htmlCode.includes('apple-touch-icon'), 'Apple touch icon link present');
   }
 
-  // Test 4: Ergonomic 6-Item Mobile Navigation Bar
-  console.log('\nTest 4: Ergonomic 6-Item Mobile Navigation Bar');
+  // Test 4: 5-tab phone navigation (Task 5): Home | Labour | Stock | Tools | More
+  console.log('\nTest 4: 5-tab Mobile Navigation Bar');
   {
     const mobileChromePath = path.resolve(process.cwd(), 'src', 'components', 'mobile', 'MobileChrome.tsx');
     const chromeCode = fs.readFileSync(mobileChromePath, 'utf8');
 
     assert(chromeCode.includes('id="app-mobile-nav"'), 'Navigation element has ID #app-mobile-nav');
     assert(chromeCode.includes('mobile-nav-home'), 'Tab 1: Home / Dashboard button exists');
-    assert(chromeCode.includes('mobile-nav-projects'), 'Tab 2: Projects button exists');
-    assert(chromeCode.includes('mobile-nav-attendance'), 'Tab 3: Attendance button exists');
-    assert(chromeCode.includes('mobile-nav-planner'), 'Tab 4: CAD Floor Plan button exists');
-    assert(chromeCode.includes('mobile-nav-calculator'), 'Tab 5: Building Calculator button exists');
-    assert(chromeCode.includes('mobile-nav-settings'), 'Tab 6: Settings / Sync button exists');
+    assert(chromeCode.includes('mobile-nav-labour'), 'Tab 2: Labour (attendance) button exists');
+    assert(chromeCode.includes('mobile-nav-stock'), 'Tab 3: Stock (materials) button exists');
+    assert(chromeCode.includes('mobile-nav-tools'), 'Tab 4: Tools button exists');
+    assert(chromeCode.includes('mobile-nav-more'), 'Tab 5: More button exists');
+    for (const gone of ['mobile-nav-projects', 'mobile-nav-planner', 'mobile-nav-calculator', 'mobile-nav-settings']) {
+      assert(!chromeCode.includes(gone), `${gone} moved into More`);
+    }
 
     const dsCssPath = path.resolve(process.cwd(), 'src', 'styles', 'design-system.css');
     const dsCss = fs.readFileSync(dsCssPath, 'utf8');
 
-    assert(dsCss.includes('repeat(6, minmax(0, 1fr))'), 'Mobile nav grid configured for 6 columns');
+    assert(dsCss.includes('repeat(5, minmax(0, 1fr))'), 'Mobile nav grid configured for 5 columns');
     assert(dsCss.includes('backdrop-filter: blur'), 'Mobile nav utilizes modern blur backdrop');
     assert(dsCss.includes('safe-area-inset-bottom'), 'Safe-area-inset-bottom is handled for iPhone home indicator');
     assert(dsCss.includes('@media print'), 'Print stylesheet hides mobile bottom navigation bar');

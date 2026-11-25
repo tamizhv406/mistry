@@ -18,11 +18,13 @@ interface ExpensesViewProps {
   onBack: () => void;
   onOpenLedger: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  /** Open with the add-expense form already showing (home screen quick action). */
+  startWith?: 'add';
 }
 
-export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack, onOpenLedger, onNotify }) => {
+export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack, onOpenLedger, onNotify, startWith }) => {
   const sites = useLiveQuery(() => db.sites.filter(s => !s.isDeleted).toArray(), []) || [];
-  const [currentSiteId, setCurrentSiteId] = useState<string>('all');
+  const [currentSiteId, setCurrentSiteId] = useState<string>(siteId || 'all'); // the open project, as on Home
   const project = useProject(currentSiteId !== 'all' ? currentSiteId : undefined);
   const today = todayKey();
   const [range, setRange] = useState<RangeKey>('month');
@@ -30,7 +32,7 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
   const [to, setTo] = useState(today);
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(startWith === 'add');
   const [open, setOpen] = useState<ExpenseRow | null>(null);
 
   const allSitesExpenses = useLiveQuery(async () => {
@@ -88,10 +90,10 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
   const openRow = open ? all.find(e => e.id === open.id && e.table === open.table) : undefined;
 
   return (
-    <Page title={pageTitle} subtitle={currentSiteId === 'all' ? 'All Sites (Consolidated)' : selectedSite?.name} onBack={onBack}>
+    <Page className="stk-screen" title={pageTitle} subtitle={currentSiteId === 'all' ? 'All Sites (Consolidated)' : selectedSite?.name} onBack={onBack}>
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#F8FAFC', padding: '8px 12px', borderRadius: 8, border: '1px solid #E2E8F0' }}>
-          <label htmlFor="expenses-site-selector" style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+          <label htmlFor="expenses-site-selector" style={{ fontSize: 14, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
             Site:
           </label>
           <select
@@ -101,12 +103,13 @@ export const ExpensesView: React.FC<ExpensesViewProps> = ({ user, siteId, onBack
             onChange={e => setCurrentSiteId(e.target.value)}
             style={{
               flex: 1,
-              height: '36px',
+              minWidth: 0,
+              height: '44px',
               borderRadius: '6px',
               border: '1px solid #CBD5E1',
               padding: '0 8px',
               background: '#FFFFFF',
-              fontSize: '0.85rem',
+              fontSize: 14,
               fontWeight: 600,
               color: '#1E293B',
             }}

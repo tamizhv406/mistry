@@ -1491,14 +1491,49 @@
    STREAMLINED RESPONSIVE HEADER & LEFT SLIDE-IN NAVIGATION DRAWER
    ========================================================================== */
 
-/* 1. Removal of Bottom Navigation Bar */
-#app-mobile-nav,
-.m-nav {
-  display: none !important;
+/* 1. Bottom navigation: phones only (5 tabs: Home, Labour, Stock, Tools, More).
+   Tablets and desktops use the sidebar / drawer instead. */
+@media (min-width: 769px) {
+  #app-mobile-nav,
+  .m-nav {
+    display: none !important;
+  }
+  :root {
+    --m-nav-h: 0px !important;
+  }
+}
+@media (max-width: 768px) {
+  :root { --m-nav-h: 64px !important; }
+  #app-mobile-nav.m-nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+  #app-mobile-nav .m-nav-btn {
+    min-height: 52px;
+    min-width: 44px;
+    font-size: 14px !important;
+    line-height: 1.1;
+    gap: 2px;
+    justify-content: center;
+    position: relative;
+  }
+  #app-mobile-nav .m-nav-btn span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The More sheet covers everything the drawer did, so phones don't need the menu button. */
+  .erp-mobile-menu-btn { display: none !important; }
+  .erp-brand-badge { display: none !important; }
 }
 
-:root {
-  --m-nav-h: 0px !important;
+/* Project switcher in the top bar: the open project's name, tap to change. */
+.pj-switch {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 0; max-width: 340px;
+  padding: 0 10px; margin-left: 10px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc;
+  color: #0f172a; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.pj-switch:hover { background: #f1f5f9; }
+.pj-switch-icon { flex: 0 0 auto; color: #475569; }
+.pj-switch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 768px) {
+  .erp-top-nav-left { flex: 1 1 auto; min-width: 0; }
+  .pj-switch { margin-left: 0; flex: 1 1 auto; max-width: none; }
 }
 
 /* 2. Responsive Header Navigation */
@@ -1881,3 +1916,54 @@
 
 
 
+
+/* Desktop "Today" panel (same numbers as the phone Home screen). */
+.dt-today { background: #fff; border: 1px solid var(--erp-border, #e2e8f0); border-radius: 16px; padding: 16px 20px; display: grid; gap: 14px; }
+.dt-head h3 { margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a; }
+.dt-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dt-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 72px; max-height: 96px; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; text-align: left; cursor: pointer; font: inherit; color: #0f172a; overflow: hidden; }
+.dt-tile:hover { background: #f1f5f9; }
+.dt-tile-label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: #334155; }
+.dt-tile-value { font-size: 1.5rem; font-weight: 800; line-height: 1.15; }
+.dt-tile-hint { font-size: 14px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dt-tile.is-ok .dt-tile-value { color: #047857; }
+.dt-tile.is-bad { background: #fef2f2; border-color: #fecaca; }
+.dt-tile.is-bad .dt-tile-value { color: #b91c1c; }
+.dt-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.dt-list-head { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.dt-list-head h4 { margin: 0; font-size: 15px; font-weight: 700; color: #0f172a; }
+.dt-link { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 6px; border: 0; background: none; color: #1d4ed8; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.dt-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 0; border-top: 1px solid #f1f5f9; font-size: 14px; }
+.dt-row-main { flex: 1; min-width: 0; font-weight: 600; color: #0f172a; overflow: hidden; text-overflow: ellipsis; }
+.dt-activity { display: block; }
+.dt-sub { display: block; font-weight: 400; color: #64748b; font-size: 14px; }
+.dt-row-end { white-space: nowrap; font-size: 14px; }
+.dt-row-end.is-bad { color: #b91c1c; }
+.dt-empty { display: flex; align-items: center; gap: 6px; margin: 0; padding: 10px 0; color: #475569; font-size: 14px; }
+@media (max-width: 1100px) { .dt-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dt-lists { grid-template-columns: 1fr; } }
+
+/* Phone header (Task 5): project switcher first; every button a full 44px tap; text 14px.
+   Placed last so it wins over the earlier responsive header rules. */
+@media (max-width: 768px) {
+  .erp-top-nav .erp-mobile-menu-btn,
+  .erp-top-nav .erp-brand-badge,
+  .erp-top-nav .erp-nav-divider,
+  .erp-top-nav .erp-page-breadcrumb { display: none !important; }
+  .erp-top-nav .erp-top-nav-right { gap: 4px !important; flex: 0 0 auto; }
+  .erp-top-nav .erp-icon-btn { width: 44px !important; height: 44px !important; }
+  .erp-top-nav .erp-mobile-lang-pill { min-height: 44px; min-width: 44px; padding: 0 8px; font-size: 14px; }
+  .erp-top-nav .erp-mobile-lang-pill .erp-lang-code,
+  .erp-top-nav .erp-mobile-lang-pill .erp-lang-globe { font-size: 14px; }
+  .erp-top-nav .erp-profile-btn { min-height: 44px; min-width: 44px; padding: 0 2px; }
+  .erp-top-nav .erp-avatar, .erp-top-nav .erp-avatar span { font-size: 14px; }
+  .erp-top-nav .erp-profile-meta { display: none !important; }
+}
+@media (max-width: 768px) {
+  .erp-top-nav .erp-badge-count { font-size: 14px; min-width: 20px; height: 20px; line-height: 20px; }
+}
+@media (max-width: 768px) {
+  /* More room for the project name. */
+  .erp-top-nav .erp-lang-globe,
+  .erp-top-nav .erp-profile-btn > svg { display: none !important; }
+  .erp-top-nav .erp-top-nav-left { gap: 6px; }
+}

@@ -1,60 +1,61 @@
 import React, { useMemo, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  BarChart3, Building2, CalendarCheck, ChevronRight, Database, HardHat, LayoutGrid, Package, PenTool, Plus, Wallet, Wrench,
+  Building2, CalendarCheck, ChevronRight, Database, Package, Plus, Users, Wallet, Wrench,
 } from 'lucide-react';
+import { db } from '../../db/db';
 import type { Site, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
-import { buildSiteLabourSummary, countByStatus } from '../../domain/salary';
-import { buildStock } from '../../domain/stock';
-import { buildToolStatus } from '../../domain/toolTracking';
-import { flattenExpenses, sumBy } from '../../domain/expenses';
-import { formatDateTime, formatDay, formatDayLong, todayKey } from '../../utils/datetime';
-import { formatINR, formatQty } from '../../utils/money';
+import { buildDashboardSummary, projectDashboardInput } from '../../domain/dashboard';
+import { formatStock } from '../../domain/stock';
+import { formatDateTime, formatDayLong, todayKey } from '../../utils/datetime';
+import { formatINR } from '../../utils/money';
 import { loadDemoData } from '../../db/seedData';
-import { Empty, Loading, Note, Page, Section, Stat } from '../../components/mobile/kit';
+import { useLanguage } from '../../services/i18n';
+import { MaterialIcon } from '../../components/ui/CategoryIcon';
+import { Empty, Page, Section, Sheet } from '../../components/mobile/kit';
+import '../../styles/materials-mobile.css';
 
 export type AppView = 'labour' | 'stock' | 'toolroom' | 'expenses' | 'reports' | 'floor-plans' | 'my-sites';
+/** A screen to open with its form already started: the home screen's quick actions. */
+export type QuickAction = 'purchase' | 'expense' | 'issue-tool';
 
 interface HomeViewProps {
   user: User;
-  sites: Site[];
+  /** undefined while the projects are still loading. */
+  sites: Site[] | undefined;
   siteId: string | null;
-  onSelectSite: (id: string) => void;
-  onGo: (view: AppView) => void;
-  onOpenClassic: (siteId: string) => void;
+  onGo: (view: AppView, action?: QuickAction) => void;
   onNewSite: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-export const HomeView: React.FC<HomeViewProps> = ({ user, sites, siteId, onSelectSite, onGo, onOpenClassic, onNewSite, onNotify }) => {
+/** Placeholder blocks in the shape of the home screen, shown while the device database opens. */
+export const HomeSkeleton: React.FC = () => (
+  <div className="m-page stk-screen hm-screen" aria-busy="true" aria-label="Loading">
+    <div className="hm-skel hm-skel-title" />
+    <div className="hm-grid">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="hm-skel hm-skel-card" />)}</div>
+    <div className="hm-skel hm-skel-list" />
+  </div>
+);
+
+export const HomeView: React.FC<HomeViewProps> = ({ user, sites, siteId, onGo, onNewSite, onNotify }) => {
+  const { t } = useLanguage();
   const project = useProject(siteId);
+  const catalog = useLiveQuery(() => db.catalogItems.toArray(), []);
   const today = todayKey();
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [allActivity, setAllActivity] = useState(false);
 
-  const derived = useMemo(() => {
-    if (!project) return null;
-    const todays = project.attendance.filter(a => a.date === today);
-    const counts = countByStatus(todays);
-    const marked = new Set(todays.map(a => a.workerId)).size;
-    const labour = buildSiteLabourSummary(project.workers, project.attendance, project.advances, project.salaryPayments, { leavePaid: project.site.leavePaid });
-    const stock = buildStock(project.materials, project.rodEntries, project.stockMovements);
-    const expenses = flattenExpenses(project);
-    const todaysExpenses = expenses.filter(e => e.date === today);
-    const purchases = [...project.materials].sort((a, b) => (b.purchaseDate || '').localeCompare(a.purchaseDate || '') || (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 3);
-    const toolsOut = project.toolAssets.reduce((s, t) => s + buildToolStatus(t, project.toolIssues).issued, 0);
-    return {
-      counts, marked, labour, stock, purchases, toolsOut,
-      todaysExpenseTotal: sumBy(todaysExpenses, e => e.amount),
-      todaysExpenseCount: todaysExpenses.length,
-      inStock: stock.filter(s => s.onHand > 0).length,
-      negative: stock.filter(s => s.isNegative).length,
-    };
-  }, [project, today]);
+  const summary = useMemo(
+    () => (project && catalog ? buildDashboardSummary(projectDashboardInput(project, catalog), today) : null),
+    [project, catalog, today],
+  );
 
   const handleLoadDemo = async () => {
     setLoadingDemo(true);
     try {
-      await loadDemoData();
+      await loadDemoData(user.id);
       onNotify('Sample project loaded. It is marked DEMO and can be removed from Backup & Data.', 'success');
     } catch (err) {
       onNotify('Could not load the sample project: ' + (err as Error).message, 'error');
@@ -63,11 +64,12 @@ export const HomeView: React.FC<HomeViewProps> = ({ user, sites, siteId, onSelec
     }
   };
 
-  const firstName = (user.fullName || user.username || '').split(' ')[0];
+  if (sites === undefined) return <HomeSkeleton />;
 
   if (sites.length === 0) {
+    const firstName = (user.fullName || user.username || '').split(' ')[0];
     return (
-      <Page title={`Welcome${firstName ? ', ' + firstName : ''}`} subtitle={formatDayLong(today)}>
+      <Page className="stk-screen hm-screen" title={`Welcome${firstName ? ', ' + firstName : ''}`} subtitle={formatDayLong(today)}>
         <div className="m-card">
           <Empty
             icon={<Building2 size={26} />}
@@ -83,160 +85,109 @@ export const HomeView: React.FC<HomeViewProps> = ({ user, sites, siteId, onSelec
               </div>
             }
           >
-            A project holds its own floor plans, workers, materials, tools and expenses.
+            A project holds its own workers, materials, tools, expenses and floor plans.
           </Empty>
         </div>
       </Page>
     );
   }
 
-  if (!siteId || project === null) {
-    return (
-      <Page title="Choose a project" subtitle={formatDayLong(today)}>
-        <div className="m-card m-list">
-          {sites.map(s => (
-            <button key={s.id} type="button" className="m-row" onClick={() => onSelectSite(s.id)}>
-              <span className="m-row-icon"><Building2 size={20} /></span>
-              <span className="m-row-main">
-                <span className="m-row-title" style={{ display: 'block' }}>{s.name}</span>
-                <span className="m-row-sub">{s.area || s.address || s.buildingType} · {s.status}</span>
-              </span>
-              <ChevronRight size={20} className="is-muted" />
-            </button>
-          ))}
-        </div>
-      </Page>
-    );
-  }
+  // The app always opens a project; while it (or the catalog) loads, keep the screen's shape.
+  if (!project || !summary) return <HomeSkeleton />;
 
-  if (project === undefined || !derived) {
-    return <Page title="Home" subtitle={formatDayLong(today)}><Loading rows={4} /></Page>;
-  }
-
-  const { site } = project;
-  const notMarked = Math.max(0, project.workers.length - derived.marked);
-  const otherSites = sites.filter(s => s.id !== site.id).slice(0, 3);
+  const s = summary;
+  const presentHint = s.workerCount === 0
+    ? 'No workers yet'
+    : s.notMarkedToday > 0
+      ? t('hm_not_marked', '{n} not marked yet').replace('{n}', String(s.notMarkedToday))
+      : t('hm_of_workers', 'of {n} workers').replace('{n}', String(s.workerCount));
 
   return (
-    <Page title={site.name} subtitle={<>{formatDayLong(today)} · {site.area || site.address || site.status}</>}>
-      <button type="button" className="m-hero" onClick={() => onGo('floor-plans')}>
-        <span className="m-hero-icon"><PenTool size={24} /></span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span className="m-hero-title" style={{ display: 'block' }}>Floor Planner</span>
-          <span className="m-hero-sub">Draw walls, rooms, doors and windows. View in 3D.</span>
-        </span>
-        <ChevronRight size={22} />
-      </button>
+    <Page className="stk-screen hm-screen" title={formatDayLong(today)}>
+      {/* Today: who came, what was spent. */}
+      <div className="hm-grid">
+        <button type="button" className="hm-card is-ok" onClick={() => onGo('labour')}>
+          <span className="hm-card-label">{t('hm_present', 'Present today')}</span>
+          <span className="hm-card-value">{s.presentToday}</span>
+          <span className={`hm-card-hint ${s.notMarkedToday > 0 && s.workerCount > 0 ? 'is-warn' : ''}`}>{presentHint}</span>
+        </button>
+        <button type="button" className="hm-card" onClick={() => onGo('expenses')}>
+          <span className="hm-card-label">{t('hm_expenses', "Today's expenses")}</span>
+          <span className="hm-card-value">{formatINR(s.todaysExpenses)}</span>
+          <span className="hm-card-hint">{s.todaysExpenseCount ? t('hm_entries', '{n} entries').replace('{n}', String(s.todaysExpenseCount)) : 'Nothing yet'}</span>
+        </button>
+      </div>
 
-      <Section
-        title="Labour today"
-        action={<button type="button" className="m-link" onClick={() => onGo('labour')}>Mark attendance <ChevronRight size={16} /></button>}
-      >
-        {project.workers.length === 0 ? (
-          <div className="m-card m-card-pad is-muted" style={{ fontSize: '0.92rem' }}>
-            No workers yet. Add workers to start marking attendance.
+      {/* Four quick actions, one tap each. */}
+      <div className="hm-grid hm-actions">
+        <button type="button" className="hm-action" onClick={() => onGo('labour')}>
+          <span className="hm-action-icon is-green"><CalendarCheck size={22} /></span>{t('hm_attendance', 'Attendance')}
+        </button>
+        <button type="button" className="hm-action" onClick={() => onGo('stock', 'purchase')}>
+          <span className="hm-action-icon is-amber"><Package size={22} /></span>{t('hm_material_in', 'Material arrived')}
+        </button>
+        <button type="button" className="hm-action" onClick={() => onGo('expenses', 'expense')}>
+          <span className="hm-action-icon is-blue"><Wallet size={22} /></span>{t('hm_add_expense', 'Add expense')}
+        </button>
+        <button type="button" className="hm-action" onClick={() => onGo('toolroom', 'issue-tool')}>
+          <span className="hm-action-icon is-teal"><Wrench size={22} /></span>{t('hm_give_tool', 'Give tool')}
+        </button>
+      </div>
+
+      <div className="hm-grid">
+        <button type="button" className={`hm-card ${s.lowStockCount > 0 ? 'is-bad' : ''}`} onClick={() => onGo('stock')}>
+          <span className="hm-card-label">{t('hm_low_stock', 'Low stock')}</span>
+          <span className="hm-card-value">{s.lowStockCount}</span>
+          <span className="hm-card-hint">{s.lowStockCount ? `${s.lowStockCount} item${s.lowStockCount === 1 ? '' : 's'}` : t('hm_all_ok', 'All stock OK')}</span>
+        </button>
+        <button type="button" className={`hm-card ${s.toolsLate > 0 ? 'is-bad' : ''}`} onClick={() => onGo('toolroom')}>
+          <span className="hm-card-label">{t('hm_tools_out', 'Tools out')}</span>
+          <span className="hm-card-value">{s.toolsOut}</span>
+          <span className="hm-card-hint">{s.toolsLate ? t('hm_late', '{n} late').replace('{n}', String(s.toolsLate)) : project.toolAssets.length ? `${project.toolAssets.length} in tool room` : 'No tools yet'}</span>
+        </button>
+      </div>
+
+      {/* Salary still to pay, one line. */}
+      <div className="m-card m-list hm-block">
+        <button type="button" className="m-row" onClick={() => onGo('labour')}>
+          <span className="m-row-icon"><Users size={20} /></span>
+          <span className="m-row-main"><span className="m-row-title">{t('hm_pending_salary', 'Salary pending')}</span></span>
+          <span className={`hm-row-amount ${s.pendingSalary > 0 ? 'is-bad' : ''}`}>{formatINR(s.pendingSalary)}</span>
+          <ChevronRight size={20} className="is-muted" />
+        </button>
+      </div>
+
+      {s.lowStockCount > 0 && (
+        <Section
+          title={t('hm_low_stock', 'Low stock')}
+          action={<button type="button" className="m-link hm-link" onClick={() => onGo('stock')}>{t('hm_view_all', 'View all')} <ChevronRight size={16} /></button>}
+        >
+          <div className="m-card m-list">
+            {s.lowStockTop.map(item => (
+              <button key={item.key} type="button" className="m-row hm-stock-row" onClick={() => onGo('stock')}>
+                <MaterialIcon category={item.category} name={item.name} />
+                <span className="m-row-main"><span className="m-row-title">{item.name}</span></span>
+                <span className="hm-row-amount is-bad">{formatStock(item.category, item.unit, item.onHand)}</span>
+              </button>
+            ))}
           </div>
-        ) : (
-          <>
-            <div className="m-stats is-4">
-              <Stat label="Present" value={derived.counts.present + derived.counts.overtime} tone="ok" onClick={() => onGo('labour')} />
-              <Stat label="Half day" value={derived.counts.half_day} tone="warn" onClick={() => onGo('labour')} />
-              <Stat label="Leave" value={derived.counts.leave} tone="info" onClick={() => onGo('labour')} />
-              <Stat label="Absent" value={derived.counts.absent} tone="bad" onClick={() => onGo('labour')} />
-            </div>
-            {notMarked > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <Note tone="warn">{notMarked} of {project.workers.length} workers not marked yet today.</Note>
-              </div>
-            )}
-          </>
-        )}
-      </Section>
-
-      <Section title="Money">
-        <div className="m-stats">
-          <Stat
-            label="Today's expenses"
-            value={formatINR(derived.todaysExpenseTotal)}
-            hint={derived.todaysExpenseCount ? `${derived.todaysExpenseCount} entr${derived.todaysExpenseCount === 1 ? 'y' : 'ies'}` : 'Nothing recorded'}
-            onClick={() => onGo('expenses')}
-          />
-          <Stat
-            label="Salary pending"
-            value={formatINR(derived.labour.pending)}
-            tone={derived.labour.pending > 0 ? 'bad' : 'ok'}
-            hint="Earned − paid − advances"
-            onClick={() => onGo('labour')}
-          />
-          <Stat
-            label="Advances given"
-            value={formatINR(derived.labour.recoverableAdvances)}
-            hint="To be recovered from salary"
-            onClick={() => onGo('labour')}
-          />
-          <Stat
-            label="Paid ahead"
-            value={formatINR(derived.labour.overpaid)}
-            hint="Workers paid more than earned"
-            onClick={() => onGo('labour')}
-          />
-        </div>
-      </Section>
+        </Section>
+      )}
 
       <Section
-        title="Materials"
-        action={<button type="button" className="m-link" onClick={() => onGo('stock')}>Stock <ChevronRight size={16} /></button>}
+        title={t('hm_recent', 'Recent activity')}
+        action={project.activity.length > s.recentActivity.length
+          ? <button type="button" className="m-link hm-link" onClick={() => setAllActivity(true)}>{t('hm_view_all', 'View all')} <ChevronRight size={16} /></button>
+          : undefined}
       >
-        <div className="m-card m-list">
-          <button type="button" className="m-row" onClick={() => onGo('stock')}>
-            <span className="m-row-icon"><Package size={20} /></span>
-            <span className="m-row-main">
-              <span className="m-row-title" style={{ display: 'block' }}>{derived.inStock} item{derived.inStock === 1 ? '' : 's'} in stock</span>
-              <span className="m-row-sub">
-                {derived.negative > 0 ? `${derived.negative} item${derived.negative === 1 ? '' : 's'} need checking` : 'Purchases, usage and returns'}
-              </span>
-            </span>
-            <ChevronRight size={20} className="is-muted" />
-          </button>
-          {derived.purchases.map(p => (
-            <div key={p.id} className="m-row">
-              <span className="m-row-main">
-                <span className="m-row-title" style={{ display: 'block' }}>{p.materialName}</span>
-                <span className="m-row-sub">{formatQty(p.quantity)} {p.unit} · {formatDay(p.purchaseDate)}{p.supplier ? ' · ' + p.supplier : ''}</span>
-              </span>
-              <span className="m-row-end"><span className="m-row-amount">{formatINR(p.totalAmount)}</span></span>
-            </div>
-          ))}
-          {derived.purchases.length === 0 && (
-            <div className="m-row is-muted" style={{ fontSize: '0.9rem' }}>No purchases recorded yet.</div>
-          )}
-        </div>
-      </Section>
-
-      <Section title="Go to">
-        <div className="m-action-grid">
-          <button type="button" className="m-action" onClick={() => onGo('labour')}><span className="m-action-icon"><CalendarCheck size={22} /></span>Attendance</button>
-          <button type="button" className="m-action" onClick={() => onGo('stock')}><span className="m-action-icon"><Package size={22} /></span>Materials</button>
-          <button type="button" className="m-action" onClick={() => onGo('toolroom')}>
-            <span className="m-action-icon"><Wrench size={22} /></span>Tools{derived.toolsOut > 0 ? ` (${derived.toolsOut} out)` : ''}
-          </button>
-          <button type="button" className="m-action" onClick={() => onGo('expenses')}><span className="m-action-icon"><Wallet size={22} /></span>Expenses</button>
-          <button type="button" className="m-action" onClick={() => onGo('reports')}><span className="m-action-icon"><BarChart3 size={22} /></span>Reports</button>
-          <button type="button" className="m-action" onClick={() => onGo('floor-plans')}><span className="m-action-icon"><PenTool size={22} /></span>Floor Plans</button>
-          <button type="button" className="m-action" onClick={() => onGo('my-sites')}><span className="m-action-icon"><HardHat size={22} /></span>Projects</button>
-          <button type="button" className="m-action" onClick={() => onOpenClassic(site.id)}><span className="m-action-icon"><LayoutGrid size={22} /></span>All ledgers</button>
-        </div>
-      </Section>
-
-      <Section title="Recent activity">
-        {project.activity.length === 0 ? (
-          <div className="m-card m-card-pad is-muted" style={{ fontSize: '0.92rem' }}>Activity will appear here as you record work.</div>
+        {s.recentActivity.length === 0 ? (
+          <div className="m-card m-card-pad is-muted">{t('hm_no_activity', 'Activity will appear here as you record work.')}</div>
         ) : (
           <div className="m-card m-list">
-            {project.activity.slice(0, 6).map(a => (
-              <div key={a.id} className="m-row" style={{ minHeight: 52 }}>
+            {s.recentActivity.map(a => (
+              <div key={a.id} className="m-row hm-activity">
                 <span className="m-row-main">
-                  <span style={{ display: 'block', fontSize: '0.92rem', fontWeight: 600 }}>{a.description}</span>
+                  <span className="hm-activity-text">{a.description}</span>
                   <span className="m-row-sub">{formatDateTime(a.timestamp)}{a.userName ? ' · ' + a.userName : ''}</span>
                 </span>
               </div>
@@ -245,25 +196,19 @@ export const HomeView: React.FC<HomeViewProps> = ({ user, sites, siteId, onSelec
         )}
       </Section>
 
-      {otherSites.length > 0 && (
-        <Section
-          title="Other projects"
-          action={<button type="button" className="m-link" onClick={() => onGo('my-sites')}>All <ChevronRight size={16} /></button>}
-        >
-          <div className="m-card m-list">
-            {otherSites.map(s => (
-              <button key={s.id} type="button" className="m-row" onClick={() => onSelectSite(s.id)}>
-                <span className="m-row-icon"><Building2 size={20} /></span>
-                <span className="m-row-main">
-                  <span className="m-row-title" style={{ display: 'block' }}>{s.name}</span>
-                  <span className="m-row-sub">{s.area || s.address || s.buildingType} · {s.status}</span>
-                </span>
-                <ChevronRight size={20} className="is-muted" />
-              </button>
-            ))}
-          </div>
-        </Section>
-      )}
+      <Sheet open={allActivity} title={t('hm_recent', 'Recent activity')} subtitle={project.site.name} onClose={() => setAllActivity(false)}>
+        <div className="m-card m-list stk-screen">
+          {project.activity.map(a => (
+            <div key={a.id} className="m-row hm-activity">
+              <span className="m-row-main">
+                <span className="hm-activity-text">{a.description}</span>
+                <span className="m-row-sub">{formatDateTime(a.timestamp)}{a.userName ? ' · ' + a.userName : ''}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </Sheet>
     </Page>
   );
 };
+

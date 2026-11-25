@@ -17,6 +17,8 @@ interface AppShellProps {
   installPromptEvent?: any;
   onInstallPwa?: () => void;
   isPwaInstalled?: boolean;
+  /** Shown in the top bar: the open project, tap to switch. */
+  projectSwitcher?: React.ReactNode;
 }
 
 /**
@@ -36,6 +38,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   children,
   isOnline = true,
   showOnlineRestored = false,
+  projectSwitcher,
 }) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -129,6 +132,7 @@ export const AppShell: React.FC<AppShellProps> = ({
           onNavigate={onNavigate}
           onLogout={onLogout}
           onToggleSidebarMobile={() => setMobileDrawerOpen(prev => !prev)}
+          projectSwitcher={projectSwitcher}
           />
         )}
 

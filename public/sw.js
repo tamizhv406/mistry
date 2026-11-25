@@ -1,5 +1,5 @@
 // Building Mistry Service Worker
-const CACHE_NAME = 'building-mistry-v4';
+const CACHE_NAME = 'building-mistry-v5';
 
 const STATIC_ASSETS = [
   './',
@@ -13,12 +13,35 @@ const STATIC_ASSETS = [
   './icons/icon.svg'
 ];
 
-// Install Event: Pre-cache static shell assets
+/**
+ * The app's own scripts and styles named in a page (Vite gives them hashed names), so the app can
+ * start offline even when the very first visit is the last one made online.
+ */
+function shellAssetUrls(html) {
+  const urls = new Set();
+  const re = /(?:src|href)="([^"]+\.(?:js|css))"/g;
+  let m;
+  while ((m = re.exec(html))) {
+    try {
+      const u = new URL(m[1], self.registration.scope);
+      if (u.origin === self.location.origin) urls.add(u.href);
+    } catch { /* not a URL */ }
+  }
+  return [...urls];
+}
+
+function cacheShellAssets(cache, html) {
+  return Promise.all(shellAssetUrls(html).map(url => cache.add(url).catch(() => undefined)));
+}
+
+// Install Event: Pre-cache static shell assets, then the scripts and styles the app page loads
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(STATIC_ASSETS)
+        .then(() => cache.match('./index.html'))
+        .then(page => (page ? page.text().then(html => cacheShellAssets(cache, html)) : undefined)))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -62,7 +85,12 @@ self.addEventListener('fetch', event => {
           // install time is served forever when offline, even after the app has been updated.
           if (response && response.status === 200 && response.type === 'basic') {
             const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(pageKey, copy));
+            const forAssets = isPlanner ? null : response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(pageKey, copy);
+              // An updated app has new file names: keep its scripts and styles for offline starts too.
+              if (forAssets) forAssets.text().then(html => cacheShellAssets(cache, html)).catch(() => undefined);
+            });
           }
           return response;
         })

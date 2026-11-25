@@ -17,11 +17,12 @@ import type {
   PaymentTransaction,
 } from './types';
 
-export async function loadDemoData(): Promise<void> {
+/** `ownerId`: the account the sample belongs to, so it shows in that account's project list. */
+export async function loadDemoData(ownerId?: string): Promise<void> {
   const now = new Date().toISOString();
   const todayStr = todayKey();
   const demoSiteId = 'demo-site-sri-murugan';
-  const demoUserId = 'user-mistry-velu';
+  const demoUserId = ownerId || 'user-mistry-velu';
 
   // Demo Site
   const demoSite: Site = {

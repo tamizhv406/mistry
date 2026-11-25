@@ -40,6 +40,8 @@ interface TopNavProps {
   onNavigate: (view: string, siteId?: string, tab?: string) => void;
   onLogout: () => void;
   onToggleSidebarMobile?: () => void;
+  /** The open project's name; tapping it switches project. */
+  projectSwitcher?: React.ReactNode;
 }
 
 interface NotificationItem {
@@ -59,6 +61,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onNavigate,
   onLogout,
   onToggleSidebarMobile,
+  projectSwitcher,
 }) => {
   const { lang, setLang } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -242,6 +245,8 @@ export const TopNav: React.FC<TopNavProps> = ({
           <span className="erp-breadcrumb-sep">/</span>
           <h1 className="erp-page-title">{currentTitle}</h1>
         </div>
+
+        {projectSwitcher}
       </div>
 
       {/* Center: Global Real-time Search */}

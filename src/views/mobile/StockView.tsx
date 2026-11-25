@@ -41,15 +41,17 @@ interface StockViewProps {
   onOpenSteelPurchase: () => void;
   onOpenLedger: () => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  /** Open with the "material arrived" form already started (home screen quick action). */
+  startWith?: 'purchase';
 }
 
-export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOpenSteelPurchase, onOpenLedger, onNotify }) => {
+export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOpenSteelPurchase, onOpenLedger, onNotify, startWith }) => {
   const { t } = useLanguage();
   const project = useProject(siteId);
   const catalog = useLiveQuery(() => db.catalogItems.filter(c => !c.isDeleted && c.kind !== 'tool').toArray(), []);
   const [query, setQuery] = useState('');
   const [chip, setChip] = useState<StockChip>('all');
-  const [entry, setEntry] = useState<{ mode: EntryMode; itemKey?: string } | null>(null);
+  const [entry, setEntry] = useState<{ mode: EntryMode; itemKey?: string } | null>(() => (startWith === 'purchase' ? { mode: 'purchase' } : null));
   const [chooser, setChooser] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);

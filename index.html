@@ -28,9 +28,32 @@
         }
       })();
     </script>
+    <style>
+      .boot-shell { min-height: 100vh; background: #f8fafc; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+      .boot-bar { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+      .boot-logo { width: 32px; height: 32px; border-radius: 9px; background: #0f172a; }
+      .boot-pill { flex: 0 1 220px; height: 36px; border-radius: 10px; background: #eef2f7; }
+      .boot-body { max-width: 720px; margin: 0 auto; padding: 16px; }
+      .boot-block { height: 72px; border-radius: 14px; background: linear-gradient(90deg, #eef2f7 25%, #f8fafc 50%, #eef2f7 75%); background-size: 200% 100%; animation: bootShimmer 1.2s ease-in-out infinite; }
+      .boot-title { height: 24px; width: 60%; margin-bottom: 12px; }
+      .boot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .boot-list { height: 160px; margin-top: 14px; }
+      .boot-text { margin: 16px 0 0; text-align: center; color: #475569; font-size: 15px; }
+      @keyframes bootShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+      @media (prefers-reduced-motion: reduce) { .boot-block { animation: none; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown until the app starts (also offline), so opening the app never shows a blank screen. -->
+    <div id="root"><div class="boot-shell" aria-busy="true" aria-label="Loading Building Mistry">
+      <div class="boot-bar"><span class="boot-logo"></span><span class="boot-pill"></span></div>
+      <div class="boot-body">
+        <div class="boot-block boot-title"></div>
+        <div class="boot-grid"><div class="boot-block"></div><div class="boot-block"></div><div class="boot-block"></div><div class="boot-block"></div></div>
+        <div class="boot-block boot-list"></div>
+        <p class="boot-text">Opening your project…</p>
+      </div>
+    </div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
