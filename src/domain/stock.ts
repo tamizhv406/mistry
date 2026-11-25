@@ -8,7 +8,7 @@
  * supplier payments). Every other change is a `StockMovement`. History is append-only:
  * a wrong movement is voided (kept, struck through, excluded from the balance), never edited.
  */
-import type { CatalogItem, Material, RodEntry, StockMovement, StockMovementType } from '../db/types';
+import type { BillPhotoSyncStatus, CatalogItem, Material, RodEntry, StockMovement, StockMovementType } from '../db/types';
 import { dayKeyOf, formatDay } from '../utils/datetime';
 
 /** Purchase date, or for old rows without one, the Indian calendar day the row was entered. */
@@ -115,6 +115,14 @@ export interface StockLine {
   notes?: string;
   createdByName?: string;
   voidReason?: string;
+  /** Bill / invoice photo attachment metadata copied from purchase records. */
+  billPhotoPath?: string;
+  billPhotoLocalDataUrl?: string;
+  billPhotoSyncStatus?: BillPhotoSyncStatus;
+  billPhotoName?: string;
+  /** Original database record ID and table backing this purchase line (differs from id for `${r.id}-length`). */
+  purchaseRecordId?: string;
+  recordTable?: 'materials' | 'rodEntries';
   /** Movements can be voided from the stock screen; purchases are corrected in the purchase record. */
   source: 'purchase' | 'movement';
 }
@@ -206,6 +214,12 @@ export function buildStock(
       createdAt: m.createdAt || '', quantity, signed: quantity,
       voided: false, balanceAfter: 0, supplier: m.supplier, cost: purchaseAmount(m.totalAmount, m.quantity, m.rate ?? (m as { unitPrice?: number }).unitPrice),
       reference: m.invoiceNumber, notes: m.notes,
+      billPhotoPath: m.billPhotoPath,
+      billPhotoLocalDataUrl: m.billPhotoLocalDataUrl,
+      billPhotoSyncStatus: m.billPhotoSyncStatus,
+      billPhotoName: m.billPhotoName,
+      purchaseRecordId: m.id,
+      recordTable: 'materials',
     });
     if (m.catalogItemId) catalogIdsOf(it.key).add(m.catalogItemId);
   }
@@ -220,6 +234,12 @@ export function buildStock(
       voided: false, balanceAfter: 0, supplier: r.supplier,
       cost: purchaseAmount(r.totalAmount, r.weightKg, r.ratePerKg ?? (r as { pricePerKg?: number }).pricePerKg),
       reference: r.invoiceNumber, notes: r.notes,
+      billPhotoPath: r.billPhotoPath,
+      billPhotoLocalDataUrl: r.billPhotoLocalDataUrl,
+      billPhotoSyncStatus: r.billPhotoSyncStatus,
+      billPhotoName: r.billPhotoName,
+      purchaseRecordId: r.id,
+      recordTable: 'rodEntries',
     });
 
     const recordedLength = Number(r.lengthMetres);
@@ -235,6 +255,12 @@ export function buildStock(
         createdAt: r.createdAt || '', quantity: recordedLength, signed: recordedLength,
         voided: false, balanceAfter: 0, supplier: r.supplier,
         reference: r.invoiceNumber, notes: r.notes,
+        billPhotoPath: r.billPhotoPath,
+        billPhotoLocalDataUrl: r.billPhotoLocalDataUrl,
+        billPhotoSyncStatus: r.billPhotoSyncStatus,
+        billPhotoName: r.billPhotoName,
+        purchaseRecordId: r.id,
+        recordTable: 'rodEntries',
       });
     }
   }

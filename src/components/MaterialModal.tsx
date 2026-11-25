@@ -7,6 +7,13 @@ import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/fi
 import { getCurrentUser } from '../services/auth';
 import { writableSite } from '../services/records';
 import { VoiceInputField } from './VoiceInputField';
+import { BillPhotoPicker } from './BillPhotoComponents';
+import {
+  attachBillPhotoToPurchase,
+  deleteBillPhotoFromPurchase,
+  resolveBillPhotoDisplayUrl,
+  type CompressedBillPhoto,
+} from '../services/billPhotoService';
 
 interface MaterialModalProps {
   isOpen: boolean;
@@ -49,6 +56,9 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
   const [purchaseDate, setPurchaseDate] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [billPhoto, setBillPhoto] = useState<CompressedBillPhoto | null>(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
+  const [removeExistingPhoto, setRemoveExistingPhoto] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -125,6 +135,20 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
       }
     }
   }, [category, materialToEdit, isOpen]);
+
+  useEffect(() => {
+    setBillPhoto(null);
+    setRemoveExistingPhoto(false);
+    if (!isOpen || !materialToEdit || (!materialToEdit.billPhotoPath && !materialToEdit.billPhotoLocalDataUrl)) {
+      setExistingPhotoUrl(null);
+      return;
+    }
+    let active = true;
+    void resolveBillPhotoDisplayUrl(materialToEdit).then(res => {
+      if (active) setExistingPhotoUrl(res.url);
+    });
+    return () => { active = false; };
+  }, [materialToEdit, isOpen]);
 
   if (!isOpen) return null;
 
@@ -203,9 +227,31 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
         isDeleted: false,
         createdAt: materialToEdit ? materialToEdit.createdAt : now,
         updatedAt: now,
+        ...(materialToEdit && !removeExistingPhoto
+          ? {
+              billPhotoPath: materialToEdit.billPhotoPath,
+              billPhotoLocalDataUrl: materialToEdit.billPhotoLocalDataUrl,
+              billPhotoSyncStatus: materialToEdit.billPhotoSyncStatus,
+              billPhotoName: materialToEdit.billPhotoName,
+            }
+          : {}),
       };
 
       await db.materials.put(record);
+
+      if (billPhoto) {
+        await attachBillPhotoToPurchase({
+          table: 'materials',
+          purchaseId: id,
+          siteId,
+          photo: billPhoto,
+        });
+      } else if (materialToEdit && removeExistingPhoto && (materialToEdit.billPhotoPath || materialToEdit.billPhotoLocalDataUrl)) {
+        await deleteBillPhotoFromPurchase({
+          table: 'materials',
+          purchaseId: id,
+        });
+      }
 
       // Record individual payment transaction if initial payment made
       if (!materialToEdit && fin.paidAmount > 0) {
@@ -485,6 +531,19 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                 onChange={setNotes}
               />
             </div>
+
+            <BillPhotoPicker
+              value={billPhoto}
+              onChange={photo => {
+                setBillPhoto(photo);
+                if (photo) setRemoveExistingPhoto(false);
+              }}
+              existingUrl={!removeExistingPhoto ? existingPhotoUrl : null}
+              existingName={materialToEdit?.billPhotoName || 'Bill photo'}
+              onRemoveExisting={() => setRemoveExistingPhoto(true)}
+              disabled={isSubmitting}
+              compact
+            />
           </div>
 
           <div className="modal-footer">

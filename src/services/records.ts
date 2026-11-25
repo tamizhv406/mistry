@@ -418,6 +418,10 @@ export interface PurchaseInput {
   purchaseDate: string;
   invoiceNumber?: string;
   notes?: string;
+  billPhotoPath?: string;
+  billPhotoLocalDataUrl?: string;
+  billPhotoSyncStatus?: 'pending' | 'synced' | 'failed';
+  billPhotoName?: string;
   /** Set after the user has confirmed a purchase that looks like a repeat. */
   allowDuplicate?: boolean;
 }
@@ -458,6 +462,10 @@ export async function recordPurchase(user: User, siteId: string, input: Purchase
     purchaseDate: input.purchaseDate,
     invoiceNumber: (input.invoiceNumber || '').trim(),
     notes: (input.notes || '').trim(),
+    ...(input.billPhotoPath ? { billPhotoPath: input.billPhotoPath } : {}),
+    ...(input.billPhotoLocalDataUrl ? { billPhotoLocalDataUrl: input.billPhotoLocalDataUrl } : {}),
+    ...(input.billPhotoSyncStatus ? { billPhotoSyncStatus: input.billPhotoSyncStatus } : {}),
+    ...(input.billPhotoName ? { billPhotoName: input.billPhotoName } : {}),
     createdBy: user.id,
     isDeleted: false,
     createdAt: now,

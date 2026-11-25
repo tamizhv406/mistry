@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { db } from '../db/db';
 import type { Site, LabourWorker, AttendanceRecord, Material, OtherExpense } from '../db/types';
+import { syncPendingBillPhotos } from './billPhotoService';
 
 export interface SyncStatus {
   status: 'synced' | 'syncing' | 'offline' | 'error' | 'idle';
@@ -204,6 +205,7 @@ export async function pullMaterialsFromCloud(userId: string): Promise<number> {
 
   let count = 0;
   for (const m of data) {
+    const existing = await db.materials.get(m.id);
     const localMat: Material = {
       id: m.id,
       siteId: m.project_id,
@@ -223,6 +225,10 @@ export async function pullMaterialsFromCloud(userId: string): Promise<number> {
       createdAt: m.created_at || new Date().toISOString(),
       updatedAt: m.updated_at || new Date().toISOString(),
       isDeleted: false,
+      billPhotoPath: m.bill_photo_path || existing?.billPhotoPath,
+      billPhotoLocalDataUrl: existing?.billPhotoLocalDataUrl,
+      billPhotoSyncStatus: m.bill_photo_path ? 'synced' : existing?.billPhotoSyncStatus,
+      billPhotoName: m.bill_photo_name || existing?.billPhotoName,
     };
     await db.materials.put(localMat);
     count++;
@@ -450,8 +456,9 @@ export async function performFullSync(userId?: string): Promise<{ success: boole
     updateStatus({ status: 'syncing', message: 'Syncing projects and records...' });
 
     try {
-      // 1. Drain any pending offline queue items
+      // 1. Drain any pending offline queue items and pending offline bill photos
       await drainOfflineQueue();
+      await syncPendingBillPhotos().catch(() => {});
 
       // 2. Pull latest from cloud into Dexie local cache
       await pullProjectsFromCloud(targetUserId);

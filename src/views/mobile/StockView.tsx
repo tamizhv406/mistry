@@ -17,6 +17,13 @@ import {
 } from '../../domain/catalog';
 import { MaterialIcon } from '../../components/ui/CategoryIcon';
 import {
+  BillPhotoPicker,
+  BillPhotoThumbnail,
+  BillPhotoViewerModal,
+  type BillPhotoRecordRef,
+} from '../../components/BillPhotoComponents';
+import { attachBillPhotoToPurchase, type CompressedBillPhoto } from '../../services/billPhotoService';
+import {
   ensureCatalogSeeded, recordPurchase, recordStockMovement, removeCatalogItem, saveCatalogItem, setLowStockLevel, voidStockMovement,
 } from '../../services/records';
 import { useLanguage } from '../../services/i18n';
@@ -303,6 +310,7 @@ const EntrySheet: React.FC<{
   const [date, setDate] = useState(todayKey());
   const [invoice, setInvoice] = useState('');
   const [notes, setNotes] = useState('');
+  const [billPhoto, setBillPhoto] = useState<CompressedBillPhoto | null>(null);
   const [reason, setReason] = useState('');
   const [direction, setDirection] = useState<'adjust_in' | 'adjust_out'>('adjust_out');
   const [error, setError] = useState('');
@@ -535,6 +543,14 @@ const EntrySheet: React.FC<{
         else setError(res.error);
         return;
       }
+      if (mode === 'purchase' && billPhoto) {
+        await attachBillPhotoToPurchase({
+          table: 'materials',
+          purchaseId: res.value.id,
+          siteId,
+          photo: billPhoto,
+        });
+      }
       if (chosen.newInShelf) {
         // Keep the new material for next time. A name that is already there is fine.
         await saveCatalogItem(user, { kind: 'material', name: chosen.name, category: chosen.category, group: chosen.newInShelf, unit });
@@ -672,6 +688,15 @@ const EntrySheet: React.FC<{
           </Field>
         )}
 
+        {mode === 'purchase' && (
+          <BillPhotoPicker
+            value={billPhoto}
+            onChange={setBillPhoto}
+            disabled={busy}
+            compact
+          />
+        )}
+
         <button type="button" className="stk-more-toggle" aria-expanded={showMore} onClick={() => setShowMore(v => !v)}>
           <span>{t('stk_more', 'More details')}{date !== todayKey() ? ` · ${formatDay(date)}` : ''}</span>
           <ChevronDown size={18} aria-hidden="true" style={{ transform: showMore ? 'rotate(180deg)' : undefined }} />
@@ -783,7 +808,20 @@ const ItemSheet: React.FC<{
   const [voidReason, setVoidReason] = useState('');
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [viewingBill, setViewingBill] = useState<BillPhotoRecordRef | null>(null);
   const history = [...item.lines].reverse();
+
+  const toBillPhotoRef = (target: StockLine): BillPhotoRecordRef => ({
+    purchaseRecordId: target.purchaseRecordId || target.id,
+    recordTable: target.recordTable || (item.category === 'rod' ? 'rodEntries' : 'materials'),
+    siteId,
+    title: item.name,
+    subtitle: `${formatDay(target.date)}${target.supplier ? ` · ${target.supplier}` : ''}`,
+    billPhotoPath: target.billPhotoPath,
+    billPhotoLocalDataUrl: target.billPhotoLocalDataUrl,
+    billPhotoSyncStatus: target.billPhotoSyncStatus,
+    billPhotoName: target.billPhotoName,
+  });
 
   const doVoid = async () => {
     if (!line || busy) return;
@@ -846,23 +884,35 @@ const ItemSheet: React.FC<{
 
         <Section title={`History (${history.length})`}>
           <div className="m-card m-list">
-            {history.map(l => (
-              <button key={l.id} type="button" className="m-row" onClick={() => setLine(l)}>
-                <span className="m-row-main">
-                  <span className={`m-row-title ${l.voided ? 'is-void' : ''}`} style={{ display: 'block' }}>{STOCK_MOVEMENT_LABEL[l.type]}</span>
-                  <span className="m-row-sub">
-                    {formatDay(l.date)}{l.supplier ? ' · ' + l.supplier : ''}{l.reference && l.source === 'movement' ? ' · ' + l.reference : ''}
-                  </span>
-                  {l.voided && <span className="m-row-sub stk-void-reason" style={{ display: 'block' }}>Cancelled: {l.voidReason || 'no reason given'}</span>}
-                </span>
-                <span className="m-row-end">
-                  <span className={`m-qty ${l.voided ? 'is-void is-muted' : l.signed < 0 ? 'is-bad' : 'is-ok'}`} style={{ display: 'block' }}>
-                    {isOut(l.type) ? '−' : '+'}{qtyOnly(l.quantity)}
-                  </span>
-                  {!l.voided && <span className="m-row-sub">bal {qtyOnly(l.balanceAfter)}</span>}
-                </span>
-              </button>
-            ))}
+            {history.map(l => {
+              const hasBillPhoto = l.source === 'purchase' && !!(l.billPhotoPath || l.billPhotoLocalDataUrl);
+              return (
+                <div key={l.id} className="m-row stk-history-row">
+                  <button type="button" className="stk-history-main" onClick={() => setLine(l)}>
+                    <span className="m-row-main">
+                      <span className={`m-row-title ${l.voided ? 'is-void' : ''}`} style={{ display: 'block' }}>{STOCK_MOVEMENT_LABEL[l.type]}</span>
+                      <span className="m-row-sub">
+                        {formatDay(l.date)}{l.supplier ? ' · ' + l.supplier : ''}{l.reference && l.source === 'movement' ? ' · ' + l.reference : ''}
+                      </span>
+                      {l.voided && <span className="m-row-sub stk-void-reason" style={{ display: 'block' }}>Cancelled: {l.voidReason || 'no reason given'}</span>}
+                    </span>
+                    <span className="m-row-end">
+                      <span className={`m-qty ${l.voided ? 'is-void is-muted' : l.signed < 0 ? 'is-bad' : 'is-ok'}`} style={{ display: 'block' }}>
+                        {isOut(l.type) ? '−' : '+'}{qtyOnly(l.quantity)}
+                      </span>
+                      {!l.voided && <span className="m-row-sub">bal {qtyOnly(l.balanceAfter)}</span>}
+                    </span>
+                  </button>
+                  {hasBillPhoto && (
+                    <BillPhotoThumbnail
+                      record={l}
+                      label={`View bill photo for ${item.name}`}
+                      onOpen={() => setViewingBill(toBillPhotoRef(l))}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </Section>
       </Sheet>
@@ -891,20 +941,63 @@ const ItemSheet: React.FC<{
         }
       >
         {line && (
-          <div className="m-calc">
-            <CalcLine label="Quantity" value={show(line.quantity)} />
-            <CalcLine label="Date" value={formatDay(line.date)} />
-            {line.supplier && <CalcLine label="Supplier" value={line.supplier} />}
-            {line.cost !== undefined && line.source === 'purchase' && <CalcLine label="Cost" value={formatINR(line.cost)} />}
-            {line.reference && <CalcLine label={line.source === 'purchase' ? 'Invoice' : 'Reason'} value={<span style={{ whiteSpace: 'normal' }}>{line.reference}</span>} />}
-            {line.notes && <CalcLine label="Notes" value={<span style={{ whiteSpace: 'normal', fontFamily: 'var(--font-body)', fontWeight: 600 }}>{line.notes}</span>} />}
-            <CalcLine label="Entered" value={formatDateTime(line.createdAt)} />
-            {line.createdByName && <CalcLine label="Entered by" value={line.createdByName} />}
-            {line.voided ? <CalcLine label="Cancelled" value={line.voidReason || 'Yes'} tone="bad" /> : <CalcLine label="Stock after this entry" value={show(line.balanceAfter)} />}
-          </div>
+          <>
+            <div className="m-calc">
+              <CalcLine label="Quantity" value={show(line.quantity)} />
+              <CalcLine label="Date" value={formatDay(line.date)} />
+              {line.supplier && <CalcLine label="Supplier" value={line.supplier} />}
+              {line.cost !== undefined && line.source === 'purchase' && <CalcLine label="Cost" value={formatINR(line.cost)} />}
+              {line.reference && <CalcLine label={line.source === 'purchase' ? 'Invoice' : 'Reason'} value={<span style={{ whiteSpace: 'normal' }}>{line.reference}</span>} />}
+              {line.notes && <CalcLine label="Notes" value={<span style={{ whiteSpace: 'normal', fontFamily: 'var(--font-body)', fontWeight: 600 }}>{line.notes}</span>} />}
+              <CalcLine label="Entered" value={formatDateTime(line.createdAt)} />
+              {line.createdByName && <CalcLine label="Entered by" value={line.createdByName} />}
+              {line.voided ? <CalcLine label="Cancelled" value={line.voidReason || 'Yes'} tone="bad" /> : <CalcLine label="Stock after this entry" value={show(line.balanceAfter)} />}
+            </div>
+            {line.source === 'purchase' && (line.billPhotoPath || line.billPhotoLocalDataUrl) && (
+              <div className="bph-detail-card">
+                <BillPhotoThumbnail
+                  record={line}
+                  label={`Open bill photo for ${item.name}`}
+                  onOpen={() => setViewingBill(toBillPhotoRef(line))}
+                />
+                <div className="bph-detail-card-info">
+                  <span className="bph-detail-card-title">{line.billPhotoName || 'Purchase Bill Photo'}</span>
+                  <span className="bph-detail-card-sub">
+                    {line.billPhotoSyncStatus === 'pending' ? 'Saved offline · syncs online' : 'Tap to inspect or remove'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="bph-detail-open-btn"
+                  onClick={() => setViewingBill(toBillPhotoRef(line))}
+                >
+                  View bill
+                </button>
+              </div>
+            )}
+          </>
         )}
         {line?.source === 'purchase' && <p className="m-calc-note">Purchases carry cost and supplier payments. Correct or delete them in the Materials ledger so the payment history stays right.</p>}
       </Sheet>
+
+      <BillPhotoViewerModal
+        record={viewingBill}
+        onClose={() => setViewingBill(null)}
+        onDeleted={deleted => {
+          onNotify('Bill photo removed.', 'info');
+          setLine(prev =>
+            prev && (prev.purchaseRecordId || prev.id) === deleted.purchaseRecordId
+              ? {
+                  ...prev,
+                  billPhotoPath: undefined,
+                  billPhotoLocalDataUrl: undefined,
+                  billPhotoSyncStatus: undefined,
+                  billPhotoName: undefined,
+                }
+              : prev
+          );
+        }}
+      />
 
       <Sheet
         open={confirmVoid}

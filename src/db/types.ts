@@ -83,6 +83,8 @@ export interface Site {
 
 export type MaterialCategory = 'sand' | 'msand' | 'cement' | 'rod' | 'bricks' | 'aggregate' | 'other';
 
+export type BillPhotoSyncStatus = 'pending' | 'synced' | 'failed';
+
 export interface Material {
   id: string;
   userId?: string;
@@ -110,6 +112,10 @@ export interface Material {
   imageUrl?: string;
   imageType?: string;
   imageAlt?: string;
+  billPhotoPath?: string;
+  billPhotoLocalDataUrl?: string;
+  billPhotoSyncStatus?: BillPhotoSyncStatus;
+  billPhotoName?: string;
   isDeleted: boolean;
   deletedAt?: string;
   isDemo?: boolean;
@@ -140,6 +146,10 @@ export interface RodEntry {
   imageUrl?: string;
   imageType?: string;
   imageAlt?: string;
+  billPhotoPath?: string;
+  billPhotoLocalDataUrl?: string;
+  billPhotoSyncStatus?: BillPhotoSyncStatus;
+  billPhotoName?: string;
   isDeleted: boolean;
   deletedAt?: string;
   isDemo?: boolean;

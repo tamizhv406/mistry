@@ -161,3 +161,7 @@ match alone.
   applied, and tested.
 - Very large photo attachments are not synced as files; tool photos added by the user are small
   (about 40 KB) and travel inside the record.
+- Purchase bill / invoice photos attached to material or steel entries are stored in the private
+  `purchase-bills` Storage bucket scoped by `${auth.uid()}/${siteId}/${purchaseId}` (never public).
+  Review and apply [005_purchase_bills_storage.sql](file:///c:/Users/tamiz/Downloads/mistry-main/mistry-main/supabase/migrations/005_purchase_bills_storage.sql)
+  in the Supabase SQL Editor before enabling online bill photo uploads and signed-URL playback.

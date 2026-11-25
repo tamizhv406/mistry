@@ -11,6 +11,8 @@ import { formatINR, parseAmount, roundMoney } from '../utils/money';
 import { CEMENT_TYPES, cementItemName, materialUnitsForCategory } from '../domain/catalog';
 import { compatibleUnits, latestPurchaseByItem, rodItemName, stockItemKey, type StockItem } from '../domain/stock';
 import { useLanguage } from '../services/i18n';
+import { attachBillPhotoToPurchase, type CompressedBillPhoto } from '../services/billPhotoService';
+import { BillPhotoPicker } from './BillPhotoComponents';
 import { MaterialIcon } from './ui/CategoryIcon';
 import '../styles/materials-mobile.css';
 
@@ -69,6 +71,8 @@ const PurchaseForm: React.FC<RecordPurchaseModalProps> = ({
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [billPhoto, setBillPhoto] = useState<CompressedBillPhoto | null>(null);
+  const [photoStatus, setPhotoStatus] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [duplicate, setDuplicate] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -203,6 +207,15 @@ const PurchaseForm: React.FC<RecordPurchaseModalProps> = ({
           isDeleted: false, createdAt: now, updatedAt: now,
         };
         await db.rodEntries.put(rod);
+        if (billPhoto) {
+          setPhotoStatus('Saving bill photo…');
+          await attachBillPhotoToPurchase({
+            table: 'rodEntries',
+            purchaseId: id,
+            siteId: targetSiteId,
+            photo: billPhoto,
+          });
+        }
         if (fin.paidAmount > 0) {
           await recordPaymentTransaction({
             siteId: targetSiteId, relatedRecordId: id, tableName: 'rodEntries', amount: fin.paidAmount,
@@ -229,6 +242,15 @@ const PurchaseForm: React.FC<RecordPurchaseModalProps> = ({
         if (res.duplicateOf) setDuplicate(true);
         else setError(res.error);
         return;
+      }
+      if (billPhoto) {
+        setPhotoStatus('Saving bill photo…');
+        await attachBillPhotoToPurchase({
+          table: 'materials',
+          purchaseId: res.value.id,
+          siteId: targetSiteId,
+          photo: billPhoto,
+        });
       }
       onSuccess(`Purchase recorded: ${qty} ${unit} ${finalName}`);
       onClose();
@@ -364,6 +386,14 @@ const PurchaseForm: React.FC<RecordPurchaseModalProps> = ({
           </label>
 
           <div className="rpm-total"><span>Total</span><strong>{formatINR(total)}</strong></div>
+
+          <BillPhotoPicker
+            value={billPhoto}
+            onChange={setBillPhoto}
+            disabled={busy}
+            statusMessage={photoStatus}
+            compact
+          />
 
           <button type="button" className="rpm-more-toggle" aria-expanded={showMore} onClick={() => setShowMore(v => !v)}>
             <span>{t('stk_more', 'More details')}</span>

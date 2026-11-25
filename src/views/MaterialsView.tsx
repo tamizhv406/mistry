@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
-import type { Site, StockMovement, User } from '../db/types';
+import type { BillPhotoSyncStatus, Site, StockMovement, User } from '../db/types';
 import { buildStock, formatStock, STOCK_MOVEMENT_LABEL, stockStatus, summariseStock, type StockItem } from '../domain/stock';
 import { voidStockMovement } from '../services/records';
 import { MATERIAL_GROUPS, materialGroupId } from '../domain/catalog';
@@ -23,6 +23,7 @@ import { formatINR } from '../utils/money';
 import { RecordPurchaseModal } from '../components/RecordPurchaseModal';
 import { StockOperationModal } from '../components/StockOperationModal';
 import { MaterialIcon } from '../components/ui/CategoryIcon';
+import { BillPhotoThumbnail, BillPhotoViewerModal, type BillPhotoRecordRef } from '../components/BillPhotoComponents';
 
 export interface MaterialsViewProps {
   user: User;
@@ -57,6 +58,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   const [isStockOpModalOpen, setIsStockOpModalOpen] = useState(false);
   const [stockOpItem, setStockOpItem] = useState<StockItem | null>(null);
   const [stockOpMode, setStockOpMode] = useState<'usage' | 'opening' | 'return' | 'adjust_in' | 'adjust_out' | 'transfer'>('usage');
+  const [selectedBillPhoto, setSelectedBillPhoto] = useState<BillPhotoRecordRef | null>(null);
 
   // Live queries for active data
   const materialsQuery = useLiveQuery(async () => {
@@ -143,6 +145,10 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
       paidAmount: number;
       balance: number;
       invoiceNumber?: string;
+      billPhotoPath?: string;
+      billPhotoLocalDataUrl?: string;
+      billPhotoSyncStatus?: BillPhotoSyncStatus;
+      billPhotoName?: string;
     }> = [];
 
     materials.forEach(m => {
@@ -159,6 +165,10 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         paidAmount: m.paidAmount,
         balance: m.balance,
         invoiceNumber: m.invoiceNumber,
+        billPhotoPath: m.billPhotoPath,
+        billPhotoLocalDataUrl: m.billPhotoLocalDataUrl,
+        billPhotoSyncStatus: m.billPhotoSyncStatus,
+        billPhotoName: m.billPhotoName,
       });
     });
 
@@ -176,6 +186,10 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         paidAmount: r.paidAmount,
         balance: r.balance,
         invoiceNumber: r.invoiceNumber,
+        billPhotoPath: r.billPhotoPath,
+        billPhotoLocalDataUrl: r.billPhotoLocalDataUrl,
+        billPhotoSyncStatus: r.billPhotoSyncStatus,
+        billPhotoName: r.billPhotoName,
       });
     });
 
@@ -488,12 +502,13 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                   <th className="is-right">Total Amount</th>
                   <th className="is-right">Paid</th>
                   <th className="is-right">Balance</th>
+                  <th>Bill</th>
                 </tr>
               </thead>
               <tbody>
                 {combinedPurchases.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="erp-empty-cell">
+                    <td colSpan={9} className="erp-empty-cell">
                       <Receipt size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                       <div className="erp-cell-primary">No purchase records yet</div>
                     </td>
@@ -501,6 +516,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                 ) : (
                   combinedPurchases.map(p => {
                     const siteObj = sites.find(s => s.id === p.siteId);
+                    const hasPhoto = !!(p.billPhotoPath || p.billPhotoLocalDataUrl);
                     return (
                       <tr key={p.id}>
                         <td className="erp-cell-muted">{formatDay(p.date)}</td>
@@ -519,6 +535,27 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         </td>
                         <td className={`is-right ${p.balance > 0 ? 'erp-cell-danger' : 'erp-cell-muted'}`}>
                           {formatINR(p.balance)}
+                        </td>
+                        <td>
+                          {hasPhoto ? (
+                            <BillPhotoThumbnail
+                              record={p}
+                              label={`View bill photo for ${p.name}`}
+                              onOpen={() => setSelectedBillPhoto({
+                                purchaseRecordId: p.id,
+                                recordTable: p.kind === 'rod' ? 'rodEntries' : 'materials',
+                                siteId: p.siteId,
+                                title: p.name,
+                                subtitle: `${formatDay(p.date)} · ${p.supplier}`,
+                                billPhotoPath: p.billPhotoPath,
+                                billPhotoLocalDataUrl: p.billPhotoLocalDataUrl,
+                                billPhotoSyncStatus: p.billPhotoSyncStatus,
+                                billPhotoName: p.billPhotoName,
+                              })}
+                            />
+                          ) : (
+                            <span className="erp-cell-muted">—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -656,6 +693,12 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           </div>
         </div>
       )}
+
+      <BillPhotoViewerModal
+        record={selectedBillPhoto}
+        onClose={() => setSelectedBillPhoto(null)}
+        onDeleted={() => onNotify('Bill photo removed.', 'info')}
+      />
     </div>
   );
 };

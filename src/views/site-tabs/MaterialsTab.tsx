@@ -26,6 +26,7 @@ import {
   getRodVisual,
 } from '../../utils/constructionVisuals';
 import { SafeImage } from '../../components/ui/SafeImage';
+import { BillPhotoThumbnail, BillPhotoViewerModal, type BillPhotoRecordRef } from '../../components/BillPhotoComponents';
 
 interface MaterialsTabProps {
   siteId: string;
@@ -67,6 +68,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [selectedRod, setSelectedRod] = useState<RodEntry | null>(null);
   const [selectedDiameterCatalog, setSelectedDiameterCatalog] = useState<string | null>(null);
+  const [selectedBillPhoto, setSelectedBillPhoto] = useState<BillPhotoRecordRef | null>(null);
 
   // Payment History Modal state
   const [paymentModalData, setPaymentModalData] = useState<{
@@ -637,6 +639,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                       <th>Paid Amount</th>
                       <th>Balance Due</th>
                       <th>Extra Paid</th>
+                      <th>Bill</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -717,6 +720,27 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                             )}
                           </td>
                           <td onClick={e => e.stopPropagation()}>
+                            {mat.billPhotoPath || mat.billPhotoLocalDataUrl ? (
+                              <BillPhotoThumbnail
+                                record={mat}
+                                label={`View bill photo for ${mat.materialName}`}
+                                onOpen={() => setSelectedBillPhoto({
+                                  purchaseRecordId: mat.id,
+                                  recordTable: 'materials',
+                                  siteId: mat.siteId,
+                                  title: mat.materialName,
+                                  subtitle: `${mat.purchaseDate} · ${mat.supplier}`,
+                                  billPhotoPath: mat.billPhotoPath,
+                                  billPhotoLocalDataUrl: mat.billPhotoLocalDataUrl,
+                                  billPhotoSyncStatus: mat.billPhotoSyncStatus,
+                                  billPhotoName: mat.billPhotoName,
+                                })}
+                              />
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            )}
+                          </td>
+                          <td onClick={e => e.stopPropagation()}>
                             <div style={{ display: 'flex', gap: '4px' }}>
                               <button
                                 className="btn btn-sm btn-outline"
@@ -784,6 +808,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                       <th>Paid Amount</th>
                       <th>Balance Due</th>
                       <th>Extra Paid</th>
+                      <th>Bill</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -860,6 +885,27 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                               </span>
                             ) : (
                               <span style={{ color: 'var(--text-muted)' }}>₹0</span>
+                            )}
+                          </td>
+                          <td onClick={e => e.stopPropagation()}>
+                            {rod.billPhotoPath || rod.billPhotoLocalDataUrl ? (
+                              <BillPhotoThumbnail
+                                record={rod}
+                                label={`View bill photo for ${rod.brand || 'TMT Steel'} (${rod.diameter})`}
+                                onOpen={() => setSelectedBillPhoto({
+                                  purchaseRecordId: rod.id,
+                                  recordTable: 'rodEntries',
+                                  siteId: rod.siteId,
+                                  title: `${rod.brand || 'TMT Steel'} (${rod.diameter})`,
+                                  subtitle: `${rod.purchaseDate} · ${rod.supplier}`,
+                                  billPhotoPath: rod.billPhotoPath,
+                                  billPhotoLocalDataUrl: rod.billPhotoLocalDataUrl,
+                                  billPhotoSyncStatus: rod.billPhotoSyncStatus,
+                                  billPhotoName: rod.billPhotoName,
+                                })}
+                              />
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>—</span>
                             )}
                           </td>
                           <td onClick={e => e.stopPropagation()}>
@@ -1061,6 +1107,11 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
         subtitle={paymentModalData.subtitle}
         module={paymentModalData.module}
         totalAmount={paymentModalData.totalAmount}
+      />
+
+      <BillPhotoViewerModal
+        record={selectedBillPhoto}
+        onClose={() => setSelectedBillPhoto(null)}
       />
     </div>
   );

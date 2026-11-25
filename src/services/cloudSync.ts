@@ -16,6 +16,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { db } from '../db/db';
 import { userCanAccessRecord, type User } from '../db/types';
 import { SYNC_TABLES, USER_TABLES, forgetTombstones, readTombstones, type Tombstone } from './syncTombstones';
+import { syncPendingBillPhotos } from './billPhotoService';
 
 export { SYNC_TABLES, readTombstones, recordTombstone } from './syncTombstones';
 export type { Tombstone } from './syncTombstones';
@@ -128,7 +129,9 @@ export async function syncOnce(
       if (justPulled.has(`${name}|${row.id}`)) continue; // it just came from the server
       const stamp = stampOf(row);
       if (since > 0 && time(stamp) <= since) continue; // unchanged since the last push
-      const { passwordHash: _never, ...data } = row; // defensive: no table here should carry one
+      // Strip password hashes defensively and omit inline local base64 bill images from Postgres JSONB
+      // so Storage uploads hold the binary while synced metadata (`billPhotoPath`, `billPhotoName`) travels cleanly.
+      const { passwordHash: _never, billPhotoLocalDataUrl: _localPhoto, ...data } = row;
       outgoing.push({
         owner_id: ownerId,
         table_name: name,
@@ -214,6 +217,7 @@ export function runCloudSync(client: SupabaseClient, user: User) {
     if (!cloudUserId) return { ok: false as const, error: 'Sign in to cloud backup first.' };
     const saved = readCloudStatus(cloudUserId, user.id);
     try {
+      await syncPendingBillPhotos({ client: client as any }).catch(() => {});
       const { result, state, sentTombstones } = await syncOnce(supabaseRemote(client), user, saved, readTombstones());
       forgetTombstones(sentTombstones);
       if (hasStorage()) localStorage.setItem(stateKey(cloudUserId, user.id), JSON.stringify({ ...state, lastSyncedAt: result.finishedAt, lastError: null }));

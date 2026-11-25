@@ -6,6 +6,13 @@ import type { RodEntry } from '../db/types';
 import { calculateFinancialBalance, recordPaymentTransaction } from '../utils/financial';
 import { getCurrentUser } from '../services/auth';
 import { VoiceInputField } from './VoiceInputField';
+import { BillPhotoPicker } from './BillPhotoComponents';
+import {
+  attachBillPhotoToPurchase,
+  deleteBillPhotoFromPurchase,
+  resolveBillPhotoDisplayUrl,
+  type CompressedBillPhoto,
+} from '../services/billPhotoService';
 
 interface RodModalProps {
   isOpen: boolean;
@@ -47,6 +54,9 @@ export const RodModal: React.FC<RodModalProps> = ({
   const [purchaseDate, setPurchaseDate] = useState('');
   const [invoiceNumber, setInvoiceNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [billPhoto, setBillPhoto] = useState<CompressedBillPhoto | null>(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
+  const [removeExistingPhoto, setRemoveExistingPhoto] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -91,6 +101,20 @@ export const RodModal: React.FC<RodModalProps> = ({
       setError('');
       setIsSubmitting(false);
     }
+  }, [rodToEdit, isOpen]);
+
+  useEffect(() => {
+    setBillPhoto(null);
+    setRemoveExistingPhoto(false);
+    if (!isOpen || !rodToEdit || (!rodToEdit.billPhotoPath && !rodToEdit.billPhotoLocalDataUrl)) {
+      setExistingPhotoUrl(null);
+      return;
+    }
+    let active = true;
+    void resolveBillPhotoDisplayUrl(rodToEdit).then(res => {
+      if (active) setExistingPhotoUrl(res.url);
+    });
+    return () => { active = false; };
   }, [rodToEdit, isOpen]);
 
   if (!isOpen) return null;
@@ -153,11 +177,33 @@ export const RodModal: React.FC<RodModalProps> = ({
       isDeleted: false,
       createdAt: rodToEdit ? rodToEdit.createdAt : now,
       updatedAt: now,
+      ...(rodToEdit && !removeExistingPhoto
+        ? {
+            billPhotoPath: rodToEdit.billPhotoPath,
+            billPhotoLocalDataUrl: rodToEdit.billPhotoLocalDataUrl,
+            billPhotoSyncStatus: rodToEdit.billPhotoSyncStatus,
+            billPhotoName: rodToEdit.billPhotoName,
+          }
+        : {}),
     };
 
     setIsSubmitting(true);
     try {
       await db.rodEntries.put(rodData);
+
+      if (billPhoto) {
+        await attachBillPhotoToPurchase({
+          table: 'rodEntries',
+          purchaseId: id,
+          siteId,
+          photo: billPhoto,
+        });
+      } else if (rodToEdit && removeExistingPhoto && (rodToEdit.billPhotoPath || rodToEdit.billPhotoLocalDataUrl)) {
+        await deleteBillPhotoFromPurchase({
+          table: 'rodEntries',
+          purchaseId: id,
+        });
+      }
 
       // Record individual payment transaction if initial payment made
       if (!rodToEdit && fin.paidAmount > 0) {
@@ -424,6 +470,19 @@ export const RodModal: React.FC<RodModalProps> = ({
                 onChange={setNotes}
               />
             </div>
+
+            <BillPhotoPicker
+              value={billPhoto}
+              onChange={photo => {
+                setBillPhoto(photo);
+                if (photo) setRemoveExistingPhoto(false);
+              }}
+              existingUrl={!removeExistingPhoto ? existingPhotoUrl : null}
+              existingName={rodToEdit?.billPhotoName || 'Bill photo'}
+              onRemoveExisting={() => setRemoveExistingPhoto(true)}
+              disabled={isSubmitting}
+              compact
+            />
           </div>
 
           <div className="modal-footer">
