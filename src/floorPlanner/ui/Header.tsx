@@ -10,6 +10,7 @@ import { sectionHref, sections, useNarrow, type SectionId } from './useSection'
 import { loadBlankPlan } from '../storage'
 import { exportPdfBlueprint } from '../utils/pdfBlueprint'
 import { goBackToMistry } from '../host'
+import { APP_NAME } from '../../config/brand'
 
 const meters = (mm: number) => formatLength(mm)
 
@@ -62,7 +63,7 @@ export function Header({ section }: { section: SectionId }) {
             type="button"
             className="btn btn--sm btn--primary header__blank-btn"
             onClick={() => loadBlankPlan()}
-            title="Start a new blank floor plan (Building Mistry style)"
+            title={`Start a new blank floor plan (${APP_NAME})`}
             style={{
               height: 32,
               padding: '0 12px',

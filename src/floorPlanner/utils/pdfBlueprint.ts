@@ -3,6 +3,7 @@ import { getCanvasStage } from '../canvas/stageRef'
 import { formatLength, type Plan } from '../model'
 import { usePlanStore } from '../store/planStore'
 import { showToast } from '../ui/Toast'
+import { APP_NAME } from '../../config/brand'
 
 export async function exportPdfBlueprint(): Promise<boolean> {
   const plan: Plan | null = usePlanStore.getState().plan
@@ -62,7 +63,7 @@ export async function exportPdfBlueprint(): Promise<boolean> {
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(71, 85, 105)
     doc.text('ARCHITECTURAL 2D BLUEPRINT', margin + 4, tbY + 18)
-    doc.text('PLATFORM: BUILDING MISTRY / FLOOR PLANNER', margin + 4, tbY + 22)
+    doc.text(`PLATFORM: ${APP_NAME.toUpperCase()} / FLOOR PLANNER`, margin + 4, tbY + 22)
 
     // Column 2: Plan Specifications & Schedule
     const wallsCount = plan.walls.length

@@ -8,6 +8,7 @@
  */
 import { db } from '../db/db';
 import type { FloorPlan, Site, User } from '../db/types';
+import { cloneTemplateFloorPlan, type HouseTemplate } from '../domain/houseTemplates';
 
 const SQFT_PER_M2 = 10.7639104;
 
@@ -68,14 +69,27 @@ export async function listFloorPlans(user: User, siteId?: string | null): Promis
 }
 
 /**
- * A new, empty Floor Planner record. The planner fills in the drawing the first time it opens
- * the record (a blank 20 × 15 m plot with 9" and 4.5" brick walls ready).
+ * A new Floor Planner record. Without `plannerPlan` the planner fills in the drawing the first
+ * time it opens the record (a blank plot with 9" and 4.5" brick walls ready); with one (a house
+ * template) it opens that drawing. The plot size comes from the drawing's site when not given.
  */
 export async function createPlannerRecord(
   user: User,
-  options: { name: string; floorName?: string; site?: Site | null }
+  options: {
+    name: string;
+    floorName?: string;
+    site?: Site | null;
+    plannerPlan?: unknown;
+    plotWidth?: number;
+    plotLength?: number;
+  }
 ): Promise<FloorPlan> {
   const now = new Date().toISOString();
+  const hasTemplate = Boolean(options.plannerPlan && typeof options.plannerPlan === 'object');
+  const p = (hasTemplate ? options.plannerPlan : null) as { site?: { width?: number; depth?: number } } | null;
+  const computedW = options.plotWidth ?? (p?.site?.width ? Math.round((p.site.width / 304.8) * 100) / 100 : 0);
+  const computedL = options.plotLength ?? (p?.site?.depth ? Math.round((p.site.depth / 304.8) * 100) / 100 : 0);
+
   const record: FloorPlan = {
     id: newId(),
     userId: user.id,
@@ -83,14 +97,15 @@ export async function createPlannerRecord(
     siteName: options.site?.name,
     buildingName: options.name.trim() || 'New floor plan',
     floorName: options.floorName?.trim() || 'Ground Floor',
-    plotLength: 0,
-    plotWidth: 0,
+    plotLength: computedL,
+    plotWidth: computedW,
     unit: 'feet',
     walls: [],
     rooms: [],
     doors: [],
     windows: [],
     engine: 'house-planner',
+    ...(hasTemplate ? { plannerPlan: JSON.parse(JSON.stringify(options.plannerPlan)) } : {}),
     revision: 0,
     status: 'draft',
     isDeleted: false,
@@ -99,6 +114,33 @@ export async function createPlannerRecord(
   };
   await db.floorPlans.put(record);
   return record;
+}
+
+/**
+ * Plans from a house template, one record per floor (a Duplex gives "Ground Floor" and
+ * "First Floor"), each with its own copy of the drawing. Returns them in floor order; the
+ * first one is the plan to open.
+ */
+export async function createRecordsFromTemplate(
+  user: User,
+  template: HouseTemplate,
+  options: { name?: string; site?: Site | null } = {}
+): Promise<FloorPlan[]> {
+  const name = options.name?.trim() || (options.site ? `${options.site.name} – ${template.title}` : template.title);
+  const records: FloorPlan[] = [];
+  for (const floor of template.floors) {
+    records.push(
+      await createPlannerRecord(user, {
+        name,
+        floorName: floor.label,
+        site: options.site,
+        plannerPlan: cloneTemplateFloorPlan(template, floor.floorIndex, name),
+        plotWidth: template.plotWidthFt,
+        plotLength: template.plotDepthFt,
+      })
+    );
+  }
+  return records;
 }
 
 /** Rename a plan in the list. The planner shows the same name in its header. */

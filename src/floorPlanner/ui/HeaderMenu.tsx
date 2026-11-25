@@ -25,6 +25,7 @@ import { exportPdfBlueprint, printBlueprint } from '../utils/pdfBlueprint'
 import { lengthUnit, setLengthUnit, type LengthUnit } from '../i18n/lengthUnit'
 import { hasHost, sendAreaToEstimator } from '../host'
 import { computePlanSummary } from '../stats/summary'
+import { TemplatesModal } from './TemplatesModal'
 import { showToast } from './Toast'
 
 const SQFT_PER_M2 = 10.7639104
@@ -209,6 +210,7 @@ export function HeaderMenu() {
   const commit = usePlanStore((s) => s.commit)
   const fileRef = useRef<HTMLInputElement>(null)
   const [showVersions, setShowVersions] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const onImport = async (file: File | undefined) => {
     if (!file) return
@@ -243,6 +245,9 @@ export function HeaderMenu() {
             <MenuSection title={t('menu.plan')}>
               <MenuItem onClick={() => { loadBlankPlan(); close() }} hint="new">
                 + New Blank Plan
+              </MenuItem>
+              <MenuItem onClick={() => { setShowTemplates(true); close() }} hint="1-3 BHK">
+                Browse House Templates
               </MenuItem>
               <MenuItem onClick={() => { void loadDemoPlan(); close() }} hint="demo">
                 Load Sample Plan (Demo)
@@ -314,6 +319,7 @@ export function HeaderMenu() {
           e.target.value = ''
         }}
       />
+      {showTemplates && <TemplatesModal onClose={() => setShowTemplates(false)} />}
     </>
   )
 }

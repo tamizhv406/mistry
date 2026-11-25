@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Box, Pencil, PenTool, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Box, ChevronDown, ChevronUp, LayoutTemplate, Pencil, PenTool, Plus, Trash2 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { FloorPlan, Site, User } from '../db/types';
 import {
+  HOUSE_TEMPLATES,
+  HOUSE_TEMPLATE_TYPES,
+  roomSizeText,
+  templateSizeText,
+  type HouseTemplate,
+  type HouseTemplateType,
+} from '../domain/houseTemplates';
+import { HouseTemplatePreview } from '../components/floorplan/HouseTemplatePreview';
+import {
   createPlannerRecord,
+  createRecordsFromTemplate,
   isPlannerRecord,
   listFloorPlans,
   planCounts,
@@ -37,6 +47,8 @@ export function FloorPlanListView({ user, initialSiteId, onBack, onOpenPlan, onT
   const [newSiteId, setNewSiteId] = useState<string>(initialSiteId || '');
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showTemplates, setShowTemplates] = useState<boolean | null>(null);
+  const [templateFilter, setTemplateFilter] = useState<'All' | HouseTemplateType>('All');
 
   useEffect(() => {
     setSiteFilter(initialSiteId || '');
@@ -57,6 +69,30 @@ export function FloorPlanListView({ user, initialSiteId, onBack, onOpenPlan, onT
       setCreating(false);
       setNewName('');
       onOpenPlan(record.id);
+    } catch (err: any) {
+      onNotify('Could not create the plan: ' + (err?.message || err), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Templates open by default until the first plan exists.
+  const templatesOpen = showTemplates ?? (plans ? plans.length === 0 : false);
+  const shownTemplates = templateFilter === 'All' ? HOUSE_TEMPLATES : HOUSE_TEMPLATES.filter(t => t.type === templateFilter);
+
+  const startFromTemplate = async (template: HouseTemplate) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const site = sites.find((s: Site) => s.id === siteFilter) || null;
+      const created = await createRecordsFromTemplate(user, template, { site });
+      onNotify(
+        created.length > 1
+          ? `${template.title}: Ground Floor and First Floor plans created. Opening the Ground Floor.`
+          : `${template.title} created. Every wall, door, window and room can be changed.`,
+        'success'
+      );
+      onOpenPlan(created[0].id);
     } catch (err: any) {
       onNotify('Could not create the plan: ' + (err?.message || err), 'error');
     } finally {
@@ -142,6 +178,76 @@ export function FloorPlanListView({ user, initialSiteId, onBack, onOpenPlan, onT
           </div>
         </div>
       )}
+
+      <section className="tpl-section" aria-labelledby="tpl-section-title">
+        <div className="tpl-section-head">
+          <div>
+            <h3 id="tpl-section-title" className="tpl-section-title">
+              <LayoutTemplate size={20} aria-hidden="true" /> Start from a house template
+            </h3>
+            <p className="tpl-section-sub">Ready 1 BHK, 2 BHK, 3 BHK and Duplex plans for 20×30, 30×40 and 30×50 ft plots. Change anything after opening.</p>
+          </div>
+          <button
+            type="button"
+            className="tpl-toggle"
+            aria-expanded={templatesOpen}
+            aria-controls="tpl-section-body"
+            onClick={() => setShowTemplates(!templatesOpen)}
+          >
+            {templatesOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+            <span>{templatesOpen ? 'Hide templates' : 'Show templates'}</span>
+          </button>
+        </div>
+        {templatesOpen && (
+          <div id="tpl-section-body">
+            <div className="tpl-filter-bar" role="group" aria-label="Filter house templates">
+              {HOUSE_TEMPLATE_TYPES.map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  className={`tpl-filter-chip${templateFilter === type ? ' is-active' : ''}`}
+                  aria-pressed={templateFilter === type}
+                  onClick={() => setTemplateFilter(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            <div className="tpl-grid">
+              {shownTemplates.map(t => (
+                <article key={t.id} className="tpl-card">
+                  <HouseTemplatePreview template={t} height={180} />
+                  <div className="tpl-badges">
+                    <span className="tpl-badge">{t.type}</span>
+                    {t.floors.length > 1 && <span className="tpl-badge is-charcoal">Ground + First Floor</span>}
+                  </div>
+                  <h4 className="tpl-card-title">{t.title}</h4>
+                  <p className="tpl-card-size">{templateSizeText(t)}</p>
+                  <p className="tpl-card-meta">{t.roomSummary}</p>
+                  <details className="tpl-rooms">
+                    <summary>Rooms and sizes</summary>
+                    <ul>
+                      {t.rooms.map(r => (
+                        <li key={`${r.floorIndex}-${r.id}`}>
+                          <span>{t.floors.length > 1 ? `${r.name} (${r.floorIndex === 0 ? 'GF' : 'FF'})` : r.name}</span>
+                          <span>{roomSizeText(r)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <button type="button" className="tpl-use-btn" disabled={busy} onClick={() => void startFromTemplate(t)}>
+                    <PenTool size={16} aria-hidden="true" />
+                    <span>{t.floors.length > 1 ? 'Use template (2 floors)' : 'Use template'}</span>
+                  </button>
+                </article>
+              ))}
+            </div>
+            <p className="tpl-note">
+              {siteFilter && siteName(siteFilter) ? `New plans go to ${siteName(siteFilter)}.` : 'Pick a site above the list first if the plan belongs to one.'} Room sizes are centre-line; the planner shows the carpet area inside the walls.
+            </p>
+          </div>
+        )}
+      </section>
 
       {sites.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
