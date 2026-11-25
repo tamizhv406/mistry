@@ -298,14 +298,14 @@ export async function loadOverallStats(user?: User | null, selectedSiteId?: stri
 
   // Category Expense Breakdown with percentages
   const categoryExpenses: CategoryExpenseItem[] = [
-    { key: 'materials', label: 'Materials', amount: totalMaterialExpense, percentage: 0, color: '#f59e0b' },
-    { key: 'labour', label: 'Labour Wages', amount: totalLabourGross, percentage: 0, color: '#10b981' },
-    { key: 'tools', label: 'Tools & Rentals', amount: totalToolsExpense, percentage: 0, color: '#3b82f6' },
-    { key: 'teaSnacks', label: 'Tea & Snacks', amount: totalTeaSnacksExpense, percentage: 0, color: '#eab308' },
-    { key: 'pooja', label: 'Pooja', amount: totalPoojaExpense, percentage: 0, color: '#8b5cf6' },
-    { key: 'electricity', label: 'Electricity', amount: totalElectricityExpense, percentage: 0, color: '#475569' },
-    { key: 'water', label: 'Water', amount: totalWaterExpense, percentage: 0, color: '#06b6d4' },
-    { key: 'other', label: 'Other', amount: totalOtherExpense, percentage: 0, color: '#6366f1' },
+    { key: 'materials', label: 'Materials', amount: totalMaterialExpense, percentage: 0, color: '#F97316' },
+    { key: 'labour', label: 'Labour Wages', amount: totalLabourGross, percentage: 0, color: '#16A34A' },
+    { key: 'tools', label: 'Tools & Rentals', amount: totalToolsExpense, percentage: 0, color: '#0D9488' },
+    { key: 'teaSnacks', label: 'Tea & Snacks', amount: totalTeaSnacksExpense, percentage: 0, color: '#F59E0B' },
+    { key: 'pooja', label: 'Pooja', amount: totalPoojaExpense, percentage: 0, color: '#EA580C' },
+    { key: 'electricity', label: 'Electricity', amount: totalElectricityExpense, percentage: 0, color: '#4B5563' },
+    { key: 'water', label: 'Water', amount: totalWaterExpense, percentage: 0, color: '#B45309' },
+    { key: 'other', label: 'Other', amount: totalOtherExpense, percentage: 0, color: '#1F2937' },
   ];
   if (overallExpense > 0) {
     categoryExpenses.forEach(c => {

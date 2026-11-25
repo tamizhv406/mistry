@@ -41,15 +41,15 @@ const SingleToast: React.FC<{ toast: ToastMessage; onDismiss: (id: string) => vo
 
   return (
     <div className={`toast toast-${toast.type}`} role={toast.type === 'error' ? 'alert' : undefined}>
-      {toast.type === 'success' && <CheckCircle2 size={20} color="#10b981" />}
-      {toast.type === 'error' && <AlertCircle size={20} color="#ef4444" />}
-      {toast.type === 'info' && <Info size={20} color="#3b82f6" />}
+      {toast.type === 'success' && <CheckCircle2 size={20} color="var(--color-success)" />}
+      {toast.type === 'error' && <AlertCircle size={20} color="var(--color-danger)" />}
+      {toast.type === 'info' && <Info size={20} color="var(--color-primary)" />}
       <span style={{ fontSize: '0.9rem', flex: 1 }}>{toast.message}</span>
       <button
         type="button"
         onClick={() => onDismiss(toast.id)}
         aria-label="Dismiss message"
-        style={{ color: '#64748b', minWidth: 44, minHeight: 44, margin: '-10px -8px -10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{ color: 'var(--color-text-muted)', minWidth: 44, minHeight: 44, margin: '-10px -8px -10px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
         <X size={16} />
       </button>

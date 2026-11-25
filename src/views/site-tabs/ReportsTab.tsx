@@ -374,8 +374,8 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           </div>
           {(summary.totalExtraPaid || 0) > 0 && (
             <div>
-              <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#94a3b8' }}>Extra Paid (Advance)</span>
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.5rem', fontWeight: 800, color: '#38bdf8', marginTop: '2px' }}>
+              <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#D1D5DB' }}>Extra Paid (Advance)</span>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-primary)', marginTop: '2px' }}>
                 ₹{(summary.totalExtraPaid || 0).toLocaleString('en-IN')}
               </div>
             </div>

@@ -500,7 +500,14 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               type="button"
               onClick={handleMarkAllPresentToday}
               disabled={bulkBusy || filteredWorkers.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl shadow-xs transition"
+              style={{
+                minHeight: '44px',
+                backgroundColor: 'var(--color-success)',
+                color: '#FFFFFF',
+                border: 'none',
+                cursor: bulkBusy || filteredWorkers.length === 0 ? 'not-allowed' : 'pointer',
+              }}
             >
               <CheckCircle2 size={15} />
               <span>{t('mark_all_present')}</span>
@@ -511,7 +518,14 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               type="button"
               onClick={handleCopyYesterdayAttendance}
               disabled={bulkBusy || filteredWorkers.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl transition"
+              style={{
+                minHeight: '44px',
+                backgroundColor: 'var(--color-primary-soft)',
+                color: 'var(--color-primary-text)',
+                border: '1px solid var(--color-primary-border)',
+                cursor: bulkBusy || filteredWorkers.length === 0 ? 'not-allowed' : 'pointer',
+              }}
             >
               <Copy size={14} />
               <span>{t('copy_yesterday')}</span>
@@ -677,24 +691,41 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
                           <td
                             key={dateStr}
                             onClick={() => handleCellClick(w, dateStr)}
-                            className={`text-center p-1 border-r border-slate-100 dark:border-slate-800 cursor-pointer select-none transition-all ${
-                              isToday ? 'bg-indigo-50/20' : ''
-                            } hover:bg-slate-100/80 dark:hover:bg-slate-800`}
+                            className="text-center p-1 border-r border-slate-100 cursor-pointer select-none transition-all"
+                            style={{ backgroundColor: isToday ? 'rgba(249, 115, 22, 0.06)' : undefined }}
                           >
                             <div
-                              className={`w-9 h-9 mx-auto rounded-xl flex items-center justify-center font-black text-xs transition-transform active:scale-90 border ${
-                                isSaving
-                                  ? 'animate-pulse bg-slate-100 border-slate-300 text-slate-400'
+                              className="mx-auto rounded-xl flex items-center justify-center font-black text-xs transition-transform active:scale-90 border"
+                              style={{
+                                width: '44px',
+                                height: '44px',
+                                backgroundColor: isSaving
+                                  ? 'var(--color-bg)'
                                   : status === 'present'
-                                  ? 'bg-emerald-500 text-white border-emerald-600 shadow-2xs'
+                                  ? 'var(--color-success)'
                                   : status === 'half_day'
-                                  ? 'bg-amber-400 text-amber-950 border-amber-500'
+                                  ? 'var(--color-warning)'
                                   : status === 'absent'
-                                  ? 'bg-rose-500 text-white border-rose-600'
+                                  ? 'var(--color-danger)'
                                   : status === 'overtime'
-                                  ? 'bg-purple-600 text-white border-purple-700'
-                                  : 'border-dashed border-slate-300 dark:border-slate-700 text-slate-300 dark:text-slate-600 hover:border-slate-400'
-                              }`}
+                                  ? 'var(--color-primary)'
+                                  : 'transparent',
+                                color: isSaving || !status
+                                  ? 'var(--color-text-muted)'
+                                  : status === 'half_day' || status === 'overtime'
+                                  ? 'var(--color-on-primary)'
+                                  : '#FFFFFF',
+                                borderColor: isSaving || !status
+                                  ? 'var(--color-border-strong)'
+                                  : status === 'present'
+                                  ? 'var(--color-success)'
+                                  : status === 'half_day'
+                                  ? 'var(--color-warning)'
+                                  : status === 'absent'
+                                  ? 'var(--color-danger)'
+                                  : 'var(--color-primary)',
+                                borderStyle: !isSaving && !status ? 'dashed' : 'solid',
+                              }}
                             >
                               {isSaving ? (
                                 '..'
@@ -802,11 +833,14 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
                   key={h}
                   type="button"
                   onClick={() => setOtPrompt(prev => ({ ...prev, hours: h }))}
-                  className={`flex-1 py-1 text-xs font-bold rounded-lg border transition ${
-                    otPrompt.hours === h
-                      ? 'bg-purple-600 text-white border-purple-600'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200'
-                  }`}
+                  className="flex-1 text-xs font-bold rounded-lg border transition"
+                  style={{
+                    minHeight: '44px',
+                    backgroundColor: otPrompt.hours === h ? 'var(--color-primary)' : 'var(--color-bg)',
+                    color: otPrompt.hours === h ? 'var(--color-on-primary)' : 'var(--color-charcoal)',
+                    borderColor: otPrompt.hours === h ? 'var(--color-primary)' : 'var(--color-border-strong)',
+                    cursor: 'pointer',
+                  }}
                 >
                   {h}h
                 </button>
@@ -817,14 +851,28 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               <button
                 type="button"
                 onClick={() => setOtPrompt({ isOpen: false, worker: null, date: '', hours: 2 })}
-                className="flex-1 py-2 text-xs font-bold rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100"
+                className="flex-1 text-xs font-bold rounded-xl border transition"
+                style={{
+                  minHeight: '44px',
+                  backgroundColor: 'var(--color-surface)',
+                  color: 'var(--color-charcoal)',
+                  borderColor: 'var(--color-border-strong)',
+                  cursor: 'pointer',
+                }}
               >
                 {lang === 'ta' ? 'ரத்து' : 'Cancel'}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmOT}
-                className="flex-1 py-2 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white shadow-xs"
+                className="flex-1 text-xs font-bold rounded-xl shadow-xs transition"
+                style={{
+                  minHeight: '44px',
+                  backgroundColor: 'var(--color-primary)',
+                  color: 'var(--color-on-primary)',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 {lang === 'ta' ? 'சேமி' : 'Save OT'}
               </button>
@@ -926,14 +974,17 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               </div>
 
               {/* Net Cash in Hand */}
-              <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md">
+              <div
+                className="flex items-center justify-between p-3.5 rounded-2xl shadow-md"
+                style={{ backgroundColor: 'var(--color-success)', color: '#FFFFFF' }}
+              >
                 <div>
-                  <div className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-100">
+                  <div className="text-[10px] font-extrabold uppercase tracking-wider" style={{ color: '#DCFCE7' }}>
                     {t('cash_in_hand')}
                   </div>
-                  <div className="text-xs text-emerald-200">Disbursed in full cash</div>
+                  <div className="text-xs" style={{ color: '#ECFDF5' }}>Disbursed in full cash</div>
                 </div>
-                <div className="text-xl font-black">{formatINR(payslipData.netPayout)}</div>
+                <div className="text-xl font-black" style={{ color: '#FFFFFF' }}>{formatINR(payslipData.netPayout)}</div>
               </div>
             </div>
 
@@ -942,7 +993,14 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               <button
                 type="button"
                 onClick={handlePrintPayslipPdf}
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition"
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs shadow-xs transition"
+                style={{
+                  minHeight: '44px',
+                  backgroundColor: 'var(--color-primary)',
+                  color: 'var(--color-on-primary)',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 <Download size={14} />
                 <span>{t('print_pdf')}</span>
@@ -951,7 +1009,14 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               <button
                 type="button"
                 onClick={handleSendWhatsAppSlip}
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition"
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs shadow-xs transition"
+                style={{
+                  minHeight: '44px',
+                  backgroundColor: 'var(--color-success)',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
               >
                 <Share2 size={14} />
                 <span>{t('send_whatsapp')}</span>
@@ -960,9 +1025,16 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
               <button
                 type="button"
                 onClick={handleCopySlipText}
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-bold text-xs transition border border-slate-200"
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl font-bold text-xs transition border"
+                style={{
+                  minHeight: '44px',
+                  backgroundColor: 'var(--color-surface)',
+                  color: 'var(--color-charcoal)',
+                  borderColor: 'var(--color-border-strong)',
+                  cursor: 'pointer',
+                }}
               >
-                {copiedPayslip ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                {copiedPayslip ? <Check size={14} style={{ color: 'var(--color-success)' }} /> : <Copy size={14} />}
                 <span>{copiedPayslip ? 'Copied!' : 'Copy Text'}</span>
               </button>
             </div>

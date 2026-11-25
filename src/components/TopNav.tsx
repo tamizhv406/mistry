@@ -412,9 +412,9 @@ export const TopNav: React.FC<TopNavProps> = ({
               fontWeight: 800,
               cursor: 'pointer',
               border: 'none',
-              backgroundColor: lang === 'en' ? '#FFFFFF' : 'transparent',
-              color: lang === 'en' ? '#4F46E5' : '#64748B',
-              boxShadow: lang === 'en' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              backgroundColor: lang === 'en' ? 'var(--color-primary)' : 'transparent',
+              color: lang === 'en' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+              boxShadow: lang === 'en' ? 'var(--shadow-sm)' : 'none',
               transition: 'all 0.15s ease',
             }}
             title="English"
@@ -431,9 +431,9 @@ export const TopNav: React.FC<TopNavProps> = ({
               fontWeight: 800,
               cursor: 'pointer',
               border: 'none',
-              backgroundColor: lang === 'ta' ? '#FFFFFF' : 'transparent',
-              color: lang === 'ta' ? '#4F46E5' : '#64748B',
-              boxShadow: lang === 'ta' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+              backgroundColor: lang === 'ta' ? 'var(--color-primary)' : 'transparent',
+              color: lang === 'ta' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+              boxShadow: lang === 'ta' ? 'var(--shadow-sm)' : 'none',
               transition: 'all 0.15s ease',
             }}
             title="தமிழ்"
@@ -487,8 +487,8 @@ export const TopNav: React.FC<TopNavProps> = ({
               <div className="erp-help-modal" onClick={e => e.stopPropagation()}>
                 <div className="erp-help-header">
                   <div className="flex items-center gap-2">
-                    <HelpCircle size={20} className="text-blue-600" />
-                    <h3 className="font-bold text-slate-900 text-base">{APP_NAME} Guide</h3>
+                    <HelpCircle size={20} color="var(--color-primary)" />
+                    <h3 className="font-bold text-base" style={{ color: 'var(--color-charcoal)' }}>{APP_NAME} Guide</h3>
                   </div>
                   <button type="button" onClick={() => setIsHelpOpen(false)} className="text-slate-400 hover:text-slate-600">
                     <X size={18} />

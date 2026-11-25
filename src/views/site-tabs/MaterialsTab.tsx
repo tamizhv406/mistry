@@ -172,17 +172,17 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
         {
           label: 'Paid Amount',
           value: `₹${mat.paidAmount.toLocaleString('en-IN')}`,
-          color: '#34d399',
+          color: 'var(--color-success-text)',
         },
         {
           label: 'Balance Due',
           value: `₹${mat.balance.toLocaleString('en-IN')}`,
-          color: mat.balance > 0 ? '#f87171' : '#94a3b8',
+          color: mat.balance > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)',
         },
         {
           label: 'Extra Paid',
           value: `₹${(mat.extraPaid || 0).toLocaleString('en-IN')}`,
-          color: (mat.extraPaid || 0) > 0 ? '#38bdf8' : '#94a3b8',
+          color: (mat.extraPaid || 0) > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)',
         },
       ],
       onClick: () => setSelectedMaterial(mat),
@@ -251,17 +251,17 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
         {
           label: 'Supplier / Quarry / Agency',
           value: selectedMaterial.supplier || 'Site Store',
-          icon: <Building size={14} className="text-purple-400" />,
+          icon: <Building size={14} style={{ color: 'var(--color-charcoal)' }} />,
         },
         {
           label: 'Purchase Date',
           value: selectedMaterial.purchaseDate || 'N/A',
-          icon: <Calendar size={14} className="text-orange-400" />,
+          icon: <Calendar size={14} style={{ color: 'var(--color-primary)' }} />,
         },
         {
           label: 'Invoice / DC Number',
           value: selectedMaterial.invoiceNumber || 'No invoice number attached',
-          icon: <Tag size={14} className="text-sky-400" />,
+          icon: <Tag size={14} style={{ color: 'var(--color-warning)' }} />,
         },
         {
           label: 'Delivery Notes',
@@ -281,7 +281,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
         {
           label: 'Weight (KG)',
           value: `${selectedRod.weightKg.toLocaleString('en-IN')} kg (${(selectedRod.weightKg / 1000).toFixed(2)} Tons)`,
-          icon: <Hash size={14} className="text-emerald-400" />,
+          icon: <Hash size={14} style={{ color: 'var(--color-success)' }} />,
         },
         {
           label: 'Rate per KG',
@@ -294,7 +294,7 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
         {
           label: 'Supplier / Steel Depot',
           value: selectedRod.supplier || 'Steel Stockist',
-          icon: <Building size={14} className="text-purple-400" />,
+          icon: <Building size={14} style={{ color: 'var(--color-charcoal)' }} />,
         },
         {
           label: 'Quantity (Pieces/Bundles)',
@@ -303,12 +303,12 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
         {
           label: 'Purchase Date',
           value: selectedRod.purchaseDate || 'N/A',
-          icon: <Calendar size={14} className="text-orange-400" />,
+          icon: <Calendar size={14} style={{ color: 'var(--color-primary)' }} />,
         },
         {
           label: 'Invoice Number',
           value: selectedRod.invoiceNumber || 'N/A',
-          icon: <Tag size={14} className="text-sky-400" />,
+          icon: <Tag size={14} style={{ color: 'var(--color-warning)' }} />,
         },
         {
           label: 'Notes & Structural Usage',
@@ -400,23 +400,44 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
 
       {/* ROD INDIVIDUAL DIAMETERS GALLERY (Do NOT combine diameters!) */}
       {activeCategory === 'rod' && (
-        <div className="rounded-2xl bg-slate-900/60 p-5 border border-slate-800 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <div
+          style={{
+            borderRadius: '16px',
+            background: 'var(--color-surface)',
+            padding: '20px',
+            border: '1px solid var(--color-border)',
+            boxShadow: 'var(--shadow-sm)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+          }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             <div>
-              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                <Disc size={18} className="text-blue-400" />
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-charcoal)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <Disc size={18} style={{ color: 'var(--color-primary)' }} />
                 TMT Steel Rod Individual Diameters (6mm – 25mm)
               </h4>
-              <p className="text-xs text-slate-400">
+              <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
                 Each diameter maintains its dedicated rebar visual, weight, rate, and separate payment ledger.
               </p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+            <span
+              style={{
+                padding: '4px 12px',
+                borderRadius: '999px',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: 'var(--color-primary-soft)',
+                color: 'var(--color-primary-text)',
+                border: '1px solid var(--color-primary-border)',
+              }}
+            >
               Total Steel: {totalSteelWeightKg.toLocaleString('en-IN')} kg (≈ {(totalSteelWeightKg / 1000).toFixed(2)} Tons)
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '10px' }}>
             {ROD_STANDARD_DIAMETERS.map(diam => {
               const vis = getRodVisual(diam);
               const hasEntry = rodSummaryByDiameter[diam];
@@ -433,26 +454,50 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                       setSelectedDiameterCatalog(diam);
                     }
                   }}
-                  className="group relative flex flex-col items-center justify-center p-3 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-slate-800 hover:border-blue-500/60 transition-all text-center"
+                  style={{
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '44px',
+                    padding: '12px',
+                    borderRadius: '12px',
+                    background: hasEntry ? 'var(--color-primary-soft)' : 'var(--color-bg)',
+                    border: hasEntry ? '1.5px solid var(--color-primary-border)' : '1px solid var(--color-border)',
+                    transition: 'all 0.2s ease',
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                  }}
                 >
                   <SafeImage
                     src={vis.imageUrl}
                     alt={diam}
                     fallbackCategory="rod"
-                    className="w-12 h-10 object-contain drop-shadow-sm group-hover:scale-105 transition-transform"
+                    style={{ width: '48px', height: '40px', objectFit: 'contain' }}
                   />
-                  <span className="text-xs font-black text-white mt-1.5 group-hover:text-blue-400">
+                  <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--color-charcoal)', marginTop: '6px' }}>
                     {diam}
                   </span>
                   {hasEntry ? (
-                    <span className="text-[10px] font-bold text-emerald-400 mt-0.5">
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-success-text)', marginTop: '2px' }}>
                       {hasEntry.weightKg} kg
                     </span>
                   ) : (
-                    <span className="text-[10px] text-slate-500 mt-0.5">Click to view</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>Click to view</span>
                   )}
                   {hasEntry && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-400 shadow-sm" />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '6px',
+                        right: '6px',
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '999px',
+                        background: 'var(--color-primary)',
+                      }}
+                    />
                   )}
                 </button>
               );
@@ -462,9 +507,21 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
       )}
 
       {/* Action and View Toggle Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-sm text-slate-100 uppercase tracking-wide">
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          background: 'var(--color-surface)',
+          padding: '12px 16px',
+          borderRadius: '14px',
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--color-charcoal)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
             {activeCategory === 'legacy' ? 'Legacy Material Records' : `${activeCategory.toUpperCase()} Purchases`}
           </span>
           <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded-full">
@@ -647,9 +704,9 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                               <span
                                 className="badge"
                                 style={{
-                                  backgroundColor: '#f5f3ff',
-                                  color: '#7c3aed',
-                                  border: '1px solid #ddd6fe',
+                                  backgroundColor: 'var(--color-primary-soft)',
+                                  color: 'var(--color-primary-text)',
+                                  border: '1px solid var(--color-primary-border)',
                                   fontWeight: 700,
                                 }}
                               >
@@ -793,9 +850,9 @@ export const MaterialsTab: React.FC<MaterialsTabProps> = ({
                               <span
                                 className="badge"
                                 style={{
-                                  backgroundColor: '#f5f3ff',
-                                  color: '#7c3aed',
-                                  border: '1px solid #ddd6fe',
+                                  backgroundColor: 'var(--color-primary-soft)',
+                                  color: 'var(--color-primary-text)',
+                                  border: '1px solid var(--color-primary-border)',
                                   fontWeight: 700,
                                 }}
                               >

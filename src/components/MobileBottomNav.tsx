@@ -309,7 +309,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 }`}
                 onClick={() => handleMoreItemClick(() => onOpenSiteTab('comments'))}
               >
-                <div className="mobile-drawer-icon" style={{ color: '#8b5cf6', background: 'rgba(139, 92, 246, 0.15)' }}>
+                <div className="mobile-drawer-icon" style={{ color: 'var(--color-warning)', background: 'rgba(245, 158, 11, 0.16)' }}>
                   <MessageSquare size={20} />
                 </div>
                 <span className="mobile-drawer-label">Comments</span>
@@ -323,7 +323,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 }`}
                 onClick={() => handleMoreItemClick(() => onOpenSiteTab('reports'))}
               >
-                <div className="mobile-drawer-icon" style={{ color: '#3b82f6', background: 'rgba(59, 130, 246, 0.15)' }}>
+                <div className="mobile-drawer-icon" style={{ color: 'var(--color-primary)', background: 'rgba(249, 115, 22, 0.16)' }}>
                   <FileText size={20} />
                 </div>
                 <span className="mobile-drawer-label">Reports</span>
@@ -414,7 +414,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               {isAdmin(user) && (
                 <button
                   type="button"
-                  className="w-full flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 text-slate-100 transition-all text-left"
+                  className="w-full flex items-center justify-between p-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-100 transition-all text-left"
+                  style={{ minHeight: 44 }}
                   onClick={() => {
                     setIsSettingsOpen(false);
                     setIsMoreOpen(false);
@@ -422,7 +423,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                    <ShieldCheck className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                     <div>
                       <div className="text-sm font-bold">Admin Portal</div>
                       <div className="text-xs text-slate-400">Manage contractors & sub-admins</div>

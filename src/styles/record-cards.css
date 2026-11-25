@@ -36,13 +36,13 @@
 }
 
 .interactive-card:hover {
-  border-color: #f59e0b;
-  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.12), 0 2px 6px rgba(15, 23, 42, 0.05);
+  border-color: var(--color-primary, #F97316);
+  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.12), 0 2px 6px rgba(31, 41, 55, 0.05);
   transform: translateY(-2px);
 }
 
 .interactive-card:focus-visible {
-  outline: 3px solid #f59e0b;
+  outline: 3px solid var(--color-primary, #F97316);
   outline-offset: 3px;
 }
 
@@ -58,9 +58,9 @@
   display: block;
   width: 56px;
   height: 56px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border, #E7E5E4);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--color-bg, #FAFAF9);
   object-fit: cover;
   object-position: center;
 }
@@ -93,16 +93,16 @@
   flex: 0 0 26px;
   width: 26px;
   height: 26px;
-  border: 1px solid #fed7aa;
+  border: 1px solid var(--color-primary-border, #FDBA74);
   border-radius: 8px;
-  background: #fff7ed;
-  color: #d97706;
+  background: var(--color-primary-soft, #FFF7ED);
+  color: var(--color-primary-hover, #EA580C);
 }
 
 .interactive-card-title {
   min-width: 0;
   margin: 0;
-  color: #0f172a;
+  color: var(--color-charcoal, #1F2937);
   font-size: 0.92rem;
   font-weight: 750;
   line-height: 1.3;
@@ -113,7 +113,7 @@
   display: inline-flex;
   max-width: 100%;
   padding: 2px 7px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border, #E7E5E4);
   border-radius: 999px;
   font-size: 0.65rem;
   font-weight: 700;
@@ -121,17 +121,17 @@
   overflow-wrap: anywhere;
 }
 
-.interactive-card-badge.is-primary { color: #b45309; background: #fef3c7; border-color: #fde68a; }
-.interactive-card-badge.is-success { color: #15803d; background: #dcfce7; border-color: #bbf7d0; }
-.interactive-card-badge.is-warning { color: #c2410c; background: #ffedd5; border-color: #fed7aa; }
-.interactive-card-badge.is-danger { color: #b91c1c; background: #fee2e2; border-color: #fecaca; }
-.interactive-card-badge.is-info { color: #0369a1; background: #e0f2fe; border-color: #bae6fd; }
-.interactive-card-badge.is-neutral { color: #475569; background: #f1f5f9; border-color: #e2e8f0; }
+.interactive-card-badge.is-primary { color: var(--color-primary-text, #9A3412); background: var(--color-primary-soft, #FFF7ED); border-color: var(--color-primary-border, #FDBA74); }
+.interactive-card-badge.is-success { color: var(--color-success-text, #166534); background: var(--color-success-soft, #DCFCE7); border-color: var(--color-success-border, #BBF7D0); }
+.interactive-card-badge.is-warning { color: var(--color-warning-text, #92400E); background: var(--color-warning-soft, #FEF3C7); border-color: var(--color-warning-border, #FDE68A); }
+.interactive-card-badge.is-danger { color: var(--color-danger-text, #991B1B); background: var(--color-danger-soft, #FEE2E2); border-color: var(--color-danger-border, #FECACA); }
+.interactive-card-badge.is-info { color: var(--color-charcoal, #1F2937); background: var(--color-surface-subtle, #F5F5F4); border-color: var(--color-border-strong, #D6D3D1); }
+.interactive-card-badge.is-neutral { color: var(--color-text-secondary, #4B5563); background: var(--color-surface-subtle, #F5F5F4); border-color: var(--color-border, #E7E5E4); }
 
 .interactive-card-description {
   max-width: 100%;
   margin: 0;
-  color: #64748b;
+  color: var(--color-text-muted, #57534E);
   font-size: 0.74rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -143,10 +143,10 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border, #E7E5E4);
   border-radius: 8px;
-  background: #f8fafc;
-  color: #d97706;
+  background: var(--color-bg, #FAFAF9);
+  color: var(--color-primary-hover, #EA580C);
 }
 
 .interactive-card-body {
@@ -172,13 +172,13 @@
   min-width: 0;
   min-height: 44px;
   padding: 6px 8px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid var(--color-surface-subtle, #F5F5F4);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--color-bg, #FAFAF9);
 }
 
 .interactive-card-stat-label {
-  color: #64748b;
+  color: var(--color-text-muted, #57534E);
   font-size: 0.62rem;
   font-weight: 700;
   line-height: 1.3;
@@ -188,7 +188,7 @@
 }
 
 .interactive-card-stat-value {
-  color: #0f172a;
+  color: var(--color-charcoal, #1F2937);
   font-size: 0.78rem;
   font-weight: 750;
   line-height: 1.35;
@@ -201,8 +201,8 @@
   align-items: center;
   min-height: 30px;
   padding-top: 6px;
-  border-top: 1px solid #f1f5f9;
-  color: #d97706;
+  border-top: 1px solid var(--color-surface-subtle, #F5F5F4);
+  color: var(--color-primary-text, #9A3412);
   font-size: 0.75rem;
   font-weight: 700;
 }
@@ -362,9 +362,9 @@
   width: 24px !important;
   height: 24px !important;
   flex: 0 0 24px !important;
-  background: #fff7ed !important;
-  border: 1px solid #fed7aa !important;
-  color: #ea580c !important;
+  background: var(--color-primary-soft, #FFF7ED) !important;
+  border: 1px solid var(--color-primary-border, #FDBA74) !important;
+  color: var(--color-primary-hover, #EA580C) !important;
   border-radius: 6px !important;
 }
 
@@ -374,9 +374,9 @@
 .tea-snacks-card-grid .interactive-card .interactive-card-arrow {
   width: 26px !important;
   height: 26px !important;
-  border: 1px solid #e2e8f0 !important;
-  background: #f8fafc !important;
-  color: #ea580c !important;
+  border: 1px solid var(--color-border, #E7E5E4) !important;
+  background: var(--color-bg, #FAFAF9) !important;
+  color: var(--color-primary-hover, #EA580C) !important;
   border-radius: 6px !important;
 }
 
@@ -399,8 +399,8 @@
 .tea-snacks-section .interactive-card .interactive-card-stat,
 .tea-snacks-card-grid .interactive-card .interactive-card-stat {
   padding: 4px 6px !important;
-  background: #f8fafc !important;
-  border: 1px solid #f1f5f9 !important;
+  background: var(--color-bg, #FAFAF9) !important;
+  border: 1px solid var(--color-surface-subtle, #F5F5F4) !important;
   border-radius: 6px !important;
 }
 
@@ -408,7 +408,7 @@
 .interactive-card.tea-snacks-card .interactive-card-stat-label,
 .tea-snacks-section .interactive-card .interactive-card-stat-label,
 .tea-snacks-card-grid .interactive-card .interactive-card-stat-label {
-  color: #64748b !important;
+  color: var(--color-text-muted, #57534E) !important;
   font-size: 0.62rem !important;
   font-weight: 600 !important;
 }
@@ -417,7 +417,7 @@
 .interactive-card.tea-snacks-card .interactive-card-stat-value,
 .tea-snacks-section .interactive-card .interactive-card-stat-value,
 .tea-snacks-card-grid .interactive-card .interactive-card-stat-value {
-  color: #0f172a !important;
+  color: var(--color-charcoal, #1F2937) !important;
   font-size: 0.76rem !important;
   font-weight: 800 !important;
 }
@@ -428,8 +428,8 @@
 .tea-snacks-card-grid .interactive-card .interactive-card-action {
   min-height: 24px !important;
   padding-top: 4px !important;
-  border-top: 1px solid #f1f5f9 !important;
-  color: #d97706 !important;
+  border-top: 1px solid var(--color-surface-subtle, #F5F5F4) !important;
+  color: var(--color-primary-text, #9A3412) !important;
   font-size: 0.72rem !important;
   font-weight: 700 !important;
 }

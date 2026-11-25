@@ -229,16 +229,16 @@ const StockOperationForm: React.FC<StockOperationModalProps> = ({
                 borderRadius: '10px',
                 backgroundColor:
                   mode === 'usage'
-                    ? '#FEE2E2'
+                    ? 'var(--color-danger-soft)'
                     : mode === 'transfer'
-                    ? '#EDE9FE'
-                    : '#EFF6FF',
+                    ? 'var(--color-warning-soft)'
+                    : 'var(--color-primary-soft)',
                 color:
                   mode === 'usage'
-                    ? '#DC2626'
+                    ? 'var(--color-danger)'
                     : mode === 'transfer'
-                    ? '#7C3AED'
-                    : '#2563EB',
+                    ? 'var(--color-warning-text)'
+                    : 'var(--color-primary-text)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -322,11 +322,11 @@ const StockOperationForm: React.FC<StockOperationModalProps> = ({
                     minHeight: '44px',
                     borderRadius: '8px',
                     fontSize: '0.875rem',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: 'pointer',
-                    border: mode === opt.id ? '2px solid #2563EB' : '1px solid #CBD5E1',
-                    backgroundColor: mode === opt.id ? '#EFF6FF' : '#FFFFFF',
-                    color: mode === opt.id ? '#1D4ED8' : '#475569',
+                    border: mode === opt.id ? '2px solid var(--color-primary)' : '1px solid var(--color-border-strong)',
+                    backgroundColor: mode === opt.id ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+                    color: mode === opt.id ? 'var(--color-primary-text)' : 'var(--color-text-secondary)',
                     textAlign: 'center',
                   }}
                 >
@@ -588,11 +588,14 @@ const StockOperationForm: React.FC<StockOperationModalProps> = ({
                 border: 'none',
                 backgroundColor:
                   mode === 'usage'
-                    ? '#DC2626'
+                    ? 'var(--color-danger)'
                     : mode === 'transfer'
-                    ? '#7C3AED'
-                    : '#2563EB',
-                color: '#FFFFFF',
+                    ? 'var(--color-warning)'
+                    : 'var(--color-primary)',
+                color:
+                  mode === 'usage'
+                    ? '#FFFFFF'
+                    : 'var(--color-on-primary)',
                 fontSize: '0.9rem',
                 fontWeight: 600,
                 cursor: 'pointer',

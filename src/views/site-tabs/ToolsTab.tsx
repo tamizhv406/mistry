@@ -96,17 +96,17 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
         {
           label: 'Paid Amount',
           value: `₹${tool.paidAmount.toLocaleString('en-IN')}`,
-          color: '#34d399',
+          color: 'var(--color-success-text)',
         },
         {
           label: 'Balance Due',
           value: `₹${tool.balance.toLocaleString('en-IN')}`,
-          color: tool.balance > 0 ? '#f87171' : '#94a3b8',
+          color: tool.balance > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)',
         },
         {
           label: 'Extra Paid',
           value: `₹${(tool.extraPaid || 0).toLocaleString('en-IN')}`,
-          color: (tool.extraPaid || 0) > 0 ? '#38bdf8' : '#94a3b8',
+          color: (tool.extraPaid || 0) > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)',
         },
       ],
       onClick: () => setSelectedToolForDetails(tool),
@@ -129,17 +129,17 @@ export const ToolsTab: React.FC<ToolsTabProps> = ({
         {
           label: 'Tool Type',
           value: selectedToolForDetails.type,
-          icon: <Tag size={14} className="text-sky-400" />,
+          icon: <Tag size={14} style={{ color: 'var(--color-warning)' }} />,
         },
         {
           label: 'Quantity',
           value: `${selectedToolForDetails.quantity} Nos`,
-          icon: <Hash size={14} className="text-emerald-400" />,
+          icon: <Hash size={14} style={{ color: 'var(--color-success)' }} />,
         },
         {
           label: 'Supplier / Rental Shop',
           value: selectedToolForDetails.supplier || 'Not Specified',
-          icon: <Building size={14} className="text-purple-400" />,
+          icon: <Building size={14} style={{ color: 'var(--color-charcoal)' }} />,
         },
         {
           label: 'Purchase / Entry Date',

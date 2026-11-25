@@ -82,7 +82,7 @@ export const ChangeInitialPasswordModal: React.FC<ChangeInitialPasswordModalProp
               <h3 style={{ fontSize: '1.1rem', color: '#f8fafc' }}>
                 Change Initial Password Required
               </h3>
-              <p style={{ fontSize: '0.75rem', color: '#c7d2fe' }}>
+              <p style={{ fontSize: '0.8rem', color: '#D1D5DB' }}>
                 Set your secure private password to activate your account
               </p>
             </div>

@@ -117,13 +117,13 @@ async function runTests() {
     const dsCssPath = path.resolve(process.cwd(), 'src', 'styles', 'design-system.css');
     const dsCss = fs.readFileSync(dsCssPath, 'utf8');
 
-    assert(dsCss.includes('--ds-accent-amber: #f59e0b'), 'High-visibility safety construction amber token defined (#f59e0b)');
-    assert(dsCss.includes('--ds-accent-amber-dark: #d97706'), 'Dark amber hover token defined (#d97706)');
-    assert(dsCss.includes('--ds-primary: #0f172a'), 'Deep slate navy header token defined (#0f172a)');
-    assert(dsCss.includes('--ds-status-present: #16a34a'), 'Forest green present status token defined (#16a34a)');
-    assert(dsCss.includes('--ds-status-absent: #dc2626'), 'Crimson red absent status token defined (#dc2626)');
+    assert(dsCss.includes('--ds-accent-amber:') && dsCss.includes('#F97316'), 'High-visibility construction orange accent token defined (--color-primary / #F97316)');
+    assert(dsCss.includes('--ds-accent-amber-dark:') && dsCss.includes('#EA580C'), 'Dark orange hover token defined (--color-primary-hover / #EA580C)');
+    assert(dsCss.includes('--ds-primary:') && dsCss.includes('#1F2937'), 'Charcoal primary text/header token defined (--color-charcoal / #1F2937)');
+    assert(dsCss.includes('--ds-status-present:') && dsCss.includes('#16A34A'), 'Green present status token defined (--color-success / #16A34A)');
+    assert(dsCss.includes('--ds-status-absent:') && dsCss.includes('#DC2626'), 'Red absent status token defined (--color-danger / #DC2626)');
     assert(dsCss.includes('border-radius: 8px'), 'Universal 8px border-radius applied to inputs');
-    assert(dsCss.includes('rgba(245, 158, 11'), 'Focus ring styled with construction amber');
+    assert(dsCss.includes('--ds-focus-ring:') && dsCss.includes('var(--color-focus-ring'), 'Focus ring styled with unified theme token');
   }
 
   // Test 6: Zero-Network Offline Data Operation

@@ -79,13 +79,13 @@ export const BoqProjectEstimatePanel: React.FC<BoqProjectEstimatePanelProps> = (
   // Group materials for Cost Breakdown & Donut Chart
   const costBreakdownData = useMemo(() => {
     const categories: Record<string, { label: string; amount: number; color: string }> = {
-      cement: { label: 'Cement', amount: 0, color: '#3b82f6' }, // blue
-      sand: { label: 'Sand & Aggregates', amount: 0, color: '#f59e0b' }, // amber
-      brick: { label: 'Bricks & AAC Blocks', amount: 0, color: '#ef4444' }, // red
-      steel: { label: 'Steel & Rebar', amount: 0, color: '#8b5cf6' }, // purple
-      tile: { label: 'Tiles & Adhesives', amount: 0, color: '#10b981' }, // emerald
-      labour: { label: 'Site Labour Allowance', amount: boq.totalLabourCost, color: '#ec4899' }, // pink
-      other: { label: 'Other Materials', amount: 0, color: '#64748b' }, // slate
+      cement: { label: 'Cement', amount: 0, color: '#EA580C' }, // burnt orange
+      sand: { label: 'Sand & Aggregates', amount: 0, color: '#F59E0B' }, // amber
+      brick: { label: 'Bricks & AAC Blocks', amount: 0, color: '#DC2626' }, // danger red
+      steel: { label: 'Steel & Rebar', amount: 0, color: '#1F2937' }, // charcoal
+      tile: { label: 'Tiles & Adhesives', amount: 0, color: '#16A34A' }, // green
+      labour: { label: 'Site Labour Allowance', amount: boq.totalLabourCost, color: '#D97706' }, // warm gold
+      other: { label: 'Other Materials', amount: 0, color: '#57534E' }, // warm grey
     };
 
     boq.consolidatedMaterials.forEach((m) => {
@@ -319,33 +319,38 @@ export const BoqProjectEstimatePanel: React.FC<BoqProjectEstimatePanelProps> = (
           </div>
         </div>
 
-        {/* Card 2: MATERIAL SUBTOTAL (Emerald Green Card) */}
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white shadow-md flex flex-col justify-between relative overflow-hidden">
+        {/* Card 2: MATERIAL SUBTOTAL (Green Success Card) */}
+        <div
+          className="p-5 rounded-2xl shadow-md flex flex-col justify-between relative overflow-hidden"
+          style={{ background: 'var(--color-success)', color: '#FFFFFF' }}
+        >
           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none" />
-          <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
+          <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight" style={{ color: '#FFFFFF' }}>
             {formatINR(boq.totalEstimateCost)}
           </span>
           <div className="mt-3">
-            <span className="text-[11px] uppercase tracking-wider text-emerald-100 font-bold block">
+            <span className="text-[11px] uppercase tracking-wider font-bold block" style={{ color: '#DCFCE7' }}>
               MATERIAL SUBTOTAL
             </span>
-            <span className="text-[11px] text-emerald-200/80 block mt-0.5">
+            <span className="text-[11px] block mt-0.5" style={{ color: '#ECFDF5' }}>
               Landed cost including GST &amp; transport
             </span>
           </div>
         </div>
 
-        {/* Card 3: FINAL TOTAL (Indigo / Purple Card) */}
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-md flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-purple-400/20 rounded-full blur-2xl -mr-6 -mt-6 pointer-events-none" />
-          <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight text-white">
+        {/* Card 3: FINAL TOTAL (Primary Orange Accent Card) */}
+        <div
+          className="p-5 rounded-2xl shadow-md flex flex-col justify-between relative overflow-hidden"
+          style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}
+        >
+          <span className="text-3xl sm:text-4xl font-extrabold font-mono tracking-tight" style={{ color: 'var(--color-on-primary)' }}>
             {formatINR(boq.grandTotal)}
           </span>
           <div className="mt-3">
-            <span className="text-[11px] uppercase tracking-wider text-indigo-100 font-bold block">
+            <span className="text-[11px] uppercase tracking-wider font-bold block" style={{ color: 'var(--color-on-primary)' }}>
               FINAL TOTAL ESTIMATE
             </span>
-            <span className="text-[11px] text-indigo-200/80 block mt-0.5">
+            <span className="text-[11px] block mt-0.5" style={{ color: 'var(--color-on-primary)', opacity: 0.9 }}>
               Materials + Site Labour ({formatINR(boq.totalLabourCost)})
             </span>
           </div>

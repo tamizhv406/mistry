@@ -384,9 +384,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'warning',
       stats: [
         { label: 'Total Amount', value: `₹${teaFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${teaFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${teaFin.balanceDue.toLocaleString('en-IN')}`, color: teaFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${teaFin.extraPaid.toLocaleString('en-IN')}`, color: teaFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${teaFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${teaFin.balanceDue.toLocaleString('en-IN')}`, color: teaFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${teaFin.extraPaid.toLocaleString('en-IN')}`, color: teaFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -423,9 +423,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'warning',
       stats: [
         { label: 'Total Amount', value: `₹${snacksFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${snacksFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${snacksFin.balanceDue.toLocaleString('en-IN')}`, color: snacksFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${snacksFin.extraPaid.toLocaleString('en-IN')}`, color: snacksFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${snacksFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${snacksFin.balanceDue.toLocaleString('en-IN')}`, color: snacksFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${snacksFin.extraPaid.toLocaleString('en-IN')}`, color: snacksFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -462,9 +462,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'success',
       stats: [
         { label: 'Total Amount', value: `₹${juiceFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${juiceFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${juiceFin.balanceDue.toLocaleString('en-IN')}`, color: juiceFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${juiceFin.extraPaid.toLocaleString('en-IN')}`, color: juiceFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${juiceFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${juiceFin.balanceDue.toLocaleString('en-IN')}`, color: juiceFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${juiceFin.extraPaid.toLocaleString('en-IN')}`, color: juiceFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -501,9 +501,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'info',
       stats: [
         { label: 'Total Amount', value: `₹${foodFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${foodFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${foodFin.balanceDue.toLocaleString('en-IN')}`, color: foodFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${foodFin.extraPaid.toLocaleString('en-IN')}`, color: foodFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${foodFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${foodFin.balanceDue.toLocaleString('en-IN')}`, color: foodFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${foodFin.extraPaid.toLocaleString('en-IN')}`, color: foodFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -540,9 +540,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'warning',
       stats: [
         { label: 'Total Amount', value: `₹${poojaFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${poojaFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${poojaFin.balanceDue.toLocaleString('en-IN')}`, color: poojaFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${poojaFin.extraPaid.toLocaleString('en-IN')}`, color: poojaFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${poojaFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${poojaFin.balanceDue.toLocaleString('en-IN')}`, color: poojaFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${poojaFin.extraPaid.toLocaleString('en-IN')}`, color: poojaFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -579,9 +579,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'primary',
       stats: [
         { label: 'Total Amount', value: `₹${otherFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${otherFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${otherFin.balanceDue.toLocaleString('en-IN')}`, color: otherFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${otherFin.extraPaid.toLocaleString('en-IN')}`, color: otherFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${otherFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${otherFin.balanceDue.toLocaleString('en-IN')}`, color: otherFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${otherFin.extraPaid.toLocaleString('en-IN')}`, color: otherFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -618,9 +618,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'warning',
       stats: [
         { label: 'Total Amount', value: `₹${elecFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${elecFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${elecFin.balanceDue.toLocaleString('en-IN')}`, color: elecFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${elecFin.extraPaid.toLocaleString('en-IN')}`, color: elecFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${elecFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${elecFin.balanceDue.toLocaleString('en-IN')}`, color: elecFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${elecFin.extraPaid.toLocaleString('en-IN')}`, color: elecFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({
@@ -657,9 +657,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
       badgeVariant: 'info',
       stats: [
         { label: 'Total Amount', value: `₹${waterFin.totalAmount.toLocaleString('en-IN')}` },
-        { label: 'Paid Amount', value: `₹${waterFin.paidAmount.toLocaleString('en-IN')}`, color: '#34d399' },
-        { label: 'Balance Due', value: `₹${waterFin.balanceDue.toLocaleString('en-IN')}`, color: waterFin.balanceDue > 0 ? '#f87171' : '#94a3b8' },
-        { label: 'Extra Paid', value: `₹${waterFin.extraPaid.toLocaleString('en-IN')}`, color: waterFin.extraPaid > 0 ? '#38bdf8' : '#94a3b8' },
+        { label: 'Paid Amount', value: `₹${waterFin.paidAmount.toLocaleString('en-IN')}`, color: 'var(--color-success-text)' },
+        { label: 'Balance Due', value: `₹${waterFin.balanceDue.toLocaleString('en-IN')}`, color: waterFin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' },
+        { label: 'Extra Paid', value: `₹${waterFin.extraPaid.toLocaleString('en-IN')}`, color: waterFin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' },
       ],
       onClick: () => {
         setExpenseModalData({

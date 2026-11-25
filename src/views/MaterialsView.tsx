@@ -223,63 +223,28 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto', color: '#0F172A' }}>
+    <div className="erp-view-page">
       {/* Top Header & Actions */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-          marginBottom: '24px',
-        }}
-      >
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '10px',
-                backgroundColor: '#EFF6FF',
-                color: '#2563EB',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Layers size={22} />
-            </div>
-            <div>
-              <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
-                Materials & Inventory Management
-              </h1>
-              <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748B' }}>
-                Track live construction material stock, purchases, usage consumption and site-to-site transfers.
-              </p>
-            </div>
+      <div className="erp-view-header">
+        <div className="erp-view-title-wrap">
+          <div className="erp-view-title-icon">
+            <Layers size={22} />
+          </div>
+          <div>
+            <h1 className="erp-view-title">
+              Materials & Inventory Management
+            </h1>
+            <p className="erp-view-subtitle">
+              Track live construction material stock, purchases, usage consumption and site-to-site transfers.
+            </p>
           </div>
         </div>
 
         {/* Global Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="erp-view-actions">
           <button
             onClick={handleExportPDF}
-            style={{
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
+            className="erp-btn-secondary"
           >
             <FileText size={16} />
             <span>Export Stock PDF</span>
@@ -289,42 +254,16 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             onClick={() => handleOpenStockOut()}
             disabled={isAllSites}
             title={isAllSites ? 'Choose a project first' : undefined}
-            style={{
-              opacity: isAllSites ? 0.5 : 1,
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
+            className="erp-btn-secondary"
+            style={isAllSites ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
-            <ArrowDownCircle size={16} color="#DC2626" />
+            <ArrowDownCircle size={16} color="var(--color-danger)" />
             <span>Record Usage</span>
           </button>
 
           <button
             onClick={() => handleOpenPurchase()}
-            style={{
-              padding: '9px 20px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: '#2563EB',
-              color: '#FFFFFF',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.25)',
-            }}
+            className="erp-btn-primary"
           >
             <PlusCircle size={18} />
             <span>+ Record Purchase</span>
@@ -333,74 +272,35 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
       </div>
 
       {/* KPI Summary Cards: same figures as the phone screen */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-          gap: '16px',
-          marginBottom: '24px',
-        }}
-      >
+      <div className="erp-summary-grid-4">
         {[
-          { label: 'MATERIALS', value: String(metrics.itemCount), hint: `${metrics.inStockCount} in stock`, color: '#0F172A', icon: <Package size={18} color="#2563EB" /> },
-          { label: 'STOCK VALUE', value: formatINR(metrics.stockValue), hint: 'On hand, at average purchase price', color: '#16A34A', icon: <TrendingUp size={18} color="#16A34A" /> },
-          { label: 'BOUGHT', value: formatINR(metrics.purchaseValue), hint: 'All purchases', color: '#0F172A', icon: <Receipt size={18} color="#2563EB" /> },
-          { label: 'LOW STOCK', value: String(metrics.lowCount), hint: 'At or below the low-stock level', color: metrics.lowCount > 0 ? '#D97706' : '#0F172A', icon: <AlertTriangle size={18} color="#F59E0B" /> },
-          { label: 'OUT OF STOCK', value: String(metrics.outCount), hint: 'Nothing left on site', color: metrics.outCount > 0 ? '#DC2626' : '#0F172A', icon: <TrendingDown size={18} color="#DC2626" /> },
-          { label: 'TO PAY', value: formatINR(metrics.payable), hint: 'Unpaid supplier balance', color: '#7C3AED', icon: <Receipt size={18} color="#7C3AED" /> },
+          { label: 'MATERIALS', value: String(metrics.itemCount), hint: `${metrics.inStockCount} in stock`, valueClass: '', icon: <Package size={18} color="var(--color-charcoal)" /> },
+          { label: 'STOCK VALUE', value: formatINR(metrics.stockValue), hint: 'On hand, at average purchase price', valueClass: 'erp-stat-value--success', icon: <TrendingUp size={18} color="var(--color-success)" /> },
+          { label: 'BOUGHT', value: formatINR(metrics.purchaseValue), hint: 'All purchases', valueClass: '', icon: <Receipt size={18} color="var(--color-charcoal)" /> },
+          { label: 'LOW STOCK', value: String(metrics.lowCount), hint: 'At or below the low-stock level', valueClass: metrics.lowCount > 0 ? 'erp-stat-value--warning' : '', icon: <AlertTriangle size={18} color="var(--color-warning)" /> },
+          { label: 'OUT OF STOCK', value: String(metrics.outCount), hint: 'Nothing left on site', valueClass: metrics.outCount > 0 ? 'erp-stat-value--danger' : '', icon: <TrendingDown size={18} color="var(--color-danger)" /> },
+          { label: 'TO PAY', value: formatINR(metrics.payable), hint: 'Unpaid supplier balance', valueClass: metrics.payable > 0 ? 'erp-stat-value--primary' : '', icon: <Receipt size={18} color="var(--color-primary-text)" /> },
         ].map(card => (
-          <div
-            key={card.label}
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: '12px',
-              border: '1px solid #E2E8F0',
-              padding: '18px 20px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              minWidth: 0,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#64748B' }}>{card.label}</span>
+          <div key={card.label} className="erp-stat-card">
+            <div className="erp-stat-card-top">
+              <span className="erp-stat-label">{card.label}</span>
               {card.icon}
             </div>
-            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: card.color, overflowWrap: 'anywhere' }}>{card.value}</div>
-            <div style={{ fontSize: '0.875rem', color: '#64748B', marginTop: '4px' }}>{card.hint}</div>
+            <div className={`erp-stat-value ${card.valueClass}`.trim()}>{card.value}</div>
+            <div className="erp-stat-sub">{card.hint}</div>
           </div>
         ))}
       </div>
+
       {/* Control Bar: Project Filter, Search, Shelf Filter, and Tabs */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1px solid #E2E8F0',
-          padding: '16px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-        }}
-      >
+      <div className="erp-control-card">
         {/* Project & Search Inputs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
-          <div style={{ minWidth: '180px' }}>
+        <div className="erp-filter-group">
+          <div>
             <select
               value={selectedSiteId}
               onChange={e => setSelectedSiteId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                backgroundColor: '#F8FAFC',
-                fontWeight: 600,
-                color: '#1E293B',
-                outline: 'none',
-              }}
+              className="erp-select-pill erp-select-pill--wide"
             >
               <option value="all">All Projects (Combined)</option>
               {sites.map(s => (
@@ -411,42 +311,22 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             </select>
           </div>
 
-          <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
-            <Search
-              size={16}
-              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
-            />
+          <div className="erp-search-box">
+            <Search size={16} className="erp-search-icon" />
             <input
               type="text"
               placeholder="Search materials by name or category..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px 9px 36px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
+              className="erp-search-input"
             />
           </div>
 
-          <div style={{ minWidth: '140px' }}>
+          <div>
             <select
               value={selectedShelf}
               onChange={e => setSelectedShelf(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                backgroundColor: '#FFFFFF',
-                color: '#334155',
-                outline: 'none',
-              }}
+              className="erp-select-pill"
             >
               <option value="all">All Categories</option>
               {MATERIAL_GROUPS.map(g => (
@@ -457,20 +337,11 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             </select>
           </div>
 
-          <div style={{ minWidth: '130px' }}>
+          <div>
             <select
               value={stockStatusFilter}
               onChange={e => setStockStatusFilter(e.target.value as any)}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                backgroundColor: '#FFFFFF',
-                color: '#334155',
-                outline: 'none',
-              }}
+              className="erp-select-pill"
             >
               <option value="all">All Status</option>
               <option value="in">In Stock Only</option>
@@ -481,7 +352,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         </div>
 
         {/* View Switcher Tabs */}
-        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
+        <div className="erp-segmented-bar">
           {[
             { id: 'inventory', label: 'Inventory Stock' },
             { id: 'purchases', label: 'Purchases History' },
@@ -490,18 +361,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: '7px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                backgroundColor: activeTab === tab.id ? '#FFFFFF' : 'transparent',
-                color: activeTab === tab.id ? '#0F172A' : '#64748B',
-                boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
+              className={`erp-segmented-tab ${activeTab === tab.id ? 'is-active' : ''}`.trim()}
             >
               {tab.label}
             </button>
@@ -511,35 +371,27 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
       {/* Tab 1: Live Inventory Stock Grid / Table */}
       {activeTab === 'inventory' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="erp-card-panel">
+          <div className="erp-table-wrap">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Material Name</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Category</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Purchased</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Consumed / Out</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>On Hand Stock</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'center' }}>Status</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                <tr>
+                  <th>Material Name</th>
+                  <th>Category</th>
+                  <th className="is-right">Purchased</th>
+                  <th className="is-right">Consumed / Out</th>
+                  <th className="is-right">On Hand Stock</th>
+                  <th className="is-center">Status</th>
+                  <th className="is-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredStock.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={7} className="erp-empty-cell">
                       <Package size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No material inventory records found</div>
-                      <div style={{ fontSize: '0.875rem', marginTop: '4px' }}>
+                      <div className="erp-cell-primary">No material inventory records found</div>
+                      <div className="erp-cell-sub">
                         Click "+ Record Purchase" to enter stock purchases for this site.
                       </div>
                     </td>
@@ -551,82 +403,45 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     const isLow = status === 'low';
 
                     return (
-                      <tr
-                        key={item.key}
-                        style={{
-                          borderBottom: '1px solid #F1F5F9',
-                          transition: 'background-color 0.15s ease',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
+                      <tr key={item.key}>
+                        <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                             <MaterialIcon size="md" category={item.category} name={item.name} />
                             <div style={{ minWidth: 0 }}>
-                              <div>{item.name}</div>
-                              <div style={{ fontSize: '0.875rem', color: '#64748B', fontWeight: 400 }}>{item.lowStockThreshold !== undefined ? `Low-stock level: ${formatStock(item.category, item.unit, item.lowStockThreshold)}` : 'No low-stock level set'}</div>
+                              <div className="erp-cell-primary">{item.name}</div>
+                              <div className="erp-cell-sub">{item.lowStockThreshold !== undefined ? `Low-stock level: ${formatStock(item.category, item.unit, item.lowStockThreshold)}` : 'No low-stock level set'}</div>
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: '14px 18px' }}>
-                          <span
-                            style={{
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              backgroundColor: '#EFF6FF',
-                              color: '#1D4ED8',
-                              fontSize: '0.875rem',
-                              fontWeight: 600,
-                              textTransform: 'capitalize',
-                            }}
-                          >
+                        <td>
+                          <span className="mat-cat-chip" style={{ textTransform: 'capitalize' }}>
                             {item.category}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#334155' }}>
+                        <td className="is-right">
                           {formatStock(item.category, item.unit, item.purchased)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#DC2626' }}>
+                        <td className="is-right erp-cell-danger">
                           {formatStock(item.category, item.unit, item.used + item.returned)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, fontSize: '0.95rem' }}>
-                          <span style={{ color: isOut ? '#DC2626' : isLow ? '#D97706' : '#16A34A' }}>
+                        <td className="is-right">
+                          <span className={isOut ? 'erp-cell-danger' : isLow ? 'erp-cell-warning' : 'erp-cell-success'}>
                             {formatStock(item.category, item.unit, item.onHand)}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <td className="is-center">
                           <span
-                            style={{
-                              display: 'inline-block',
-                              padding: '4px 10px',
-                              borderRadius: '999px',
-                              fontSize: '0.875rem',
-                              fontWeight: 700,
-                              backgroundColor: isOut ? '#FEE2E2' : isLow ? '#FEF3C7' : '#DCFCE7',
-                              color: isOut ? '#991B1B' : isLow ? '#92400E' : '#166534',
-                            }}
+                            className={`erp-badge ${isOut ? 'erp-badge--danger' : isLow ? 'erp-badge--warning' : 'erp-badge--success'}`}
                           >
                             {status === 'negative' ? 'Below zero' : isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'Available'}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                        <td className="is-right">
+                          <div className="erp-table-actions">
                             <button
                               onClick={() => handleOpenPurchase(item)}
                               title="Record a purchase of this material"
-                              style={{
-                                padding: '6px 10px',
-                                minHeight: '44px',
-                                whiteSpace: 'nowrap',
-                                borderRadius: '6px',
-                                border: '1px solid #CBD5E1',
-                                backgroundColor: '#FFFFFF',
-                                color: '#16A34A',
-                                fontSize: '0.875rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
+                              className="erp-btn-table-action erp-btn-table-action--success-outline"
                             >
                               + Purchase
                             </button>
@@ -634,19 +449,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                               onClick={() => handleOpenStockOut(item)}
                               disabled={isAllSites || item.onHand <= 0}
                               title={isAllSites ? 'Choose a project first' : 'Stock Out / Use on site'}
-                              style={{
-                                opacity: isAllSites || item.onHand <= 0 ? 0.5 : 1,
-                                minHeight: '44px',
-                                whiteSpace: 'nowrap',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #CBD5E1',
-                                backgroundColor: '#FFFFFF',
-                                color: '#DC2626',
-                                fontSize: '0.875rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
+                              className="erp-btn-table-action erp-btn-table-action--danger-outline"
                             >
                               Stock Out
                             </button>
@@ -654,19 +457,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                               onClick={() => handleOpenTransfer(item)}
                               disabled={isAllSites || item.onHand <= 0 || sites.length < 2}
                               title={isAllSites ? 'Choose a project first' : 'Transfer stock to another site'}
-                              style={{
-                                opacity: isAllSites || item.onHand <= 0 || sites.length < 2 ? 0.5 : 1,
-                                minHeight: '44px',
-                                whiteSpace: 'nowrap',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #CBD5E1',
-                                backgroundColor: '#FFFFFF',
-                                color: '#7C3AED',
-                                fontSize: '0.875rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
+                              className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
                             >
                               Transfer
                             </button>
@@ -684,57 +475,49 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
       {/* Tab 2: Purchases History */}
       {activeTab === 'purchases' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="erp-card-panel">
+          <div className="erp-table-wrap">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Item Description</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Project</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Supplier</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Qty</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Total Amount</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Paid</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Balance</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Item Description</th>
+                  <th>Project</th>
+                  <th>Supplier</th>
+                  <th className="is-right">Qty</th>
+                  <th className="is-right">Total Amount</th>
+                  <th className="is-right">Paid</th>
+                  <th className="is-right">Balance</th>
                 </tr>
               </thead>
               <tbody>
                 {combinedPurchases.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={8} className="erp-empty-cell">
                       <Receipt size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No purchase records yet</div>
+                      <div className="erp-cell-primary">No purchase records yet</div>
                     </td>
                   </tr>
                 ) : (
                   combinedPurchases.map(p => {
                     const siteObj = sites.find(s => s.id === p.siteId);
                     return (
-                      <tr key={p.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                        <td style={{ padding: '14px 18px', color: '#64748B' }}>{formatDay(p.date)}</td>
-                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
-                          <div>{p.name}</div>
-                          {p.invoiceNumber && <div style={{ fontSize: '0.875rem', color: '#64748B' }}>Invoice: {p.invoiceNumber}</div>}
+                      <tr key={p.id}>
+                        <td className="erp-cell-muted">{formatDay(p.date)}</td>
+                        <td>
+                          <div className="erp-cell-primary">{p.name}</div>
+                          {p.invoiceNumber && <div className="erp-cell-sub">Invoice: {p.invoiceNumber}</div>}
                         </td>
-                        <td style={{ padding: '14px 18px', color: '#334155' }}>{siteObj?.name || 'Project'}</td>
-                        <td style={{ padding: '14px 18px', color: '#64748B' }}>{p.supplier}</td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 600 }}>{p.quantity}</td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, color: '#0F172A' }}>
+                        <td>{siteObj?.name || 'Project'}</td>
+                        <td className="erp-cell-muted">{p.supplier}</td>
+                        <td className="is-right erp-cell-primary">{p.quantity}</td>
+                        <td className="is-right erp-cell-primary">
                           {formatINR(p.totalAmount)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#16A34A', fontWeight: 600 }}>
+                        <td className="is-right erp-cell-success">
                           {formatINR(p.paidAmount)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 600, color: p.balance > 0 ? '#DC2626' : '#64748B' }}>
+                        <td className={`is-right ${p.balance > 0 ? 'erp-cell-danger' : 'erp-cell-muted'}`}>
                           {formatINR(p.balance)}
                         </td>
                       </tr>
@@ -749,80 +532,61 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
       {/* Tab 3: Movements Log */}
       {activeTab === 'movements' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="erp-card-panel">
+          <div className="erp-table-wrap">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.875rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Material</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Type</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Quantity</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Reason / Notes</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Material</th>
+                  <th>Type</th>
+                  <th className="is-right">Quantity</th>
+                  <th>Reason / Notes</th>
+                  <th className="is-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {movementLog.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={6} className="erp-empty-cell">
                       <RotateCcw size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No stock movements recorded</div>
+                      <div className="erp-cell-primary">No stock movements recorded</div>
                     </td>
                   </tr>
                 ) : (
                   movementLog.map(m => (
-                    <tr key={m.id} style={{ borderBottom: '1px solid #F1F5F9', opacity: m.isDeleted ? 0.75 : 1 }}>
-                      <td style={{ padding: '14px 18px', color: '#64748B' }}>{formatDay(m.eventDate)}</td>
-                      <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>{m.itemName}</td>
-                      <td style={{ padding: '14px 18px' }}>
+                    <tr key={m.id} className={m.isDeleted ? 'erp-row-voided' : undefined}>
+                      <td className="erp-cell-muted">{formatDay(m.eventDate)}</td>
+                      <td className="erp-cell-primary">{m.itemName}</td>
+                      <td>
                         <span
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            fontSize: '0.875rem',
-                            fontWeight: 600,
-                            backgroundColor:
-                              m.movementType === 'usage'
-                                ? '#FEE2E2'
-                                : m.movementType === 'adjust_in'
-                                ? '#DCFCE7'
-                                : '#F1F5F9',
-                            color:
-                              m.movementType === 'usage'
-                                ? '#991B1B'
-                                : m.movementType === 'adjust_in'
-                                ? '#166534'
-                                : '#334155',
-                          }}
+                          className={`erp-badge ${
+                            m.movementType === 'usage'
+                              ? 'erp-badge--danger'
+                              : m.movementType === 'adjust_in'
+                              ? 'erp-badge--success'
+                              : 'erp-badge--neutral'
+                          }`}
                         >
                           {STOCK_MOVEMENT_LABEL[m.movementType] || m.movementType}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700 }}>
-                        <span style={{ textDecoration: m.isDeleted ? 'line-through' : undefined }}>{formatStock(m.category, m.unit, m.quantity)}</span>
+                      <td className="is-right erp-cell-primary">
+                        <span className={m.isDeleted ? 'erp-text-strike' : undefined}>{formatStock(m.category, m.unit, m.quantity)}</span>
                       </td>
-                      <td style={{ padding: '14px 18px', color: '#64748B', fontSize: '0.875rem' }}>
-                        {m.reason ? (m.notes ? `${m.reason} · ${m.notes}` : m.reason) : (m.notes || '—')}
+                      <td>
+                        <div>{m.reason ? (m.notes ? `${m.reason} · ${m.notes}` : m.reason) : (m.notes || '—')}</div>
                         {m.isDeleted && (
-                          <div style={{ color: '#991B1B', fontWeight: 600 }}>
+                          <div className="erp-cell-danger">
                             Cancelled: {m.voidReason || 'no reason given'}
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                      <td className="is-right">
                         {!m.isDeleted && (
                           <button
                             onClick={() => { setVoiding(m); setVoidReason(''); setVoidError(''); }}
-                            style={{ minHeight: '44px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #FCA5A5', backgroundColor: '#FFFFFF', color: '#991B1B', fontSize: '0.875rem', fontWeight: 600, cursor: 'pointer' }}
+                            className="erp-btn-table-action erp-btn-table-action--danger-outline"
                           >
                             Cancel entry
                           </button>
@@ -866,15 +630,15 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
       {/* Cancel (void) a stock entry: a reason is required, the entry stays in the history */}
       {voiding && (
-        <div role="dialog" aria-modal="true" aria-label="Cancel stock entry" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '16px', width: '100%', maxWidth: '440px', padding: '20px' }}>
-            <h2 style={{ margin: '0 0 6px', fontSize: '1.15rem', fontWeight: 700 }}>Cancel this entry?</h2>
-            <p style={{ margin: '0 0 12px', fontSize: '0.9rem', color: '#475569' }}>
+        <div role="dialog" aria-modal="true" aria-label="Cancel stock entry" className="erp-inline-modal-backdrop">
+          <div className="erp-inline-modal-card">
+            <h2 className="erp-modal-title">Cancel this entry?</h2>
+            <p className="erp-modal-desc">
               {STOCK_MOVEMENT_LABEL[voiding.movementType]}: {formatStock(voiding.category, voiding.unit, voiding.quantity)} {voiding.itemName}, {formatDay(voiding.eventDate)}.
               It stays in the history marked as cancelled and stops changing the stock.
             </p>
-            {voidError && <div role="alert" style={{ marginBottom: '10px', padding: '10px 12px', borderRadius: '8px', backgroundColor: '#FEF2F2', color: '#991B1B', fontSize: '0.9rem' }}>{voidError}</div>}
-            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: 600, marginBottom: '6px' }}>
+            {voidError && <div role="alert" className="erp-inline-alert">{voidError}</div>}
+            <label className="erp-modal-field-label">
               Why is it being cancelled?
               <input
                 type="text"
@@ -882,12 +646,12 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                 maxLength={120}
                 onChange={e => setVoidReason(e.target.value)}
                 placeholder="Entered twice, wrong item"
-                style={{ display: 'block', width: '100%', marginTop: '6px', minHeight: '44px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '0.95rem', boxSizing: 'border-box' }}
+                className="erp-modal-input"
               />
             </label>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
-              <button onClick={() => setVoiding(null)} style={{ minHeight: '44px', padding: '0 16px', borderRadius: '8px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' }}>Keep it</button>
-              <button onClick={handleVoid} disabled={!voidReason.trim()} style={{ minHeight: '44px', padding: '0 16px', borderRadius: '8px', border: 'none', backgroundColor: '#DC2626', color: '#FFFFFF', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', opacity: voidReason.trim() ? 1 : 0.5 }}>Cancel entry</button>
+            <div className="erp-modal-actions">
+              <button onClick={() => setVoiding(null)} className="btn btn-outline">Keep it</button>
+              <button onClick={handleVoid} disabled={!voidReason.trim()} className="btn btn-danger-solid" style={{ opacity: voidReason.trim() ? 1 : 0.5 }}>Cancel entry</button>
             </div>
           </div>
         </div>

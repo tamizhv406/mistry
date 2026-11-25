@@ -81,13 +81,13 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
   // Colors for donut chart & table
   const categoryColors: Record<TakeoffMaterialItem['category'], { fill: string; dot: string }> = {
     cement: { fill: '#f59e0b', dot: '#f59e0b' },
-    sand: { fill: '#14b8a6', dot: '#14b8a6' },
-    aggregate: { fill: '#a855f7', dot: '#a855f7' },
-    brick: { fill: '#f43f5e', dot: '#f43f5e' },
-    steel: { fill: '#3b82f6', dot: '#3b82f6' },
-    tile: { fill: '#06b6d4', dot: '#06b6d4' },
-    labour: { fill: '#10b981', dot: '#10b981' },
-    other: { fill: '#64748b', dot: '#64748b' },
+    sand: { fill: '#0d9488', dot: '#0d9488' },
+    aggregate: { fill: '#78716c', dot: '#78716c' },
+    brick: { fill: '#dc2626', dot: '#dc2626' },
+    steel: { fill: '#1f2937', dot: '#1f2937' },
+    tile: { fill: '#f97316', dot: '#f97316' },
+    labour: { fill: '#16a34a', dot: '#16a34a' },
+    other: { fill: '#57534e', dot: '#57534e' },
   };
 
   // Build segments for the circular Donut Chart matching Image 4 (MYDESIGNERPLUS)
@@ -202,7 +202,7 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
       <div className="bm-donut-card">
         <div className="bm-card-title-row">
           <span className="bm-card-title">
-            <PieChart size={15} style={{ color: '#4f46e5' }} />
+            <PieChart size={15} style={{ color: 'var(--color-primary)' }} />
             Cost Breakdown
           </span>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>
@@ -266,7 +266,7 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
       {/* ── 3. Selected Quantities Metrics Card (Image 3 Style) ── */}
       <div className="bm-quantities-card">
         <div className="bm-card-title">
-          <Layers size={14} style={{ color: '#4f46e5' }} />
+          <Layers size={14} style={{ color: 'var(--color-primary)' }} />
           Selected Quantities
         </div>
         <div className="bm-quantities-grid">
@@ -393,7 +393,7 @@ export const QuantityTakeoffPanel: React.FC<QuantityTakeoffPanelProps> = ({
 
           <div className="bm-summary-line total">
             <span>FINAL TOTAL</span>
-            <span style={{ color: '#4f46e5' }}>{formatINR(costs.overallTotalCost)}</span>
+            <span style={{ color: 'var(--color-primary-text)' }}>{formatINR(costs.overallTotalCost)}</span>
           </div>
         </div>
       </div>

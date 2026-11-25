@@ -189,29 +189,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Card 1: User Profile */}
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '14px', padding: '22px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <UserIcon size={20} className="text-blue-600" />
-            <h3 style={{ fontSize: '1.1rem', margin: 0, color: '#0f172a' }}>Contractor / User Profile</h3>
+            <UserIcon size={20} style={{ color: 'var(--color-charcoal)' }} />
+            <h3 style={{ fontSize: '1.1rem', margin: 0, color: 'var(--color-charcoal)' }}>Contractor / User Profile</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
             <div>
-              <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, display: 'block' }}>User Name</span>
-              <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>{user?.fullName || user?.username || 'Local Contractor'}</strong>
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>User Name</span>
+              <strong style={{ fontSize: '0.94rem', color: 'var(--color-charcoal)' }}>{user?.fullName || user?.username || 'Local Contractor'}</strong>
             </div>
             <div>
-              <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, display: 'block' }}>Role</span>
-              <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>{user?.role || 'Admin / Builder'}</strong>
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>Role</span>
+              <strong style={{ fontSize: '0.94rem', color: 'var(--color-charcoal)' }}>{user?.role || 'Admin / Builder'}</strong>
             </div>
             <div>
-              <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: 600, display: 'block' }}>Contact / Mobile</span>
-              <strong style={{ fontSize: '0.92rem', color: '#1e293b' }}>{user?.mobile || (user as any)?.phone || 'Not configured'}</strong>
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>Contact / Mobile</span>
+              <strong style={{ fontSize: '0.94rem', color: 'var(--color-charcoal)' }}>{user?.mobile || (user as any)?.phone || 'Not configured'}</strong>
             </div>
           </div>
           {onSignOut && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid #E7E5E4' }}>
-              <span style={{ fontSize: '0.9rem', color: '#57534E', minWidth: 0, overflowWrap: 'anywhere' }}>
-                {t('auth_signed_in_as')} <strong style={{ color: '#1F2937' }}>{user?.email || user?.mobile || user?.fullName}</strong>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '14px', borderTop: '1px solid var(--color-border)' }}>
+              <span style={{ fontSize: '0.9rem', color: 'var(--color-text-secondary)', minWidth: 0, overflowWrap: 'anywhere' }}>
+                {t('auth_signed_in_as')} <strong style={{ color: 'var(--color-charcoal)' }}>{user?.email || user?.mobile || user?.fullName}</strong>
               </span>
               <button
                 type="button"
@@ -219,7 +219,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 onClick={onSignOut}
                 disabled={signingOut}
                 aria-busy={signingOut}
-                style={{ minHeight: 44, padding: '0 18px', borderRadius: 12, border: '2px solid #DC2626', background: '#FFFFFF', color: '#B91C1C', fontWeight: 700, fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: signingOut ? 'not-allowed' : 'pointer' }}
+                style={{ minHeight: 44, padding: '0 18px', borderRadius: 12, border: '2px solid var(--color-danger)', background: 'var(--color-surface)', color: 'var(--color-danger-text)', fontWeight: 700, fontSize: '0.95rem', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: signingOut ? 'not-allowed' : 'pointer' }}
               >
                 <LogOut size={18} aria-hidden="true" />
                 {signingOut ? t('auth_signing_out') : t('auth_sign_out')}
@@ -229,14 +229,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Card 2: Regional & Financial Conventions */}
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '14px', padding: '22px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <Globe size={20} className="text-emerald-600" />
-            <h3 style={{ fontSize: '1.1rem', margin: 0, color: '#0f172a' }}>Regional & Financial Conventions</h3>
+            <Globe size={20} style={{ color: 'var(--color-success)' }} />
+            <h3 style={{ fontSize: '1.1rem', margin: 0, color: 'var(--color-charcoal)' }}>Regional & Financial Conventions</h3>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
             <div>
-              <label style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '0.84rem', color: 'var(--color-text-secondary)', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
                 Primary Currency
               </label>
               <input
@@ -244,17 +244,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 value="Indian Rupee (₹ INR) — en-IN numbering"
                 readOnly
                 disabled
-                style={{ width: '100%', padding: '9px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.88rem', color: '#334155' }}
+                style={{ width: '100%', minHeight: 44, padding: '9px 12px', background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--color-charcoal)' }}
               />
             </div>
             <div>
-              <label style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
+              <label style={{ fontSize: '0.84rem', color: 'var(--color-text-secondary)', fontWeight: 600, display: 'block', marginBottom: '6px' }}>
                 Default Measurement Standard
               </label>
               <select
                 value={unitSystem}
                 onChange={e => setUnitSystem(e.target.value as 'feet' | 'meter')}
-                style={{ width: '100%', padding: '9px 12px', background: '#ffffff', border: '1.5px solid #cbd5e1', borderRadius: '8px', fontSize: '0.88rem', color: '#0f172a' }}
+                style={{ width: '100%', minHeight: 44, padding: '9px 12px', background: 'var(--color-surface)', border: '1.5px solid var(--color-border-strong)', borderRadius: '8px', fontSize: '0.88rem', color: 'var(--color-charcoal)' }}
               >
                 <option value="feet">Imperial (Feet, Inches, Sq.ft) — Indian Construction Standard</option>
                 <option value="meter">Metric (Metres, Millimetres, Sq.m)</option>
@@ -264,39 +264,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Card 3: Drafting & Interface Options */}
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '22px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '14px', padding: '22px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-            <Sliders size={20} className="text-purple-600" />
-            <h3 style={{ fontSize: '1.1rem', margin: 0, color: '#0f172a' }}>CAD & Interface Preferences</h3>
+            <Sliders size={20} style={{ color: 'var(--color-charcoal)' }} />
+            <h3 style={{ fontSize: '1.1rem', margin: 0, color: 'var(--color-charcoal)' }}>CAD & Interface Preferences</h3>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: 44, cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={voiceAssist}
                 onChange={e => setVoiceAssist(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
+                style={{ width: '20px', height: '20px', accentColor: 'var(--color-primary)' }}
               />
               <div>
-                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-charcoal)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Volume2 size={16} /> Tamil Audio Guidance (குரல் வழிகாட்டுதல்)
                 </span>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Announce CAD tool selection and drawing operations in Tamil.</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>Announce CAD tool selection and drawing operations in Tamil.</span>
               </div>
             </label>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', minHeight: 44, cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={showTips}
                 onChange={e => setShowTips(e.target.checked)}
-                style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
+                style={{ width: '20px', height: '20px', accentColor: 'var(--color-primary)' }}
               />
               <div>
-                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: '#1e293b' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--color-charcoal)' }}>
                   Live Tool Hints & Snapping HUD
                 </span>
-                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Display dynamic drafting tips and alignment guidelines on the canvas.</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>Display dynamic drafting tips and alignment guidelines on the canvas.</span>
               </div>
             </label>
           </div>
@@ -314,15 +314,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
 
         {/* Card 4: Backup & Data Sync (Phase 1 Engine) */}
-        <div style={{ background: '#ffffff', border: '1.5px solid #cbd5e1', borderRadius: '16px', padding: '24px', boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <HardDrive size={22} className="text-indigo-600" />
+              <HardDrive size={22} style={{ color: 'var(--color-primary)' }} />
               <div>
-                <h3 style={{ fontSize: '1.15rem', margin: 0, color: '#0f172a', fontWeight: 700 }}>
+                <h3 style={{ fontSize: '1.15rem', margin: 0, color: 'var(--color-charcoal)', fontWeight: 700 }}>
                   Backup &amp; Sync Engine
                 </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                <span style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>
                   Zero data loss persistence with IndexedDB, localStorage fallback, and portable backups.
                 </span>
               </div>
@@ -330,42 +330,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             {/* Badges */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '999px', background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: 'var(--color-success-soft)', color: 'var(--color-success-text)', border: '1px solid var(--color-success-border)' }}>
                 Offline Ready
               </span>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '999px', background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: 'var(--color-primary-soft)', color: 'var(--color-primary-text)', border: '1px solid var(--color-primary-border)' }}>
                 DB v{DB_VERSION}
               </span>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '3px 8px', borderRadius: '999px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, padding: '3px 10px', borderRadius: '999px', background: 'var(--color-warning-soft)', color: 'var(--color-warning-text)', border: '1px solid var(--color-warning-border)' }}>
                 Auto-Save 500ms
               </span>
             </div>
           </div>
 
           {/* Quick Record Counter */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', padding: '12px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', padding: '12px', background: 'var(--color-bg)', borderRadius: '10px', border: '1px solid var(--color-border)', marginBottom: '18px' }}>
             <div>
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, display: 'block' }}>Active Sites</span>
-              <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>{stats.sites}</strong>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>Active Sites</span>
+              <strong style={{ fontSize: '1.1rem', color: 'var(--color-charcoal)' }}>{stats.sites}</strong>
             </div>
             <div>
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, display: 'block' }}>Labour / Workers</span>
-              <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>{stats.workers}</strong>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>Labour / Workers</span>
+              <strong style={{ fontSize: '1.1rem', color: 'var(--color-charcoal)' }}>{stats.workers}</strong>
             </div>
             <div>
-              <span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600, display: 'block' }}>Floor Plans</span>
-              <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>{stats.plans}</strong>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>Floor Plans</span>
+              <strong style={{ fontSize: '1.1rem', color: 'var(--color-charcoal)' }}>{stats.plans}</strong>
             </div>
           </div>
 
           {/* Export & Import Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '18px' }}>
             {/* Export Column */}
-            <div style={{ padding: '16px', background: '#faf5ff', borderRadius: '12px', border: '1px solid #f3e8ff' }}>
-              <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#581c87', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Download size={15} /> Export Portable Backups
+            <div style={{ padding: '16px', background: 'var(--color-bg)', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
+              <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--color-charcoal)', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Download size={15} style={{ color: 'var(--color-primary)' }} /> Export Portable Backups
               </h4>
-              <p style={{ fontSize: '0.75rem', color: '#6b21a8', margin: '0 0 12px' }}>
+              <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', margin: '0 0 12px' }}>
                 Download complete database or human-readable CSV summary.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -373,10 +373,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   type="button"
                   onClick={handleExportJSON}
                   disabled={exportingJSON}
-                  className="btn btn-sm"
-                  style={{ background: '#7c3aed', color: '#ffffff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 12px' }}
+                  className="btn btn-primary btn-sm"
+                  style={{ width: '100%' }}
                 >
-                  <Download size={14} />
+                  <Download size={15} />
                   <span>{exportingJSON ? 'Exporting...' : 'Export JSON Backup (.json)'}</span>
                 </button>
                 <button
@@ -384,9 +384,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onClick={handleExportCSV}
                   disabled={exportingCSV}
                   className="btn btn-outline btn-sm"
-                  style={{ background: '#ffffff', borderColor: '#d8b4fe', color: '#6b21a8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px 12px' }}
+                  style={{ width: '100%' }}
                 >
-                  <FileSpreadsheet size={14} />
+                  <FileSpreadsheet size={15} />
                   <span>{exportingCSV ? 'Preparing...' : 'Export Excel / CSV Summary (.csv)'}</span>
                 </button>
               </div>

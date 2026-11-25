@@ -251,134 +251,28 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   };
 
   return (
-    <div
-      className="attendance-page-container"
-      style={{
-        padding: '24px',
-        maxWidth: '1440px',
-        margin: '0 auto',
-        color: '#0F172A',
-        boxSizing: 'border-box',
-        width: '100%',
-        overflowX: 'hidden',
-      }}
-    >
-      <style>{`
-        .attendance-page-container {
-          max-width: 100vw;
-          box-sizing: border-box;
-          overflow-x: hidden;
-        }
-        @media (max-width: 768px) {
-          .attendance-page-container {
-            padding: 12px 8px !important;
-          }
-          .attendance-desktop-table {
-            display: none !important;
-          }
-          .attendance-mobile-cards {
-            display: flex !important;
-            flex-direction: column !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
-          }
-          .attendance-mobile-roster {
-            display: flex !important;
-            flex-direction: column !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
-            gap: 10px !important;
-          }
-          .attendance-worker-card,
-          .salary-mobile-card {
-            width: 100% !important;
-            max-width: 100% !important;
-            box-sizing: border-box !important;
-            overflow: hidden !important;
-            word-break: break-word !important;
-          }
-          .attendance-kpi-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 8px !important;
-          }
-        }
-        @media (min-width: 769px) {
-          .attendance-desktop-table {
-            display: block !important;
-          }
-          .attendance-mobile-cards {
-            display: none !important;
-          }
-          .attendance-mobile-roster {
-            display: none !important;
-          }
-        }
-        .attendance-desktop-table {
-          width: 100%;
-          max-width: 100%;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .attendance-quick-cycle-cluster {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 4px;
-        }
-      `}</style>
+    <div className="attendance-page-container">
       {/* Top Header & Actions */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-          marginBottom: '24px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              backgroundColor: '#EFF6FF',
-              color: '#2563EB',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+      <div className="erp-view-header">
+        <div className="erp-view-title-wrap">
+          <div className="erp-view-title-icon">
             <Users size={22} />
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.02em' }}>
+            <h1 className="erp-view-title">
               Attendance & Salary Management
             </h1>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748B' }}>
+            <p className="erp-view-subtitle">
               Real-time worker roster, daily muster roll, wages, recoverable advances and salary disbursement.
             </p>
           </div>
         </div>
 
         {/* Global Action Buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="erp-view-actions">
           <button
             onClick={handleExportPDF}
-            style={{
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
+            className="erp-btn-secondary"
           >
             <Download size={16} />
             <span>Export Muster PDF</span>
@@ -389,22 +283,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
               setAdvanceToEdit(null);
               setIsAdvanceModalOpen(true);
             }}
-            style={{
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
+            className="erp-btn-secondary"
           >
-            <DollarSign size={16} color="#F59E0B" />
+            <DollarSign size={16} color="var(--color-warning)" />
             <span>Pay Advance</span>
           </button>
 
@@ -413,22 +294,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
               setSalaryToEdit(null);
               setIsSalaryModalOpen(true);
             }}
-            style={{
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
+            className="erp-btn-secondary"
           >
-            <IndianRupee size={16} color="#16A34A" />
+            <IndianRupee size={16} color="var(--color-success)" />
             <span>Disburse Salary</span>
           </button>
 
@@ -437,20 +305,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
               setWorkerToEdit(null);
               setIsWorkerModalOpen(true);
             }}
-            style={{
-              padding: '9px 18px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: '#2563EB',
-              color: '#FFFFFF',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.25)',
-            }}
+            className="erp-btn-primary"
           >
             <PlusCircle size={18} />
             <span>+ Add Worker</span>
@@ -459,147 +314,76 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
       </div>
 
       {/* KPI Cards */}
-      <div
-        className="attendance-kpi-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '12px',
-          marginBottom: '24px',
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>TOTAL WORKERS</span>
-            <Users size={18} color="#2563EB" />
+      <div className="attendance-kpi-grid">
+        <div className="erp-stat-card">
+          <div className="erp-stat-card-top">
+            <span className="erp-stat-label">TOTAL WORKERS</span>
+            <Users size={18} color="var(--color-charcoal)" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A' }}>{workers.length}</div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Active site personnel</div>
+          <div className="erp-stat-value erp-stat-value--lg">{workers.length}</div>
+          <div className="erp-stat-sub">Active site personnel</div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>PRESENT TODAY</span>
-            <CheckCircle2 size={18} color="#16A34A" />
+        <div className="erp-stat-card">
+          <div className="erp-stat-card-top">
+            <span className="erp-stat-label">PRESENT TODAY</span>
+            <CheckCircle2 size={18} color="var(--color-success)" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#16A34A' }}>
+          <div className="erp-stat-value erp-stat-value--lg erp-stat-value--success">
             {dayCounts.present + dayCounts.overtime}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>
+          <div className="erp-stat-sub">
             {dayCounts.overtime > 0 ? `Includes ${dayCounts.overtime} overtime shifts` : 'Full day attendance'}
           </div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>ABSENT / HALF-DAY</span>
-            <XCircle size={18} color="#DC2626" />
+        <div className="erp-stat-card">
+          <div className="erp-stat-card-top">
+            <span className="erp-stat-label">ABSENT / HALF-DAY</span>
+            <XCircle size={18} color="var(--color-danger)" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: dayCounts.absent > 0 ? '#DC2626' : '#0F172A' }}>
-            {dayCounts.absent} <span style={{ fontSize: '1rem', color: '#64748B', fontWeight: 500 }}>({dayCounts.half_day} half)</span>
+          <div className={`erp-stat-value erp-stat-value--lg ${dayCounts.absent > 0 ? 'erp-stat-value--danger' : ''}`.trim()}>
+            {dayCounts.absent} <span className="erp-cell-sub">({dayCounts.half_day} half)</span>
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>Non-productive attendance</div>
+          <div className="erp-stat-sub">Non-productive attendance</div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>ON LEAVE</span>
-            <Clock size={18} color="#F59E0B" />
+        <div className="erp-stat-card">
+          <div className="erp-stat-card-top">
+            <span className="erp-stat-label">ON LEAVE</span>
+            <Clock size={18} color="var(--color-warning)" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: dayCounts.leave > 0 ? '#D97706' : '#0F172A' }}>
+          <div className={`erp-stat-value erp-stat-value--lg ${dayCounts.leave > 0 ? 'erp-stat-value--warning' : ''}`.trim()}>
             {dayCounts.leave}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>
+          <div className="erp-stat-sub">
             Policy: {activeSite?.leavePaid ? 'Paid Leave' : 'Unpaid Leave'}
           </div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            padding: '18px 20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748B' }}>PENDING WAGES</span>
-            <IndianRupee size={18} color="#7C3AED" />
+        <div className="erp-stat-card">
+          <div className="erp-stat-card-top">
+            <span className="erp-stat-label">PENDING WAGES</span>
+            <IndianRupee size={18} color="var(--color-primary-text)" />
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#7C3AED' }}>
+          <div className="erp-stat-value erp-stat-value--lg erp-stat-value--primary">
             {formatINR(siteLabourSummary?.pending || 0)}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '4px' }}>
+          <div className="erp-stat-sub">
             Earned: {formatINR(siteLabourSummary?.earned || 0)}
           </div>
         </div>
       </div>
 
       {/* Control Bar: Project Selector, Date Picker, Search & View Tabs */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '12px',
-          border: '1px solid #E2E8F0',
-          padding: '16px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', flex: 1 }}>
+      <div className="erp-control-card">
+        <div className="erp-filter-group">
           {/* Site Selector */}
-          <div style={{ minWidth: '180px' }}>
+          <div>
             <select
               value={selectedSiteId}
               onChange={e => setSelectedSiteId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                backgroundColor: '#F8FAFC',
-                fontWeight: 600,
-                color: '#1E293B',
-                outline: 'none',
-              }}
+              className="erp-select-pill erp-select-pill--wide"
             >
               {sites.map(s => (
                 <option key={s.id} value={s.id}>
@@ -610,34 +394,17 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           </div>
 
           {/* Date Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="att-controls-left">
             <input
               type="date"
               value={selectedDate}
               onChange={e => setSelectedDate(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                outline: 'none',
-                fontWeight: 600,
-                color: '#334155',
-              }}
+              className="att-date-picker"
             />
             {selectedDate !== todayKey() && (
               <button
                 onClick={() => setSelectedDate(todayKey())}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#FFFFFF',
-                  color: '#2563EB',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                className="erp-btn-secondary"
               >
                 Today
               </button>
@@ -645,43 +412,23 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           </div>
 
           {/* Search */}
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
-            <Search
-              size={16}
-              style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }}
-            />
+          <div className="erp-search-box">
+            <Search size={16} className="erp-search-icon" />
             <input
               type="text"
               placeholder="Search worker by name, role or phone..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px 9px 36px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
+              className="erp-search-input"
             />
           </div>
 
           {/* Status Filter */}
-          <div style={{ minWidth: '130px' }}>
+          <div>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '9px 12px',
-                borderRadius: '8px',
-                border: '1px solid #CBD5E1',
-                fontSize: '0.875rem',
-                backgroundColor: '#FFFFFF',
-                color: '#334155',
-                outline: 'none',
-              }}
+              className="erp-select-pill"
             >
               <option value="all">All Workers</option>
               <option value="present">Present</option>
@@ -695,7 +442,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '8px', padding: '3px', flexWrap: 'wrap', gap: '2px' }}>
+        <div className="erp-segmented-bar">
           {[
             { id: 'matrix', label: lang === 'ta' ? 'வருகை மேட்ரிக்ஸ் (Weekly)' : 'Attendance Matrix (Weekly)' },
             { id: 'attendance', label: lang === 'ta' ? 'தினசரி பதிவு' : 'Daily Mark' },
@@ -707,18 +454,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              style={{
-                padding: '7px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.825rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                backgroundColor: activeTab === tab.id ? '#FFFFFF' : 'transparent',
-                color: activeTab === tab.id ? '#4F46E5' : '#64748B',
-                boxShadow: activeTab === tab.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                transition: 'all 0.15s ease',
-              }}
+              className={`erp-segmented-tab ${activeTab === tab.id ? 'is-active' : ''}`.trim()}
             >
               {tab.label}
             </button>
@@ -727,45 +463,23 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
       </div>
 
       {/* Leave Pay Policy Banner */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '10px',
-          border: '1px solid #E2E8F0',
-          padding: '12px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Sparkles size={18} color="#2563EB" />
+      <div className="attendance-policy-bar">
+        <div className="att-controls-left">
+          <Sparkles size={18} color="var(--color-primary)" />
           <div>
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A' }}>
+            <span className="attendance-policy-title">
               Project Leave Pay Policy: {activeSite?.leavePaid ? 'Leaves are Paid' : 'Leaves are Unpaid (Standard)'}
             </span>
-            <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+            <div className="attendance-policy-sub">
               Configurable per site. If paid, 1 full day wage is earned on approved leave days.
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="att-controls-left">
           <button
             onClick={() => handleToggleLeavePolicy(!activeSite?.leavePaid)}
-            style={{
-              padding: '6px 14px',
-              borderRadius: '6px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#F8FAFC',
-              color: '#334155',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className="erp-btn-secondary"
           >
             Switch to {activeSite?.leavePaid ? 'Unpaid Leaves' : 'Paid Leaves'}
           </button>
@@ -774,19 +488,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             <button
               onClick={handleBulkMarkPresent}
               disabled={bulkBusy}
-              style={{
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: '#16A34A',
-                color: '#FFFFFF',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
+              className="erp-btn-success"
             >
               <CheckCircle2 size={15} />
               <span>{bulkBusy ? 'Marking...' : `Mark All ${unmarkedWorkers.length} Unmarked Present`}</span>
@@ -814,33 +516,25 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
 
       {/* Tab 1: Daily Attendance Table & Optimized Mobile Roster */}
       {activeTab === 'attendance' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
+        <div className="erp-card-panel">
           {/* Desktop Table View (> 768px) */}
-          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+          <div className="attendance-desktop-table">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name & ID</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Role</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Daily Wage</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Daily Status ({formatDay(selectedDate)})</th>
+                <tr>
+                  <th>Worker Name & ID</th>
+                  <th>Role</th>
+                  <th>Daily Wage</th>
+                  <th className="is-right">Daily Status ({formatDay(selectedDate)})</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredWorkers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={4} className="erp-empty-cell">
                       <Users size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No personnel found for this site</div>
-                      <div style={{ fontSize: '0.825rem', marginTop: '4px' }}>Click "+ Add Worker" to enroll personnel.</div>
+                      <div className="erp-cell-primary">No personnel found for this site</div>
+                      <div className="erp-cell-sub">Click "+ Add Worker" to enroll personnel.</div>
                     </td>
                   </tr>
                 ) : (
@@ -851,60 +545,30 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     const statusMeta = status ? ATTENDANCE_STATUS_META[status] : null;
 
                     return (
-                      <tr
-                        key={w.id}
-                        style={{
-                          borderBottom: '1px solid #F1F5F9',
-                          transition: 'background-color 0.15s ease',
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
-                        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                      >
-                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div
-                              style={{
-                                width: '36px',
-                                height: '36px',
-                                borderRadius: '50%',
-                                backgroundColor: '#E2E8F0',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 700,
-                                color: '#475569',
-                                fontSize: '0.85rem',
-                              }}
-                            >
+                      <tr key={w.id}>
+                        <td>
+                          <div className="att-controls-left">
+                            <div className="attendance-worker-avatar-circle">
                               {w.name.slice(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <div>{w.name}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 400 }}>
+                              <div className="erp-cell-primary">{w.name}</div>
+                              <div className="erp-cell-sub">
                                 ID: #{w.id.slice(-6).toUpperCase()} · {w.phone || 'No phone'}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td style={{ padding: '14px 18px' }}>
-                          <span
-                            style={{
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              backgroundColor: '#EFF6FF',
-                              color: '#1D4ED8',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                            }}
-                          >
+                        <td>
+                          <span className="attendance-role-pill">
                             {w.category}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#334155' }}>
+                        <td className="erp-cell-primary">
                           {formatINR(w.dailyWage)} / day
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                        <td className="is-right">
+                          <div className="erp-table-actions">
                             {/* Primary 1-Tap Cycling Status Pill */}
                             <button
                               type="button"
@@ -915,40 +579,11 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                                 const nextSt = nextOrder[(curIdx + 1) % nextOrder.length];
                                 handleMarkStatus(w, nextSt);
                               }}
+                              data-status={status || 'unmarked'}
                               className="attendance-status-pill-btn"
                               title={`Click to cycle status (Current: ${statusMeta?.label || 'Not Marked'})`}
-                              style={{
-                                backgroundColor:
-                                  status === 'present'
-                                    ? '#DCFCE7'
-                                    : status === 'overtime'
-                                    ? '#EDE9FE'
-                                    : status === 'half_day'
-                                    ? '#FEF3C7'
-                                    : status === 'leave'
-                                    ? '#EFF6FF'
-                                    : status === 'absent'
-                                    ? '#FEE2E2'
-                                    : '#F1F5F9',
-                                color:
-                                  status === 'present'
-                                    ? '#15803D'
-                                    : status === 'overtime'
-                                    ? '#6D28D9'
-                                    : status === 'half_day'
-                                    ? '#B45309'
-                                    : status === 'leave'
-                                    ? '#1D4ED8'
-                                    : status === 'absent'
-                                    ? '#B91C1C'
-                                    : '#64748B',
-                                border:
-                                  status
-                                    ? '1px solid currentColor'
-                                    : '1px dashed #CBD5E1',
-                              }}
                             >
-                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                              <span className="attendance-status-dot" />
                               <span>{statusMeta?.label || 'Not Marked'}</span>
                             </button>
 
@@ -984,9 +619,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           {/* Simplified Mobile Worker Roster Cards (< 768px) */}
           <div className="attendance-mobile-roster">
             {filteredWorkers.length === 0 ? (
-              <div style={{ padding: '36px 16px', textAlign: 'center', color: '#94A3B8' }}>
+              <div className="erp-empty-cell">
                 <Users size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>No personnel enrolled</div>
+                <div className="erp-cell-primary">No personnel enrolled</div>
               </div>
             ) : (
               filteredWorkers.map(w => {
@@ -999,36 +634,13 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                   <div key={w.id} className="attendance-worker-card">
                     <div className="attendance-worker-card-header">
                       <div className="attendance-worker-card-info">
-                        <div
-                          style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '50%',
-                            backgroundColor: '#E2E8F0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            color: '#334155',
-                            fontSize: '0.85rem',
-                            flexShrink: 0,
-                          }}
-                        >
+                        <div className="attendance-worker-avatar-circle">
                           {w.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="attendance-worker-card-meta">
                           <span className="attendance-worker-card-name">{w.name}</span>
                           <span className="attendance-worker-card-sub">
-                            <span
-                              style={{
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                backgroundColor: '#EFF6FF',
-                                color: '#1D4ED8',
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                              }}
-                            >
+                            <span className="attendance-role-pill">
                               {w.category}
                             </span>
                             <span>{formatINR(w.dailyWage)}/day</span>
@@ -1046,44 +658,18 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                           const nextSt = nextOrder[(curIdx + 1) % nextOrder.length];
                           handleMarkStatus(w, nextSt);
                         }}
+                        data-status={status || 'unmarked'}
                         className="attendance-status-pill-btn"
                         title="Tap to cycle status"
-                        style={{
-                          backgroundColor:
-                            status === 'present'
-                              ? '#DCFCE7'
-                              : status === 'overtime'
-                              ? '#EDE9FE'
-                              : status === 'half_day'
-                              ? '#FEF3C7'
-                              : status === 'leave'
-                              ? '#EFF6FF'
-                              : status === 'absent'
-                              ? '#FEE2E2'
-                              : '#F1F5F9',
-                          color:
-                            status === 'present'
-                              ? '#15803D'
-                              : status === 'overtime'
-                              ? '#6D28D9'
-                              : status === 'half_day'
-                              ? '#B45309'
-                              : status === 'leave'
-                              ? '#1D4ED8'
-                              : status === 'absent'
-                              ? '#B91C1C'
-                              : '#64748B',
-                          border: status ? '1px solid currentColor' : '1px dashed #CBD5E1',
-                        }}
                       >
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                        <span className="attendance-status-dot" />
                         <span>{statusMeta?.label || 'Tap to Mark'}</span>
                       </button>
                     </div>
 
                     {/* Quick 1-Tap Status Options for Mobile */}
                     <div className="attendance-worker-card-actions">
-                      <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600 }}>Quick Mark:</span>
+                      <span className="erp-cell-sub">Quick Mark:</span>
                       <div className="attendance-quick-cycle-cluster">
                         {(['present', 'half_day', 'overtime', 'leave', 'absent'] as AttendanceStatus[]).map(st => {
                           const isCurrent = status === st;
@@ -1096,7 +682,6 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                               onClick={() => handleMarkStatus(w, st)}
                               title={`Mark ${meta.label}`}
                               className={`attendance-mini-status-btn ${isCurrent ? `active-${st}` : ''}`}
-                              style={{ width: '32px', height: '32px' }}
                             >
                               {meta.short}
                             </button>
@@ -1116,34 +701,26 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
 
       {/* Tab 2: Salary Ledger */}
       {activeTab === 'salary' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="erp-card-panel">
+          <div className="attendance-desktop-table">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Days Worked</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Total Earned</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Advances (Recov.)</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Salary Paid</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Pending Wage</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                <tr>
+                  <th>Worker Name</th>
+                  <th>Days Worked</th>
+                  <th className="is-right">Total Earned</th>
+                  <th className="is-right">Advances (Recov.)</th>
+                  <th className="is-right">Salary Paid</th>
+                  <th className="is-right">Pending Wage</th>
+                  <th className="is-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {workers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={7} className="erp-empty-cell">
                       <IndianRupee size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No salary records available</div>
+                      <div className="erp-cell-primary">No salary records available</div>
                     </td>
                   </tr>
                 ) : (
@@ -1159,43 +736,40 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                       <tr
                         key={w.id}
                         id={`salary-table-row-${w.id}`}
-                        style={{
-                          borderBottom: '1px solid #F1F5F9',
-                          backgroundColor: isRecentlyUpdated ? '#F0FDF4' : isSelected ? '#EFF6FF' : undefined,
-                        }}
+                        className={isRecentlyUpdated ? 'salary-table-row-updated' : isSelected ? 'salary-table-row-selected' : undefined}
                       >
-                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            {w.name}
+                        <td>
+                          <div className="att-controls-left">
+                            <span className="erp-cell-primary">{w.name}</span>
                             {isRecentlyUpdated && (
-                              <span style={{ fontSize: '0.68rem', background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                              <span className="att-wage-badge att-wage-badge--paid">
                                 ✓ Payment Updated
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                          <div className="erp-cell-sub">
                             {w.category} · {formatINR(w.dailyWage)}/day
                           </div>
                         </td>
-                        <td style={{ padding: '14px 18px', color: '#334155' }}>
+                        <td>
                           {ledger.workedDayEquivalents} days
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 600, color: '#0F172A' }}>
+                        <td className="is-right erp-cell-primary">
                           {formatINR(ledger.earned)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#D97706', fontWeight: 600 }}>
+                        <td className="is-right erp-cell-warning">
                           {formatINR(ledger.recoverableAdvances)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', color: '#16A34A', fontWeight: 600 }}>
+                        <td className="is-right erp-cell-success">
                           {formatINR(ledger.salaryPaid)}
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, fontSize: '0.95rem' }}>
-                          <span style={{ color: ledger.pending > 0 ? '#DC2626' : '#16A34A' }}>
+                        <td className="is-right">
+                          <span className={ledger.pending > 0 ? 'erp-cell-danger' : 'erp-cell-success'}>
                             {formatINR(ledger.pending)}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                        <td className="is-right">
+                          <div className="erp-table-actions">
                             <button
                               id={`salary-pay-btn-${w.id}`}
                               onClick={() => {
@@ -1203,16 +777,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                                 setSalaryToEdit(null);
                                 setIsSalaryModalOpen(true);
                               }}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #CBD5E1',
-                                backgroundColor: '#FFFFFF',
-                                color: '#16A34A',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
+                              className="erp-btn-table-action erp-btn-table-action--success-outline"
                             >
                               Pay Wage
                             </button>
@@ -1223,16 +788,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                                 setAdvanceToEdit(null);
                                 setIsAdvanceModalOpen(true);
                               }}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #CBD5E1',
-                                backgroundColor: '#FFFFFF',
-                                color: '#D97706',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                              }}
+                              className="erp-btn-table-action erp-btn-table-action--warning"
                             >
                               Advance
                             </button>
@@ -1242,22 +798,10 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                                 setSelectedWorkerForSlip(w);
                                 setIsWageSlipModalOpen(true);
                               }}
-                              style={{
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #0284C7',
-                                backgroundColor: '#F0F9FF',
-                                color: '#0284C7',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                              }}
+                              className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
                               title="1-Click Printable Wage Slip"
                             >
-                              <Printer size={13} />
+                              <Printer size={14} />
                               <span>Slip</span>
                             </button>
                           </div>
@@ -1271,9 +815,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           </div>
 
           {/* Mobile Card View (<= 768px - Requirement 4) */}
-          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+          <div className="attendance-mobile-cards">
             {workers.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B' }}>
+              <div className="erp-empty-cell">
                 No worker salary records available
               </div>
             ) : (
@@ -1289,58 +833,48 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                   <div
                     key={w.id}
                     id={`salary-mobile-card-${w.id}`}
-                    className={`salary-mobile-card ${isSelected ? 'selected' : ''}`}
-                    style={{
-                      background: isRecentlyUpdated ? '#F0FDF4' : isSelected ? '#EFF6FF' : '#FFFFFF',
-                      border: isRecentlyUpdated ? '1.5px solid #16A34A' : isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
-                      borderRadius: '10px',
-                      padding: '14px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '10px',
-                    }}
+                    className={`salary-mobile-card ${isSelected ? 'selected is-selected' : ''} ${isRecentlyUpdated ? 'is-updated' : ''}`.trim()}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '6px' }}>
+                    <div className="erp-view-header">
                       <div>
-                        <strong style={{ fontSize: '0.95rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <strong className="erp-cell-primary">
                           {w.name}
                           {isRecentlyUpdated && (
-                            <span style={{ fontSize: '0.68rem', background: '#DCFCE7', color: '#15803D', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                            <span className="att-wage-badge att-wage-badge--paid">
                               ✓ Payment Updated
                             </span>
                           )}
                         </strong>
-                        <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                        <span className="erp-cell-sub" style={{ display: 'block' }}>
                           {w.category} · {formatINR(w.dailyWage)}/day · {ledger.workedDayEquivalents} days
                         </span>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>
+                      <div className="is-right">
+                        <span className="erp-stat-label" style={{ display: 'block' }}>
                           Pending Due
                         </span>
-                        <strong style={{ fontSize: '1rem', color: ledger.pending > 0 ? '#DC2626' : '#16A34A' }}>
+                        <strong className={ledger.pending > 0 ? 'erp-cell-danger' : 'erp-cell-success'}>
                           {formatINR(ledger.pending)}
                         </strong>
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: '#F8FAFC', padding: '8px', borderRadius: '8px', textAlign: 'center', fontSize: '0.75rem' }}>
+                    <div className="salary-mobile-grid">
                       <div>
-                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Earned</span>
-                        <strong style={{ color: '#0F172A' }}>{formatINR(ledger.earned)}</strong>
+                        <span className="erp-cell-sub" style={{ display: 'block' }}>Earned</span>
+                        <strong className="erp-cell-primary">{formatINR(ledger.earned)}</strong>
                       </div>
                       <div>
-                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Advances</span>
-                        <strong style={{ color: '#D97706' }}>{formatINR(ledger.recoverableAdvances)}</strong>
+                        <span className="erp-cell-sub" style={{ display: 'block' }}>Advances</span>
+                        <strong className="erp-cell-warning">{formatINR(ledger.recoverableAdvances)}</strong>
                       </div>
                       <div>
-                        <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block' }}>Paid</span>
-                        <strong style={{ color: '#16A34A' }}>{formatINR(ledger.salaryPaid)}</strong>
+                        <span className="erp-cell-sub" style={{ display: 'block' }}>Paid</span>
+                        <strong className="erp-cell-success">{formatINR(ledger.salaryPaid)}</strong>
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div className="m-btn-row">
                       <button
                         type="button"
                         id={`mobile-pay-wage-${w.id}`}
@@ -1349,16 +883,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                           setSalaryToEdit(null);
                           setIsSalaryModalOpen(true);
                         }}
-                        style={{
-                          padding: '8px',
-                          borderRadius: '8px',
-                          border: '1px solid #16A34A',
-                          backgroundColor: '#F0FDF4',
-                          color: '#15803D',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                        }}
+                        className="erp-btn-table-action erp-btn-table-action--success-outline"
                       >
                         Pay Wage
                       </button>
@@ -1370,16 +895,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                           setAdvanceToEdit(null);
                           setIsAdvanceModalOpen(true);
                         }}
-                        style={{
-                          padding: '8px',
-                          borderRadius: '8px',
-                          border: '1px solid #D97706',
-                          backgroundColor: '#FEF3C7',
-                          color: '#B45309',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                        }}
+                        className="erp-btn-table-action erp-btn-table-action--warning"
                       >
                         Advance
                       </button>
@@ -1390,20 +906,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                           setSelectedWorkerForSlip(w);
                           setIsWageSlipModalOpen(true);
                         }}
-                        style={{
-                          padding: '8px',
-                          borderRadius: '8px',
-                          border: '1px solid #0284C7',
-                          backgroundColor: '#F0F9FF',
-                          color: '#0284C7',
-                          fontWeight: 700,
-                          fontSize: '0.8rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px',
-                        }}
+                        className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
                       >
                         <Printer size={14} />
                         <span>Slip</span>
@@ -1419,57 +922,42 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
 
       {/* Tab 3: Advances History */}
       {activeTab === 'advances' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="erp-card-panel">
+          <div className="attendance-desktop-table">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Date</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Worker Name</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Advance Type</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Reason / Purpose</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Amount</th>
+                <tr>
+                  <th>Date</th>
+                  <th>Worker Name</th>
+                  <th>Advance Type</th>
+                  <th>Reason / Purpose</th>
+                  <th className="is-right">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {advances.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ padding: '48px 24px', textAlign: 'center', color: '#94A3B8' }}>
+                    <td colSpan={5} className="erp-empty-cell">
                       <DollarSign size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
-                      <div style={{ fontSize: '1rem', fontWeight: 600, color: '#475569' }}>No advances logged for this site</div>
+                      <div className="erp-cell-primary">No advances logged for this site</div>
                     </td>
                   </tr>
                 ) : (
                   advances.map(a => {
                     const w = workers.find(work => work.id === a.workerId);
                     return (
-                      <tr key={a.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                        <td style={{ padding: '14px 18px', color: '#64748B' }}>{formatDay(a.date)}</td>
-                        <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>{w?.name || 'Worker'}</td>
-                        <td style={{ padding: '14px 18px' }}>
+                      <tr key={a.id}>
+                        <td className="erp-cell-muted">{formatDay(a.date)}</td>
+                        <td className="erp-cell-primary">{w?.name || 'Worker'}</td>
+                        <td>
                           <span
-                            style={{
-                              padding: '4px 8px',
-                              borderRadius: '6px',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              backgroundColor: a.advanceType === 'Non-Recoverable' ? '#EFF6FF' : '#FEF3C7',
-                              color: a.advanceType === 'Non-Recoverable' ? '#1D4ED8' : '#92400E',
-                            }}
+                            className={`erp-badge ${a.advanceType === 'Non-Recoverable' ? 'erp-badge--primary' : 'erp-badge--warning'}`}
                           >
                             {a.advanceType || 'Recoverable'}
                           </span>
                         </td>
-                        <td style={{ padding: '14px 18px', color: '#334155' }}>{a.reason || 'Weekly advance'}</td>
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, color: '#DC2626' }}>
+                        <td>{a.reason || 'Weekly advance'}</td>
+                        <td className="is-right erp-cell-danger">
                           {formatINR(a.amount)}
                         </td>
                       </tr>
@@ -1481,51 +969,29 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           </div>
 
           {/* Mobile Advances Cards (<= 768px - Requirement 4) */}
-          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+          <div className="attendance-mobile-cards">
             {advances.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 16px', color: '#64748B' }}>
+              <div className="erp-empty-cell">
                 No advances logged for this site
               </div>
             ) : (
               advances.map(a => {
                 const w = workers.find(work => work.id === a.workerId);
                 return (
-                  <div
-                    key={a.id}
-                    style={{
-                      background: '#FFFFFF',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '10px',
-                      padding: '12px',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <strong style={{ fontSize: '0.92rem', color: '#0F172A' }}>{w?.name || 'Worker'}</strong>
-                        <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block' }}>{formatDay(a.date)}</span>
-                      </div>
-                      <span style={{ fontSize: '1rem', fontWeight: 800, color: '#DC2626' }}>
-                        {formatINR(a.amount)}
-                      </span>
+                  <div key={a.id} className="att-advance-card">
+                    <div>
+                      <strong className="erp-cell-primary" style={{ display: 'block' }}>{w?.name || 'Worker'}</strong>
+                      <span className="erp-cell-sub">{formatDay(a.date)} · {a.reason || 'Weekly advance'}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="att-controls-left">
                       <span
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          backgroundColor: a.advanceType === 'Non-Recoverable' ? '#EFF6FF' : '#FEF3C7',
-                          color: a.advanceType === 'Non-Recoverable' ? '#1D4ED8' : '#92400E',
-                        }}
+                        className={`erp-badge ${a.advanceType === 'Non-Recoverable' ? 'erp-badge--primary' : 'erp-badge--warning'}`}
                       >
                         {a.advanceType || 'Recoverable'}
                       </span>
-                      <span style={{ fontSize: '0.78rem', color: '#475569' }}>{a.reason || 'Weekly advance'}</span>
+                      <span className="erp-cell-danger">
+                        {formatINR(a.amount)}
+                      </span>
                     </div>
                   </div>
                 );
@@ -1537,53 +1003,36 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
 
       {/* Tab 4: Worker Roster */}
       {activeTab === 'roster' && (
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '12px',
-            border: '1px solid #E2E8F0',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-          }}
-        >
-          <div className="attendance-desktop-table" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+        <div className="erp-card-panel">
+          <div className="attendance-desktop-table">
+            <table className="erp-data-table">
               <thead>
-                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Personnel Name</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Designation / Skill</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Phone</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700 }}>Joining Date</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Daily Wage</th>
-                  <th style={{ padding: '14px 18px', fontWeight: 700, textAlign: 'right' }}>Action</th>
+                <tr>
+                  <th>Personnel Name</th>
+                  <th>Designation / Skill</th>
+                  <th>Phone</th>
+                  <th>Joining Date</th>
+                  <th className="is-right">Daily Wage</th>
+                  <th className="is-right">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {workers.map(w => (
-                  <tr key={w.id} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                    <td style={{ padding: '14px 18px', fontWeight: 600, color: '#0F172A' }}>{w.name}</td>
-                    <td style={{ padding: '14px 18px', color: '#334155' }}>{w.category}</td>
-                    <td style={{ padding: '14px 18px', color: '#64748B' }}>{w.phone || '—'}</td>
-                    <td style={{ padding: '14px 18px', color: '#64748B' }}>{w.joiningDate ? formatDay(w.joiningDate) : '—'}</td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: 700, color: '#0F172A' }}>
+                  <tr key={w.id}>
+                    <td className="erp-cell-primary">{w.name}</td>
+                    <td>{w.category}</td>
+                    <td className="erp-cell-muted">{w.phone || '—'}</td>
+                    <td className="erp-cell-muted">{w.joiningDate ? formatDay(w.joiningDate) : '—'}</td>
+                    <td className="is-right erp-cell-primary">
                       {formatINR(w.dailyWage)}
                     </td>
-                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                    <td className="is-right">
                       <button
                         onClick={() => {
                           setWorkerToEdit(w);
                           setIsWorkerModalOpen(true);
                         }}
-                        style={{
-                          padding: '6px 10px',
-                          borderRadius: '6px',
-                          border: '1px solid #CBD5E1',
-                          backgroundColor: '#FFFFFF',
-                          color: '#475569',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
+                        className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
                       >
                         Edit Profile
                       </button>
@@ -1595,51 +1044,30 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           </div>
 
           {/* Mobile Roster Cards (<= 768px - Requirement 4) */}
-          <div className="attendance-mobile-cards" style={{ display: 'none', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+          <div className="attendance-mobile-cards">
             {workers.map(w => (
-              <div
-                key={w.id}
-                style={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '10px',
-                  padding: '14px',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '8px',
-                }}
-              >
-                <div>
-                  <strong style={{ fontSize: '0.92rem', color: '#0F172A', display: 'block' }}>{w.name}</strong>
-                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                    {w.category} · Phone: {w.phone || '—'}
-                  </span>
-                  <span style={{ fontSize: '0.78rem', color: '#2563EB', fontWeight: 700, display: 'block', marginTop: '2px' }}>
-                    {formatINR(w.dailyWage)} / day
-                  </span>
+              <div key={w.id} className="salary-mobile-card">
+                <div className="erp-view-header">
+                  <div>
+                    <strong className="erp-cell-primary" style={{ display: 'block' }}>{w.name}</strong>
+                    <span className="erp-cell-sub" style={{ display: 'block' }}>
+                      {w.category} · Phone: {w.phone || '—'}
+                    </span>
+                    <span className="erp-cell-primary" style={{ display: 'block', marginTop: '2px' }}>
+                      {formatINR(w.dailyWage)} / day
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWorkerToEdit(w);
+                      setIsWorkerModalOpen(true);
+                    }}
+                    className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
+                  >
+                    Edit Profile
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setWorkerToEdit(w);
-                    setIsWorkerModalOpen(true);
-                  }}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
-                    backgroundColor: '#F8FAFC',
-                    color: '#334155',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Edit Profile
-                </button>
               </div>
             ))}
           </div>

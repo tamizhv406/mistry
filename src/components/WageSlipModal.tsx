@@ -68,10 +68,10 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
         }}
       >
         {/* Modal Bar (Screen Only) */}
-        <div className="no-print" style={{ padding: '12px 18px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc' }}>
+        <div className="no-print" style={{ padding: '12px 18px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--color-bg)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Printer size={18} color="#0284c7" />
-            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0f172a' }}>
+            <Printer size={18} color="var(--color-primary)" />
+            <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--color-charcoal)' }}>
               தொழிலாளர் சம்பள ரசீது (Worker Wage Slip)
             </span>
           </div>
@@ -83,23 +83,25 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '6px 12px',
+                minHeight: '44px',
+                padding: '8px 14px',
                 borderRadius: 8,
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
+                backgroundColor: 'var(--color-primary)',
+                color: 'var(--color-on-primary)',
                 border: 'none',
                 fontWeight: 700,
-                fontSize: '0.8rem',
+                fontSize: '0.85rem',
                 cursor: 'pointer',
               }}
             >
-              <Printer size={14} />
+              <Printer size={15} />
               <span>Print Slip</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              aria-label="Close"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', minWidth: '44px', minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
               <X size={20} />
             </button>
@@ -112,20 +114,20 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
           style={{
             padding: '24px 28px',
             fontFamily: "'Inter', 'Noto Sans Tamil', -apple-system, sans-serif",
-            color: '#0f172a',
+            color: 'var(--color-charcoal)',
             lineHeight: 1.5,
           }}
         >
           {/* Company / Site Header */}
-          <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ borderBottom: '2px solid var(--color-charcoal)', paddingBottom: '14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: 'var(--color-charcoal)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 {APP_NAME}
               </h2>
-              <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+              <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>
                 தொழிலாளர் சம்பள பட்டுவாடா ரசீது • Worker Wage Settlement Slip
               </p>
-              <p style={{ margin: '4px 0 0', fontSize: '0.82rem', fontWeight: 700, color: '#0284c7' }}>
+              <p style={{ margin: '4px 0 0', fontSize: '0.84rem', fontWeight: 700, color: 'var(--color-primary-text)' }}>
                 திட்டம் / தளம் (Site): {siteName}
               </p>
             </div>

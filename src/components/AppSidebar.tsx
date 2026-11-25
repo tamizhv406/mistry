@@ -338,12 +338,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 className="sidebar-user-avatar"
                 style={{
                   backgroundColor: isLocalUser
-                    ? '#475569'
+                    ? 'var(--color-charcoal-soft)'
                     : isSuperAdmin(user)
-                    ? '#f59e0b'
+                    ? 'var(--color-warning)'
                     : user.role === 'SUB_ADMIN'
-                    ? '#6366f1'
-                    : '#0284c7',
+                    ? 'var(--color-primary-hover)'
+                    : 'var(--color-primary)',
+                  color: isLocalUser ? 'var(--color-text-inverse)' : 'var(--color-on-primary)',
                 }}
               >
                 {isLocalUser
@@ -363,12 +364,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     className="sidebar-user-role"
                     style={{
                       color: isLocalUser
-                        ? '#94a3b8'
+                        ? '#D1D5DB'
                         : isSuperAdmin(user)
-                        ? '#fbbf24'
-                        : user.role === 'SUB_ADMIN'
-                        ? '#a78bfa'
-                        : '#38bdf8',
+                        ? '#FBBF24'
+                        : '#FDBA74',
                     }}
                   >
                     {isLocalUser
@@ -393,7 +392,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     onClick={() => onNavigate('login')}
                     title="Connect Supabase Cloud / Sign in"
                     aria-label="Connect Supabase Cloud"
-                    style={{ color: '#38bdf8' }}
+                    style={{ color: 'var(--color-primary)' }}
                   >
                     <LogIn size={16} />
                   </button>
@@ -418,7 +417,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   onClick={() => onNavigate('login')}
                   title="Connect Supabase Cloud / Sign in"
                   aria-label="Connect Supabase Cloud"
-                  style={{ color: '#38bdf8' }}
+                  style={{ color: 'var(--color-primary)' }}
                 >
                   <LogIn size={16} />
                 </button>

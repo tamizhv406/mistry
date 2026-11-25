@@ -220,10 +220,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   if (!stats) {
     return (
       <div className="erp-dashboard-container">
-        <div style={{ padding: '80px 20px', textAlign: 'center', color: '#64748B' }}>
-          <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>Loading Construction Projects...</h3>
-          <p style={{ fontSize: '0.85rem' }}>Fetching live site records and budget analytics...</p>
+        <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px', border: '3px solid var(--color-border)', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-charcoal)' }}>Loading Construction Projects...</h3>
+          <p style={{ fontSize: '0.88rem' }}>Fetching live site records and budget analytics...</p>
         </div>
       </div>
     );
@@ -263,13 +263,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <div className="erp-kpi-card">
           <div className="erp-kpi-header">
             <span className="erp-kpi-title">Total Projects</span>
-            <div className="erp-kpi-icon-box" style={{ background: '#EFF6FF', color: '#2563EB' }}>
+            <div className="erp-kpi-icon-box" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-text)' }}>
               <Building2 size={18} />
             </div>
           </div>
           <div className="erp-kpi-value">{stats.totalSites}</div>
           <div className="erp-kpi-footer">
-            <span className="text-slate-500">All registered site ledgers</span>
+            <span style={{ color: 'var(--color-text-muted)' }}>All registered site ledgers</span>
           </div>
         </div>
 
@@ -277,13 +277,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <div className="erp-kpi-card">
           <div className="erp-kpi-header">
             <span className="erp-kpi-title">Active Projects</span>
-            <div className="erp-kpi-icon-box" style={{ background: '#DCFCE7', color: '#16A34A' }}>
+            <div className="erp-kpi-icon-box" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}>
               <CheckCircle2 size={18} />
             </div>
           </div>
-          <div className="erp-kpi-value" style={{ color: '#16A34A' }}>{stats.activeSites}</div>
+          <div className="erp-kpi-value" style={{ color: 'var(--color-success)' }}>{stats.activeSites}</div>
           <div className="erp-kpi-footer">
-            <span style={{ color: '#16A34A', fontWeight: 600 }}>
+            <span style={{ color: 'var(--color-success-text)', fontWeight: 600 }}>
               {stats.totalSites > 0 ? Math.round((stats.activeSites / stats.totalSites) * 100) : 0}% active operations
             </span>
           </div>
@@ -293,13 +293,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <div className="erp-kpi-card">
           <div className="erp-kpi-header">
             <span className="erp-kpi-title">Completed</span>
-            <div className="erp-kpi-icon-box" style={{ background: '#F3E8FF', color: '#9333EA' }}>
+            <div className="erp-kpi-icon-box" style={{ background: 'var(--color-charcoal-soft)', color: 'var(--color-charcoal)' }}>
               <Building2 size={18} />
             </div>
           </div>
-          <div className="erp-kpi-value" style={{ color: '#9333EA' }}>{stats.completedSites}</div>
+          <div className="erp-kpi-value" style={{ color: 'var(--color-charcoal)' }}>{stats.completedSites}</div>
           <div className="erp-kpi-footer">
-            <span className="text-purple-600 font-medium">Successfully delivered</span>
+            <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Successfully delivered</span>
           </div>
         </div>
 
@@ -307,11 +307,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
         <div className="erp-kpi-card">
           <div className="erp-kpi-header">
             <span className="erp-kpi-title">On Hold / Planning</span>
-            <div className="erp-kpi-icon-box" style={{ background: '#FEF3C7', color: '#D97706' }}>
+            <div className="erp-kpi-icon-box" style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning-text)' }}>
               <Clock size={18} />
             </div>
           </div>
-          <div className="erp-kpi-value" style={{ color: '#D97706' }}>
+          <div className="erp-kpi-value" style={{ color: 'var(--color-warning-text)' }}>
             {stats.onHoldSites + stats.planningSites}
           </div>
           <div className="erp-kpi-footer">
@@ -437,12 +437,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 onClick={() => setViewMode('grid')}
                 style={{
                   border: 'none',
-                  background: viewMode === 'grid' ? '#FFFFFF' : 'transparent',
-                  color: viewMode === 'grid' ? '#2563EB' : '#64748B',
+                  background: viewMode === 'grid' ? 'var(--color-primary)' : 'transparent',
+                  color: viewMode === 'grid' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+                  minWidth: '44px',
+                  minHeight: '44px',
                   padding: '6px 10px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   cursor: 'pointer',
-                  boxShadow: viewMode === 'grid' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                  boxShadow: viewMode === 'grid' ? 'var(--shadow-sm)' : 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 title="3-Column Cards Grid"
                 aria-label="3-Column Cards Grid"
@@ -454,12 +459,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 onClick={() => setViewMode('table')}
                 style={{
                   border: 'none',
-                  background: viewMode === 'table' ? '#FFFFFF' : 'transparent',
-                  color: viewMode === 'table' ? '#2563EB' : '#64748B',
+                  background: viewMode === 'table' ? 'var(--color-primary)' : 'transparent',
+                  color: viewMode === 'table' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+                  minWidth: '44px',
+                  minHeight: '44px',
                   padding: '6px 10px',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   cursor: 'pointer',
-                  boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                  boxShadow: viewMode === 'table' ? 'var(--shadow-sm)' : 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 title="Data Table View"
                 aria-label="Data Table View"
@@ -470,7 +480,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.78rem', color: '#64748B', paddingTop: '4px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.84rem', color: 'var(--color-text-muted)', paddingTop: '4px' }}>
           <span>
             Showing <strong>{filteredAndSortedProjects.length}</strong> of <strong>{stats.totalSites}</strong> projects
           </span>
@@ -482,7 +492,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 setStatusFilter('All');
                 setDateFilter('all');
               }}
-              style={{ background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer', fontWeight: 600 }}
+              style={{ background: 'none', border: 'none', color: 'var(--color-primary-text)', cursor: 'pointer', fontWeight: 700, minHeight: '44px', padding: '0 8px' }}
             >
               Reset Filters
             </button>
@@ -544,17 +554,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = '0 10px 20px -3px rgba(15, 23, 42, 0.1)';
-                  e.currentTarget.style.borderColor = '#BFDBFE';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+                  e.currentTarget.style.borderColor = 'var(--color-primary-border)';
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(15, 23, 42, 0.06)';
-                  e.currentTarget.style.borderColor = '#E2E8F0';
+                  e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                  e.currentTarget.style.borderColor = 'var(--color-border)';
                 }}
               >
                 {/* Project Image Banner */}
-                <div style={{ width: '100%', height: '140px', position: 'relative', backgroundColor: '#F1F5F9', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '140px', position: 'relative', backgroundColor: 'var(--color-bg)', overflow: 'hidden' }}>
                   <SafeImage
                     src={site.imageUrl}
                     alt={site.name}
@@ -580,10 +590,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                       position: 'absolute',
                       top: '12px',
                       right: '12px',
-                      background: 'rgba(15, 23, 42, 0.75)',
+                      background: 'rgba(31, 41, 55, 0.85)',
                       backdropFilter: 'blur(4px)',
                       color: '#FFFFFF',
-                      fontSize: '0.68rem',
+                      fontSize: '0.75rem',
                       fontWeight: 700,
                       padding: '2px 8px',
                       borderRadius: '6px',
@@ -598,35 +608,35 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 <div style={{ padding: '18px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: '14px' }}>
                   {/* Name and Client */}
                   <div>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#111827', margin: '0 0 4px', lineHeight: 1.3 }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-charcoal)', margin: '0 0 4px', lineHeight: 1.3 }}>
                       {site.name}
                     </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748B' }}>
-                      <Users size={14} className="text-slate-400" />
-                      <span>Client: <strong style={{ color: '#334155' }}>{site.ownerName}</strong></span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>
+                      <Users size={14} style={{ color: 'var(--color-text-muted)' }} />
+                      <span>Client: <strong style={{ color: 'var(--color-charcoal)' }}>{site.ownerName}</strong></span>
                       {site.ownerPhone && <span>• {site.ownerPhone}</span>}
                     </div>
                   </div>
 
                   {/* Location & Type */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748B' }}>
-                    <MapPin size={14} style={{ color: '#2563EB', flexShrink: 0 }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>
+                    <MapPin size={14} style={{ color: 'var(--color-primary)', flexShrink: 0 }} />
                     <span className="truncate">{site.area || site.address || 'Location not specified'}</span>
-                    <span style={{ color: '#CBD5E1' }}>•</span>
+                    <span style={{ color: 'var(--color-border-strong)' }}>•</span>
                     <span style={{ whiteSpace: 'nowrap' }}>{site.buildingType}</span>
                   </div>
 
                   {/* Dates Row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '10px', border: '1px solid #F1F5F9' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', background: 'var(--color-bg)', padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
                     <div>
-                      <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: '#94A3B8', fontWeight: 700, display: 'block' }}>Start Date</span>
-                      <strong style={{ fontSize: '0.8rem', color: '#334155' }}>
+                      <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700, display: 'block' }}>Start Date</span>
+                      <strong style={{ fontSize: '0.84rem', color: 'var(--color-charcoal)' }}>
                         {site.startDate ? formatDay(site.startDate) : 'Unset'}
                       </strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: '#94A3B8', fontWeight: 700, display: 'block' }}>Target Completion</span>
-                      <strong style={{ fontSize: '0.8rem', color: site.expectedCompletionDate && site.expectedCompletionDate < today && site.status !== 'Completed' ? '#DC2626' : '#334155' }}>
+                      <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--color-text-muted)', fontWeight: 700, display: 'block' }}>Target Completion</span>
+                      <strong style={{ fontSize: '0.84rem', color: site.expectedCompletionDate && site.expectedCompletionDate < today && site.status !== 'Completed' ? 'var(--color-danger)' : 'var(--color-charcoal)' }}>
                         {site.expectedCompletionDate ? formatDay(site.expectedCompletionDate) : 'Unset'}
                       </strong>
                     </div>
@@ -634,16 +644,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
                   {/* Progress Bar */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.76rem' }}>
-                      <span style={{ color: '#475569', fontWeight: 600 }}>Project Milestone Progress</span>
-                      <strong style={{ color: '#2563EB', fontWeight: 800 }}>{progressPercentage}%</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.8rem' }}>
+                      <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Project Milestone Progress</span>
+                      <strong style={{ color: 'var(--color-primary-text)', fontWeight: 800 }}>{progressPercentage}%</strong>
                     </div>
-                    <div style={{ width: '100%', height: '7px', background: '#F1F5F9', borderRadius: '999px', overflow: 'hidden' }}>
+                    <div style={{ width: '100%', height: '7px', background: 'var(--color-border-subtle)', borderRadius: '999px', overflow: 'hidden' }}>
                       <div
                         style={{
                           width: `${progressPercentage}%`,
                           height: '100%',
-                          background: site.status === 'Completed' ? '#16A34A' : '#2563EB',
+                          background: site.status === 'Completed' ? 'var(--color-success)' : 'var(--color-primary)',
                           borderRadius: '999px',
                           transition: 'width 0.3s ease',
                         }}
@@ -652,22 +662,22 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </div>
 
                   {/* Financial Ribbon (Budget, Expenses, Balance Due) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', background: '#F8FAFC', padding: '10px', borderRadius: '10px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', background: 'var(--color-bg)', padding: '10px', borderRadius: '10px', border: '1px solid var(--color-border)', textAlign: 'center' }}>
                     <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                      <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', fontWeight: 600 }}>Budget</span>
-                      <strong style={{ fontSize: '0.84rem', color: '#111827', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block', fontWeight: 600 }}>Budget</span>
+                      <strong style={{ fontSize: '0.88rem', color: 'var(--color-charcoal)', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         {budget ? `₹${budget.toLocaleString('en-IN')}` : 'Unset'}
                       </strong>
                     </div>
                     <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                      <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', fontWeight: 600 }}>Spent</span>
-                      <strong style={{ fontSize: '0.84rem', color: '#2563EB', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block', fontWeight: 600 }}>Spent</span>
+                      <strong style={{ fontSize: '0.88rem', color: 'var(--color-charcoal)', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         ₹{totalExpense.toLocaleString('en-IN')}
                       </strong>
                     </div>
                     <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                      <span style={{ fontSize: '0.68rem', color: '#64748B', display: 'block', fontWeight: 600 }}>Balance Due</span>
-                      <strong style={{ fontSize: '0.84rem', color: balance > 0 ? '#DC2626' : '#16A34A', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', display: 'block', fontWeight: 600 }}>Balance Due</span>
+                      <strong style={{ fontSize: '0.88rem', color: balance > 0 ? 'var(--color-danger)' : 'var(--color-success)', fontFamily: 'var(--font-heading)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                         ₹{balance.toLocaleString('en-IN')}
                       </strong>
                     </div>
@@ -762,24 +772,22 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   {/* Primary View / Open Action */}
                   <button
                     type="button"
-                    className="btn btn-sm"
+                    className="btn btn-primary btn-sm"
                     onClick={() => onOpenSite(site.id)}
                     title="Open project operations"
                     style={{
-                      padding: '6px 14px',
+                      minHeight: '44px',
+                      padding: '8px 14px',
                       borderRadius: '8px',
-                      background: '#2563EB',
-                      border: 'none',
-                      color: '#FFFFFF',
-                      display: 'flex',
+                      display: 'inline-flex',
                       alignItems: 'center',
                       gap: '5px',
-                      fontSize: '0.78rem',
+                      fontSize: '0.84rem',
                       fontWeight: 700,
                     }}
                   >
                     <span>View</span>
-                    <ArrowRight size={13} />
+                    <ArrowRight size={14} />
                   </button>
                 </div>
               </div>
@@ -814,14 +822,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
                   return (
                     <tr key={site.id} onClick={() => onOpenSite(site.id)} style={{ cursor: 'pointer' }}>
-                      <td style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 700 }}>
+                      <td style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', fontWeight: 700 }}>
                         #{displayId}
                       </td>
                       <td>
-                        <strong style={{ fontSize: '0.88rem', color: '#111827', display: 'block' }}>{site.name}</strong>
-                        <span style={{ fontSize: '0.74rem', color: '#64748B' }}>Client: {site.ownerName}</span>
+                        <strong style={{ fontSize: '0.9rem', color: 'var(--color-charcoal)', display: 'block' }}>{site.name}</strong>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Client: {site.ownerName}</span>
                       </td>
-                      <td style={{ fontSize: '0.8rem', color: '#475569' }}>
+                      <td style={{ fontSize: '0.84rem', color: 'var(--color-text-secondary)' }}>
                         {site.area || site.address || site.buildingType}
                       </td>
                       <td>
@@ -829,15 +837,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                           {site.status}
                         </span>
                       </td>
-                      <td style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                      <td style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
                         {site.startDate ? formatDay(site.startDate) : '—'}
                       </td>
-                      <td style={{ fontSize: '0.78rem', color: site.expectedCompletionDate && site.expectedCompletionDate < today && site.status !== 'Completed' ? '#DC2626' : '#64748B' }}>
+                      <td style={{ fontSize: '0.82rem', color: site.expectedCompletionDate && site.expectedCompletionDate < today && site.status !== 'Completed' ? 'var(--color-danger)' : 'var(--color-text-muted)' }}>
                         {site.expectedCompletionDate ? formatDay(site.expectedCompletionDate) : '—'}
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '0.76rem', fontWeight: 700, color: '#111827', minWidth: '30px' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-charcoal)', minWidth: '32px' }}>
                             {progressPercentage}%
                           </span>
                           <div className="erp-progress-track" style={{ width: '60px' }}>
@@ -845,14 +853,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                           </div>
                         </div>
                       </td>
-                      <td style={{ fontSize: '0.82rem', fontWeight: 600, color: '#111827' }}>
+                      <td style={{ fontSize: '0.86rem', fontWeight: 600, color: 'var(--color-charcoal)' }}>
                         {budget ? `₹${budget.toLocaleString('en-IN')}` : '—'}
                       </td>
-                      <td style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2563EB' }}>
+                      <td style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--color-charcoal)' }}>
                         ₹{totalExpense.toLocaleString('en-IN')}
                       </td>
                       <td>
-                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: balance > 0 ? '#DC2626' : '#16A34A' }}>
+                        <span style={{ fontSize: '0.86rem', fontWeight: 700, color: balance > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
                           ₹{balance.toLocaleString('en-IN')}
                         </span>
                       </td>
@@ -860,37 +868,40 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                           <button
                             type="button"
-                            className="btn btn-sm"
+                            className="btn btn-sm btn-outline"
                             title="Edit project"
+                            aria-label="Edit project"
                             onClick={() => onEditSite(site)}
-                            style={{ padding: '4px 8px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#475569' }}
+                            style={{ minWidth: '44px', minHeight: '44px', padding: '0 8px' }}
                           >
-                            <Edit2 size={13} />
+                            <Edit2 size={15} />
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm"
+                            className="btn btn-sm btn-outline"
                             title="Duplicate project"
+                            aria-label="Duplicate project"
                             onClick={e => handleDuplicateProject(summary, e)}
-                            style={{ padding: '4px 8px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#475569' }}
+                            style={{ minWidth: '44px', minHeight: '44px', padding: '0 8px' }}
                           >
-                            <Copy size={13} />
+                            <Copy size={15} />
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm"
+                            className="btn btn-sm btn-outline"
                             title="Archive / Un-archive project"
+                            aria-label="Archive project"
                             onClick={e => handleArchiveProject(site, e)}
-                            style={{ padding: '4px 8px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#475569' }}
+                            style={{ minWidth: '44px', minHeight: '44px', padding: '0 8px' }}
                           >
-                            <Archive size={13} />
+                            <Archive size={15} />
                           </button>
                           <button
                             type="button"
-                            className="btn btn-sm"
+                            className="btn btn-primary btn-sm"
                             title="Open project"
                             onClick={() => onOpenSite(site.id)}
-                            style={{ padding: '4px 10px', borderRadius: '6px', background: '#2563EB', border: 'none', color: '#FFFFFF', fontWeight: 700, fontSize: '0.76rem' }}
+                            style={{ minHeight: '44px', padding: '0 14px', fontSize: '0.84rem' }}
                           >
                             View
                           </button>

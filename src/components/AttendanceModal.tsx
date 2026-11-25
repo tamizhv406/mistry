@@ -241,13 +241,15 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                         type="button"
                         onClick={() => handleStatusChange(w.id, 'overtime')}
                         style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontSize: '0.82rem',
+                          minHeight: '44px',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          fontSize: '0.84rem',
                           fontWeight: 700,
-                          backgroundColor: current.status === 'overtime' ? '#8b5cf6' : '#f1f5f9',
-                          color: current.status === 'overtime' ? '#ffffff' : '#475569',
-                          border: current.status === 'overtime' ? '1px solid #7c3aed' : '1px solid #cbd5e1',
+                          backgroundColor: current.status === 'overtime' ? 'var(--color-primary)' : 'var(--color-bg)',
+                          color: current.status === 'overtime' ? 'var(--color-on-primary)' : 'var(--color-text-secondary)',
+                          border: current.status === 'overtime' ? '1px solid var(--color-primary)' : '1px solid var(--color-border-strong)',
+                          cursor: 'pointer',
                         }}
                       >
                         Overtime (1.5)
@@ -257,13 +259,15 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
                         type="button"
                         onClick={() => handleStatusChange(w.id, 'leave')}
                         style={{
-                          padding: '6px 12px',
-                          borderRadius: '6px',
-                          fontSize: '0.82rem',
+                          minHeight: '44px',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          fontSize: '0.84rem',
                           fontWeight: 700,
-                          backgroundColor: current.status === 'leave' ? '#1d4ed8' : '#f1f5f9',
-                          color: current.status === 'leave' ? '#ffffff' : '#475569',
-                          border: current.status === 'leave' ? '1px solid #1e40af' : '1px solid #cbd5e1',
+                          backgroundColor: current.status === 'leave' ? 'var(--color-charcoal)' : 'var(--color-bg)',
+                          color: current.status === 'leave' ? '#ffffff' : 'var(--color-text-secondary)',
+                          border: current.status === 'leave' ? '1px solid var(--color-charcoal)' : '1px solid var(--color-border-strong)',
+                          cursor: 'pointer',
                         }}
                       >
                         Leave

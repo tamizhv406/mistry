@@ -216,12 +216,12 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
               </div>
 
               {nonRecoverableAdvances > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '4px 8px', background: '#f5f3ff', borderRadius: '6px' }}>
-                  <span style={{ fontSize: '0.82rem', color: '#7c3aed', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', padding: '4px 8px', background: 'var(--color-warning-soft)', border: '1px solid var(--color-warning-border)', borderRadius: '6px' }}>
+                  <span style={{ fontSize: '0.84rem', color: 'var(--color-warning-text)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <ShieldCheck size={14} />
                     <span>No Return / Non-Recoverable Grant (Never deducted):</span>
                   </span>
-                  <span style={{ color: '#7c3aed', fontSize: '0.85rem', fontWeight: 600 }}>
+                  <span style={{ color: 'var(--color-warning-text)', fontSize: '0.85rem', fontWeight: 600 }}>
                     ₹{nonRecoverableAdvances.toLocaleString('en-IN')}
                   </span>
                 </div>
@@ -229,16 +229,16 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
 
               {totalAlreadyPaid > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
                     (-) Past Salary Disbursed:
                   </span>
                   <strong style={{ fontSize: '0.95rem' }}>-₹{totalAlreadyPaid.toLocaleString('en-IN')}</strong>
                 </div>
               )}
 
-              <div style={{ borderTop: '1.5px dashed var(--border-medium)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Net Wage Payable:</span>
-                <strong style={{ fontSize: '1.1rem', color: '#2563eb' }}>₹{netPayableWage.toLocaleString('en-IN')}</strong>
+              <div style={{ borderTop: '1.5px dashed var(--color-border-strong)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--color-charcoal)' }}>Net Wage Payable:</span>
+                <strong style={{ fontSize: '1.1rem', color: 'var(--color-charcoal)' }}>₹{netPayableWage.toLocaleString('en-IN')}</strong>
               </div>
             </div>
 
@@ -249,31 +249,32 @@ export const SalaryPaymentModal: React.FC<SalaryPaymentModalProps> = ({
               gap: '8px',
               marginBottom: '16px',
             }}>
-              <div style={{ background: '#eff6ff', padding: '8px 10px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                <span style={{ fontSize: '0.7rem', color: '#1d4ed8', fontWeight: 600, display: 'block' }}>TOTAL PAYABLE</span>
-                <strong style={{ fontSize: '1rem', color: '#1e3a8a' }}>₹{fin.totalAmount.toLocaleString('en-IN')}</strong>
+              <div style={{ background: 'var(--color-bg)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>TOTAL PAYABLE</span>
+                <strong style={{ fontSize: '1rem', color: 'var(--color-charcoal)' }}>₹{fin.totalAmount.toLocaleString('en-IN')}</strong>
               </div>
-              <div style={{ background: '#ecfdf5', padding: '8px 10px', borderRadius: '8px', border: '1px solid #a7f3d0' }}>
-                <span style={{ fontSize: '0.7rem', color: '#047857', fontWeight: 600, display: 'block' }}>PAID AMOUNT</span>
-                <strong style={{ fontSize: '1rem', color: '#065f46' }}>₹{fin.paidAmount.toLocaleString('en-IN')}</strong>
+              <div style={{ background: 'var(--color-success-soft)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--color-success-border)' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--color-success-text)', fontWeight: 600, display: 'block' }}>PAID AMOUNT</span>
+                <strong style={{ fontSize: '1rem', color: 'var(--color-success-text)' }}>₹{fin.paidAmount.toLocaleString('en-IN')}</strong>
               </div>
-              <div style={{ background: fin.balanceDue > 0 ? '#fef2f2' : '#f8fafc', padding: '8px 10px', borderRadius: '8px', border: fin.balanceDue > 0 ? '1px solid #fecaca' : '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: '0.7rem', color: fin.balanceDue > 0 ? '#b91c1c' : '#64748b', fontWeight: 600, display: 'block' }}>BALANCE DUE</span>
-                <strong style={{ fontSize: '1rem', color: fin.balanceDue > 0 ? '#b91c1c' : '#64748b' }}>₹{fin.balanceDue.toLocaleString('en-IN')}</strong>
+              <div style={{ background: fin.balanceDue > 0 ? 'var(--color-danger-soft)' : 'var(--color-bg)', padding: '8px 10px', borderRadius: '8px', border: fin.balanceDue > 0 ? '1px solid var(--color-danger-border)' : '1px solid var(--color-border)' }}>
+                <span style={{ fontSize: '0.72rem', color: fin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>BALANCE DUE</span>
+                <strong style={{ fontSize: '1rem', color: fin.balanceDue > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)' }}>₹{fin.balanceDue.toLocaleString('en-IN')}</strong>
               </div>
-              <div style={{ background: fin.extraPaid > 0 ? '#f5f3ff' : '#f8fafc', padding: '8px 10px', borderRadius: '8px', border: fin.extraPaid > 0 ? '1.5px solid #ddd6fe' : '1px solid var(--border-light)' }}>
-                <span style={{ fontSize: '0.7rem', color: fin.extraPaid > 0 ? '#6d28d9' : '#64748b', fontWeight: 600, display: 'block' }}>EXTRA PAID</span>
-                <strong style={{ fontSize: '1rem', color: fin.extraPaid > 0 ? '#6d28d9' : '#64748b' }}>₹{fin.extraPaid.toLocaleString('en-IN')}</strong>
+              <div style={{ background: fin.extraPaid > 0 ? 'var(--color-primary-soft)' : 'var(--color-bg)', padding: '8px 10px', borderRadius: '8px', border: fin.extraPaid > 0 ? '1.5px solid var(--color-primary-border)' : '1px solid var(--color-border)' }}>
+                <span style={{ fontSize: '0.72rem', color: fin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>EXTRA PAID</span>
+                <strong style={{ fontSize: '1rem', color: fin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)' }}>₹{fin.extraPaid.toLocaleString('en-IN')}</strong>
               </div>
             </div>
 
             {fin.extraPaid > 0 && (
               <div style={{
-                backgroundColor: '#f5f3ff',
-                color: '#6d28d9',
+                backgroundColor: 'var(--color-primary-soft)',
+                color: 'var(--color-primary-text)',
+                border: '1px solid var(--color-primary-border)',
                 padding: '8px 12px',
                 borderRadius: '8px',
-                fontSize: '0.82rem',
+                fontSize: '0.84rem',
                 fontWeight: 600,
                 marginBottom: '12px',
                 display: 'flex',

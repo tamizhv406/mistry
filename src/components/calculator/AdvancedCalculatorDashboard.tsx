@@ -204,9 +204,9 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {sites.length > 0 && (
             <div className="bm-site-pill">
-              <Building2 size={15} style={{ color: '#4f46e5' }} />
+              <Building2 size={15} style={{ color: 'var(--color-primary)' }} />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 700, color: '#94a3b8' }}>Linked Site</span>
+                <span style={{ fontSize: '9px', textTransform: 'uppercase', fontWeight: 700, color: 'var(--color-text-muted)' }}>Linked Site</span>
                 <select
                   value={selectedSiteId}
                   onChange={(e) => {
@@ -226,17 +226,17 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
           )}
 
           {/* Quick Stats Pill */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '6px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '11px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#475569' }}>
-              <Bookmark size={13} style={{ color: '#6366f1' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--color-bg)', padding: '6px 12px', borderRadius: '12px', border: '1px solid var(--color-border)', fontSize: '11px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--color-text-secondary)' }}>
+              <Bookmark size={13} style={{ color: 'var(--color-primary)' }} />
               <span style={{ fontWeight: 700 }}>{savedCalculations.length}</span>
-              <span style={{ color: '#94a3b8' }}>saved</span>
+              <span style={{ color: 'var(--color-text-muted)' }}>saved</span>
             </div>
-            <div style={{ width: '1px', height: '14px', background: '#cbd5e1' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#475569' }}>
-              <Tag size={13} style={{ color: '#10b981' }} />
+            <div style={{ width: '1px', height: '14px', background: 'var(--color-border-strong)' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--color-text-secondary)' }}>
+              <Tag size={13} style={{ color: 'var(--color-success)' }} />
               <span style={{ fontWeight: 700 }}>{rates.length}</span>
-              <span style={{ color: '#94a3b8' }}>rates</span>
+              <span style={{ color: 'var(--color-text-muted)' }}>rates</span>
             </div>
           </div>
         </div>
@@ -267,8 +267,8 @@ export const AdvancedCalculatorDashboard: React.FC<AdvancedCalculatorDashboardPr
                           fontWeight: 700,
                           padding: '1px 5px',
                           borderRadius: '9999px',
-                          background: isActive ? 'rgba(255,255,255,0.25)' : '#e0e7ff',
-                          color: isActive ? '#ffffff' : '#3730a3',
+                          background: isActive ? 'rgba(31, 41, 55, 0.14)' : 'var(--color-primary-soft)',
+                          color: isActive ? 'var(--color-on-primary)' : 'var(--color-primary-text)',
                         }}
                       >
                         {m.badge}

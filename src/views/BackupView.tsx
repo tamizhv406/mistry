@@ -124,35 +124,35 @@ export const BackupView: React.FC<BackupViewProps> = ({ user, onBack, onNotify }
         gap: '12px',
         marginBottom: '20px',
       }}>
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: '#ecfdf5', color: '#059669', padding: '8px', borderRadius: '8px' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: 'var(--color-success-soft)', color: 'var(--color-success-text)', padding: '8px', borderRadius: '8px' }}>
             <HardDrive size={20} />
           </div>
           <div>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Local Storage</span>
-            <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>IndexedDB (Active)</strong>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Local Storage</span>
+            <strong style={{ fontSize: '0.875rem', color: 'var(--color-charcoal)' }}>IndexedDB (Active)</strong>
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: safetyStatus.isCloudActive ? '#eff6ff' : '#fef2f2', color: safetyStatus.isCloudActive ? '#2563eb' : '#dc2626', padding: '8px', borderRadius: '8px' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: safetyStatus.isCloudActive ? 'var(--color-success-soft)' : 'var(--color-danger-soft)', color: safetyStatus.isCloudActive ? 'var(--color-success)' : 'var(--color-danger)', padding: '8px', borderRadius: '8px' }}>
             {safetyStatus.isCloudActive ? <Cloud size={20} /> : <CloudOff size={20} />}
           </div>
           <div>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Cloud Sync</span>
-            <strong style={{ fontSize: '0.85rem', color: safetyStatus.isCloudActive ? '#2563eb' : '#b91c1c' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Cloud Sync</span>
+            <strong style={{ fontSize: '0.875rem', color: safetyStatus.isCloudActive ? 'var(--color-success-text)' : 'var(--color-danger-text)' }}>
               {safetyStatus.isCloudActive ? 'Enabled & Active' : 'Offline / Disabled'}
             </strong>
           </div>
         </div>
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: '#f8fafc', color: '#475569', padding: '8px', borderRadius: '8px' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '10px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ background: 'var(--color-surface-subtle)', color: 'var(--color-charcoal)', padding: '8px', borderRadius: '8px' }}>
             <Database size={20} />
           </div>
           <div>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Cloud Backend</span>
-            <strong style={{ fontSize: '0.85rem', color: '#0f172a' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Cloud Backend</span>
+            <strong style={{ fontSize: '0.875rem', color: 'var(--color-charcoal)' }}>
               {safetyStatus.isCloudConfigured ? 'Supabase Configured' : 'Not Configured (Local)'}
             </strong>
           </div>

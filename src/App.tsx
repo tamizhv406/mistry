@@ -1361,16 +1361,16 @@ function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, o
             onClick={e => e.stopPropagation()}
             style={{ maxWidth: '480px', width: '100%', borderRadius: 16, overflow: 'hidden' }}
           >
-            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="modal-header" style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'var(--color-primary-soft)', color: 'var(--color-primary-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Building2 size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-charcoal)' }}>
                     உள்ளூர் திட்டங்கள் கண்டறியப்பட்டன
                   </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: '0.74rem', color: '#64748b' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
                     Local Sites Detected ({localSitesToMerge.length} projects)
                   </p>
                 </div>
@@ -1378,21 +1378,22 @@ function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, o
               <button
                 type="button"
                 onClick={() => setIsMergeModalOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+                aria-label="Close modal"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', minWidth: 44, minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="modal-body" style={{ padding: '20px' }}>
-              <p style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.5, margin: '0 0 14px' }}>
+              <p style={{ fontSize: '0.9rem', color: 'var(--color-charcoal)', lineHeight: 1.5, margin: '0 0 14px' }}>
                 நீங்கள் ஆஃப்லைன் முறையில் உருவாக்கிய <strong>{localSitesToMerge.length} திட்டங்கள்</strong> உள்ளன. அவற்றை உங்கள் கணக்கில் (<strong>{mergeTargetUser.fullName || mergeTargetUser.username}</strong>) இணைக்க விரும்புகிறீர்களா?
               </p>
-              <div style={{ backgroundColor: '#f1f5f9', borderRadius: 10, padding: '10px 14px', marginBottom: 16, maxHeight: '140px', overflowY: 'auto' }}>
+              <div style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 10, padding: '10px 14px', marginBottom: 16, maxHeight: '140px', overflowY: 'auto' }}>
                 {localSitesToMerge.map(s => (
-                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', padding: '4px 0', borderBottom: '1px solid #e2e8f0' }}>
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.88rem', padding: '6px 0', borderBottom: '1px solid var(--color-border)' }}>
                     <strong>{s.name}</strong>
-                    <span style={{ color: '#64748b' }}>{s.location || 'Local'}</span>
+                    <span style={{ color: 'var(--color-text-muted)' }}>{s.location || 'Local'}</span>
                   </div>
                 ))}
               </div>
@@ -1403,13 +1404,14 @@ function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, o
                   onClick={() => setIsMergeModalOpen(false)}
                   style={{
                     flex: 1,
+                    minHeight: 44,
                     padding: '11px',
                     borderRadius: 10,
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#64748b',
+                    border: '1px solid var(--color-border-strong)',
+                    background: 'var(--color-surface)',
+                    color: 'var(--color-charcoal)',
                     fontWeight: 700,
-                    fontSize: '0.85rem',
+                    fontSize: '0.88rem',
                     cursor: 'pointer',
                   }}
                 >
@@ -1433,13 +1435,14 @@ function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, o
                   }}
                   style={{
                     flex: 1.5,
+                    minHeight: 44,
                     padding: '11px',
                     borderRadius: 10,
                     border: 'none',
-                    background: '#0284c7',
-                    color: '#ffffff',
+                    background: 'var(--color-primary)',
+                    color: 'var(--color-on-primary)',
                     fontWeight: 700,
-                    fontSize: '0.85rem',
+                    fontSize: '0.88rem',
                     cursor: 'pointer',
                   }}
                 >

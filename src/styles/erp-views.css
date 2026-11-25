@@ -1,0 +1,1123 @@
+/* ==========================================================================
+   SHARED ERP VIEW COMPONENTS (MaterialsView & AttendanceSalaryView)
+   Uses canonical theme tokens from src/index.css with >= 44px touch targets.
+   ========================================================================== */
+
+.erp-view-page {
+  padding: 20px 24px 60px;
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.erp-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.erp-view-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.erp-view-title-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  border: 1px solid var(--color-primary-border);
+}
+
+.erp-view-title {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--color-charcoal);
+}
+
+.erp-view-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.erp-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.erp-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.25);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.erp-btn-primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.erp-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-charcoal);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.erp-btn-secondary:hover {
+  background: var(--color-surface-subtle);
+}
+
+.erp-btn-charcoal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-charcoal);
+  background: var(--color-charcoal);
+  color: var(--color-text-inverse);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.erp-btn-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-success);
+  background: var(--color-success);
+  color: var(--color-text-inverse);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.erp-btn-danger-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.erp-btn-table-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.erp-btn-table-action--primary {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.erp-btn-table-action--danger {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.erp-btn-table-action--success {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-text-inverse);
+}
+
+.erp-btn-table-action--warning {
+  background: var(--color-warning-soft);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+.erp-select-pill {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-charcoal);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.erp-select-pill--wide {
+  min-width: 150px;
+}
+
+.erp-summary-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.erp-stat-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.erp-control-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.erp-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.erp-table-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.erp-data-table tbody tr:hover td {
+  background: var(--color-bg);
+}
+
+.erp-cell-primary {
+  font-weight: 700;
+  color: var(--color-charcoal);
+}
+
+.erp-cell-muted {
+  color: var(--color-text-muted);
+}
+
+.erp-cell-sub {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.erp-cell-success {
+  color: var(--color-success-text);
+  font-weight: 700;
+}
+
+.erp-cell-danger {
+  color: var(--color-danger-text);
+  font-weight: 700;
+}
+
+.erp-cell-warning {
+  color: var(--color-warning-text);
+  font-weight: 700;
+}
+
+.erp-btn-table-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.erp-btn-table-action--success-outline {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-success-text);
+}
+
+.erp-btn-table-action--danger-outline {
+  background: var(--color-surface);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.erp-btn-table-action--charcoal-outline {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-charcoal);
+}
+
+.erp-modal-title {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-charcoal);
+}
+
+.erp-modal-desc {
+  margin: 0 0 12px;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.erp-modal-field-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-charcoal);
+  margin-bottom: 6px;
+}
+
+.erp-modal-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-charcoal);
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.erp-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.erp-stat-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.erp-stat-card--accent-left {
+  border-left: 4px solid var(--color-charcoal);
+}
+
+.erp-stat-card--success-left {
+  border-left: 4px solid var(--color-success);
+}
+
+.erp-stat-card--warning-left {
+  border-left: 4px solid var(--color-warning);
+}
+
+.erp-stat-card--danger-left {
+  border-left: 4px solid var(--color-danger);
+}
+
+.erp-stat-card--primary-tint {
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-border);
+}
+
+.erp-stat-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.erp-stat-value {
+  margin-top: 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-charcoal);
+}
+
+.erp-stat-value--lg {
+  font-size: 1.5rem;
+}
+
+.erp-stat-value--success { color: var(--color-success-text); }
+.erp-stat-value--danger { color: var(--color-danger-text); }
+.erp-stat-value--warning { color: var(--color-warning-text); }
+.erp-stat-value--primary { color: var(--color-primary-text); }
+
+.erp-stat-sub {
+  margin-top: 3px;
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.erp-segmented-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+.erp-segmented-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.erp-segmented-tab.is-active {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.25);
+}
+
+.erp-card-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.erp-card-panel--padded {
+  padding: 18px 20px;
+}
+
+.erp-card-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.erp-card-panel-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--color-charcoal);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.erp-filter-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.erp-search-box {
+  position: relative;
+  flex: 1 1 200px;
+}
+
+.erp-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-light);
+  pointer-events: none;
+}
+
+.erp-search-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px 10px 38px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-charcoal);
+  font-size: 0.9rem;
+}
+
+.erp-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.erp-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.erp-data-table th {
+  padding: 11px 14px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.erp-data-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-charcoal);
+  vertical-align: middle;
+}
+
+.erp-data-table th.is-right,
+.erp-data-table td.is-right {
+  text-align: right;
+}
+
+.erp-data-table th.is-center,
+.erp-data-table td.is-center {
+  text-align: center;
+}
+
+.erp-row-voided {
+  background: var(--color-surface-subtle);
+  opacity: 0.72;
+}
+
+.erp-text-strike {
+  text-decoration: line-through;
+}
+
+.erp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.erp-badge--compact {
+  padding: 2px 8px;
+  font-size: 0.875rem;
+}
+
+.erp-badge--neutral {
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+  border: 1px solid var(--color-border);
+}
+
+.erp-badge--primary {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  border: 1px solid var(--color-primary-border);
+}
+
+.erp-badge--success {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.erp-badge--warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.erp-badge--danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.erp-inline-alert {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  font-size: 0.875rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.erp-inline-alert--info {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+}
+
+.erp-inline-alert--warning {
+  border-color: var(--color-warning-border);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.erp-empty-cell {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.erp-inline-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(31, 41, 55, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.erp-inline-modal-card {
+  background: var(--color-surface);
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 440px;
+  width: 100%;
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Materials View Specific Helpers */
+.mat-item-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-charcoal);
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--color-primary);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.mat-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+}
+
+.mat-stock-cell-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+  font-weight: 800;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.mat-stock-cell-btn.is-low {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.mat-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.mat-icon-btn--danger {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+/* Attendance & Salary View Specific Helpers */
+.att-controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-surface);
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+}
+
+.att-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.att-date-picker {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.att-policy-banner {
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.att-worker-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--color-charcoal);
+  color: var(--color-text-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.att-worker-avatar--primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+.att-wage-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 800;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  border: 1px solid var(--color-primary-border);
+}
+
+.att-wage-badge--paid {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+
+.att-salary-mobile-card {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.att-salary-mobile-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  background: var(--color-surface-subtle);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+}
+
+.att-advance-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.att-advance-card--settled {
+  background: var(--color-surface-subtle);
+  opacity: 0.8;
+}
+
+.att-mobile-list {
+  display: none;
+}
+
+.att-desktop-table {
+  display: block;
+}
+
+.att-mobile-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .erp-view-page {
+    padding: 14px 12px 72px;
+    gap: 14px;
+  }
+
+  .att-mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .att-desktop-table {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   ATTENDANCE & SALARY VIEW CLASSES (replaces inline <style> and bloat)
+   ========================================================================== */
+
+.attendance-page-container {
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 24px 60px;
+  color: var(--color-charcoal);
+  box-sizing: border-box;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.attendance-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.attendance-policy-bar {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.attendance-policy-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-charcoal);
+}
+
+.attendance-policy-sub {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.attendance-worker-avatar-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-charcoal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.attendance-role-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  color: var(--color-charcoal);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.attendance-status-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  border: 1px dashed var(--color-border-strong);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.attendance-status-pill-btn[data-status='present'] {
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success);
+}
+
+.attendance-status-pill-btn[data-status='half_day'] {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  border: 1px solid var(--color-warning);
+}
+
+.attendance-status-pill-btn[data-status='overtime'] {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  border: 1px solid var(--color-primary);
+}
+
+.attendance-status-pill-btn[data-status='leave'] {
+  background: var(--color-surface-subtle);
+  color: var(--color-charcoal);
+  border: 1px solid var(--color-charcoal);
+}
+
+.attendance-status-pill-btn[data-status='absent'] {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  border: 1px solid var(--color-danger);
+}
+
+.attendance-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.attendance-desktop-table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.attendance-mobile-cards {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.attendance-quick-cycle-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attendance-quick-cycle-cluster .attendance-mini-status-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.salary-mobile-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.salary-mobile-card.is-updated {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.salary-mobile-card.is-selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.salary-mobile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  background: var(--color-bg);
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 0.875rem;
+}
+
+.salary-table-row-updated {
+  background: var(--color-success-soft);
+}
+
+.salary-table-row-selected {
+  background: var(--color-primary-soft);
+}
+
+.attendance-advances-banner {
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning-text);
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .attendance-page-container {
+    padding: 12px 10px 72px;
+    gap: 14px;
+  }
+
+  .attendance-desktop-table {
+    display: none !important;
+  }
+
+  .attendance-mobile-cards {
+    display: flex !important;
+  }
+
+  .attendance-mobile-roster {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    gap: 10px !important;
+    padding: 12px !important;
+  }
+
+  .attendance-worker-card,
+  .salary-mobile-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    word-break: break-word !important;
+  }
+
+  .attendance-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}

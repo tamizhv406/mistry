@@ -1974,9 +1974,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             onClick={e => e.stopPropagation()}
             style={{ maxWidth: '520px' }}
           >
-            <div className="modal-header bg-gradient-to-r from-purple-950 via-slate-900 to-slate-900 border-b border-purple-500/30 p-4">
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: '#f1f5f9' }}>
-                <ShieldCheck size={22} color="#c084fc" />
+            <div className="modal-header p-4" style={{ background: 'var(--color-charcoal)', borderBottom: '1px solid var(--color-border)' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: '#ffffff' }}>
+                <ShieldCheck size={22} color="var(--color-warning)" />
                 <span>Invite Sub-admin</span>
               </h3>
               <button
@@ -2121,7 +2121,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <button
                   type="submit"
                   disabled={isCreatingSubAdmin}
-                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/30 flex items-center gap-1.5 transition-all active:scale-95"
+                  className="px-5 py-2 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-all active:scale-95"
+                  style={{
+                    minHeight: '44px',
+                    backgroundColor: 'var(--color-primary)',
+                    color: 'var(--color-on-primary)',
+                  }}
                 >
                   <ShieldCheck className="w-4 h-4" />
                   <span>{isCreatingSubAdmin ? 'Sending...' : 'Send invitation'}</span>

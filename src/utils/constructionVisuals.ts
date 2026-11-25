@@ -95,7 +95,7 @@ const TOOL_SVGS = {
         </linearGradient>
       </defs>
       <rect width="400" height="300" fill="url(#bgTr)" rx="16"/>
-      <circle cx="200" cy="150" r="110" fill="#3b82f6" fill-opacity="0.06"/>
+      <circle cx="200" cy="150" r="110" fill="#f97316" fill-opacity="0.08"/>
       <g transform="translate(40, -10)">
         <!-- Triangular Masonry Blade -->
         <polygon points="160,50 90,210 230,210" fill="url(#bladeTr)" stroke="#64748b" stroke-width="2"/>
@@ -251,17 +251,17 @@ const TOOL_SVGS = {
           <stop offset="0%" stop-color="#0f172a" /><stop offset="100%" stop-color="#1e293b" />
         </linearGradient>
         <linearGradient id="bucketGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="#1e40af" /><stop offset="50%" stop-color="#3b82f6" /><stop offset="100%" stop-color="#1d4ed8" />
+          <stop offset="0%" stop-color="#c2410c" /><stop offset="50%" stop-color="#f97316" /><stop offset="100%" stop-color="#ea580c" />
         </linearGradient>
       </defs>
       <rect width="400" height="300" fill="url(#bgBk)" rx="16"/>
       <g transform="translate(100, 40)">
         <!-- Bucket Rim -->
-        <ellipse cx="100" cy="60" rx="85" ry="18" fill="#1e3a8a" stroke="#60a5fa" stroke-width="3"/>
+        <ellipse cx="100" cy="60" rx="85" ry="18" fill="#9a3412" stroke="#fdba74" stroke-width="3"/>
         <!-- Bucket Body -->
-        <path d="M 20,65 L 45,185 Q 100,205 155,185 L 180,65 Z" fill="url(#bucketGrad)" stroke="#1e3a8a" stroke-width="2"/>
+        <path d="M 20,65 L 45,185 Q 100,205 155,185 L 180,65 Z" fill="url(#bucketGrad)" stroke="#9a3412" stroke-width="2"/>
         <!-- Bottom Rim -->
-        <ellipse cx="100" cy="185" rx="55" ry="12" fill="#1e3a8a"/>
+        <ellipse cx="100" cy="185" rx="55" ry="12" fill="#9a3412"/>
         <!-- Metal Handle Arch -->
         <path d="M 15,65 Q 100,-15 185,65" fill="none" stroke="#94a3b8" stroke-width="6" stroke-linecap="round"/>
         <!-- Plastic Grip on Handle -->
@@ -345,7 +345,7 @@ const TOOL_SVGS = {
         <!-- Drill Bit -->
         <polygon points="220,77 265,79 265,81 220,83" fill="#cbd5e1"/>
         <!-- Motor Casing -->
-        <path d="M 60,60 L 190,60 L 190,105 L 100,105 L 100,165 L 65,165 Q 50,165 50,140 L 50,70 Q 50,60 60,60 Z" fill="#0284c7" stroke="#0369a1" stroke-width="3"/>
+        <path d="M 60,60 L 190,60 L 190,105 L 100,105 L 100,165 L 65,165 Q 50,165 50,140 L 50,70 Q 50,60 60,60 Z" fill="#ea580c" stroke="#c2410c" stroke-width="3"/>
         <!-- Air vents -->
         <line x1="75" y1="75" x2="75" y2="95" stroke="#0f172a" stroke-width="3"/>
         <line x1="85" y1="75" x2="85" y2="95" stroke="#0f172a" stroke-width="3"/>
@@ -598,11 +598,11 @@ const MATERIAL_SVGS = {
       </defs>
       <rect width="400" height="300" fill="url(#bgOm)" rx="16"/>
       <g transform="translate(100, 40)">
-        <rect x="40" y="50" width="120" height="130" rx="8" fill="#3b82f6" fill-opacity="0.15" stroke="#3b82f6" stroke-width="3"/>
-        <circle cx="100" cy="105" r="30" fill="#3b82f6" stroke="#93c5fd" stroke-width="3"/>
+        <rect x="40" y="50" width="120" height="130" rx="8" fill="#f97316" fill-opacity="0.15" stroke="#f97316" stroke-width="3"/>
+        <circle cx="100" cy="105" r="30" fill="#f97316" stroke="#fdba74" stroke-width="3"/>
         <path d="M 85,105 L 115,105 M 100,90 L 100,120" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
       </g>
-      <text x="200" y="275" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#60a5fa" text-anchor="middle" letter-spacing="1">CIVIL MATERIALS & SUPPLIES • இதர பொருட்கள்</text>
+      <text x="200" y="275" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#fdba74" text-anchor="middle" letter-spacing="1">CIVIL MATERIALS & SUPPLIES • இதர பொருட்கள்</text>
     </svg>
   `),
 };
@@ -611,7 +611,7 @@ const MATERIAL_SVGS = {
 // 3. STEEL ROD VISUAL ASSETS (Individual Diameters)
 // ==========================================
 
-export function generateRodSvg(diameter: string, highlightColor = '#3b82f6'): string {
+export function generateRodSvg(diameter: string, highlightColor = '#F97316'): string {
   const numDia = parseInt(diameter) || 12;
   // Calculate relative rebar thickness (scale thickness between 6px to 36px)
   const barThickness = Math.max(8, Math.min(42, Math.round(numDia * 1.5)));
@@ -691,8 +691,8 @@ const WORKER_SVGS = {
       <rect width="400" height="300" fill="url(#bgPy)" rx="16"/>
       <g transform="translate(110, 30)">
         <!-- Blue Safety Helmet -->
-        <path d="M 50,75 Q 90,30 130,75 L 145,85 L 35,85 Z" fill="#2563eb" stroke="#1d4ed8" stroke-width="3"/>
-        <rect x="30" y="80" width="120" height="10" rx="4" fill="#3b82f6"/>
+        <path d="M 50,75 Q 90,30 130,75 L 145,85 L 35,85 Z" fill="#f97316" stroke="#ea580c" stroke-width="3"/>
+        <rect x="30" y="80" width="120" height="10" rx="4" fill="#fb923c"/>
         <!-- Neutral Head -->
         <circle cx="90" cy="115" r="32" fill="#e2e8f0"/>
         <!-- Torso with Blue Mason Workwear -->
@@ -700,7 +700,7 @@ const WORKER_SVGS = {
         <!-- Mason Trowel Emblem -->
         <polygon points="90,160 80,180 100,180" fill="#94a3b8"/>
       </g>
-      <text x="200" y="275" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#60a5fa" text-anchor="middle" letter-spacing="1">MASON / BRICKLAYER (PERIYAAL) • பெரியாள்</text>
+      <text x="200" y="275" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#fdba74" text-anchor="middle" letter-spacing="1">MASON / BRICKLAYER (PERIYAAL) • பெரியாள்</text>
     </svg>
   `),
 
@@ -867,21 +867,21 @@ const EXPENSE_SVGS = {
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
       <defs>
         <linearGradient id="bgWt" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1e293b"/></linearGradient>
-        <linearGradient id="waterTank" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0284c7"/><stop offset="50%" stop-color="#38bdf8"/><stop offset="100%" stop-color="#0369a1"/></linearGradient>
+        <linearGradient id="waterTank" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#0f766e"/><stop offset="50%" stop-color="#14b8a6"/><stop offset="100%" stop-color="#0d9488"/></linearGradient>
       </defs>
       <rect width="400" height="300" fill="url(#bgWt)" rx="16"/>
       <g transform="translate(60, 45)">
         <!-- Site Water Tanker Lorry -->
-        <rect x="20" y="70" width="180" height="75" rx="35" fill="url(#waterTank)" stroke="#0284c7" stroke-width="3"/>
+        <rect x="20" y="70" width="180" height="75" rx="35" fill="url(#waterTank)" stroke="#14b8a6" stroke-width="3"/>
         <!-- Truck Cabin -->
-        <path d="M 200,85 L 250,85 L 250,145 L 200,145 Z" fill="#0f172a" stroke="#0284c7" stroke-width="2"/>
-        <rect x="215" y="95" width="25" height="25" rx="3" fill="#38bdf8"/>
+        <path d="M 200,85 L 250,85 L 250,145 L 200,145 Z" fill="#0f172a" stroke="#14b8a6" stroke-width="2"/>
+        <rect x="215" y="95" width="25" height="25" rx="3" fill="#2dd4bf"/>
         <!-- Wheels -->
         <circle cx="65" cy="155" r="18" fill="#0f172a" stroke="#94a3b8" stroke-width="4"/>
         <circle cx="160" cy="155" r="18" fill="#0f172a" stroke="#94a3b8" stroke-width="4"/>
         <circle cx="230" cy="155" r="18" fill="#0f172a" stroke="#94a3b8" stroke-width="4"/>
       </g>
-      <text x="200" y="275" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#38bdf8" text-anchor="middle" letter-spacing="1">WATER TANKER SUPPLY • தண்ணீர் டேங்கர்</text>
+      <text x="200" y="275" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="#2dd4bf" text-anchor="middle" letter-spacing="1">WATER TANKER SUPPLY • தண்ணீர் டேங்கர்</text>
     </svg>
   `),
 };
@@ -903,7 +903,7 @@ export const SITE_ILLUSTRATION_SVG = svgToUri(`
       <!-- Balcony Floor Slab -->
       <rect x="35" y="140" width="210" height="12" rx="3" fill="#f59e0b"/>
       <!-- Glass Balcony Railing -->
-      <rect x="40" y="115" width="200" height="25" rx="2" fill="#38bdf8" fill-opacity="0.25" stroke="#38bdf8" stroke-width="2"/>
+      <rect x="40" y="115" width="200" height="25" rx="2" fill="#e7e5e4" fill-opacity="0.25" stroke="#d6d3d1" stroke-width="2"/>
       <!-- Main Door -->
       <rect x="115" y="160" width="40" height="50" rx="3" fill="#78350f" stroke="#b45309" stroke-width="2"/>
       <!-- Windows with Warm Lighting -->
@@ -1031,7 +1031,7 @@ export function getToolVisual(toolName: string, customImageUrl?: string): Visual
       emoji: '📐',
       imageUrl: TOOL_SVGS.trowel,
       imageAlt: 'Masonry Plastering Trowel',
-      colorTheme: { primary: '#3b82f6', bg: '#3b82f615', border: '#3b82f650', accent: '#60a5fa' },
+      colorTheme: { primary: '#F97316', bg: '#F9731615', border: '#F9731650', accent: '#EA580C' },
     };
   }
 
@@ -1106,7 +1106,7 @@ export function getToolVisual(toolName: string, customImageUrl?: string): Visual
       emoji: '🪣',
       imageUrl: TOOL_SVGS.bucket,
       imageAlt: 'Construction Bucket',
-      colorTheme: { primary: '#3b82f6', bg: '#3b82f615', border: '#3b82f650', accent: '#60a5fa' },
+      colorTheme: { primary: '#F97316', bg: '#F9731615', border: '#F9731650', accent: '#EA580C' },
     };
   }
 
@@ -1151,7 +1151,7 @@ export function getToolVisual(toolName: string, customImageUrl?: string): Visual
       emoji: '🔩',
       imageUrl: TOOL_SVGS.drillMachine,
       imageAlt: 'Drill Machine',
-      colorTheme: { primary: '#0284c7', bg: '#0284c715', border: '#0284c750', accent: '#38bdf8' },
+      colorTheme: { primary: '#0D9488', bg: '#0D948815', border: '#0D948850', accent: '#14B8A6' },
     };
   }
 
@@ -1332,9 +1332,9 @@ export function getMaterialVisual(category: string, brand?: string, customImageU
       description: 'High tensile TMT reinforcement steel',
       iconName: 'Hash',
       emoji: '🏗️',
-      imageUrl: generateRodSvg('12 mm', '#3b82f6'),
+      imageUrl: generateRodSvg('12 mm', '#F97316'),
       imageAlt: 'TMT Reinforcement Steel Rod',
-      colorTheme: { primary: '#3b82f6', bg: '#3b82f615', border: '#3b82f650', accent: '#60a5fa' },
+      colorTheme: { primary: '#F97316', bg: '#F9731615', border: '#F9731650', accent: '#EA580C' },
     };
   }
 
@@ -1348,7 +1348,7 @@ export function getMaterialVisual(category: string, brand?: string, customImageU
     emoji: '📦',
     imageUrl: MATERIAL_SVGS.otherMaterials,
     imageAlt: 'Other Civil Materials',
-    colorTheme: { primary: '#8b5cf6', bg: '#8b5cf615', border: '#8b5cf650', accent: '#a78bfa' },
+    colorTheme: { primary: '#57534E', bg: '#57534E15', border: '#57534E50', accent: '#1F2937' },
   };
 }
 
@@ -1364,34 +1364,34 @@ export function getRodVisual(diameter: string, customImageUrl?: string): VisualI
       emoji: '🏗️',
       imageUrl: customImageUrl,
       imageAlt: `TMT Steel ${diameter}`,
-      colorTheme: { primary: '#3b82f6', bg: '#3b82f615', border: '#3b82f650', accent: '#60a5fa' },
+      colorTheme: { primary: '#F97316', bg: '#F9731615', border: '#F9731650', accent: '#EA580C' },
     };
   }
 
   const clean = diameter.replace(/\s+/g, '').toLowerCase();
-  let highlight = '#3b82f6';
+  let highlight = '#F97316';
   let desc = 'Structural beam & column rebar';
 
   if (clean.includes('6mm')) {
-    highlight = '#06b6d4';
+    highlight = '#0D9488';
     desc = 'Binding wire & light stirrup rings';
   } else if (clean.includes('8mm')) {
-    highlight = '#10b981';
+    highlight = '#16A34A';
     desc = 'Column ties, stirrups & slab distribution';
   } else if (clean.includes('10mm')) {
-    highlight = '#f59e0b';
+    highlight = '#F59E0B';
     desc = 'Slab main reinforcement & lintels';
   } else if (clean.includes('12mm')) {
-    highlight = '#3b82f6';
+    highlight = '#F97316';
     desc = 'Main column & primary beam rebar';
   } else if (clean.includes('16mm')) {
-    highlight = '#8b5cf6';
+    highlight = '#EA580C';
     desc = 'Heavy load columns & plinth beams';
   } else if (clean.includes('20mm')) {
-    highlight = '#ec4899';
+    highlight = '#1F2937';
     desc = 'Raft foundation & multi-story columns';
   } else if (clean.includes('25mm')) {
-    highlight = '#ef4444';
+    highlight = '#DC2626';
     desc = 'Heavy civil structural transfer girders';
   }
 
@@ -1454,7 +1454,7 @@ export function getWorkerVisual(category: string, customImageUrl?: string): Visu
       emoji: '🔨',
       imageUrl: WORKER_SVGS.periyaal,
       imageAlt: 'Periyaal Mason',
-      colorTheme: { primary: '#3b82f6', bg: '#3b82f615', border: '#3b82f650', accent: '#60a5fa' },
+      colorTheme: { primary: '#F97316', bg: '#F9731615', border: '#F9731650', accent: '#EA580C' },
     };
   }
 
@@ -1596,7 +1596,7 @@ export function getExpenseVisual(
         emoji: '💧',
         imageUrl: EXPENSE_SVGS.water,
         imageAlt: 'Water Tanker Supply',
-        colorTheme: { primary: '#0284c7', bg: '#0284c715', border: '#0284c750', accent: '#38bdf8' },
+        colorTheme: { primary: '#0D9488', bg: '#0D948815', border: '#0D948850', accent: '#14B8A6' },
       };
     default:
       return {

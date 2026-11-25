@@ -239,17 +239,17 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             position: 'sticky',
             top: 0,
             zIndex: 100,
-            backgroundColor: '#eef2ff',
-            border: '1px solid #c7d2fe',
+            backgroundColor: 'var(--color-primary-soft)',
+            border: '1px solid var(--color-primary-border)',
             borderRadius: '12px',
-            color: '#312e81',
+            color: 'var(--color-charcoal)',
             padding: '12px 18px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
             gap: '12px',
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+            boxShadow: 'var(--shadow-sm)',
             marginBottom: '18px',
           }}
         >
@@ -259,7 +259,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 width: '36px',
                 height: '36px',
                 borderRadius: '10px',
-                background: '#4f46e5',
+                background: 'var(--color-charcoal)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -270,13 +270,13 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               <ShieldCheck size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#312e81', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-charcoal)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span>Inspecting Site: <strong>{site.name}</strong></span>
-                <span style={{ backgroundColor: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+                <span style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-primary-text)', border: '1px solid var(--color-primary-border)', padding: '2px 8px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 700 }}>
                   Admin view
                 </span>
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#475569' }}>
+              <div style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
                 Super Admin Active Inspection — All project modifications are audit-logged
               </div>
             </div>
@@ -287,7 +287,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             className="btn btn-sm"
             onClick={onReturnToAdmin}
             style={{
-              background: '#4f46e5',
+              background: 'var(--color-charcoal)',
               color: '#ffffff',
               fontWeight: 700,
               fontSize: '0.85rem',
@@ -298,7 +298,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
               padding: '8px 16px',
               borderRadius: '10px',
               cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
+              boxShadow: 'var(--shadow-sm)',
               minHeight: '44px',
             }}
           >
@@ -319,8 +319,8 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             <button
               className="btn btn-sm"
               style={{
-                background: '#4f46e5',
-                color: '#fff',
+                background: 'var(--color-charcoal)',
+                color: '#ffffff',
                 fontWeight: 'bold',
                 display: 'flex',
                 alignItems: 'center',
@@ -328,6 +328,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 border: 'none',
                 padding: '6px 12px',
                 borderRadius: '8px',
+                minHeight: '44px',
                 cursor: 'pointer',
               }}
               onClick={onReturnToAdmin}
@@ -411,7 +412,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
           {(summary.totalExtraPaid || 0) > 0 && (
             <div className="banner-fin-stat">
               <span>Extra Paid (Advance)</span>
-              <strong style={{ color: '#38bdf8' }}>₹{(summary.totalExtraPaid || 0).toLocaleString('en-IN')}</strong>
+              <strong style={{ color: 'var(--color-primary)' }}>₹{(summary.totalExtraPaid || 0).toLocaleString('en-IN')}</strong>
             </div>
           )}
           <div className="banner-fin-stat">
@@ -640,7 +641,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 role="button"
                 tabIndex={0}
               >
-                <div className="site-grid-card-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#2563eb' }}>
+                <div className="site-grid-card-icon" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-text)' }}>
                   <Calendar size={24} />
                 </div>
                 <div className="site-grid-card-content">
@@ -658,12 +659,12 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 role="button"
                 tabIndex={0}
               >
-                <div className="site-grid-card-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#7c3aed' }}>
+                <div className="site-grid-card-icon" style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning-text)' }}>
                   <IndianRupee size={24} />
                 </div>
                 <div className="site-grid-card-content">
                   <div className="site-grid-card-title">Salary & Wages</div>
-                  <div className="site-grid-card-badge" style={{ background: summary.labourBalance > 0 ? '#fef2f2' : '#ecfdf5', color: summary.labourBalance > 0 ? '#dc2626' : '#059669' }}>
+                  <div className="site-grid-card-badge" style={{ background: summary.labourBalance > 0 ? 'var(--color-danger-soft)' : 'var(--color-success-soft)', color: summary.labourBalance > 0 ? 'var(--color-danger)' : 'var(--color-success-text)' }}>
                     {summary.labourBalance > 0 ? `Due: ₹${summary.labourBalance.toLocaleString('en-IN')}` : 'Settled'}
                   </div>
                   <div className="site-grid-card-amount">Paid: ₹{(summary.labourAdvances + summary.labourPaid).toLocaleString('en-IN')}</div>
@@ -678,7 +679,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 role="button"
                 tabIndex={0}
               >
-                <div className="site-grid-card-icon" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626' }}>
+                <div className="site-grid-card-icon" style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}>
                   <Wallet size={24} />
                 </div>
                 <div className="site-grid-card-content">
@@ -696,7 +697,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 role="button"
                 tabIndex={0}
               >
-                <div className="site-grid-card-icon" style={{ background: 'rgba(14, 165, 233, 0.15)', color: '#0284c7' }}>
+                <div className="site-grid-card-icon" style={{ background: 'rgba(13, 148, 136, 0.14)', color: '#0F766E' }}>
                   <Wrench size={24} />
                 </div>
                 <div className="site-grid-card-content">
@@ -786,7 +787,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                 role="button"
                 tabIndex={0}
               >
-                <div className="site-grid-card-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#4f46e5' }}>
+                <div className="site-grid-card-icon" style={{ background: 'var(--color-charcoal-soft)', color: 'var(--color-charcoal)' }}>
                   <Receipt size={24} />
                 </div>
                 <div className="site-grid-card-content">
@@ -981,7 +982,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                   Transport, Fuel, Repair & Misc
                 </div>
               </div>
-              <div className="metric-icon" style={{ backgroundColor: '#e0e7ff', color: '#4338ca' }}>
+              <div className="metric-icon" style={{ backgroundColor: 'var(--color-charcoal-soft)', color: 'var(--color-charcoal)' }}>
                 <Receipt size={22} />
               </div>
             </div>
@@ -1219,7 +1220,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                       type="button"
                       className="btn btn-sm btn-outline"
                       onClick={() => onOpenFloorPlans(site.id)}
-                      style={{ width: '100%', justifyContent: 'center', marginTop: '8px', color: '#2563EB', borderColor: '#BFDBFE' }}
+                      style={{ width: '100%', minHeight: '44px', justifyContent: 'center', marginTop: '8px', color: 'var(--color-primary-text)', borderColor: 'var(--color-primary-border)', background: 'var(--color-primary-soft)' }}
                     >
                       <span>Open Floor Planner</span>
                       <ArrowRight size={14} />
@@ -1234,14 +1235,14 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
 
       {/* TAB: PROJECT SETTINGS */}
       {activeTab === 'settings' && (
-        <div style={{ background: '#FFFFFF', border: '1px solid var(--border-light)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--border-light)', paddingBottom: '16px' }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '16px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
             <div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-main)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Settings size={20} color="var(--primary)" />
+              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-charcoal)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Settings size={20} color="var(--color-primary)" />
                 <span>Project Settings & Lifecycle</span>
               </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+              <p style={{ fontSize: '0.88rem', color: 'var(--color-text-muted)', margin: '4px 0 0' }}>
                 Manage project status, workforce policies, client contacts, and safety archival.
               </p>
             </div>
@@ -1256,13 +1257,13 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
             {/* Status Configuration */}
-            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px' }}>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+            <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '18px' }}>
+              <h4 style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--color-charcoal)', margin: '0 0 6px' }}>
                 Project Lifecycle Status
               </h4>
-              <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 14px' }}>
+              <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
                 Switch lifecycle state between planning, active construction, hold, or completion.
               </p>
 
@@ -1277,13 +1278,14 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                       onNotify?.(`Project status updated to "${st}"`, 'success');
                     }}
                     style={{
+                      minHeight: '44px',
                       padding: '8px 14px',
                       borderRadius: '8px',
-                      fontSize: '0.82rem',
+                      fontSize: '0.84rem',
                       fontWeight: 700,
-                      border: site.status === st ? '2px solid #2563EB' : '1px solid #CBD5E1',
-                      background: site.status === st ? '#EFF6FF' : '#FFFFFF',
-                      color: site.status === st ? '#1D4ED8' : '#475569',
+                      border: site.status === st ? '2px solid var(--color-primary)' : '1px solid var(--color-border-strong)',
+                      background: site.status === st ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+                      color: site.status === st ? 'var(--color-primary-text)' : 'var(--color-text-secondary)',
                       cursor: 'pointer',
                     }}
                   >
@@ -1295,11 +1297,11 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             </div>
 
             {/* Leave Policy */}
-            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px' }}>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+            <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '18px' }}>
+              <h4 style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--color-charcoal)', margin: '0 0 6px' }}>
                 Workforce Leave Pay Policy
               </h4>
-              <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 14px' }}>
+              <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
                 Determine whether approved Leave days are paid to registered workers on this site.
               </p>
 
@@ -1311,13 +1313,14 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                     onNotify?.('Leave policy set: Paid Leave (1 full day wage per approved leave)', 'info');
                   }}
                   style={{
+                    minHeight: '44px',
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    fontSize: '0.82rem',
+                    fontSize: '0.84rem',
                     fontWeight: 700,
-                    border: site.leavePaid === true ? '2px solid #16A34A' : '1px solid #CBD5E1',
-                    background: site.leavePaid === true ? '#DCFCE7' : '#FFFFFF',
-                    color: site.leavePaid === true ? '#15803D' : '#475569',
+                    border: site.leavePaid === true ? '2px solid var(--color-success)' : '1px solid var(--color-border-strong)',
+                    background: site.leavePaid === true ? 'var(--color-success-soft)' : 'var(--color-surface)',
+                    color: site.leavePaid === true ? 'var(--color-success-text)' : 'var(--color-text-secondary)',
                     cursor: 'pointer',
                   }}
                 >
@@ -1331,13 +1334,14 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                     onNotify?.('Leave policy set: Unpaid Leave (0 wages for leave days)', 'info');
                   }}
                   style={{
+                    minHeight: '44px',
                     padding: '8px 14px',
                     borderRadius: '8px',
-                    fontSize: '0.82rem',
+                    fontSize: '0.84rem',
                     fontWeight: 700,
-                    border: site.leavePaid === false ? '2px solid #D97706' : '1px solid #CBD5E1',
-                    background: site.leavePaid === false ? '#FEF3C7' : '#FFFFFF',
-                    color: site.leavePaid === false ? '#B45309' : '#475569',
+                    border: site.leavePaid === false ? '2px solid var(--color-warning)' : '1px solid var(--color-border-strong)',
+                    background: site.leavePaid === false ? 'var(--color-warning-soft)' : 'var(--color-surface)',
+                    color: site.leavePaid === false ? 'var(--color-warning-text)' : 'var(--color-text-secondary)',
                     cursor: 'pointer',
                   }}
                 >
@@ -1348,11 +1352,11 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
             </div>
 
             {/* Project Actions: Duplicate & Archive */}
-            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px' }}>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+            <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '12px', padding: '18px' }}>
+              <h4 style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--color-charcoal)', margin: '0 0 6px' }}>
                 Safe Duplication & Archival
               </h4>
-              <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 14px' }}>
+              <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', margin: '0 0 14px' }}>
                 Clone project setup or move records safely to the Recycle Bin.
               </p>
 
@@ -1376,7 +1380,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                     onNotify?.(`Project successfully cloned as "${cloned.name}"!`, 'success');
                     onBack();
                   }}
-                  style={{ color: '#2563EB', borderColor: '#BFDBFE', background: '#FFFFFF' }}
+                  style={{ minHeight: '44px', color: 'var(--color-charcoal)', borderColor: 'var(--color-border-strong)', background: 'var(--color-surface)' }}
                 >
                   <Copy size={16} />
                   <span>Duplicate Project</span>
@@ -1386,7 +1390,7 @@ export const SiteDetailView: React.FC<SiteDetailViewProps> = ({
                   type="button"
                   className="btn btn-outline"
                   onClick={() => onDeleteSite(site)}
-                  style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
+                  style={{ minHeight: '44px', color: 'var(--color-danger)', borderColor: 'var(--color-danger-border)', background: 'var(--color-danger-soft)' }}
                 >
                   <Trash2 size={16} />
                   <span>Move to Recycle Bin</span>

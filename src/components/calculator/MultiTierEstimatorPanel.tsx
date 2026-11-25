@@ -541,15 +541,18 @@ export const MultiTierEstimatorPanel: React.FC<MultiTierEstimatorPanelProps> = (
         </div>
 
         {/* Card 5: Grand Estimated Total (Highlighted) */}
-        <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-4 rounded-2xl border border-indigo-700/50 shadow-md">
-          <div className="flex items-center justify-between text-indigo-200 mb-1.5">
+        <div
+          className="col-span-2 md:col-span-1 p-4 rounded-2xl shadow-md"
+          style={{ background: 'var(--color-charcoal)', color: '#FFFFFF', border: '1px solid var(--color-charcoal-soft)' }}
+        >
+          <div className="flex items-center justify-between mb-1.5" style={{ color: '#FDBA74' }}>
             <span className="text-[11px] uppercase font-extrabold tracking-wider">Grand Total</span>
-            <Crown size={15} className="text-amber-400" />
+            <Crown size={15} style={{ color: 'var(--color-primary)' }} />
           </div>
-          <div className="text-xl font-extrabold text-white tracking-tight">
+          <div className="text-xl font-extrabold tracking-tight" style={{ color: '#FFFFFF' }}>
             {formatINR(estimate.grandTotal)}
           </div>
-          <div className="text-[11px] text-indigo-300 mt-1">Ready-to-occupy</div>
+          <div className="text-[11px] mt-1" style={{ color: '#D1D5DB' }}>Ready-to-occupy</div>
         </div>
       </div>
 

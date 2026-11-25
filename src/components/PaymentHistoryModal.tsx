@@ -190,16 +190,16 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
             {/* Total Amount */}
             <div
               style={{
-                backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
+                backgroundColor: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
                 borderRadius: '10px',
                 padding: '10px 14px',
               }}
             >
-              <span style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: 600, display: 'block' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 600, display: 'block' }}>
                 TOTAL AMOUNT
               </span>
-              <strong style={{ fontSize: '1.2rem', color: '#1e293b' }}>
+              <strong style={{ fontSize: '1.2rem', color: 'var(--color-charcoal)' }}>
                 ₹{fin.totalAmount.toLocaleString('en-IN')}
               </strong>
             </div>
@@ -253,8 +253,8 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
             {/* Extra Paid */}
             <div
               style={{
-                backgroundColor: fin.extraPaid > 0 ? 'rgba(139, 92, 246, 0.08)' : 'rgba(241, 245, 249, 0.8)',
-                border: fin.extraPaid > 0 ? '1.5px solid rgba(139, 92, 246, 0.35)' : '1px solid var(--border-light)',
+                backgroundColor: fin.extraPaid > 0 ? 'var(--color-primary-soft)' : 'var(--color-bg)',
+                border: fin.extraPaid > 0 ? '1.5px solid var(--color-primary-border)' : '1px solid var(--color-border)',
                 borderRadius: '10px',
                 padding: '10px 14px',
               }}
@@ -262,7 +262,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
               <span
                 style={{
                   fontSize: '0.75rem',
-                  color: fin.extraPaid > 0 ? '#7c3aed' : '#64748b',
+                  color: fin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)',
                   fontWeight: 600,
                   display: 'block',
                 }}
@@ -272,7 +272,7 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
               <strong
                 style={{
                   fontSize: '1.2rem',
-                  color: fin.extraPaid > 0 ? '#7c3aed' : '#64748b',
+                  color: fin.extraPaid > 0 ? 'var(--color-primary-text)' : 'var(--color-text-muted)',
                 }}
               >
                 ₹{fin.extraPaid.toLocaleString('en-IN')}
@@ -284,15 +284,15 @@ export const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
           {fin.status === 'EXTRA_PAID' && (
             <div
               style={{
-                backgroundColor: '#f5f3ff',
-                border: '1px solid #c4b5fd',
+                backgroundColor: 'var(--color-primary-soft)',
+                border: '1px solid var(--color-primary-border)',
                 borderRadius: '8px',
                 padding: '10px 14px',
                 marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                color: '#6d28d9',
+                color: 'var(--color-primary-text)',
                 fontSize: '0.88rem',
                 fontWeight: 600,
               }}

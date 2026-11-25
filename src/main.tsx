@@ -5,6 +5,7 @@ import './styles/mobile.css';
 import './styles/admin-portal.css';
 import './styles/design-system.css';
 import './styles/erp-dashboard.css';
+import './styles/erp-views.css';
 import './styles/record-cards.css';
 import './styles/advanced-calculator.css';
 import './styles/phone-floor.css';

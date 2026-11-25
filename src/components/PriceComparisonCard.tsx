@@ -40,33 +40,35 @@ export const PriceComparisonCard: React.FC<PriceComparisonCardProps> = ({
   return (
     <div
       style={{
-        background: 'var(--bg-secondary)',
+        background: 'var(--color-surface)',
         borderRadius: '12px',
-        border: '1px solid var(--border)',
+        border: '1px solid var(--color-border)',
         padding: '1.25rem',
         display: 'flex',
         flexDirection: 'column',
         gap: '1rem',
+        boxShadow: 'var(--shadow-sm)',
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <span style={{ fontSize: '1.5rem' }}>{getIcon(material)}</span>
           <div>
-            <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--color-charcoal)', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
               {material} Market Rates
-              <span style={{ fontSize: '0.75rem', background: 'rgba(255, 255, 255, 0.08)', padding: '2px 8px', borderRadius: '12px', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '0.78rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', padding: '2px 8px', borderRadius: '12px', color: 'var(--color-text-muted)' }}>
                 {activeQuotes.length} Quotes
               </span>
             </h4>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Standard unit: per {unit}</div>
+            <div style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>Standard unit: per {unit}</div>
           </div>
         </div>
         <button
+          type="button"
           className="btn btn-sm btn-outline"
           onClick={() => onAddNewQuote(material)}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.84rem', minHeight: '44px' }}
         >
           <Plus size={14} /> Add Quote
         </button>
@@ -77,60 +79,60 @@ export const PriceComparisonCard: React.FC<PriceComparisonCardProps> = ({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.6rem' }}>
           <div
             style={{
-              background: 'rgba(34, 197, 94, 0.1)',
-              border: '1px solid rgba(34, 197, 94, 0.3)',
+              background: 'var(--color-success-soft)',
+              border: '1px solid var(--color-success-border)',
               borderRadius: '8px',
               padding: '0.6rem 0.75rem',
               display: 'flex',
               flexDirection: 'column',
             }}
           >
-            <span style={{ fontSize: '0.75rem', color: '#4ade80', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--color-success-text)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
               <TrendingDown size={12} /> Lowest
             </span>
-            <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#4ade80' }}>
-              ₹{lowestPrice} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/{unit}</span>
+            <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--color-success-text)' }}>
+              ₹{lowestPrice} <span style={{ fontSize: '0.78rem', fontWeight: 400 }}>/{unit}</span>
             </span>
           </div>
 
           <div
             style={{
-              background: 'rgba(59, 130, 246, 0.1)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
+              background: 'var(--color-primary-soft)',
+              border: '1px solid var(--color-primary-border)',
               borderRadius: '8px',
               padding: '0.6rem 0.75rem',
               display: 'flex',
               flexDirection: 'column',
             }}
           >
-            <span style={{ fontSize: '0.75rem', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--color-primary-text)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
               <BarChart2 size={12} /> Average
             </span>
-            <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#60a5fa' }}>
-              ₹{avgPrice} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/{unit}</span>
+            <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--color-primary-text)' }}>
+              ₹{avgPrice} <span style={{ fontSize: '0.78rem', fontWeight: 400 }}>/{unit}</span>
             </span>
           </div>
 
           <div
             style={{
-              background: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: 'var(--color-danger-soft)',
+              border: '1px solid var(--color-danger-border)',
               borderRadius: '8px',
               padding: '0.6rem 0.75rem',
               display: 'flex',
               flexDirection: 'column',
             }}
           >
-            <span style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--color-danger-text)', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
               <TrendingUp size={12} /> Highest
             </span>
-            <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f87171' }}>
-              ₹{highestPrice} <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>/{unit}</span>
+            <span style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--color-danger-text)' }}>
+              ₹{highestPrice} <span style={{ fontSize: '0.78rem', fontWeight: 400 }}>/{unit}</span>
             </span>
           </div>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+        <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--color-text-muted)', fontSize: '0.88rem' }}>
           No quotes saved yet for {material}. Click "Add Quote" above to record a dealer price.
         </div>
       )}
@@ -152,27 +154,27 @@ export const PriceComparisonCard: React.FC<PriceComparisonCardProps> = ({
                   alignItems: 'center',
                   padding: '0.6rem 0.85rem',
                   borderRadius: '8px',
-                  border: `1.5px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
-                  background: isSelected ? 'rgba(255, 184, 0, 0.08)' : 'var(--bg-main)',
+                  border: `1.5px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                  background: isSelected ? 'var(--color-primary-soft)' : 'var(--color-bg)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0, paddingRight: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    <strong style={{ fontSize: '0.92rem', color: 'var(--text-main)' }}>{quote.supplier}</strong>
+                    <strong style={{ fontSize: '0.92rem', color: 'var(--color-charcoal)' }}>{quote.supplier}</strong>
                     {isLowest && (
-                      <span style={{ background: '#22c55e', color: '#000', fontSize: '0.68rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px' }}>
+                      <span style={{ background: 'var(--color-success-soft)', color: 'var(--color-success-text)', border: '1px solid var(--color-success-border)', fontSize: '0.72rem', fontWeight: 700, padding: '1px 6px', borderRadius: '4px' }}>
                         BEST RATE
                       </span>
                     )}
                     {quote.district && (
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>
                         • {quote.district} {quote.area ? `(${quote.area})` : ''}
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', marginTop: '2px' }}>
                     {quote.brand && <span>{quote.brand} </span>}
                     {quote.product && <span>— {quote.product}</span>}
                     {quote.grade && <span> ({quote.grade})</span>}
@@ -181,21 +183,21 @@ export const PriceComparisonCard: React.FC<PriceComparisonCardProps> = ({
 
                 <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: isSelected ? 'var(--primary)' : 'var(--text-main)' }}>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 700, color: isSelected ? 'var(--color-primary-text)' : 'var(--color-charcoal)' }}>
                       ₹{quote.price}
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>/{quote.unit}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>/{quote.unit}</div>
                   </div>
                   <button
                     type="button"
                     className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline'}`}
-                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.78rem' }}
+                    style={{ minHeight: '44px', padding: '0.35rem 0.85rem', fontSize: '0.84rem' }}
                     onClick={e => {
                       e.stopPropagation();
                       onSelectQuote(quote);
                     }}
                   >
-                    {isSelected ? <Check size={14} /> : 'Use'}
+                    {isSelected ? <Check size={15} /> : 'Use'}
                   </button>
                 </div>
               </div>
@@ -210,12 +212,12 @@ export const PriceComparisonCard: React.FC<PriceComparisonCardProps> = ({
           display: 'flex',
           alignItems: 'flex-start',
           gap: '0.4rem',
-          fontSize: '0.74rem',
-          color: 'var(--text-muted)',
-          background: 'rgba(255, 255, 255, 0.03)',
-          padding: '0.5rem 0.6rem',
+          fontSize: '0.8rem',
+          color: 'var(--color-text-muted)',
+          background: 'var(--color-bg)',
+          padding: '0.6rem 0.75rem',
           borderRadius: '6px',
-          borderLeft: '2px solid var(--primary)',
+          borderLeft: '3px solid var(--color-primary)',
         }}
       >
         <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '2px' }} />

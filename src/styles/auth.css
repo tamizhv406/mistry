@@ -6,16 +6,16 @@
  * warning #F59E0B. Main buttons use charcoal text on orange (white on #F97316 is too faint).
  */
 .auth-screen {
-  --auth-orange: #F97316;
-  --auth-orange-strong: #EA580C;
-  --auth-charcoal: #1F2937;
-  --auth-bg: #FAFAF9;
-  --auth-card: #FFFFFF;
-  --auth-muted: #57534E;
-  --auth-line: #E7E5E4;
-  --auth-success: #16A34A;
-  --auth-danger: #DC2626;
-  --auth-warning: #F59E0B;
+  --auth-orange: var(--color-primary, #F97316);
+  --auth-orange-strong: var(--color-primary-hover, #EA580C);
+  --auth-charcoal: var(--color-charcoal, #1F2937);
+  --auth-bg: var(--color-bg, #FAFAF9);
+  --auth-card: var(--color-surface, #FFFFFF);
+  --auth-muted: var(--color-text-muted, #57534E);
+  --auth-line: var(--color-border, #E7E5E4);
+  --auth-success: var(--color-success, #16A34A);
+  --auth-danger: var(--color-danger, #DC2626);
+  --auth-warning: var(--color-warning, #F59E0B);
   min-height: 100vh;
   min-height: 100dvh;
   width: 100%;

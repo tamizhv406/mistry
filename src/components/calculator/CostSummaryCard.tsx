@@ -18,18 +18,23 @@ export const CostSummaryCard: React.FC<CostSummaryCardProps> = ({ costs, onLabou
     }).format(val);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-      <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div
+        className="p-4 flex items-center justify-between"
+        style={{ background: 'var(--color-charcoal)', color: '#FFFFFF' }}
+      >
         <div>
-          <span className="text-xs uppercase tracking-wider text-indigo-300 font-semibold block">Total Estimated Cost</span>
-          <div className="text-2xl font-bold flex items-center gap-1 mt-0.5">
+          <span className="text-xs uppercase tracking-wider font-semibold block" style={{ color: '#FDBA74' }}>
+            Total Estimated Cost
+          </span>
+          <div className="text-2xl font-bold flex items-center gap-1 mt-0.5" style={{ color: '#FFFFFF' }}>
             {formatINR(costs.overallTotalCost)}
           </div>
         </div>
-        <div className="text-right text-xs text-slate-300">
-          <div>Materials: <span className="font-semibold text-white">{formatINR(costs.totalMaterialBaseCost + costs.totalTransportCost + costs.totalTaxCost)}</span></div>
+        <div className="text-right text-xs" style={{ color: '#D1D5DB' }}>
+          <div>Materials: <span className="font-semibold" style={{ color: '#FFFFFF' }}>{formatINR(costs.totalMaterialBaseCost + costs.totalTransportCost + costs.totalTaxCost)}</span></div>
           {costs.labourCost > 0 && (
-            <div>Labour: <span className="font-semibold text-white">{formatINR(costs.labourCost)}</span></div>
+            <div>Labour: <span className="font-semibold" style={{ color: '#FFFFFF' }}>{formatINR(costs.labourCost)}</span></div>
           )}
         </div>
       </div>

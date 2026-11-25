@@ -183,10 +183,11 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
                 <div
                   onClick={() => setAdvanceType('Recoverable')}
                   style={{
-                    border: advanceType === 'Recoverable' ? '2px solid #2563eb' : '1.5px solid var(--border-light)',
-                    backgroundColor: advanceType === 'Recoverable' ? 'rgba(37, 99, 235, 0.08)' : '#ffffff',
+                    border: advanceType === 'Recoverable' ? '2px solid var(--color-primary)' : '1.5px solid var(--color-border)',
+                    backgroundColor: advanceType === 'Recoverable' ? 'var(--color-primary-soft)' : 'var(--color-surface)',
                     borderRadius: '10px',
                     padding: '12px',
+                    minHeight: '44px',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                   }}
@@ -197,11 +198,11 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
                       name="advanceType"
                       checked={advanceType === 'Recoverable'}
                       onChange={() => setAdvanceType('Recoverable')}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', accentColor: 'var(--color-primary)' }}
                     />
-                    <strong style={{ color: '#1e40af', fontSize: '0.92rem' }}>Recoverable</strong>
+                    <strong style={{ color: 'var(--color-primary-text)', fontSize: '0.92rem' }}>Recoverable</strong>
                   </div>
-                  <p style={{ fontSize: '0.78rem', color: '#475569', margin: 0, lineHeight: 1.3 }}>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.35 }}>
                     Include in salary deduction. Deducted from future wage settlements.
                   </p>
                 </div>
@@ -210,10 +211,11 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
                 <div
                   onClick={() => setAdvanceType('Non-Recoverable')}
                   style={{
-                    border: advanceType === 'Non-Recoverable' ? '2px solid #7c3aed' : '1.5px solid var(--border-light)',
-                    backgroundColor: advanceType === 'Non-Recoverable' ? 'rgba(124, 58, 237, 0.08)' : '#ffffff',
+                    border: advanceType === 'Non-Recoverable' ? '2px solid var(--color-warning)' : '1.5px solid var(--color-border)',
+                    backgroundColor: advanceType === 'Non-Recoverable' ? 'var(--color-warning-soft)' : 'var(--color-surface)',
                     borderRadius: '10px',
                     padding: '12px',
+                    minHeight: '44px',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',
                   }}
@@ -224,11 +226,11 @@ export const AdvanceModal: React.FC<AdvanceModalProps> = ({
                       name="advanceType"
                       checked={advanceType === 'Non-Recoverable'}
                       onChange={() => setAdvanceType('Non-Recoverable')}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', accentColor: 'var(--color-warning)' }}
                     />
-                    <strong style={{ color: '#6d28d9', fontSize: '0.92rem' }}>No Return</strong>
+                    <strong style={{ color: 'var(--color-warning-text)', fontSize: '0.92rem' }}>No Return</strong>
                   </div>
-                  <p style={{ fontSize: '0.78rem', color: '#475569', margin: 0, lineHeight: 1.3 }}>
+                  <p style={{ fontSize: '0.82rem', color: 'var(--color-text-secondary)', margin: 0, lineHeight: 1.35 }}>
                     Non-recoverable grant / bonus / medical aid. <strong>Never deducted</strong> from salary.
                   </p>
                 </div>

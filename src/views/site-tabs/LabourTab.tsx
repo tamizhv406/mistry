@@ -318,7 +318,7 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                 if (catLedgers.length === 0) return null;
 
                 const catColor =
-                  catName === 'MISTRY' ? '#fbbf24' : catName === 'PERIYAAL' ? '#60a5fa' : '#34d399';
+                  catName === 'MISTRY' ? 'var(--color-warning-text)' : catName === 'PERIYAAL' ? 'var(--color-primary-text)' : 'var(--color-success-text)';
                 const catIcon = catName === 'MISTRY' ? '👑' : catName === 'PERIYAAL' ? '🧱' : '🧤';
 
                 return (
@@ -918,18 +918,18 @@ export const LabourTab: React.FC<LabourTabProps> = ({
               {
                 label: 'Days Worked (Attendance)',
                 value: `${l?.daysWorked || 0} Days`,
-                icon: <Calendar size={14} className="text-sky-400" />,
+                icon: <Calendar size={14} style={{ color: 'var(--color-primary)' }} />,
               },
               {
                 label: 'Gross Salary Earned',
                 value: `₹${(l?.grossSalary || 0).toLocaleString('en-IN')}`,
                 highlight: true,
-                color: '#fbbf24',
+                color: 'var(--color-warning-text)',
               },
               {
                 label: 'Recoverable Advance Deducted',
                 value: `₹${(l?.totalRecoverableAdvance || 0).toLocaleString('en-IN')}`,
-                color: '#f87171',
+                color: 'var(--color-danger-text)',
               },
               {
                 label: 'Non-Recoverable Company Grant',
@@ -937,12 +937,12 @@ export const LabourTab: React.FC<LabourTabProps> = ({
                   (l?.totalNonRecoverableAdvance || 0) > 0
                     ? `₹${(l?.totalNonRecoverableAdvance || 0).toLocaleString('en-IN')} (Not Deducted)`
                     : 'None',
-                color: '#fb923c',
+                color: 'var(--color-primary-text)',
               },
               {
                 label: 'Contact Phone',
                 value: selectedWorkerForDetails.phone || 'No Phone Registered',
-                icon: <Phone size={14} className="text-purple-400" />,
+                icon: <Phone size={14} style={{ color: 'var(--color-charcoal)' }} />,
               },
               {
                 label: 'Joining Date',

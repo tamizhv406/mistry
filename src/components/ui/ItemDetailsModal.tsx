@@ -85,7 +85,7 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
     success: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
     warning: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
     danger: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-    info: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    info: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
     neutral: 'bg-slate-700/50 text-slate-300 border-slate-600',
   };
 
@@ -215,14 +215,19 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
                     </div>
 
                     {/* Extra Paid (Advance) */}
-                    <div className="rounded-lg bg-sky-950/40 px-3 py-2 border border-sky-800/40">
-                      <span className="text-[10px] font-semibold uppercase text-sky-400">
+                    <div
+                      className="rounded-lg px-3 py-2"
+                      style={{
+                        backgroundColor: fin.extraPaid > 0 ? 'rgba(249, 115, 22, 0.16)' : 'rgba(55, 65, 81, 0.45)',
+                        border: fin.extraPaid > 0 ? '1px solid rgba(249, 115, 22, 0.45)' : '1px solid rgba(75, 85, 99, 0.6)',
+                      }}
+                    >
+                      <span className="text-[10px] font-semibold uppercase" style={{ color: '#FDBA74' }}>
                         Extra Paid
                       </span>
                       <div
-                        className={`text-sm font-extrabold mt-0.5 ${
-                          fin.extraPaid > 0 ? 'text-sky-400' : 'text-slate-400'
-                        }`}
+                        className="text-sm font-extrabold mt-0.5"
+                        style={{ color: fin.extraPaid > 0 ? '#FED7AA' : '#D1D5DB' }}
                       >
                         ₹{fin.extraPaid.toLocaleString('en-IN')}
                       </div>

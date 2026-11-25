@@ -135,35 +135,31 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 className={`btn btn-sm ${currentView === 'admin' ? 'btn-secondary' : 'btn-outline'}`}
                 style={{
-                  color: isSuperAdmin(user) ? '#fde047' : '#c7d2fe',
-                  borderColor: isSuperAdmin(user) ? '#eab308' : '#6366f1',
+                  color: isSuperAdmin(user) ? '#FDE047' : '#FDBA74',
+                  borderColor: isSuperAdmin(user) ? 'var(--color-warning)' : 'var(--color-primary)',
                   background: currentView === 'admin'
-                    ? isSuperAdmin(user)
-                      ? 'rgba(234, 179, 8, 0.25)'
-                      : 'rgba(99, 102, 241, 0.25)'
-                    : isSuperAdmin(user)
-                    ? 'rgba(234, 179, 8, 0.1)'
-                    : 'rgba(99, 102, 241, 0.1)',
+                    ? 'rgba(249, 115, 22, 0.24)'
+                    : 'rgba(249, 115, 22, 0.12)',
                   fontWeight: 700,
                 }}
                 onClick={() => onNavigate('admin')}
               >
-                <ShieldCheck size={16} color={isSuperAdmin(user) ? '#facc15' : '#818cf8'} />
+                <ShieldCheck size={16} color={isSuperAdmin(user) ? '#FACC15' : 'var(--color-primary)'} />
                 <span>{isSuperAdmin(user) ? '👑 Super Admin' : 'Admin Portal'}</span>
               </button>
             )}
 
             <button
               className={`btn btn-sm ${currentView === 'trash' ? 'btn-secondary' : 'btn-outline'}`}
-              style={{ color: '#ffffff', borderColor: '#334155', position: 'relative' }}
+              style={{ color: '#ffffff', borderColor: '#374151', position: 'relative' }}
               onClick={() => onNavigate('trash')}
             >
-              <Trash2 size={16} color={trashCount > 0 ? '#f59e0b' : '#ffffff'} />
+              <Trash2 size={16} color={trashCount > 0 ? 'var(--color-warning)' : '#ffffff'} />
               <span>Recycle Bin</span>
               {trashCount > 0 && (
                 <span
                   style={{
-                    backgroundColor: '#ef4444',
+                    backgroundColor: 'var(--color-danger)',
                     color: '#ffffff',
                     fontSize: '0.72rem',
                     fontWeight: 700,
@@ -179,7 +175,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               className={`btn btn-sm ${currentView === 'backup' ? 'btn-secondary' : 'btn-outline'}`}
-              style={{ color: '#ffffff', borderColor: '#334155' }}
+              style={{ color: '#ffffff', borderColor: '#374151' }}
               onClick={() => onNavigate('backup')}
             >
               <Database size={16} />
@@ -199,7 +195,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   alignItems: 'center',
                   gap: '8px',
                   paddingLeft: '8px',
-                  borderLeft: '1px solid #334155',
+                  borderLeft: '1px solid #374151',
                 }}
               >
                 <div
@@ -208,11 +204,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                     height: '32px',
                     borderRadius: '50%',
                     backgroundColor: (user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
-                      ? '#475569'
+                      ? '#4B5563'
                       : isAdmin(user)
-                      ? '#6366f1'
-                      : '#0284c7',
-                    color: '#ffffff',
+                      ? 'var(--color-primary-hover)'
+                      : 'var(--color-primary)',
+                    color: (user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user') ? '#FFFFFF' : 'var(--color-on-primary)',
                     fontWeight: 800,
                     fontSize: '0.88rem',
                     display: 'flex',
@@ -233,7 +229,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     style={{
                       fontSize: '0.82rem',
                       fontWeight: 700,
-                      color: '#f8fafc',
+                      color: '#FAFAF9',
                       whiteSpace: 'nowrap',
                     }}
                   >
@@ -245,12 +241,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     style={{
                       fontSize: '0.7rem',
                       color: (user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user')
-                        ? '#94a3b8'
+                        ? '#D1D5DB'
                         : isSuperAdmin(user)
-                        ? '#fde047'
-                        : user.role === 'SUB_ADMIN'
-                        ? '#c4b5fd'
-                        : '#38bdf8',
+                        ? '#FDE047'
+                        : '#FDBA74',
                       fontWeight: 600,
                     }}
                   >
@@ -267,22 +261,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
                 {(user.isLocal || user.id === 'local_builder' || user.id === 'local-builder-user') ? (
                   <button
-                    className="btn btn-sm"
+                    className="btn btn-sm btn-primary"
                     onClick={() => onNavigate('login')}
                     title="Sign in with Phone OTP or Google to sync with Supabase Cloud"
-                    style={{
-                      backgroundColor: '#0284c7',
-                      color: '#ffffff',
-                      border: 'none',
-                      padding: '5px 10px',
-                      marginLeft: '6px',
-                      borderRadius: '8px',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                    }}
+                    style={{ marginLeft: '6px' }}
                   >
                     <span>☁ Cloud Sign In</span>
                   </button>
@@ -293,8 +275,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                       onClick={onLogout}
                       title={`Sign out of ${APP_NAME}`}
                       style={{
-                        color: '#ef4444',
-                        borderColor: '#475569',
+                        color: 'var(--color-danger)',
+                        borderColor: '#4B5563',
                         padding: '4px 8px',
                         marginLeft: '4px',
                       }}
@@ -331,10 +313,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="mobile-user-avatar"
                 style={{
                   backgroundColor: isSuperAdmin(user)
-                    ? '#f59e0b'
+                    ? 'var(--color-warning)'
                     : isAdmin(user)
-                    ? '#6366f1'
-                    : '#0ea5e9',
+                    ? 'var(--color-primary-hover)'
+                    : 'var(--color-primary)',
+                  color: 'var(--color-on-primary)',
                 }}
               >
                 {isSuperAdmin(user) ? '👑' : user.fullName ? user.fullName[0].toUpperCase() : 'U'}

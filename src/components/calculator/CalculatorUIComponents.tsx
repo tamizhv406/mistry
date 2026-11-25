@@ -24,11 +24,11 @@ export const CalculatorSection: React.FC<CalculatorSectionProps> = ({
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   const badgeStyles = {
-    blue: 'background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;',
-    green: 'background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0;',
-    amber: 'background: #fffbeb; color: #b45309; border: 1px solid #fde68a;',
-    slate: 'background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1;',
-    purple: 'background: #faf5ff; color: #6b21a8; border: 1px solid #e9d5ff;',
+    blue: 'background: var(--color-primary-soft, #FFF7ED); color: var(--color-primary-text, #9A3412); border: 1px solid var(--color-primary-border, #FDBA74);',
+    green: 'background: var(--color-success-soft, #DCFCE7); color: var(--color-success-text, #166534); border: 1px solid var(--color-success-border, #86EFAC);',
+    amber: 'background: var(--color-warning-soft, #FEF3C7); color: var(--color-warning-text, #92400E); border: 1px solid var(--color-warning-border, #FDE68A);',
+    slate: 'background: var(--color-bg, #FAFAF9); color: var(--color-charcoal, #1F2937); border: 1px solid var(--color-border-strong, #D6D3D1);',
+    purple: 'background: var(--color-charcoal-soft, #F3F4F6); color: var(--color-charcoal, #1F2937); border: 1px solid var(--color-border-strong, #D6D3D1);',
   }[badgeTone];
 
   return (
@@ -48,8 +48,8 @@ export const CalculatorSection: React.FC<CalculatorSectionProps> = ({
                 width: 28,
                 height: 28,
                 borderRadius: 8,
-                background: '#f1f5f9',
-                color: '#4f46e5',
+                background: 'var(--color-primary-soft)',
+                color: 'var(--color-primary-text)',
                 flexShrink: 0,
               }}
             >

@@ -242,10 +242,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   if (!stats) {
     return (
       <div className="erp-dashboard-container">
-        <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--erp-text-muted)' }}>
-          <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827' }}>Loading {APP_NAME}...</h3>
-          <p style={{ fontSize: '0.85rem' }}>Aggregating live projects, workforce ledgers, and inventory balances...</p>
+        <div style={{ padding: '80px 20px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          <div className="spinner" style={{ margin: '0 auto 16px', width: '32px', height: '32px', border: '3px solid var(--color-border)', borderTopColor: 'var(--color-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--color-charcoal)' }}>Loading {APP_NAME}...</h3>
+          <p style={{ fontSize: '0.88rem' }}>Aggregating live projects, workforce ledgers, and inventory balances...</p>
         </div>
       </div>
     );
@@ -275,11 +275,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {isAdmin(user) && (
         <div
           style={{
-            background: 'linear-gradient(135deg, #FFFBEB 0%, #FFFFFF 100%)',
-            border: '1px solid #FCD34D',
+            background: 'linear-gradient(135deg, var(--color-warning-soft) 0%, var(--color-surface) 100%)',
+            border: '1px solid var(--color-warning-border)',
             borderRadius: '16px',
             padding: '16px 20px',
-            boxShadow: 'var(--erp-shadow-sm)',
+            boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -293,12 +293,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 width: '42px',
                 height: '42px',
                 borderRadius: '12px',
-                backgroundColor: '#FEF3C7',
-                border: '1px solid #FCD34D',
+                backgroundColor: 'var(--color-warning-soft)',
+                border: '1px solid var(--color-warning-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#B45309',
+                color: 'var(--color-warning-text)',
                 flexShrink: 0,
               }}
             >
@@ -306,14 +306,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <strong style={{ color: '#92400E', fontSize: '0.95rem', fontWeight: 800 }}>
+                <strong style={{ color: 'var(--color-warning-text)', fontSize: '0.95rem', fontWeight: 800 }}>
                   Real Admin Master Access Active
                 </strong>
                 <span
                   style={{
-                    backgroundColor: '#FEF3C7',
-                    color: '#92400E',
-                    fontSize: '0.68rem',
+                    backgroundColor: 'var(--color-warning-soft)',
+                    color: 'var(--color-warning-text)',
+                    fontSize: '0.72rem',
                     padding: '2px 8px',
                     borderRadius: '10px',
                     fontWeight: 700,
@@ -323,7 +323,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   Full Cross-Contractor Oversight
                 </span>
               </div>
-              <p style={{ color: '#475569', fontSize: '0.8rem', margin: '2px 0 0 0' }}>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.84rem', margin: '2px 0 0 0' }}>
                 Unrestricted oversight across all registered mistries, construction sites, material inventories, and financial ledgers.
               </p>
             </div>
@@ -332,10 +332,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
               style={{
-                color: '#1D4ED8',
-                fontSize: '0.78rem',
-                backgroundColor: '#EFF6FF',
-                border: '1px solid #DBEAFE',
+                color: 'var(--color-charcoal)',
+                fontSize: '0.82rem',
+                backgroundColor: 'var(--color-bg)',
+                border: '1px solid var(--color-border)',
                 padding: '4px 12px',
                 borderRadius: '20px',
                 fontWeight: 600,
@@ -357,7 +357,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* 4.5 Mode Toggle: Mastri Field Mode vs Engineer Mode */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-        <div style={{ display: 'flex', gap: 6, backgroundColor: '#f1f5f9', padding: 4, borderRadius: 12, border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', gap: 6, backgroundColor: 'var(--color-bg)', padding: 4, borderRadius: 12, border: '1px solid var(--color-border)' }}>
           <button
             type="button"
             onClick={() => setDashboardMode('mastri')}
@@ -365,13 +365,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '7px 14px',
+              minHeight: 44,
+              padding: '8px 14px',
               borderRadius: 8,
-              border: dashboardMode === 'mastri' ? '1px solid #d97706' : 'none',
-              backgroundColor: dashboardMode === 'mastri' ? '#fef3c7' : 'transparent',
-              color: dashboardMode === 'mastri' ? '#92400e' : '#64748b',
+              border: dashboardMode === 'mastri' ? '1px solid var(--color-primary)' : '1px solid transparent',
+              backgroundColor: dashboardMode === 'mastri' ? 'var(--color-primary)' : 'transparent',
+              color: dashboardMode === 'mastri' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
               fontWeight: 700,
-              fontSize: '0.82rem',
+              fontSize: '0.84rem',
               cursor: 'pointer',
             }}
           >
@@ -385,13 +386,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              padding: '7px 14px',
+              minHeight: 44,
+              padding: '8px 14px',
               borderRadius: 8,
-              border: dashboardMode === 'engineer' ? '1px solid #0284c7' : 'none',
-              backgroundColor: dashboardMode === 'engineer' ? '#e0f2fe' : 'transparent',
-              color: dashboardMode === 'engineer' ? '#0369a1' : '#64748b',
+              border: dashboardMode === 'engineer' ? '1px solid var(--color-charcoal)' : '1px solid transparent',
+              backgroundColor: dashboardMode === 'engineer' ? 'var(--color-charcoal)' : 'transparent',
+              color: dashboardMode === 'engineer' ? '#ffffff' : 'var(--color-text-muted)',
               fontWeight: 700,
-              fontSize: '0.82rem',
+              fontSize: '0.84rem',
               cursor: 'pointer',
             }}
           >
@@ -399,7 +401,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
 
-        <span style={{ fontSize: '0.76rem', color: '#64748b' }}>
+        <span style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
           {dashboardMode === 'mastri' ? '⚡ அதிவேக ஆன்-சைட் மேலாண்மை வசதிகள்' : '📊 முழு CAD வரைபடம், திட்ட மதிப்பீடு & பகுப்பாய்வு'}
         </span>
       </div>
@@ -471,17 +473,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
+                minHeight: 44,
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid #f59e0b',
-                backgroundColor: '#ffffff',
-                color: '#b45309',
+                border: '1px solid var(--color-warning-border)',
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-warning-text)',
                 fontWeight: 700,
-                fontSize: '0.85rem',
+                fontSize: '0.86rem',
                 cursor: 'pointer',
               }}
             >
-              <Coffee size={18} color="#d97706" />
+              <Coffee size={18} color="var(--color-warning)" />
               <span>டீ / ஸ்நாக்ஸ் செலவு (Tea / Snacks ₹)</span>
             </button>
 
@@ -496,17 +499,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
+                minHeight: 44,
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid #0284c7',
-                backgroundColor: '#ffffff',
-                color: '#0369a1',
+                border: '1px solid var(--color-primary-border)',
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-primary-text)',
                 fontWeight: 700,
-                fontSize: '0.85rem',
+                fontSize: '0.86rem',
                 cursor: 'pointer',
               }}
             >
-              <Layers size={18} color="#0284c7" />
+              <Layers size={18} color="var(--color-primary)" />
               <span>மெட்டீரியல் வரவு (Material Inward)</span>
             </button>
 
@@ -518,17 +522,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
+                minHeight: 44,
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid #7c3aed',
-                backgroundColor: '#ffffff',
-                color: '#6d28d9',
+                border: '1px solid var(--color-border-strong)',
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-charcoal)',
                 fontWeight: 700,
-                fontSize: '0.85rem',
+                fontSize: '0.86rem',
                 cursor: 'pointer',
               }}
             >
-              <Users size={18} color="#7c3aed" />
+              <Users size={18} color="var(--color-charcoal)" />
               <span>சம்பள பட்டுவாடா & ரசீது (Wage Slips)</span>
             </button>
           </div>
@@ -619,13 +624,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="erp-kpi-card">
             <div className="erp-kpi-header">
               <span className="erp-kpi-title">Total Projects</span>
-              <div className="erp-kpi-icon-box" style={{ background: '#EFF6FF', color: '#2563EB' }}>
+              <div className="erp-kpi-icon-box" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-text)' }}>
                 <Building2 size={18} />
               </div>
             </div>
             <div className="erp-kpi-value">{stats.totalSites}</div>
             <div className="erp-kpi-footer">
-              <span className="erp-badge-pill" style={{ background: '#EFF6FF', color: '#2563EB' }}>
+              <span className="erp-badge-pill" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-text)' }}>
                 {stats.activeSites} Active
               </span>
               <span>• {stats.completedSites} Completed</span>
@@ -636,11 +641,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="erp-kpi-card">
             <div className="erp-kpi-header">
               <span className="erp-kpi-title">Active Sites</span>
-              <div className="erp-kpi-icon-box" style={{ background: '#DCFCE7', color: '#16A34A' }}>
+              <div className="erp-kpi-icon-box" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}>
                 <CheckCircle2 size={18} />
               </div>
             </div>
-            <div className="erp-kpi-value" style={{ color: '#16A34A' }}>{stats.activeSites}</div>
+            <div className="erp-kpi-value" style={{ color: 'var(--color-success)' }}>{stats.activeSites}</div>
             <div className="erp-kpi-footer">
               <span>{stats.totalSites > 0 ? Math.round((stats.activeSites / stats.totalSites) * 100) : 0}% of portfolio</span>
             </div>
@@ -650,11 +655,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="erp-kpi-card">
             <div className="erp-kpi-header">
               <span className="erp-kpi-title">Completed</span>
-              <div className="erp-kpi-icon-box" style={{ background: '#F3E8FF', color: '#9333EA' }}>
+              <div className="erp-kpi-icon-box" style={{ background: 'var(--color-charcoal-soft)', color: 'var(--color-charcoal)' }}>
                 <Building2 size={18} />
               </div>
             </div>
-            <div className="erp-kpi-value" style={{ color: '#9333EA' }}>{stats.completedSites}</div>
+            <div className="erp-kpi-value" style={{ color: 'var(--color-charcoal)' }}>{stats.completedSites}</div>
             <div className="erp-kpi-footer">
               <span>{stats.planningSites} in planning • {stats.onHoldSites} on hold</span>
             </div>
@@ -668,13 +673,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           >
             <div className="erp-kpi-header">
               <span className="erp-kpi-title">Total Workers</span>
-              <div className="erp-kpi-icon-box" style={{ background: '#FEF3C7', color: '#D97706' }}>
+              <div className="erp-kpi-icon-box" style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning-text)' }}>
                 <Users size={18} />
               </div>
             </div>
             <div className="erp-kpi-value">{stats.totalWorkers}</div>
             <div className="erp-kpi-footer">
-              <span className="erp-badge-pill" style={{ background: '#DCFCE7', color: '#15803D' }}>
+              <span className="erp-badge-pill" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success-text)' }}>
                 {stats.attendanceToday.present} Present Today
               </span>
             </div>
@@ -684,13 +689,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="erp-kpi-card">
             <div className="erp-kpi-header">
               <span className="erp-kpi-title">Total Expenses</span>
-              <div className="erp-kpi-icon-box" style={{ background: '#EFF6FF', color: '#2563EB' }}>
+              <div className="erp-kpi-icon-box" style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary-text)' }}>
                 <TrendingUp size={18} />
               </div>
             </div>
             <div className="erp-kpi-value">₹{stats.overallExpense.toLocaleString('en-IN')}</div>
             <div className="erp-kpi-footer">
-              <span style={{ color: '#16A34A', fontWeight: 600 }}>₹{stats.overallPaid.toLocaleString('en-IN')}</span> paid
+              <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>₹{stats.overallPaid.toLocaleString('en-IN')}</span> paid
             </div>
           </div>
 
@@ -740,16 +745,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderBottom: '1px solid #f1f5f9', paddingBottom: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, borderBottom: '1px solid var(--color-border-subtle)', paddingBottom: 12, marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'var(--color-primary-soft)', color: 'var(--color-primary-text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Calculator size={20} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--color-charcoal)' }}>
                 தமிழ்நாடு கட்டுமானப் பொருட்கள் விலை நிலவரம் & மதிப்பீடு (Tamil Nadu Costing)
               </h3>
-              <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#64748b' }}>
+              <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
                 சந்தையின் தற்போதைய நேரடி விலை நிலவரம் மற்றும் சதுர அடி அடிப்படையிலான உத்தேச மதிப்பீடு
               </p>
             </div>
@@ -850,37 +855,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '12px',
-          background: selectedSiteFilterId ? '#EFF6FF' : '#FFFFFF',
+          background: selectedSiteFilterId ? 'var(--color-primary-soft)' : 'var(--color-surface)',
           padding: '14px 18px',
           borderRadius: '12px',
-          border: selectedSiteFilterId ? '1.5px solid #3B82F6' : '1px solid var(--erp-border)',
+          border: selectedSiteFilterId ? '1.5px solid var(--color-primary)' : '1px solid var(--color-border)',
           marginBottom: '16px',
-          boxShadow: 'var(--erp-shadow-sm)',
+          boxShadow: 'var(--shadow-sm)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Building2 size={18} color="#2563EB" />
-            <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#1E293B' }}>
+            <Building2 size={18} color="var(--color-primary)" />
+            <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--color-charcoal)' }}>
               Select Site to Filter Dashboard:
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               type="button"
               id="dashboard-site-pill-all"
               onClick={handleClearSiteFilter}
               style={{
                 borderRadius: '20px',
-                fontSize: '0.78rem',
-                padding: '5px 14px',
+                fontSize: '0.84rem',
+                minHeight: '44px',
+                padding: '8px 16px',
                 fontWeight: 700,
                 cursor: 'pointer',
-                backgroundColor: !selectedSiteFilterId ? '#2563EB' : '#FFFFFF',
-                color: !selectedSiteFilterId ? '#FFFFFF' : '#475569',
-                border: !selectedSiteFilterId ? 'none' : '1px solid #CBD5E1',
-                boxShadow: !selectedSiteFilterId ? '0 2px 4px rgba(37,99,235,0.2)' : 'none',
+                backgroundColor: !selectedSiteFilterId ? 'var(--color-primary)' : 'var(--color-surface)',
+                color: !selectedSiteFilterId ? 'var(--color-on-primary)' : 'var(--color-charcoal)',
+                border: !selectedSiteFilterId ? '1px solid var(--color-primary)' : '1px solid var(--color-border-strong)',
+                boxShadow: !selectedSiteFilterId ? 'var(--shadow-sm)' : 'none',
               }}
             >
               All Projects ({stats.totalSites})
@@ -896,21 +902,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   onClick={() => handleSiteClick(site.id)}
                   style={{
                     borderRadius: '20px',
-                    fontSize: '0.78rem',
-                    padding: '5px 14px',
+                    fontSize: '0.84rem',
+                    minHeight: '44px',
+                    padding: '8px 16px',
                     fontWeight: 700,
                     cursor: 'pointer',
-                    backgroundColor: isSelected ? '#1D4ED8' : '#FFFFFF',
-                    color: isSelected ? '#FFFFFF' : '#334155',
-                    border: isSelected ? 'none' : '1px solid #CBD5E1',
-                    boxShadow: isSelected ? '0 2px 4px rgba(29,78,216,0.25)' : 'none',
+                    backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-surface)',
+                    color: isSelected ? 'var(--color-on-primary)' : 'var(--color-charcoal)',
+                    border: isSelected ? '1px solid var(--color-primary)' : '1px solid var(--color-border-strong)',
+                    boxShadow: isSelected ? 'var(--shadow-sm)' : 'none',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
                   }}
                 >
                   <span>{site.name}</span>
-                  {isSelected && <span style={{ fontSize: '0.7rem' }}>✓</span>}
+                  {isSelected && <span style={{ fontSize: '0.78rem' }}>✓</span>}
                 </button>
               );
             })}
@@ -919,19 +926,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {selectedSiteFilterId && stats.filteredSiteName && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '0.8rem', color: '#1E40AF', fontWeight: 700 }}>
+            <span style={{ fontSize: '0.84rem', color: 'var(--color-primary-text)', fontWeight: 700 }}>
               Showing Site Data: <strong>{stats.filteredSiteName}</strong>
             </span>
             <button
               type="button"
               onClick={handleClearSiteFilter}
               style={{
-                background: '#FFFFFF',
-                border: '1px solid #BFDBFE',
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border-strong)',
                 borderRadius: '8px',
-                padding: '4px 10px',
-                fontSize: '0.75rem',
-                color: '#2563EB',
+                minHeight: '44px',
+                padding: '6px 12px',
+                fontSize: '0.82rem',
+                color: 'var(--color-charcoal)',
                 fontWeight: 600,
                 cursor: 'pointer',
               }}
@@ -958,7 +966,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             gap: '8px',
           }}
         >
-          <Building2 size={16} color="#2563EB" />
+          <Building2 size={16} color="var(--color-primary)" />
           Select Site to View Expenses (தளத்தை தேர்வு செய்க):
         </h2>
 
@@ -983,11 +991,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 id={`dashboard-site-card-select-${site.id}`}
                 type="button"
                 onClick={() => handleSiteClick(site.id)}
-                className={`flex-shrink-0 text-left p-4 rounded-xl border-2 transition-all min-w-[210px] ${
-                  isSelected
-                    ? 'border-blue-600 bg-blue-50/60 shadow-md ring-2 ring-blue-600/20'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
-                }`}
+                className="flex-shrink-0 text-left p-4 rounded-xl border-2 transition-all min-w-[210px]"
                 style={{
                   flexShrink: 0,
                   textAlign: 'left',
@@ -995,10 +999,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   borderRadius: '12px',
                   borderWidth: '2px',
                   borderStyle: 'solid',
-                  borderColor: isSelected ? '#2563EB' : '#E2E8F0',
-                  backgroundColor: isSelected ? 'rgba(239, 246, 255, 0.85)' : '#FFFFFF',
-                  boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.18)' : '0 1px 3px rgba(0,0,0,0.04)',
+                  borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border)',
+                  backgroundColor: isSelected ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+                  boxShadow: isSelected ? '0 4px 12px rgba(249, 115, 22, 0.16)' : 'var(--shadow-sm)',
                   minWidth: '210px',
+                  minHeight: '44px',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
                 }}
@@ -1008,16 +1013,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}
                 >
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
                     style={{
-                      fontSize: '10px',
+                      fontSize: '12px',
                       fontWeight: 700,
-                      padding: '2px 8px',
+                      padding: '3px 9px',
                       borderRadius: '9999px',
-                      backgroundColor: isSelected ? '#2563EB' : '#F1F5F9',
-                      color: isSelected ? '#FFFFFF' : '#475569',
+                      backgroundColor: isSelected ? 'var(--color-primary)' : 'var(--color-bg)',
+                      color: isSelected ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+                      border: isSelected ? 'none' : '1px solid var(--color-border)',
                     }}
                   >
                     {isSelected ? '✓ Selected' : 'Click to View'}
@@ -1047,7 +1050,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   className="text-xs font-semibold text-slate-700"
                   style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}
                 >
-                  Total: <span className="text-blue-700 font-bold" style={{ color: '#1D4ED8', fontWeight: 800 }}>₹{siteSum.toLocaleString('en-IN')}</span>
+                  Total: <span style={{ color: 'var(--color-charcoal)', fontWeight: 800 }}>₹{siteSum.toLocaleString('en-IN')}</span>
                 </div>
               </button>
             );
@@ -1061,11 +1064,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6"
           id="dashboard-active-site-breakdown"
           style={{
-            backgroundColor: '#FFFFFF',
+            backgroundColor: 'var(--color-surface)',
             borderRadius: '16px',
-            border: '1px solid #E2E8F0',
+            border: '1px solid var(--color-border)',
             padding: '22px',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+            boxShadow: 'var(--shadow-sm)',
             marginBottom: '24px',
           }}
         >
@@ -1077,20 +1080,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: '16px',
-              borderBottom: '1px solid #F1F5F9',
+              borderBottom: '1px solid var(--color-border-subtle)',
               paddingBottom: '16px',
               marginBottom: '16px',
             }}
           >
             <div>
               <span
-                className="text-xs font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded"
                 style={{
-                  fontSize: '0.72rem',
+                  fontSize: '0.75rem',
                   fontWeight: 800,
                   textTransform: 'uppercase',
-                  color: '#2563EB',
-                  backgroundColor: '#EFF6FF',
+                  color: 'var(--color-primary-text)',
+                  backgroundColor: 'var(--color-primary-soft)',
+                  border: '1px solid var(--color-primary-border)',
                   padding: '3px 8px',
                   borderRadius: '4px',
                   display: 'inline-block',
@@ -1247,40 +1250,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
 
               {/* View Mode Switcher */}
-              <div style={{ display: 'flex', gap: '2px', background: '#F1F5F9', padding: '2px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--color-bg)', padding: '3px', borderRadius: '10px', border: '1px solid var(--color-border)' }}>
                 <button
                   type="button"
                   onClick={() => setViewMode('table')}
                   style={{
                     border: 'none',
-                    background: viewMode === 'table' ? '#FFFFFF' : 'transparent',
-                    color: viewMode === 'table' ? '#2563EB' : '#64748B',
-                    padding: '4px 8px',
-                    borderRadius: '6px',
+                    background: viewMode === 'table' ? 'var(--color-primary)' : 'transparent',
+                    color: viewMode === 'table' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+                    minWidth: '44px',
+                    minHeight: '44px',
+                    padding: '6px 10px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
-                    boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    boxShadow: viewMode === 'table' ? 'var(--shadow-sm)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                   title="Table view"
                   aria-label="Table view"
                 >
-                  <TableIcon size={15} />
+                  <TableIcon size={16} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode('cards')}
                   style={{
                     border: 'none',
-                    background: viewMode === 'cards' ? '#FFFFFF' : 'transparent',
-                    color: viewMode === 'cards' ? '#2563EB' : '#64748B',
-                    padding: '4px 8px',
-                    borderRadius: '6px',
+                    background: viewMode === 'cards' ? 'var(--color-primary)' : 'transparent',
+                    color: viewMode === 'cards' ? 'var(--color-on-primary)' : 'var(--color-text-muted)',
+                    minWidth: '44px',
+                    minHeight: '44px',
+                    padding: '6px 10px',
+                    borderRadius: '8px',
                     cursor: 'pointer',
-                    boxShadow: viewMode === 'cards' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                    boxShadow: viewMode === 'cards' ? 'var(--shadow-sm)' : 'none',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                   title="Card view"
                   aria-label="Card view"
                 >
-                  <LayoutGrid size={15} />
+                  <LayoutGrid size={16} />
                 </button>
               </div>
             </div>
@@ -1390,8 +1403,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         }}
                         style={{
                           cursor: 'pointer',
-                          backgroundColor: isSelected ? '#EFF6FF' : undefined,
-                          borderLeft: isSelected ? '4px solid #2563EB' : undefined,
+                          backgroundColor: isSelected ? 'var(--color-primary-soft)' : undefined,
+                          borderLeft: isSelected ? '4px solid var(--color-primary)' : undefined,
                         }}
                       >
                         <td>
@@ -1401,8 +1414,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 width: '36px',
                                 height: '36px',
                                 borderRadius: '8px',
-                                background: isSelected ? '#DBEAFE' : '#EFF6FF',
-                                color: '#2563EB',
+                                background: isSelected ? 'var(--color-primary)' : 'var(--color-primary-soft)',
+                                color: isSelected ? 'var(--color-on-primary)' : 'var(--color-primary-text)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -1414,10 +1427,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               {site.name[0].toUpperCase()}
                             </div>
                             <div style={{ minWidth: 0 }}>
-                              <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', color: '#111827' }}>
+                              <strong style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', color: 'var(--color-charcoal)' }}>
                                 {site.name}
                                 {isSelected && (
-                                  <span style={{ fontSize: '0.68rem', backgroundColor: '#2563EB', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                  <span style={{ fontSize: '0.72rem', backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
                                     Active Filter
                                   </span>
                                 )}
@@ -1495,7 +1508,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               className="btn btn-sm"
                               title="Open Project Operations"
                               onClick={() => onOpenSite(site.id)}
-                              style={{ padding: '0 10px', height: '32px', borderRadius: '8px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#2563EB', fontWeight: 700, fontSize: '0.78rem' }}
+                              style={{ minHeight: '44px', padding: '0 12px', borderRadius: '8px', background: 'var(--color-primary-soft)', border: '1px solid var(--color-primary-border)', color: 'var(--color-primary-text)', fontWeight: 700, fontSize: '0.82rem' }}
                             >
                               Open
                             </button>
@@ -1523,66 +1536,66 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       if (onSelectSite) onSelectSite(next);
                     }}
                     style={{
-                      background: isSelected ? '#EFF6FF' : '#FFFFFF',
-                      border: isSelected ? '2px solid #2563EB' : '1px solid var(--erp-border)',
+                      background: isSelected ? 'var(--color-primary-soft)' : 'var(--color-surface)',
+                      border: isSelected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
                       borderRadius: '12px',
                       padding: '16px',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
-                      boxShadow: isSelected ? '0 4px 12px rgba(37,99,235,0.15)' : 'var(--erp-shadow-sm)',
+                      boxShadow: isSelected ? '0 4px 12px rgba(249, 115, 22, 0.16)' : 'var(--shadow-sm)',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.boxShadow = isSelected ? '0 6px 16px rgba(37,99,235,0.2)' : 'var(--erp-shadow-md)'}
-                    onMouseLeave={e => e.currentTarget.style.boxShadow = isSelected ? '0 4px 12px rgba(37,99,235,0.15)' : 'var(--erp-shadow-sm)'}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = isSelected ? '0 6px 16px rgba(249, 115, 22, 0.22)' : 'var(--shadow-md)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = isSelected ? '0 4px 12px rgba(249, 115, 22, 0.16)' : 'var(--shadow-sm)'}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span className={`status-badge ${statusClass}`}>{site.status}</span>
                         {isSelected && (
-                          <span style={{ fontSize: '0.68rem', backgroundColor: '#2563EB', color: '#FFFFFF', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                          <span style={{ fontSize: '0.72rem', backgroundColor: 'var(--color-primary)', color: 'var(--color-on-primary)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
                             Active Filter
                           </span>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: '4px' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                         <button
                           type="button"
                           className="btn btn-sm"
                           title="Open Project Page"
                           onClick={() => onOpenSite(site.id)}
-                          style={{ padding: '2px 8px', height: '26px', borderRadius: '6px', background: '#EFF6FF', border: '1px solid #BFDBFE', color: '#2563EB', fontWeight: 700, fontSize: '0.72rem' }}
+                          style={{ minHeight: '44px', padding: '0 12px', borderRadius: '8px', background: 'var(--color-primary-soft)', border: '1px solid var(--color-primary-border)', color: 'var(--color-primary-text)', fontWeight: 700, fontSize: '0.8rem' }}
                         >
                           Open
                         </button>
-                        <button type="button" onClick={() => onEditSite(site)} style={{ border: 'none', background: 'none', color: '#64748B', cursor: 'pointer', padding: '4px' }}>
-                          <Edit2 size={14} />
+                        <button type="button" onClick={() => onEditSite(site)} aria-label="Edit project" style={{ border: 'none', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', minWidth: '44px', minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}>
+                          <Edit2 size={15} />
                         </button>
-                        <button type="button" onClick={() => onDeleteSiteToTrash(site)} style={{ border: 'none', background: 'none', color: '#DC2626', cursor: 'pointer', padding: '4px' }}>
-                          <Trash2 size={14} />
+                        <button type="button" onClick={() => onDeleteSiteToTrash(site)} aria-label="Delete project" style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', minWidth: '44px', minHeight: '44px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}>
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </div>
 
-                    <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#111827', margin: '0 0 4px' }}>
+                    <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-charcoal)', margin: '0 0 4px' }}>
                       {site.name}
                     </h4>
-                    <p style={{ fontSize: '0.78rem', color: '#64748B', margin: '0 0 4px' }}>
+                    <p style={{ fontSize: '0.84rem', color: 'var(--color-text-muted)', margin: '0 0 4px' }}>
                       {site.area || site.address || site.buildingType} • {site.ownerName}
                     </p>
-                    <p style={{ fontSize: '0.72rem', color: '#64748B', margin: '0 0 10px' }}>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', margin: '0 0 10px' }}>
                       {formatTargetDate(site.expectedCompletionDate || site.expectedCompletion || site.targetDate)}
                     </p>
 
                     <div style={{ marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', color: '#475569', marginBottom: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
                         <span>Progress</span>
                         <strong>{progressPercentage}%</strong>
                       </div>
-                      <div style={{ width: '100%', height: '6px', background: '#F1F5F9', borderRadius: '999px', overflow: 'hidden' }}>
-                        <div style={{ width: `${progressPercentage}%`, height: '100%', background: '#2563EB' }} />
+                      <div style={{ width: '100%', height: '6px', background: 'var(--color-border-subtle)', borderRadius: '999px', overflow: 'hidden' }}>
+                        <div style={{ width: `${progressPercentage}%`, height: '100%', background: 'var(--color-primary)' }} />
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: isSelected ? '#DBEAFE' : '#F8FAFC', padding: '8px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', background: isSelected ? 'var(--color-surface)' : 'var(--color-bg)', border: '1px solid var(--color-border)', padding: '8px', borderRadius: '8px', textAlign: 'center' }}>
                       <div>
                         <span style={{ fontSize: '0.65rem', color: '#64748B', display: 'block' }}>Spent</span>
                         <strong style={{ fontSize: '0.78rem', color: '#111827' }}>₹{totalExpense.toLocaleString('en-IN')}</strong>
@@ -1647,10 +1660,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <div className="erp-fin-box">
               <span className="erp-fin-label">Estimated Budget</span>
-              <span className="erp-fin-amount" style={{ color: stats.totalBudget > 0 ? '#2563EB' : '#94A3B8' }}>
+              <span className="erp-fin-amount" style={{ color: stats.totalBudget > 0 ? 'var(--color-charcoal)' : 'var(--color-text-muted)' }}>
                 {stats.totalBudget > 0 ? `₹${stats.totalBudget.toLocaleString('en-IN')}` : 'Unset'}
               </span>
-              <span style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '4px' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
                 {stats.remainingBudget !== undefined ? `Rem: ₹${stats.remainingBudget.toLocaleString('en-IN')}` : 'From Building Calculator'}
               </span>
             </div>
@@ -1660,7 +1673,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="erp-chart-box">
             <div className="erp-chart-header">
               <span className="erp-chart-title">Monthly Expenditure Trends (Past 6 Months)</span>
-              <span style={{ fontSize: '0.72rem', color: '#64748B' }}>Indian Rupees (₹)</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-text-muted)' }}>Indian Rupees (₹)</span>
             </div>
 
             <div style={{ height: '140px', position: 'relative', display: 'flex', alignItems: 'flex-end', gap: '10px', paddingTop: '20px' }}>
@@ -1668,7 +1681,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 const heightPct = maxMonthlyExpense > 0 ? Math.max(8, Math.round((m.expense / maxMonthlyExpense) * 100)) : 8;
                 return (
                   <div key={m.monthKey} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-text-secondary)', marginBottom: '4px' }}>
                       {m.expense > 0 ? `₹${(m.expense / 1000).toFixed(0)}k` : '₹0'}
                     </span>
                     <div
@@ -1676,13 +1689,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         width: '100%',
                         maxWidth: '38px',
                         height: `${heightPct}%`,
-                        background: idx === stats.monthlyTrends.length - 1 ? 'linear-gradient(180deg, #2563EB 0%, #1D4ED8 100%)' : '#E2E8F0',
+                        background: idx === stats.monthlyTrends.length - 1 ? 'linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-hover) 100%)' : 'var(--color-border)',
                         borderRadius: '6px 6px 2px 2px',
                         transition: 'height 0.3s ease',
                       }}
                       title={`${m.label}: ₹${m.expense.toLocaleString('en-IN')} (Paid: ₹${m.paid.toLocaleString('en-IN')})`}
                     />
-                    <span style={{ fontSize: '0.7rem', color: '#64748B', marginTop: '6px', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)', marginTop: '6px', whiteSpace: 'nowrap' }}>
                       {m.label}
                     </span>
                   </div>
