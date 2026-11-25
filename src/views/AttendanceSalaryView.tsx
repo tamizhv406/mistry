@@ -45,6 +45,7 @@ import { WorkerModal } from '../components/WorkerModal';
 import { AdvanceModal } from '../components/AdvanceModal';
 import { SalaryPaymentModal } from '../components/SalaryPaymentModal';
 import { WageSlipModal } from '../components/WageSlipModal';
+import { WorkerAttendancePdfModal } from '../components/WorkerAttendancePdfModal';
 import { useLanguage } from '../services/i18n';
 import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
 import { APP_NAME } from '../config/brand';
@@ -90,6 +91,8 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   const [lastPaidWorkerId, setLastPaidWorkerId] = useState<string | null>(null);
   const [isWageSlipModalOpen, setIsWageSlipModalOpen] = useState<boolean>(false);
   const [selectedWorkerForSlip, setSelectedWorkerForSlip] = useState<LabourWorker | null>(null);
+  const [isAttendancePdfModalOpen, setIsAttendancePdfModalOpen] = useState<boolean>(false);
+  const [pdfWorkerId, setPdfWorkerId] = useState<string | null>(null);
 
   const handlePaymentSuccess = (msg: string, workerId?: string) => {
     onNotify(msg, 'success');
@@ -270,6 +273,17 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
 
         {/* Global Action Buttons */}
         <div className="erp-view-actions">
+          <button
+            onClick={() => {
+              setPdfWorkerId(selectedWorkerForAction);
+              setIsAttendancePdfModalOpen(true);
+            }}
+            className="erp-btn-secondary"
+          >
+            <FileText size={16} color="var(--color-primary)" />
+            <span>Attendance PDF</span>
+          </button>
+
           <button
             onClick={handleExportPDF}
             className="erp-btn-secondary"
@@ -804,6 +818,18 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                               <Printer size={14} />
                               <span>Slip</span>
                             </button>
+                            <button
+                              id={`salary-pdf-btn-${w.id}`}
+                              onClick={() => {
+                                setPdfWorkerId(w.id);
+                                setIsAttendancePdfModalOpen(true);
+                              }}
+                              className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
+                              title="Monthly Attendance & Wage PDF"
+                            >
+                              <FileText size={14} />
+                              <span>PDF</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -910,6 +936,18 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                       >
                         <Printer size={14} />
                         <span>Slip</span>
+                      </button>
+                      <button
+                        type="button"
+                        id={`mobile-attendance-pdf-${w.id}`}
+                        onClick={() => {
+                          setPdfWorkerId(w.id);
+                          setIsAttendancePdfModalOpen(true);
+                        }}
+                        className="erp-btn-table-action erp-btn-table-action--charcoal-outline"
+                      >
+                        <FileText size={14} />
+                        <span>PDF</span>
                       </button>
                     </div>
                   </div>
@@ -1125,10 +1163,32 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           setSelectedWorkerForSlip(null);
         }}
         worker={selectedWorkerForSlip}
+        projectId={selectedSiteId}
         siteName={sites.find(s => s.id === selectedSiteId)?.name || `${APP_NAME} Project`}
+        month={selectedMonth}
+        leavePaid={activeSite?.leavePaid}
         attendance={attendance}
         advances={advances}
         salaryPayments={salaryPayments}
+      />
+
+      {/* Monthly Worker Attendance & Wage PDF Modal */}
+      <WorkerAttendancePdfModal
+        isOpen={isAttendancePdfModalOpen}
+        onClose={() => {
+          setIsAttendancePdfModalOpen(false);
+          setPdfWorkerId(null);
+        }}
+        siteId={selectedSiteId}
+        siteName={activeSite?.name || `${APP_NAME} Project`}
+        leavePaid={activeSite?.leavePaid}
+        workers={workers}
+        attendance={attendance}
+        advances={advances}
+        salaryPayments={salaryPayments}
+        initialWorkerId={pdfWorkerId || selectedWorkerForAction}
+        initialMonth={selectedMonth}
+        onNotify={onNotify}
       />
     </div>
   );

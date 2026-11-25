@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CalendarDays, CheckCheck, History, MoreVertical, UserPlus, Users, Wallet } from 'lucide-react';
+import { CalendarDays, CheckCheck, FileText, History, MoreVertical, UserPlus, Users, Wallet } from 'lucide-react';
 import { db } from '../../db/db';
 import type { AttendanceStatus, LabourWorker, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
@@ -10,9 +10,10 @@ import {
 } from '../../domain/salary';
 import { clearAttendance, markAllPresent, markAttendance, setLeavePolicy } from '../../services/records';
 import { useLanguage } from '../../services/i18n';
-import { addDays, formatDateTime, formatDay, formatDayLong, todayKey } from '../../utils/datetime';
+import { addDays, formatDateTime, formatDay, formatDayLong, monthKeyOf, todayKey } from '../../utils/datetime';
 import { formatINR, formatQty } from '../../utils/money';
 import { Badge, Empty, Field, Loading, Note, Page, SearchBox, Segmented, Sheet } from '../../components/mobile/kit';
+import { WorkerAttendancePdfModal } from '../../components/WorkerAttendancePdfModal';
 import '../../styles/materials-mobile.css';
 
 type Notify = (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -91,6 +92,7 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
   const [reason, setReason] = useState('');
   const [logOpen, setLogOpen] = useState(false);
   const [salaryOpen, setSalaryOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   const setDate = (d: string) => { setDateState(d); setShown({}); };
   const label = (s: AttendanceStatus | undefined | null) => (s ? statusLabel(s) : t('at_not_marked', 'Not marked'));
@@ -248,6 +250,13 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
               <span className="m-row-icon"><Wallet size={20} /></span>
               <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>{t('at_salary', 'Salary & leave rule')}</span></span>
             </button>
+            <button type="button" className="m-row" onClick={() => setPdfOpen(true)}>
+              <span className="m-row-icon"><FileText size={20} /></span>
+              <span className="m-row-main">
+                <span className="m-row-title" style={{ display: 'block' }}>Worker Attendance PDF</span>
+                <span className="m-row-sub">Day-by-day monthly report &amp; net pay</span>
+              </span>
+            </button>
           </div>
         </>
       )}
@@ -342,6 +351,20 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
           </div>
         )}
       </Sheet>
+
+      <WorkerAttendancePdfModal
+        isOpen={pdfOpen}
+        onClose={() => setPdfOpen(false)}
+        siteId={siteId}
+        siteName={site.name}
+        leavePaid={site.leavePaid}
+        workers={workers}
+        attendance={project.attendance}
+        advances={project.advances}
+        salaryPayments={project.salaryPayments}
+        initialMonth={monthKeyOf(date)}
+        onNotify={onNotify}
+      />
     </Page>
   );
 };

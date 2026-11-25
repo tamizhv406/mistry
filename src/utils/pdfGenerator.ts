@@ -1,4 +1,5 @@
 import type { MultiTierEstimateResult } from '../domain/buildingCalculator/multiTierEstimator';
+import type { WorkerMonthlyStatement } from '../domain/salary';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { APP_NAME } from '../config/brand';
@@ -914,5 +915,484 @@ export function downloadFile(blob: Blob, filename: string): void {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   }, 300);
+}
+
+function formatPdfMoney(amount: number): string {
+  const rounded = Math.round((Number(amount) || 0) * 100) / 100;
+  return `Rs. ${rounded.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+}
+
+function formatDayShortForPdf(dayKey: string): string {
+  const parts = dayKey.split('-');
+  if (parts.length !== 3) return dayKey;
+  return `${parts[2]}-${parts[1]}-${parts[0]}`;
+}
+
+function escapeHtml(text: string): string {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function workerMonthlyPdfFilename(statement: Pick<WorkerMonthlyStatement, 'workerName' | 'month'>): string {
+  const safeWorker = (statement.workerName || 'worker')
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32) || 'worker';
+  const safeMonth = (statement.month || 'month').replace(/[^0-9-]/g, '');
+  return `${APP_NAME}_Attendance_${safeWorker}_${safeMonth}.pdf`;
+}
+
+/**
+ * Generates an A4 PDF report for a single worker's monthly day-by-day attendance and wage settlement.
+ * Uses jsPDF + jspdf-autotable with the SiteMistry Orange (#F97316) & Charcoal (#1F2937) theme.
+ */
+export function generateWorkerMonthlyAttendancePdfBlob(statement: WorkerMonthlyStatement): Blob {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 32;
+  const contentWidth = pageWidth - margin * 2;
+  const generatedStr = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // Top Header Banner (Charcoal #1F2937 + Orange #F97316 accent bar)
+  doc.setFillColor(31, 41, 55);
+  doc.rect(margin, margin, contentWidth, 56, 'F');
+  doc.setFillColor(249, 115, 22);
+  doc.rect(margin, margin, contentWidth, 4, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(`${APP_NAME.toUpperCase()} - WORKER ATTENDANCE & WAGE STATEMENT`, margin + 14, margin + 24);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(229, 231, 235);
+  doc.text(`Project: ${statement.projectName}  |  Month: ${statement.monthLabel} (${statement.month})`, margin + 14, margin + 40);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(249, 115, 22);
+  doc.text(`Generated: ${generatedStr}`, pageWidth - margin - 14, margin + 40, { align: 'right' });
+
+  // Worker Details Card (#FAFAF9 fill, #E7E5E4 border)
+  let y = margin + 66;
+  doc.setFillColor(250, 250, 249);
+  doc.setDrawColor(231, 229, 228);
+  doc.roundedRect(margin, y, contentWidth, 48, 4, 4, 'FD');
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(87, 83, 78);
+  doc.text('WORKER NAME', margin + 12, y + 14);
+  doc.text('TRADE / ROLE', margin + 190, y + 14);
+  doc.text('DAILY WAGE RATE', margin + 330, y + 14);
+  doc.text('LEAVE POLICY', margin + 445, y + 14);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(31, 41, 55);
+  doc.text(statement.workerName, margin + 12, y + 30);
+  doc.text(statement.workerRole, margin + 190, y + 30);
+  doc.text(`${formatPdfMoney(statement.dailyWage)}/day`, margin + 330, y + 30);
+  doc.text(statement.leavePaid ? 'Paid Leave' : 'Unpaid Leave', margin + 445, y + 30);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(87, 83, 78);
+  doc.text(
+    `Worker ID: #${statement.workerId.slice(-6).toUpperCase()}${statement.workerPhone ? `  |  Phone: ${statement.workerPhone}` : ''}`,
+    margin + 12,
+    y + 42,
+  );
+
+  // Summary Counts Bar
+  y += 58;
+  const kpis: Array<{ label: string; value: string; color: [number, number, number] }> = [
+    { label: 'Present', value: String(statement.counts.present), color: [22, 163, 74] },
+    { label: 'Half Day', value: String(statement.counts.half_day), color: [245, 158, 11] },
+    { label: 'Overtime', value: String(statement.counts.overtime), color: [245, 158, 11] },
+    { label: 'Leave', value: String(statement.counts.leave), color: [31, 41, 55] },
+    { label: 'Absent', value: String(statement.counts.absent), color: [220, 38, 38] },
+    { label: 'Payable Days', value: String(statement.workedDayEquivalents), color: [249, 115, 22] },
+  ];
+  const boxGap = 6;
+  const boxW = (contentWidth - boxGap * (kpis.length - 1)) / kpis.length;
+  kpis.forEach((kpi, idx) => {
+    const bx = margin + idx * (boxW + boxGap);
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(231, 229, 228);
+    doc.roundedRect(bx, y, boxW, 34, 3, 3, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(87, 83, 78);
+    doc.text(kpi.label, bx + boxW / 2, y + 12, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(kpi.color[0], kpi.color[1], kpi.color[2]);
+    doc.text(kpi.value, bx + boxW / 2, y + 27, { align: 'center' });
+  });
+
+  // Day-by-day attendance log table (01 through 28/29/30/31)
+  y += 44;
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin, top: margin, bottom: 44 },
+    head: [['Date', 'Day', 'Status', 'Factor', 'Wage Earned', 'Notes / Remarks']],
+    body: statement.days.map(row => {
+      const noteParts: string[] = [];
+      if (row.notes) noteParts.push(row.notes);
+      if (row.correctionCount > 0) {
+        noteParts.push(`${row.correctionCount} edit${row.correctionCount === 1 ? '' : 's'}`);
+      }
+      return [
+        formatDayShortForPdf(row.date),
+        row.weekdayShort,
+        row.statusLabel,
+        row.status === 'unmarked' ? '-' : row.dayValue.toFixed(1),
+        row.status === 'unmarked' ? '-' : formatPdfMoney(row.earnedAmount),
+        noteParts.join(' · ') || '-',
+      ];
+    }),
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.6,
+      cellPadding: { top: 2.8, right: 5, bottom: 2.8, left: 5 },
+      textColor: [31, 41, 55],
+      lineColor: [231, 229, 228],
+      lineWidth: 0.4,
+    },
+    headStyles: {
+      fillColor: [31, 41, 55],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    alternateRowStyles: {
+      fillColor: [250, 250, 249],
+    },
+    columnStyles: {
+      0: { cellWidth: 66 },
+      1: { cellWidth: 38 },
+      2: { cellWidth: 88, fontStyle: 'bold' },
+      3: { cellWidth: 44, halign: 'right' },
+      4: { cellWidth: 78, halign: 'right' },
+      5: { cellWidth: 'auto' },
+    },
+    didParseCell: hookData => {
+      if (hookData.section !== 'body' || hookData.column.index !== 2) return;
+      const dayRow = statement.days[hookData.row.index];
+      if (!dayRow) return;
+      if (dayRow.status === 'present') {
+        hookData.cell.styles.textColor = [22, 163, 74];
+      } else if (dayRow.status === 'half_day' || dayRow.status === 'overtime') {
+        hookData.cell.styles.textColor = [245, 158, 11];
+      } else if (dayRow.status === 'absent') {
+        hookData.cell.styles.textColor = [220, 38, 38];
+      } else if (dayRow.status === 'leave') {
+        hookData.cell.styles.textColor = dayRow.dayValue > 0 ? [22, 163, 74] : [31, 41, 55];
+      } else {
+        hookData.cell.styles.textColor = [120, 113, 108];
+        hookData.cell.styles.fontStyle = 'normal';
+      }
+    },
+  });
+
+  const tableEndY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y + 360;
+  let finY = tableEndY + 14;
+  const neededBlockHeight =
+    158 +
+    (statement.advancesTaken.length > 0 ? Math.min(statement.advancesTaken.length, 4) * 11 + 14 : 0) +
+    (statement.salaryPayments.length > 0 ? Math.min(statement.salaryPayments.length, 4) * 11 + 14 : 0);
+
+  if (finY + neededBlockHeight > pageHeight - 36) {
+    doc.addPage();
+    finY = margin;
+  }
+
+  // Financial Breakdown Card
+  doc.setFillColor(31, 41, 55);
+  doc.rect(margin, finY, contentWidth, 20, 'F');
+  doc.setFillColor(249, 115, 22);
+  doc.rect(margin, finY, 4, 20, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(255, 255, 255);
+  doc.text('FINANCIAL SETTLEMENT SUMMARY', margin + 12, finY + 13);
+  finY += 20;
+
+  const summaryRows: Array<[string, string]> = [
+    ['Daily Wage Rate', `${formatPdfMoney(statement.dailyWage)} / day`],
+    [`Gross Earned Wages (${statement.workedDayEquivalents} payable days)`, formatPdfMoney(statement.grossEarned)],
+    [
+      `Recoverable Advances Taken (${statement.monthLabel})`,
+      `(-) ${formatPdfMoney(statement.totalAdvancesDeducted)}`,
+    ],
+    [
+      `Salary Already Paid (${statement.monthLabel})`,
+      `(-) ${formatPdfMoney(statement.totalSalaryPaid)}`,
+    ],
+  ];
+
+  if (statement.priorNetBalance !== 0) {
+    summaryRows.push([
+      statement.priorNetBalance > 0
+        ? 'Prior Unpaid Balance Carried In'
+        : 'Prior Excess Payment / Advance Carried In',
+      statement.priorNetBalance > 0
+        ? formatPdfMoney(statement.priorNetBalance)
+        : `(-) ${formatPdfMoney(Math.abs(statement.priorNetBalance))}`,
+    ]);
+  }
+
+  if (statement.totalNonRecoverableAdvances > 0) {
+    summaryRows.push([
+      'Non-Recoverable Grant / Gift (Not deducted)',
+      formatPdfMoney(statement.totalNonRecoverableAdvances),
+    ]);
+  }
+
+  summaryRows.push([
+    statement.monthOverpaid > 0
+      ? `Month Net Balance (Paid Ahead in ${statement.monthLabel})`
+      : `Month Net Pay Due (${statement.monthLabel})`,
+    statement.monthOverpaid > 0
+      ? `${formatPdfMoney(statement.monthOverpaid)} ahead`
+      : formatPdfMoney(statement.monthNetPay),
+  ]);
+
+  if (statement.overallPending !== statement.monthNetPay || statement.overallOverpaid !== statement.monthOverpaid) {
+    summaryRows.push([
+      statement.overallOverpaid > 0 ? 'Overall Account Position (Paid Ahead)' : 'Overall Net Balance Payable',
+      statement.overallOverpaid > 0
+        ? `${formatPdfMoney(statement.overallOverpaid)} ahead`
+        : formatPdfMoney(statement.overallPending),
+    ]);
+  }
+
+  autoTable(doc, {
+    startY: finY,
+    margin: { left: margin, right: margin, top: margin, bottom: 44 },
+    body: summaryRows,
+    styles: {
+      font: 'helvetica',
+      fontSize: 8.5,
+      cellPadding: { top: 4, right: 8, bottom: 4, left: 8 },
+      lineColor: [231, 229, 228],
+      lineWidth: 0.4,
+      textColor: [31, 41, 55],
+    },
+    columnStyles: {
+      0: { cellWidth: 'auto' },
+      1: { cellWidth: 140, halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell: hookData => {
+      if (hookData.row.index === summaryRows.length - 1 || (statement.overallPending !== statement.monthNetPay && hookData.row.index === summaryRows.length - 2)) {
+        hookData.cell.styles.fillColor = [255, 247, 237];
+        hookData.cell.styles.fontStyle = 'bold';
+        hookData.cell.styles.textColor = [154, 52, 18];
+      }
+    },
+  });
+
+  let afterFinY = ((doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? finY + 90) + 10;
+
+  if (statement.advancesTaken.length > 0 || statement.salaryPayments.length > 0) {
+    const entryLines: string[] = [];
+    for (const adv of statement.advancesTaken) {
+      entryLines.push(`Advance on ${formatDayShortForPdf(adv.date)}: ${formatPdfMoney(adv.amount)}${adv.reason ? ` (${adv.reason})` : ''}`);
+    }
+    for (const pay of statement.salaryPayments) {
+      entryLines.push(`Salary Paid on ${formatDayShortForPdf(pay.date)}: ${formatPdfMoney(pay.paidAmount)} (${pay.paymentMode || 'Cash'})`);
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(87, 83, 78);
+    entryLines.slice(0, 6).forEach(line => {
+      if (afterFinY < pageHeight - 78) {
+        doc.text(`• ${line}`, margin + 4, afterFinY);
+        afterFinY += 10;
+      }
+    });
+  }
+
+  // Signature Block
+  const sigY = Math.max(afterFinY + 18, pageHeight - 78);
+  if (sigY + 42 > pageHeight - 28) {
+    doc.addPage();
+    finY = margin + 20;
+  }
+  const drawSigY = sigY + 42 > pageHeight - 28 ? margin + 20 : sigY;
+  doc.setDrawColor(156, 163, 175);
+  doc.line(margin + 12, drawSigY + 24, margin + 195, drawSigY + 24);
+  doc.line(pageWidth - margin - 195, drawSigY + 24, pageWidth - margin - 12, drawSigY + 24);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(31, 41, 55);
+  doc.text('Worker Signature / Thumb', margin + 103, drawSigY + 35, { align: 'center' });
+  doc.text('Site Manager Signature', pageWidth - margin - 103, drawSigY + 35, { align: 'center' });
+
+  // Page footer on all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(120, 113, 108);
+    doc.text(`${APP_NAME} · Generated ${generatedStr}`, margin, pageHeight - 16);
+    doc.text(`Page ${p} of ${totalPages}`, pageWidth - margin, pageHeight - 16, { align: 'right' });
+  }
+
+  return doc.output('blob');
+}
+
+/**
+ * Builds standalone printable A4 HTML matching `generateWorkerMonthlyAttendancePdfBlob` 100%.
+ */
+export function buildWorkerMonthlyPrintHtml(statement: WorkerMonthlyStatement): string {
+  const generatedStr = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const inr = (n: number) => `₹${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  const statusColor = (status: string, value: number) => {
+    if (status === 'present') return '#16A34A';
+    if (status === 'half_day' || status === 'overtime') return '#F59E0B';
+    if (status === 'absent') return '#DC2626';
+    if (status === 'leave') return value > 0 ? '#16A34A' : '#1F2937';
+    return '#78716C';
+  };
+
+  const rowsHtml = statement.days
+    .map(
+      d => `
+      <tr>
+        <td>${escapeHtml(formatDayShortForPdf(d.date))}</td>
+        <td>${escapeHtml(d.weekdayShort)}</td>
+        <td style="font-weight:700;color:${statusColor(d.status, d.dayValue)}">${escapeHtml(d.statusLabel)}</td>
+        <td style="text-align:right">${d.status === 'unmarked' ? '—' : d.dayValue.toFixed(1)}</td>
+        <td style="text-align:right">${d.status === 'unmarked' ? '—' : escapeHtml(inr(d.earnedAmount))}</td>
+        <td>${escapeHtml(d.notes || (d.correctionCount > 0 ? `${d.correctionCount} edit(s)` : '—'))}</td>
+      </tr>`,
+    )
+    .join('');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(workerMonthlyPdfFilename(statement))}</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1F2937; margin: 0; background: #fff; font-size: 12px; }
+  .banner { background: #1F2937; color: #fff; padding: 14px 16px; border-top: 4px solid #F97316; border-radius: 6px 6px 0 0; }
+  .banner h1 { margin: 0; font-size: 15px; letter-spacing: 0.4px; }
+  .banner p { margin: 4px 0 0; font-size: 11px; color: #E5E7EB; }
+  .card { background: #FAFAF9; border: 1px solid #E7E5E4; padding: 10px 14px; margin: 10px 0; border-radius: 6px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .card small { display: block; font-size: 10px; color: #57534E; text-transform: uppercase; }
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 10px; }
+  .kpi { border: 1px solid #E7E5E4; border-radius: 6px; padding: 6px; text-align: center; }
+  .kpi small { display: block; font-size: 10px; color: #57534E; }
+  .kpi strong { font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  th, td { border: 1px solid #E7E5E4; padding: 4px 6px; font-size: 11px; text-align: left; }
+  th { background: #1F2937; color: #fff; }
+  tbody tr:nth-child(even) { background: #FAFAF9; }
+  .fin { border: 1px solid #E7E5E4; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
+  .fin-head { background: #1F2937; color: #fff; padding: 7px 12px; font-weight: 700; border-left: 4px solid #F97316; }
+  .fin-row { display: flex; justify-content: space-between; padding: 6px 12px; border-top: 1px solid #E7E5E4; }
+  .fin-row.total { background: #FFF7ED; color: #9A3412; font-weight: 800; }
+  .sigs { display: flex; justify-content: space-between; margin-top: 34px; page-break-inside: avoid; }
+  .sig { width: 200px; text-align: center; border-top: 1px solid #9CA3AF; padding-top: 6px; font-weight: 700; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <h1>${escapeHtml(APP_NAME.toUpperCase())} — WORKER ATTENDANCE &amp; WAGE STATEMENT</h1>
+    <p>Project: ${escapeHtml(statement.projectName)} · Period: ${escapeHtml(statement.monthLabel)} (${escapeHtml(statement.month)}) · Generated: ${escapeHtml(generatedStr)}</p>
+  </div>
+  <div class="card">
+    <div><small>Worker</small><strong>${escapeHtml(statement.workerName)}</strong></div>
+    <div><small>Trade / Role</small><strong>${escapeHtml(statement.workerRole)}</strong></div>
+    <div><small>Daily Wage</small><strong>${escapeHtml(inr(statement.dailyWage))}/day</strong></div>
+    <div><small>Leave Policy</small><strong>${statement.leavePaid ? 'Paid Leave' : 'Unpaid Leave'}</strong></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><small>Present</small><strong style="color:#16A34A">${statement.counts.present}</strong></div>
+    <div class="kpi"><small>Half Day</small><strong style="color:#F59E0B">${statement.counts.half_day}</strong></div>
+    <div class="kpi"><small>Overtime</small><strong style="color:#F59E0B">${statement.counts.overtime}</strong></div>
+    <div class="kpi"><small>Leave</small><strong>${statement.counts.leave}</strong></div>
+    <div class="kpi"><small>Absent</small><strong style="color:#DC2626">${statement.counts.absent}</strong></div>
+    <div class="kpi"><small>Payable Days</small><strong style="color:#F97316">${statement.workedDayEquivalents}</strong></div>
+  </div>
+  <table>
+    <thead><tr><th>Date</th><th>Day</th><th>Status</th><th style="text-align:right">Factor</th><th style="text-align:right">Earned</th><th>Notes</th></tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table>
+  <div class="fin">
+    <div class="fin-head">FINANCIAL SETTLEMENT SUMMARY</div>
+    <div class="fin-row"><span>Gross Earned Wages (${statement.workedDayEquivalents} days)</span><strong>${escapeHtml(inr(statement.grossEarned))}</strong></div>
+    <div class="fin-row"><span>Advances Deducted (${escapeHtml(statement.monthLabel)})</span><strong>− ${escapeHtml(inr(statement.totalAdvancesDeducted))}</strong></div>
+    <div class="fin-row"><span>Salary Already Paid (${escapeHtml(statement.monthLabel)})</span><strong>− ${escapeHtml(inr(statement.totalSalaryPaid))}</strong></div>
+    ${statement.priorNetBalance !== 0 ? `<div class="fin-row"><span>Prior Balance Carried In</span><strong>${escapeHtml(statement.priorNetBalance > 0 ? inr(statement.priorNetBalance) : `− ${inr(Math.abs(statement.priorNetBalance))}`)}</strong></div>` : ''}
+    <div class="fin-row total"><span>${statement.monthOverpaid > 0 ? 'Paid Ahead (Month)' : 'Net Pay Due (Month)'}</span><strong>${escapeHtml(statement.monthOverpaid > 0 ? `${inr(statement.monthOverpaid)} ahead` : inr(statement.monthNetPay))}</strong></div>
+    <div class="fin-row total"><span>${statement.overallOverpaid > 0 ? 'Overall Paid Ahead' : 'Overall Balance Due'}</span><strong>${escapeHtml(statement.overallOverpaid > 0 ? `${inr(statement.overallOverpaid)} ahead` : inr(statement.overallPending))}</strong></div>
+  </div>
+  <div class="sigs">
+    <div class="sig">Worker Signature / Thumb</div>
+    <div class="sig">Site Manager Signature</div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Prints the monthly worker statement cleanly via a dedicated hidden iframe (bypassing
+ * modal-hide print CSS rules), falling back to opening/downloading the PDF Blob if unavailable.
+ */
+export function printWorkerMonthlyStatement(statement: WorkerMonthlyStatement): boolean {
+  if (typeof document === 'undefined') return false;
+  const html = buildWorkerMonthlyPrintHtml(statement);
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.srcdoc = html;
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        const blob = generateWorkerMonthlyAttendancePdfBlob(statement);
+        downloadFile(blob, workerMonthlyPdfFilename(statement));
+      } finally {
+        setTimeout(() => iframe.remove(), 60_000);
+      }
+    };
+    document.body.appendChild(iframe);
+    return true;
+  } catch {
+    const blob = generateWorkerMonthlyAttendancePdfBlob(statement);
+    const url = URL.createObjectURL(blob);
+    const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
+    if (!popup) downloadFile(blob, workerMonthlyPdfFilename(statement));
+    return true;
+  }
 }
 

@@ -1,13 +1,24 @@
 import React from 'react';
-import { Printer, X, CheckCircle2, ShieldCheck, HardHat, Calendar, DollarSign } from 'lucide-react';
+import { Download, Printer, X } from 'lucide-react';
 import type { LabourWorker, AttendanceRecord, LabourAdvance, SalaryPayment } from '../db/types';
 import { APP_NAME } from '../config/brand';
+import { buildWorkerMonthlyStatement } from '../domain/salary';
+import { monthKeyOf, todayKey } from '../utils/datetime';
+import {
+  downloadFile,
+  generateWorkerMonthlyAttendancePdfBlob,
+  printWorkerMonthlyStatement,
+  workerMonthlyPdfFilename,
+} from '../utils/pdfGenerator';
 
 interface WageSlipModalProps {
   isOpen: boolean;
   onClose: () => void;
   worker: LabourWorker | null;
+  projectId?: string;
   siteName?: string;
+  month?: string;
+  leavePaid?: boolean;
   attendance: AttendanceRecord[];
   advances: LabourAdvance[];
   salaryPayments?: SalaryPayment[];
@@ -17,12 +28,27 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
   isOpen,
   onClose,
   worker,
+  projectId = '',
   siteName = `${APP_NAME} Project`,
+  month,
+  leavePaid,
   attendance,
   advances,
   salaryPayments = [],
 }) => {
   if (!isOpen || !worker) return null;
+
+  const targetMonth = month || monthKeyOf(todayKey());
+  const monthlyStatement = buildWorkerMonthlyStatement({
+    projectId: projectId || worker.siteId || '',
+    projectName: siteName,
+    worker,
+    month: targetMonth,
+    attendance,
+    advances,
+    payments: salaryPayments,
+    policy: { leavePaid },
+  });
 
   const workerAttendance = attendance.filter(a => a.workerId === worker.id);
   const workerAdvances = advances.filter(a => a.workerId === worker.id);
@@ -50,7 +76,12 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
   };
 
   const handlePrint = () => {
-    window.print();
+    printWorkerMonthlyStatement(monthlyStatement);
+  };
+
+  const handleDownloadPdf = () => {
+    const blob = generateWorkerMonthlyAttendancePdfBlob(monthlyStatement);
+    downloadFile(blob, workerMonthlyPdfFilename(monthlyStatement));
   };
 
   return (
@@ -75,7 +106,28 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
               தொழிலாளர் சம்பள ரசீது (Worker Wage Slip)
             </span>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                minHeight: '44px',
+                padding: '8px 14px',
+                borderRadius: 8,
+                backgroundColor: 'var(--color-charcoal)',
+                color: 'var(--color-text-inverse)',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+              }}
+            >
+              <Download size={15} />
+              <span>PDF</span>
+            </button>
             <button
               type="button"
               onClick={handlePrint}
@@ -90,7 +142,7 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
                 color: 'var(--color-on-primary)',
                 border: 'none',
                 fontWeight: 700,
-                fontSize: '0.85rem',
+                fontSize: '0.875rem',
                 cursor: 'pointer',
               }}
             >

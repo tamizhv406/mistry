@@ -21,7 +21,7 @@ import type {
   LabourWorker,
   SalaryPayment,
 } from '../db/types';
-import { monthKeyOf } from '../utils/datetime';
+import { formatMonth, monthDayKeys, monthKeyOf } from '../utils/datetime';
 import { roundMoney } from '../utils/money';
 
 export interface PayPolicy {
@@ -349,4 +349,230 @@ export function buildCorrectionLog(
 /** Label for a correction's status (a cleared mark has no status). */
 export function correctionStatusLabel(s: AttendanceStatus | 'cleared'): string {
   return s === 'cleared' ? 'Not marked' : ATTENDANCE_STATUS_META[s]?.label || s;
+}
+
+export interface MonthlyAttendanceDayRow {
+  dayNumber: number;
+  date: string;
+  weekdayShort: string;
+  status: AttendanceStatus | 'unmarked';
+  statusLabel: string;
+  dayValue: number;
+  dailyWage: number;
+  earnedAmount: number;
+  notes?: string;
+  correctionCount: number;
+}
+
+export interface WorkerMonthlyStatement {
+  projectId: string;
+  projectName: string;
+  workerId: string;
+  workerName: string;
+  workerRole: string;
+  workerPhone: string;
+  month: string;
+  monthLabel: string;
+  dailyWage: number;
+  leavePaid?: boolean;
+  daysInMonth: number;
+  days: MonthlyAttendanceDayRow[];
+  counts: {
+    present: number;
+    half_day: number;
+    overtime: number;
+    paid_leave: number;
+    unpaid_leave: number;
+    leave: number;
+    absent: number;
+    unmarked: number;
+  };
+  workedDayEquivalents: number;
+  grossEarned: number;
+  advancesTaken: LabourAdvance[];
+  nonRecoverableAdvances: LabourAdvance[];
+  totalAdvancesDeducted: number;
+  totalNonRecoverableAdvances: number;
+  salaryPayments: SalaryPayment[];
+  totalSalaryPaid: number;
+  monthNetPay: number;
+  monthOverpaid: number;
+  priorNetBalance: number;
+  overallPending: number;
+  overallOverpaid: number;
+}
+
+function weekdayShortOf(dayKey: string): string {
+  const [y, m, d] = dayKey.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return new Intl.DateTimeFormat('en-IN', { timeZone: 'UTC', weekday: 'short' }).format(
+    new Date(Date.UTC(y, m - 1, d)),
+  );
+}
+
+/**
+ * Deterministic monthly attendance and wage statement for one worker in one project/month.
+ * Reuses `buildWorkerLedger`, `dayValue`, and `isRecoverableAdvance` so figures match the
+ * attendance screen and wage ledger 100%.
+ */
+export function buildWorkerMonthlyStatement(params: {
+  projectId: string;
+  projectName: string;
+  worker: Pick<LabourWorker, 'id' | 'name' | 'category' | 'phone' | 'dailyWage'>;
+  month: string;
+  attendance: AttendanceRecord[];
+  advances: LabourAdvance[];
+  payments: SalaryPayment[];
+  policy?: PayPolicy;
+}): WorkerMonthlyStatement {
+  const { projectId, projectName, worker, month, policy = {} } = params;
+  const scopeMatch = <T extends { siteId?: string }>(rows: T[]) =>
+    projectId ? rows.filter(r => !r.siteId || r.siteId === projectId) : rows;
+
+  const scopedAttendance = scopeMatch(params.attendance);
+  const scopedAdvances = scopeMatch(params.advances);
+  const scopedPayments = scopeMatch(params.payments);
+
+  const ledger = buildWorkerLedger(worker, scopedAttendance, scopedAdvances, scopedPayments, policy);
+  const dedupedRaw = dedupeAttendance(scopedAttendance.filter(a => a.workerId === worker.id)).records;
+  const rawByDate = new Map(dedupedRaw.map(r => [r.date, r]));
+  const lineByDate = new Map(ledger.lines.map(l => [l.date, l]));
+
+  const counts = {
+    present: 0,
+    half_day: 0,
+    overtime: 0,
+    paid_leave: 0,
+    unpaid_leave: 0,
+    leave: 0,
+    absent: 0,
+    unmarked: 0,
+  };
+
+  let workedDayEquivalents = 0;
+  let grossEarned = 0;
+
+  const dayKeys = monthDayKeys(month);
+  const days: MonthlyAttendanceDayRow[] = dayKeys.map((date, idx) => {
+    const line = lineByDate.get(date);
+    const raw = rawByDate.get(date);
+    const correctionCount = raw?.editHistory?.length || 0;
+
+    if (!line) {
+      counts.unmarked += 1;
+      return {
+        dayNumber: idx + 1,
+        date,
+        weekdayShort: weekdayShortOf(date),
+        status: 'unmarked',
+        statusLabel: 'Unmarked',
+        dayValue: 0,
+        dailyWage: ledger.currentDailyWage,
+        earnedAmount: 0,
+        correctionCount,
+      };
+    }
+
+    if (line.status === 'present') counts.present += 1;
+    else if (line.status === 'half_day') counts.half_day += 1;
+    else if (line.status === 'overtime') counts.overtime += 1;
+    else if (line.status === 'absent') counts.absent += 1;
+    else if (line.status === 'leave') {
+      counts.leave += 1;
+      if (policy.leavePaid === true) counts.paid_leave += 1;
+      else counts.unpaid_leave += 1;
+    }
+
+    workedDayEquivalents += line.dayValue;
+    grossEarned += line.amount;
+
+    const statusLabel =
+      line.status === 'leave'
+        ? (policy.leavePaid === true ? 'Paid Leave' : 'Unpaid Leave')
+        : ATTENDANCE_STATUS_META[line.status].label;
+
+    return {
+      dayNumber: idx + 1,
+      date,
+      weekdayShort: weekdayShortOf(date),
+      status: line.status,
+      statusLabel,
+      dayValue: line.dayValue,
+      dailyWage: line.wage,
+      earnedAmount: line.amount,
+      notes: line.notes,
+      correctionCount,
+    };
+  });
+
+  workedDayEquivalents = roundMoney(workedDayEquivalents);
+  grossEarned = roundMoney(grossEarned);
+
+  const byDateAsc = <T extends { date: string; createdAt?: string }>(a: T, b: T) =>
+    a.date === b.date ? (a.createdAt || '').localeCompare(b.createdAt || '') : a.date.localeCompare(b.date);
+
+  const advancesTaken = ledger.advances
+    .filter(a => monthKeyOf(a.date) === month && isRecoverableAdvance(a))
+    .sort(byDateAsc);
+  const nonRecoverableAdvances = ledger.advances
+    .filter(a => monthKeyOf(a.date) === month && !isRecoverableAdvance(a))
+    .sort(byDateAsc);
+  const salaryPayments = ledger.payments
+    .filter(p => monthKeyOf(p.date) === month)
+    .sort(byDateAsc);
+
+  const totalAdvancesDeducted = roundMoney(advancesTaken.reduce((s, a) => s + (Number(a.amount) || 0), 0));
+  const totalNonRecoverableAdvances = roundMoney(
+    nonRecoverableAdvances.reduce((s, a) => s + (Number(a.amount) || 0), 0),
+  );
+  const totalSalaryPaid = roundMoney(salaryPayments.reduce((s, p) => s + (Number(p.paidAmount) || 0), 0));
+
+  const monthSettled = roundMoney(totalAdvancesDeducted + totalSalaryPaid);
+  const monthNetPay = roundMoney(Math.max(0, grossEarned - monthSettled));
+  const monthOverpaid = roundMoney(Math.max(0, monthSettled - grossEarned));
+
+  // Balance strictly prior to this month (earned - settled before YYYY-MM-01)
+  const priorEarned = ledger.lines
+    .filter(l => monthKeyOf(l.date) < month)
+    .reduce((s, l) => s + l.amount, 0);
+  const priorPaid = ledger.payments
+    .filter(p => monthKeyOf(p.date) < month)
+    .reduce((s, p) => s + (Number(p.paidAmount) || 0), 0);
+  const priorAdvances = ledger.advances
+    .filter(a => monthKeyOf(a.date) < month && isRecoverableAdvance(a))
+    .reduce((s, a) => s + (Number(a.amount) || 0), 0);
+  const priorNetBalance = roundMoney(priorEarned - (priorPaid + priorAdvances));
+
+  const cumulativeBalance = roundMoney(priorNetBalance + grossEarned - monthSettled);
+  const overallPending = roundMoney(Math.max(0, cumulativeBalance));
+  const overallOverpaid = roundMoney(Math.max(0, -cumulativeBalance));
+
+  return {
+    projectId,
+    projectName: projectName || 'Project',
+    workerId: worker.id,
+    workerName: worker.name,
+    workerRole: worker.category || 'Worker',
+    workerPhone: worker.phone || '',
+    month,
+    monthLabel: formatMonth(month),
+    dailyWage: ledger.currentDailyWage,
+    leavePaid: policy.leavePaid,
+    daysInMonth: dayKeys.length,
+    days,
+    counts,
+    workedDayEquivalents,
+    grossEarned,
+    advancesTaken,
+    nonRecoverableAdvances,
+    totalAdvancesDeducted,
+    totalNonRecoverableAdvances,
+    salaryPayments,
+    totalSalaryPaid,
+    monthNetPay,
+    monthOverpaid,
+    priorNetBalance,
+    overallPending,
+    overallOverpaid,
+  };
 }

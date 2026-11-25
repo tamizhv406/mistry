@@ -17,6 +17,7 @@ import type {
   SiteFinancialSummary,
 } from '../../db/types';
 import { APP_NAME } from '../../config/brand';
+import { WorkerAttendancePdfModal } from '../../components/WorkerAttendancePdfModal';
 
 interface ReportsTabProps {
   site: Site;
@@ -55,6 +56,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const [dateFilter, setDateFilter] = useState<'all' | 'month' | 'custom'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isWorkerPdfOpen, setIsWorkerPdfOpen] = useState(false);
 
   const handlePrint = () => {
     window.print();
@@ -253,12 +255,18 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-outline btn-sm" onClick={handleExportCSV}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {workers.length > 0 && (
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setIsWorkerPdfOpen(true)} style={{ minHeight: '44px' }}>
+              <FileText size={16} />
+              <span>Worker Attendance PDF</span>
+            </button>
+          )}
+          <button className="btn btn-outline btn-sm" onClick={handleExportCSV} style={{ minHeight: '44px' }}>
             <Download size={16} />
             <span>Download CSV</span>
           </button>
-          <button className="btn btn-primary btn-sm" onClick={handlePrint}>
+          <button className="btn btn-primary btn-sm" onClick={handlePrint} style={{ minHeight: '44px' }}>
             <Printer size={16} />
             <span>Print / Save as PDF</span>
           </button>
@@ -632,6 +640,18 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
           </div>
         </div>
       </div>
+
+      <WorkerAttendancePdfModal
+        isOpen={isWorkerPdfOpen}
+        onClose={() => setIsWorkerPdfOpen(false)}
+        siteId={site.id}
+        siteName={site.name}
+        leavePaid={site.leavePaid}
+        workers={workers}
+        attendance={attendance}
+        advances={advances}
+        salaryPayments={salaryPayments}
+      />
     </div>
   );
 };

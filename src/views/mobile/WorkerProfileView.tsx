@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { WageSlipModal } from '../../components/WageSlipModal';
+import { WorkerAttendancePdfModal } from '../../components/WorkerAttendancePdfModal';
 import { ChevronLeft, ChevronRight, Coins, FileText, HandCoins, Pencil, Phone, Trash2, UserX } from 'lucide-react';
 import type { AttendanceRecord, AttendanceStatus, LabourAdvance, LabourWorker, SalaryPayment, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
@@ -42,6 +43,7 @@ export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, site
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [slipOpen, setSlipOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   // Every mark of this worker, removed ones too, so cleared marks show in the correction log.
   const allMarks = useLiveQuery(() => db.attendance.where('workerId').equals(workerId).filter(a => a.siteId === siteId).toArray(), [workerId, siteId]);
 
@@ -164,17 +166,39 @@ export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, site
         </div>
         <div className="m-btn-row" style={{ marginTop: 8 }}>
           <button type="button" className="m-btn" onClick={() => setSlipOpen(true)}><FileText size={18} /> Wage slip</button>
-          {onRemoveWorker && <button type="button" className="m-btn" style={{ color: 'var(--m-bad)' }} onClick={() => onRemoveWorker(worker)}><Trash2 size={18} /> Remove worker</button>}
+          <button type="button" className="m-btn" onClick={() => setPdfOpen(true)}><FileText size={18} /> Attendance PDF</button>
         </div>
+        {onRemoveWorker && (
+          <div className="m-btn-row" style={{ marginTop: 8 }}>
+            <button type="button" className="m-btn" style={{ color: 'var(--m-bad)' }} onClick={() => onRemoveWorker(worker)}><Trash2 size={18} /> Remove worker</button>
+          </div>
+        )}
       </div>
       <WageSlipModal
         isOpen={slipOpen}
         onClose={() => setSlipOpen(false)}
         worker={worker}
+        projectId={siteId}
         siteName={project.site.name}
+        month={month}
+        leavePaid={project.site.leavePaid}
         attendance={project.attendance.filter(a => a.workerId === worker.id)}
         advances={project.advances.filter(a => a.workerId === worker.id)}
         salaryPayments={project.salaryPayments.filter(p => p.workerId === worker.id)}
+      />
+      <WorkerAttendancePdfModal
+        isOpen={pdfOpen}
+        onClose={() => setPdfOpen(false)}
+        siteId={siteId}
+        siteName={project.site.name}
+        leavePaid={project.site.leavePaid}
+        workers={[worker]}
+        attendance={project.attendance}
+        advances={project.advances}
+        salaryPayments={project.salaryPayments}
+        initialWorkerId={worker.id}
+        initialMonth={month}
+        onNotify={onNotify}
       />
 
       {ledger.leavePolicyMissing && (
