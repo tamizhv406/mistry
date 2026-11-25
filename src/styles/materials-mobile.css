@@ -379,3 +379,47 @@ img.stk-icon-photo { object-fit: cover; padding: 0; }
 .hm-skel-list { height: 180px; margin-top: 14px; }
 @keyframes hmShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .hm-skel { animation: none; } }
+
+/* ------------------------------------------------------------------ Attendance (Task 6) */
+.att-dates { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.att-date {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 8px;
+  border: 1px solid var(--m-line-strong, #cbd5e1); border-radius: 12px; background: var(--m-surface, #fff);
+  font: inherit; font-size: 14px; font-weight: 700; color: var(--m-ink, #0f172a); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.att-date[aria-pressed='true'], .att-date[data-active='true'] { background: var(--m-ink, #0f172a); border-color: var(--m-ink, #0f172a); color: #fff; }
+.att-date-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.att-day { margin: 8px 2px; font-size: 15px; font-weight: 700; color: var(--m-ink-2, #334155); }
+.att-all { min-height: 48px; font-size: 16px; gap: 8px; }
+.att-counts { margin: 10px 2px; font-size: 14px; color: var(--m-ink-2, #334155); line-height: 1.4; }
+.att-counts .is-ok { color: var(--m-ok, #047857); font-weight: 700; }
+.att-counts .is-bad { color: var(--m-bad, #b91c1c); font-weight: 700; }
+.att-list { margin-top: 10px; }
+.att-row { display: flex; align-items: center; gap: 6px; min-height: 60px; max-height: 72px; padding: 6px 6px 6px 10px; border-bottom: 1px solid var(--m-line, #e2e8f0); }
+.att-row:last-child { border-bottom: 0; }
+.att-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0; background: none; border: 0; font: inherit; color: inherit; text-align: left; }
+.att-avatar { flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #e2e8f0; color: #1e293b; font-weight: 800; font-size: 16px; }
+.att-text { min-width: 0; display: flex; flex-direction: column; }
+.att-name { font-size: 15px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
+.att-role { font-size: 14px; color: var(--m-ink-3, #64748b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-status {
+  flex: 0 0 112px; min-height: 44px; padding: 0 6px; border-radius: 12px; border: 1.5px dashed var(--m-line-strong, #94a3b8);
+  background: #fff; color: var(--m-ink-3, #475569); font: inherit; font-size: 14px; font-weight: 800; line-height: 1.1;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overflow: hidden; text-overflow: ellipsis;
+}
+.att-status[data-status='present'] { background: #047857; border: 1.5px solid #047857; color: #fff; }
+.att-status[data-status='half_day'] { background: #fef3c7; border: 1.5px solid #d97706; color: #92400e; }
+.att-status[data-status='absent'] { background: #fee2e2; border: 1.5px solid #b91c1c; color: #991b1b; }
+.att-status[data-status='overtime'] { background: #6d28d9; border: 1.5px solid #6d28d9; color: #fff; }
+.att-status[data-status='leave'] { background: #e0f2fe; border: 1.5px solid #0369a1; color: #075985; }
+.att-more { flex: 0 0 44px; width: 44px; min-height: 44px; display: grid; place-items: center; border: 0; background: none; color: var(--m-ink-3, #64748b); border-radius: 10px; }
+.att-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.att-menu-btn {
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; min-height: 56px; padding: 8px 12px;
+  border: 1px solid var(--m-line-strong, #cbd5e1); border-radius: 12px; background: #fff; font: inherit; font-size: 15px; font-weight: 700; color: var(--m-ink, #0f172a); text-align: left;
+}
+.att-menu-btn[aria-pressed='true'] { outline: 3px solid var(--m-ink, #0f172a); outline-offset: -1px; }
+.att-menu-btn[data-status='overtime'] { border-color: #6d28d9; color: #5b21b6; }
+.att-menu-btn[data-status='leave'] { border-color: #0369a1; color: #075985; }
+.att-menu-x { font-size: 14px; font-weight: 600; color: var(--m-ink-3, #64748b); }
+.att-screen .stk-summary strong.is-bad { color: var(--m-bad, #b91c1c); }

@@ -178,7 +178,10 @@ export interface AttendanceEdit {
   by?: string;         // user id
   byName?: string;
   from: AttendanceStatus;
-  to: AttendanceStatus;
+  /** 'cleared': the mark was removed (the day shows as not marked). */
+  to: AttendanceStatus | 'cleared';
+  /** Why it was changed, when the person gave a reason (optional). */
+  reason?: string;
 }
 
 export interface AttendanceRecord {

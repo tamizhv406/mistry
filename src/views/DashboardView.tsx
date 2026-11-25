@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { useOverallStats, type DashboardExpenseItem } from '../hooks/useOverallStats';
 import { DashboardToday } from '../components/DashboardToday';
+import { markAllPresent } from '../services/records';
 import { loadDemoData } from '../db/seedData';
 import { db } from '../db/db';
 import { isAdmin, isSuperAdmin } from '../services/auth';
@@ -170,44 +171,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
   const [tnArea, setTnArea] = useState<number>(1000);
 
+  // Same service as the attendance screens: marks only workers not marked yet today, per project.
   const handleMarkAllPresent = async () => {
     try {
+      if (!user) throw new Error('Sign in is required to mark attendance.');
       const today = todayKey();
-      const allSites = await db.sites.toArray();
-      const siteFilter = selectedSiteFilterId ? [selectedSiteFilterId] : allSites.map(s => s.id);
-      const workersToMark = await db.workers
-        .filter(w => siteFilter.includes(w.siteId) && !w.isDeleted)
-        .toArray();
-
-      if (workersToMark.length === 0) {
+      const siteIds = selectedSiteFilterId ? [selectedSiteFilterId] : sites.map(s => s.id);
+      let marked = 0;
+      let kept = 0;
+      let workerCount = 0;
+      for (const siteId of siteIds) {
+        const workers = await db.workers.where('siteId').equals(siteId).filter(w => !w.isDeleted).toArray();
+        if (!workers.length) continue;
+        workerCount += workers.length;
+        const res = await markAllPresent(user, siteId, workers, today);
+        if (!res.ok) throw new Error(res.error);
+        marked += res.value.marked;
+        kept += res.value.kept;
+      }
+      if (workerCount === 0) {
         onNotify('ஆஜர் பதிவு செய்ய தொழிலாளர்கள் இல்லை. (No workers found)', 'info');
         return;
       }
-
-      const existingAttendance = await db.attendance.where('date').equals(today).toArray();
-      const existingWorkerIds = new Set(existingAttendance.map(a => a.workerId));
-
-      let markedCount = 0;
-      for (const worker of workersToMark) {
-        if (!existingWorkerIds.has(worker.id)) {
-          await db.attendance.add({
-            id: 'att_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-            siteId: worker.siteId,
-            workerId: worker.id,
-            date: today,
-            status: 'present',
-            dayMultiplier: 1,
-            isDeleted: false,
-            wageEarned: worker.dailyWage || 0,
-            dailyWageSnapshot: worker.dailyWage || 0,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          markedCount++;
-        }
-      }
-
-      onNotify(`${markedCount > 0 ? markedCount : workersToMark.length} தொழிலாளர்களுக்கு இன்றைய ஆஜர் வெற்றிகரமாக பதிவு செய்யப்பட்டது!`, 'success');
+      onNotify(`${marked} marked Present today${kept ? ` · ${kept} already marked, kept` : ''}`, 'success');
     } catch (err: any) {
       onNotify('ஆஜர் பதிவு தோல்வி: ' + err.message, 'error');
     }

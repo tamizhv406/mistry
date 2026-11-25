@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import type { AttendanceRecord, AttendanceStatus, LabourAdvance, LabourWorker, SalaryPayment, Site, User } from '../../db/types';
 import { useLanguage, isValidIndianPhone, cleanPhoneNumber } from '../../services/i18n';
-import { markAttendance } from '../../services/records';
+import { markAllPresent, markAttendance } from '../../services/records';
 import { generateWorkerPayslipPdfBlob, downloadFile } from '../../utils/pdfGenerator';
 import { formatDay, todayKey, addDays } from '../../utils/datetime';
 import { storageService } from '../../services/storage';
@@ -237,14 +237,10 @@ export const AttendanceMatrix: React.FC<AttendanceMatrixProps> = ({
     const today = todayKey();
     let count = 0;
     try {
-      for (const w of filteredWorkers) {
-        const key = `${w.id}_${today}`;
-        const existing = attendanceMap.get(key);
-        if (!existing || existing.status !== 'present') {
-          await markAttendance(user, activeSite.id, w, today, 'present');
-          count++;
-        }
-      }
+      // Only workers not marked yet: an Absent or Half Day already saved is kept (same as the phone).
+      const res = await markAllPresent(user, activeSite.id, filteredWorkers, today);
+      if (!res.ok) throw new Error(res.error);
+      count = res.value.marked;
       onNotify(
         lang === 'ta'
           ? `${count} பணியாளர்களுக்கு இன்று முழு நாள் குறிக்கப்பட்டது!`

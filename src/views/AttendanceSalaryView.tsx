@@ -38,7 +38,8 @@ import {
 } from '../domain/salary';
 import { formatDay, formatMonth, monthKeyOf, todayKey, addMonths } from '../utils/datetime';
 import { formatINR, formatQty } from '../utils/money';
-import { markAttendance, setLeavePolicy } from '../services/records';
+import { markAllPresent, markAttendance, setLeavePolicy } from '../services/records';
+import { CorrectionLog } from '../components/attendance/CorrectionLog';
 import { AttendanceModal } from '../components/AttendanceModal';
 import { WorkerModal } from '../components/WorkerModal';
 import { AdvanceModal } from '../components/AdvanceModal';
@@ -68,7 +69,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   const [selectedSiteId, setSelectedSiteId] = useState<string>(initialSiteId || (sites[0]?.id || ''));
 
   // View state
-  const [activeTab, setActiveTab] = useState<'matrix' | 'attendance' | 'salary' | 'roster' | 'advances'>('matrix');
+  const [activeTab, setActiveTab] = useState<'matrix' | 'attendance' | 'salary' | 'roster' | 'advances' | 'corrections'>('matrix');
   const [selectedDate, setSelectedDate] = useState<string>(todayKey());
   const [selectedMonth, setSelectedMonth] = useState<string>(monthKeyOf(todayKey()));
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -221,16 +222,15 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
   const handleBulkMarkPresent = async () => {
     if (bulkBusy || unmarkedWorkers.length === 0 || !selectedSiteId) return;
     setBulkBusy(true);
-    let failed = 0;
-    for (const w of unmarkedWorkers) {
-      const res = await markAttendance(user, selectedSiteId, w, selectedDate, 'present');
-      if (!res.ok) failed++;
-    }
+    // Same service as the phone screen: only unmarked workers; existing marks are kept.
+    const res = await markAllPresent(user, selectedSiteId, workers, selectedDate);
     setBulkBusy(false);
-    if (failed > 0) {
-      onNotify(`${failed} worker(s) could not be marked.`, 'error');
+    if (!res.ok) {
+      onNotify(res.error, 'error');
+    } else if (res.value.failed > 0) {
+      onNotify(`${res.value.failed} worker(s) could not be marked.`, 'error');
     } else {
-      onNotify(`${unmarkedWorkers.length} worker(s) marked Present for ${formatDay(selectedDate)}.`, 'success');
+      onNotify(`${res.value.marked} worker(s) marked Present for ${formatDay(selectedDate)}${res.value.kept ? ` · ${res.value.kept} already marked, kept` : ''}.`, 'success');
     }
   };
 
@@ -701,6 +701,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
             { id: 'salary', label: lang === 'ta' ? 'கூலி கணக்கு ஏடு' : 'Salary Ledger' },
             { id: 'advances', label: lang === 'ta' ? 'அட்வான்ஸ்' : 'Advances' },
             { id: 'roster', label: lang === 'ta' ? 'பணியாளர்கள்' : 'Worker Roster' },
+            { id: 'corrections', label: lang === 'ta' ? 'திருத்த பதிவு' : 'Correction Log' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -1109,6 +1110,8 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
           </div>
         </div>
       )}
+
+      {activeTab === 'corrections' && selectedSiteId && <CorrectionLog siteId={selectedSiteId} workers={workers} />}
 
       {/* Tab 2: Salary Ledger */}
       {activeTab === 'salary' && (

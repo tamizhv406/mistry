@@ -7,6 +7,7 @@ import './styles/design-system.css';
 import './styles/erp-dashboard.css';
 import './styles/record-cards.css';
 import './styles/advanced-calculator.css';
+import './styles/phone-floor.css';
 import App from './App.tsx';
 
 // Register Service Worker for PWA offline capabilities

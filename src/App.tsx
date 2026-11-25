@@ -573,7 +573,7 @@ export function App() {
   };
 
   // Safe-Delete to Trash Helper
-  const handleSoftDelete = (tableName: EntityTable, id: string, displayName: string) => {
+  const handleSoftDelete = (tableName: EntityTable, id: string, displayName: string, onDone?: () => void) => {
     setConfirmModalState({
       isOpen: true,
       title: 'Move Record to Recycle Bin',
@@ -586,6 +586,7 @@ export function App() {
           if (!currentUser) throw new Error('Sign in is required to modify records.');
           await db.softDelete(tableName, id, currentUser);
           addToast(`"${displayName}" moved to Recycle Bin`, 'info');
+          onDone?.();
           if (tableName === 'sites' && selectedSiteId === id) {
             handleNavigate('dashboard');
           }
@@ -851,7 +852,27 @@ export function App() {
           />
         )}
 
-        {currentView === 'labour' && currentUser && (
+        {/* Phones: one-tap attendance (same services as the desktop screen below). */}
+        {currentView === 'labour' && isPhone && projectSiteId && (
+          <LabourView
+            user={activeUser}
+            siteId={projectSiteId}
+            onBack={() => handleNavigate('dashboard')}
+            onOpenWorker={workerId => {
+              setSelectedSiteId(projectSiteId);
+              setSelectedWorkerId(workerId);
+              handleNavigate('worker');
+            }}
+            onAddWorker={() => {
+              setSelectedSiteId(projectSiteId);
+              setWorkerToEdit(null);
+              setWorkerModalOpen(true);
+            }}
+            onNotify={addToast}
+          />
+        )}
+
+        {currentView === 'labour' && currentUser && !(isPhone && projectSiteId) && (
           <AttendanceSalaryView
             user={currentUser}
             sites={userSites}
@@ -874,6 +895,7 @@ export function App() {
               setWorkerToEdit(worker);
               setWorkerModalOpen(true);
             }}
+            onRemoveWorker={worker => handleSoftDelete('workers', worker.id, worker.name, () => setCurrentView('labour'))}
             onNotify={addToast}
           />
         )}

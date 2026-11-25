@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Coins, HandCoins, Pencil, Phone, Trash2, UserX } from 'lucide-react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/db';
+import { WageSlipModal } from '../../components/WageSlipModal';
+import { ChevronLeft, ChevronRight, Coins, FileText, HandCoins, Pencil, Phone, Trash2, UserX } from 'lucide-react';
 import type { AttendanceRecord, AttendanceStatus, LabourAdvance, LabourWorker, SalaryPayment, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
 import {
-  ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_ORDER, buildWorkerLedger, dedupeAttendance, isRecoverableAdvance, summariseMonth,
+  ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_ORDER, buildCorrectionLog, buildWorkerLedger, correctionStatusLabel, dedupeAttendance, isRecoverableAdvance, summariseMonth,
 } from '../../domain/salary';
 import { clearAttendance, markAttendance, removeMoneyEntry, setLeavePolicy } from '../../services/records';
 import {
@@ -23,10 +26,12 @@ interface WorkerProfileViewProps {
   workerId: string;
   onBack: () => void;
   onEditWorker: (worker: LabourWorker) => void;
+  /** Moves the worker to the Recycle Bin (asks first). */
+  onRemoveWorker?: (worker: LabourWorker) => void;
   onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, siteId, workerId, onBack, onEditWorker, onNotify }) => {
+export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, siteId, workerId, onBack, onEditWorker, onRemoveWorker, onNotify }) => {
   const project = useProject(siteId);
   const today = todayKey();
   const [month, setMonth] = useState(monthKeyOf(today));
@@ -36,6 +41,9 @@ export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, site
   const [entry, setEntry] = useState<{ kind: 'salary'; row: SalaryPayment } | { kind: 'advance'; row: LabourAdvance } | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [slipOpen, setSlipOpen] = useState(false);
+  // Every mark of this worker, removed ones too, so cleared marks show in the correction log.
+  const allMarks = useLiveQuery(() => db.attendance.where('workerId').equals(workerId).filter(a => a.siteId === siteId).toArray(), [workerId, siteId]);
 
   const worker = project?.workers.find(w => w.id === workerId);
   const policy = useMemo(() => ({ leavePaid: project?.site.leavePaid }), [project?.site.leavePaid]);
@@ -65,9 +73,7 @@ export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, site
   const days = monthDayKeys(month);
   const blanks = firstWeekdayOfMonth(month);
   const inScope = (d: string) => scope === 'all' || monthKeyOf(d) === month;
-  const corrections = Array.from(recordByDate.values())
-    .flatMap(r => (r.editHistory || []).map(e => ({ ...e, date: r.date })))
-    .sort((a, b) => b.at.localeCompare(a.at));
+  const corrections = buildCorrectionLog(allMarks || [], [worker]);
 
   const openDay = (d: string) => {
     if (d > today) return;
@@ -156,7 +162,20 @@ export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, site
           <button type="button" className="m-btn is-primary" onClick={() => setMoney({ kind: 'salary' })}><Coins size={20} /> Pay salary</button>
           <button type="button" className="m-btn" onClick={() => setMoney({ kind: 'advance' })}><HandCoins size={20} /> Advance</button>
         </div>
+        <div className="m-btn-row" style={{ marginTop: 8 }}>
+          <button type="button" className="m-btn" onClick={() => setSlipOpen(true)}><FileText size={18} /> Wage slip</button>
+          {onRemoveWorker && <button type="button" className="m-btn" style={{ color: 'var(--m-bad)' }} onClick={() => onRemoveWorker(worker)}><Trash2 size={18} /> Remove worker</button>}
+        </div>
       </div>
+      <WageSlipModal
+        isOpen={slipOpen}
+        onClose={() => setSlipOpen(false)}
+        worker={worker}
+        siteName={project.site.name}
+        attendance={project.attendance.filter(a => a.workerId === worker.id)}
+        advances={project.advances.filter(a => a.workerId === worker.id)}
+        salaryPayments={project.salaryPayments.filter(p => p.workerId === worker.id)}
+      />
 
       {ledger.leavePolicyMissing && (
         <div className="m-card m-card-pad" style={{ marginTop: 10 }}>
@@ -297,9 +316,9 @@ export const WorkerProfileView: React.FC<WorkerProfileViewProps> = ({ user, site
               <div key={i} className="m-row" style={{ minHeight: 52 }}>
                 <span className="m-row-main">
                   <span style={{ display: 'block', fontSize: '0.92rem', fontWeight: 600 }}>
-                    {formatDay(c.date)}: {ATTENDANCE_STATUS_META[c.from].label} → {ATTENDANCE_STATUS_META[c.to].label}
+                    {formatDay(c.date)}: {correctionStatusLabel(c.from)} → {correctionStatusLabel(c.to)}
                   </span>
-                  <span className="m-row-sub">Changed {formatDateTime(c.at)}{c.byName ? ' by ' + c.byName : ''}</span>
+                  <span className="m-row-sub">Changed {formatDateTime(c.at)}{c.byName ? ' by ' + c.byName : ''}{c.reason ? ` · ${c.reason}` : ''}</span>
                 </span>
               </div>
             ))}

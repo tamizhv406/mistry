@@ -286,3 +286,67 @@ export function findDuplicateMoneyEntry<T extends { id: string; workerId: string
       Math.abs(amountOf(row) - candidate.amount) < 0.005
   );
 }
+
+// ---------------------------------------------------------------------------
+// Attendance screen helpers (Task 6). They decide what a tap does and what the correction log
+// shows; none of them changes the salary formula above.
+
+/**
+ * One tap on a worker's status: Not marked → Present → Half Day → Absent → Present.
+ * Overtime and Leave (chosen with a long press) go back to Present on the next tap.
+ */
+export function nextTapStatus(current: AttendanceStatus | undefined | null): AttendanceStatus {
+  if (current === 'present') return 'half_day';
+  if (current === 'half_day') return 'absent';
+  return 'present';
+}
+
+/** Statuses offered by a long press (or the ⋯ button): the less common ones first. */
+export const LONG_PRESS_STATUSES: AttendanceStatus[] = ['overtime', 'leave', 'present', 'half_day', 'absent'];
+
+/** Hold this long (ms) for the long-press menu; moving the finger further than LONG_PRESS_SLOP px cancels it. */
+export const LONG_PRESS_MS = 480;
+export const LONG_PRESS_SLOP = 10;
+
+/** Which workers "Mark all present" changes for a day: only those not marked yet; others are kept. */
+export function planMarkAllPresent<W extends Pick<LabourWorker, 'id'>>(
+  workers: W[],
+  records: Pick<AttendanceRecord, 'workerId' | 'date' | 'isDeleted'>[],
+  date: string,
+): { toMark: W[]; kept: W[] } {
+  const marked = new Set(records.filter(r => !r.isDeleted && r.date === date).map(r => r.workerId));
+  return { toMark: workers.filter(w => !marked.has(w.id)), kept: workers.filter(w => marked.has(w.id)) };
+}
+
+export interface CorrectionEntry {
+  at: string;
+  date: string;
+  workerId: string;
+  workerName: string;
+  byName: string;
+  from: AttendanceStatus;
+  to: AttendanceStatus | 'cleared';
+  reason: string;
+}
+
+/**
+ * Every change to an attendance mark that was already saved: who, when, which day, old → new,
+ * and the reason if one was given. Newest first. Includes marks that were later cleared.
+ */
+export function buildCorrectionLog(
+  records: Pick<AttendanceRecord, 'workerId' | 'date' | 'editHistory'>[],
+  workers: Pick<LabourWorker, 'id' | 'name'>[],
+): CorrectionEntry[] {
+  const names = new Map(workers.map(w => [w.id, w.name]));
+  return records
+    .flatMap(r => (r.editHistory || []).map(e => ({
+      at: e.at, date: r.date, workerId: r.workerId, workerName: names.get(r.workerId) || 'Removed worker',
+      byName: e.byName || '', from: e.from, to: e.to, reason: e.reason || '',
+    })))
+    .sort((a, b) => b.at.localeCompare(a.at) || a.workerName.localeCompare(b.workerName));
+}
+
+/** Label for a correction's status (a cleared mark has no status). */
+export function correctionStatusLabel(s: AttendanceStatus | 'cleared'): string {
+  return s === 'cleared' ? 'Not marked' : ATTENDANCE_STATUS_META[s]?.label || s;
+}

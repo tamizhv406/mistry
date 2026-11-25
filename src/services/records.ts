@@ -14,7 +14,7 @@ import type {
   MaterialCategory, OtherExpense, OtherExpenseCategory, PoojaExpense, SalaryPayment, Site, StockMovement,
   StockMovementType, TeaSnacksExpense, ToolAsset, ToolCondition, ToolIssue, User, WaterBill, EntityTable,
 } from '../db/types';
-import { storedMultiplier, findDuplicateMoneyEntry } from '../domain/salary';
+import { ATTENDANCE_STATUS_META, storedMultiplier, findDuplicateMoneyEntry, planMarkAllPresent } from '../domain/salary';
 import { buildStock, convertStockQuantity, findDuplicateMovement, findDuplicatePurchase, stockItemKey, validateMovementOn } from '../domain/stock';
 import { buildToolStatus, checkToolDay, issueDay, minimumTotal, outstandingQuantity, timestampForDay, validateIssue, validateReturn } from '../domain/toolTracking';
 import { calculateFinancialBalance, generatePaymentId, syncParentRecordFinances } from '../utils/financial';
@@ -78,7 +78,9 @@ export async function markAttendance(
   worker: Pick<LabourWorker, 'id' | 'dailyWage' | 'name'>,
   date: string,
   status: AttendanceStatus,
-  notes?: string
+  notes?: string,
+  /** Why a saved mark is being changed (kept in the correction log). */
+  reason?: string
 ): Promise<Result<AttendanceRecord>> {
   const site = await writableSite(user, siteId, 'attendance');
   if (!site) return fail(NO_ACCESS);
@@ -86,7 +88,8 @@ export async function markAttendance(
   if (dateError) return fail(dateError);
 
   const now = nowIso();
-  return db.transaction('rw', db.attendance, async () => {
+  let corrected: { from: AttendanceStatus } | null = null;
+  const result = await db.transaction('rw', db.attendance, async () => {
     const sameDay = await db.attendance
       .where('workerId').equals(worker.id)
       .filter(a => !a.isDeleted && a.date === date && a.siteId === siteId)
@@ -106,8 +109,12 @@ export async function markAttendance(
         editHistory:
           existing.status === status
             ? existing.editHistory
-            : [...(existing.editHistory || []), { at: now, by: user.id, byName: user.fullName || user.username, from: existing.status, to: status }],
+            : [...(existing.editHistory || []), {
+              at: now, by: user.id, byName: user.fullName || user.username, from: existing.status, to: status,
+              ...(reason?.trim() ? { reason: reason.trim() } : {}),
+            }],
       };
+      if (existing.status !== status) corrected = { from: existing.status };
       await db.attendance.put(updated);
       return { ok: true as const, value: updated };
     }
@@ -130,16 +137,62 @@ export async function markAttendance(
     await db.attendance.put(record);
     return { ok: true as const, value: record };
   });
+  // A change to a saved mark also goes in the project's activity log (the correction log keeps the detail).
+  const change = corrected as { from: AttendanceStatus } | null;
+  if (result.ok && change) {
+    await log(user, site, 'ATTENDANCE_CORRECTED',
+      `Attendance corrected: ${worker.name}, ${date}: ${ATTENDANCE_STATUS_META[change.from].label} → ${ATTENDANCE_STATUS_META[status].label}${reason?.trim() ? ` (${reason.trim()})` : ''}`);
+  }
+  return result;
 }
 
-/** Removes a mark (moves it to the Recycle Bin) so the day shows as "not marked". */
-export async function clearAttendance(user: User, siteId: string, workerId: string, date: string): Promise<Result> {
+/** Removes a mark (moves it to the Recycle Bin) so the day shows as "not marked". The removal is logged as a correction. */
+export async function clearAttendance(user: User, siteId: string, workerId: string, date: string, reason?: string): Promise<Result> {
   const site = await writableSite(user, siteId, 'attendance');
   if (!site) return fail(NO_ACCESS);
   const rows = await db.attendance.where('workerId').equals(workerId).filter(a => !a.isDeleted && a.date === date && a.siteId === siteId).toArray();
   const now = nowIso();
-  for (const r of rows) await db.attendance.update(r.id, { isDeleted: true, deletedAt: now, updatedAt: now, updatedBy: user.id });
+  for (const r of rows) {
+    await db.attendance.update(r.id, {
+      isDeleted: true, deletedAt: now, updatedAt: now, updatedBy: user.id,
+      editHistory: [...(r.editHistory || []), {
+        at: now, by: user.id, byName: user.fullName || user.username, from: r.status, to: 'cleared',
+        ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      }],
+    });
+  }
+  if (rows.length) {
+    const worker = await db.workers.get(workerId);
+    await log(user, site, 'ATTENDANCE_CORRECTED', `Attendance cleared: ${worker?.name || 'worker'}, ${date} (was ${ATTENDANCE_STATUS_META[rows[0].status].label})`);
+  }
   return { ok: true, value: undefined };
+}
+
+/**
+ * "Mark all present" for one day: marks every worker who has no mark yet as Present and keeps
+ * the marks already made (an Absent or Half Day is never overwritten). Used by the phone and
+ * desktop attendance screens and the dashboard, so they all behave the same.
+ */
+export async function markAllPresent(
+  user: User,
+  siteId: string,
+  workers: Pick<LabourWorker, 'id' | 'dailyWage' | 'name'>[],
+  date: string,
+): Promise<Result<{ marked: number; kept: number; failed: number }>> {
+  const site = await writableSite(user, siteId, 'attendance');
+  if (!site) return fail(NO_ACCESS);
+  const dateError = checkEventDate(date);
+  if (dateError) return fail(dateError);
+  const ids = new Set(workers.map(w => w.id));
+  const dayRecords = await db.attendance.where('siteId').equals(siteId).filter(a => a.date === date && ids.has(a.workerId)).toArray();
+  const { toMark, kept } = planMarkAllPresent(workers, dayRecords, date);
+  let marked = 0;
+  let failed = 0;
+  for (const w of toMark) {
+    const res = await markAttendance(user, siteId, w, date, 'present');
+    if (res.ok) marked += 1; else failed += 1;
+  }
+  return { ok: true, value: { marked, kept: kept.length, failed } };
 }
 
 export async function setLeavePolicy(user: User, siteId: string, leavePaid: boolean): Promise<Result> {

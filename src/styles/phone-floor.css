@@ -1,0 +1,96 @@
+/*
+ * Phone floor (Task 6): on screens up to 768px wide, no text below 14px and no tap target
+ * below 44px, on every screen, including the older desktop-style ones (projects, ledgers,
+ * reports, backup, settings, recycle bin).
+ *
+ * Loaded last. Rules use :where() (no specificity) wherever possible, so a component's own,
+ * larger size always wins; only sizes below the floor are raised.
+ */
+@media (max-width: 768px) {
+  /* 1. Text that inherits a small size from its container comes up to 14px. */
+  :where(.app-shell-content, .m-sheet, .modal-dialog, .rpm-dialog)
+    :where(p, span, strong, b, em, small, a, label, li, td, th, dt, dd, div, button, select, input, textarea, h4, h5, h6) {
+    font-size: max(14px, 1em);
+  }
+
+  /* 2. Inline sizes below 14px (0.5rem–0.86rem, 9–13px) written in the components. */
+  .app-shell-content [style*="font-size: 0.5"],
+  .app-shell-content [style*="font-size: 0.6"],
+  .app-shell-content [style*="font-size: 0.7"],
+  .app-shell-content [style*="font-size: 0.80"],
+  .app-shell-content [style*="font-size: 0.81"],
+  .app-shell-content [style*="font-size: 0.82"],
+  .app-shell-content [style*="font-size: 0.83"],
+  .app-shell-content [style*="font-size: 0.84"],
+  .app-shell-content [style*="font-size: 0.85"],
+  .app-shell-content [style*="font-size: 0.86"],
+  .app-shell-content [style*="font-size: 0.8rem"],
+  .app-shell-content [style*="font-size: 9px"],
+  .app-shell-content [style*="font-size: 10px"],
+  .app-shell-content [style*="font-size: 11px"],
+  .app-shell-content [style*="font-size: 12px"],
+  .app-shell-content [style*="font-size: 13px"],
+  .m-sheet [style*="font-size: 0.7"],
+  .m-sheet [style*="font-size: 0.8"],
+  .modal-dialog [style*="font-size: 0.6"],
+  .modal-dialog [style*="font-size: 0.7"],
+  .modal-dialog [style*="font-size: 0.8"] {
+    font-size: 14px !important;
+  }
+
+  /* 3. Classes that set a small size themselves (shared kit and older ERP screens). */
+  .m-page-head p, .m-sheet-head p, .m-stat-label, .m-stat-hint, .m-calc-note, .m-row-sub, .m-badge, .m-note,
+  .m-field-label, .m-field-hint, .m-chip, .m-seg-btn, .m-date-pill, .m-daybar-rel, .m-calc-line,
+  .app-shell-content th, .app-shell-content td, .app-shell-content .num,
+  .erp-welcome-badge, .erp-action-btn, .erp-kpi-title, .erp-kpi-footer, .erp-tab-pill, .erp-section-subtitle,
+  .status-badge, .badge, .btn, .tab-btn, .banner-details-row, .banner-fin-stat, .metric-sub,
+  .site-grid-card-title, .site-grid-card-badge, .site-grid-card-amount, .site-grid-card-sub,
+  .app-shell-content .text-slate-500, .app-shell-content .text-purple-600, .app-shell-content .text-xs {
+    font-size: max(14px, 1em) !important;
+  }
+
+  /* 4. Every control at least 44px to tap. */
+  :where(.app-shell-content, .m-sheet, .modal-dialog, .rpm-dialog)
+    :where(button, [role="button"], select, input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"])) {
+    min-height: 44px;
+  }
+  :where(.app-shell-content, .m-sheet, .modal-dialog, .rpm-dialog) :where(button, [role="button"]) { min-width: 44px; }
+  .m-seg-btn, .m-chip, .m-btn.is-small, .m-date-pill, .erp-tab-pill, .tab-btn, .btn, .erp-action-btn { min-height: 44px !important; }
+  .app-shell-content a[href^="tel:"], .app-shell-content a[href^="mailto:"] { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
+@media (max-width: 768px) {
+  /* Older screens: labels set by descendant rules, and the calendar day codes. */
+  .metric-info h3, .banner-fin-stat span, .m-cal-code { font-size: 14px !important; }
+  /* Two KPI cards per row must shrink to fit 390px instead of pushing past the edge. */
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .metric-card, .metric-info { min-width: 0; }
+  .metric-info { overflow-wrap: anywhere; }
+  .metric-card .metric-icon { flex-shrink: 0; }
+}
+
+@media (max-width: 768px) {
+  /* Ledger tabs (Tailwind / inline styles): small text classes. */
+  .app-shell-content [class*="text-[9px]"], .app-shell-content [class*="text-[10px]"], .app-shell-content [class*="text-[11px]"],
+  .app-shell-content [class*="text-[12px]"], .app-shell-content [class*="text-[13px]"],
+  .app-shell-content [class*="interactive-card-"], .app-shell-content [class*="mat-cat-"] {
+    font-size: max(14px, 1em) !important;
+  }
+  /* Toolbars and inline rows wrap instead of running off the right edge. */
+  .app-shell-content .flex.items-center, .app-shell-content .flex.rounded-xl,
+  .app-shell-content [style*="justify-content: space-between"] { flex-wrap: wrap; }
+  .app-shell-content .grid > *, .app-shell-content [style*="display: grid"] > * { min-width: 0; overflow-wrap: anywhere; }
+  .app-shell-content [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .app-shell-content select { max-width: 100%; }
+}
+@media (max-width: 768px) {
+  .app-shell-content .interactive-card [class*="interactive-card-"],
+  .app-shell-content .tea-snacks-section .interactive-card [class*="interactive-card-"],
+  .app-shell-content .tea-snacks-card-grid .interactive-card [class*="interactive-card-"] { font-size: max(14px, 1em) !important; }
+  .app-shell-content select { max-width: calc(100vw - 32px); }
+}
+@media (max-width: 768px) {
+  /* Inline flex rows: wrap rather than overflow (they only wrap when they would not fit). */
+  .app-shell-content [style*="display: flex"] { flex-wrap: wrap; }
+  .app-shell-content .search-input-wrapper, .app-shell-content .search-input-wrapper input { min-width: 0; }
+}

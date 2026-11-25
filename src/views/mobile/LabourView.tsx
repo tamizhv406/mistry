@@ -1,24 +1,21 @@
-import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, UserPlus, Users } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { CalendarDays, CheckCheck, History, MoreVertical, UserPlus, Users, Wallet } from 'lucide-react';
+import { db } from '../../db/db';
 import type { AttendanceStatus, LabourWorker, User } from '../../db/types';
 import { useProject } from '../../hooks/useProject';
 import {
-  ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_ORDER, buildSiteLabourSummary, countByStatus, dedupeAttendance, summariseMonth,
+  ATTENDANCE_STATUS_META, ATTENDANCE_STATUS_ORDER, buildCorrectionLog, buildSiteLabourSummary, correctionStatusLabel, countByStatus,
+  dedupeAttendance, LONG_PRESS_MS, LONG_PRESS_SLOP, LONG_PRESS_STATUSES, nextTapStatus,
 } from '../../domain/salary';
-import { markAttendance, setLeavePolicy } from '../../services/records';
-import { addMonths, formatDay, formatMonth, monthKeyOf, todayKey } from '../../utils/datetime';
+import { clearAttendance, markAllPresent, markAttendance, setLeavePolicy } from '../../services/records';
+import { useLanguage } from '../../services/i18n';
+import { addDays, formatDateTime, formatDay, formatDayLong, todayKey } from '../../utils/datetime';
 import { formatINR, formatQty } from '../../utils/money';
-import { Badge, DayBar, Empty, Loading, Note, Page, SearchBox, Section, Segmented, Stat } from '../../components/mobile/kit';
+import { Badge, Empty, Field, Loading, Note, Page, SearchBox, Segmented, Sheet } from '../../components/mobile/kit';
+import '../../styles/materials-mobile.css';
 
-type Tab = 'day' | 'month' | 'salary';
-
-const BUTTON_LABEL: Record<AttendanceStatus, string> = {
-  present: 'Present',
-  half_day: 'Half Day',
-  leave: 'Leave',
-  absent: 'Absent',
-  overtime: 'Over-time',
-};
+type Notify = (msg: string, type?: 'success' | 'error' | 'info') => void;
 
 interface LabourViewProps {
   user: User;
@@ -26,24 +23,77 @@ interface LabourViewProps {
   onBack: () => void;
   onOpenWorker: (workerId: string) => void;
   onAddWorker: () => void;
-  onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  onNotify: Notify;
 }
 
-export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, onOpenWorker, onAddWorker, onNotify }) => {
-  const project = useProject(siteId);
-  const [tab, setTab] = useState<Tab>('day');
-  const [date, setDate] = useState(todayKey());
-  const [month, setMonth] = useState(monthKeyOf(todayKey()));
-  const [query, setQuery] = useState('');
-  const [saving, setSaving] = useState<string | null>(null);
-  const [bulkBusy, setBulkBusy] = useState(false);
-
-  const policy = useMemo(() => ({ leavePaid: project?.site.leavePaid }), [project?.site.leavePaid]);
-
-  const summary = useMemo(
-    () => (project ? buildSiteLabourSummary(project.workers, project.attendance, project.advances, project.salaryPayments, policy) : null),
-    [project, policy]
+/**
+ * The status button of a row. A tap moves to the next status; holding it (LONG_PRESS_MS, without
+ * moving more than LONG_PRESS_SLOP px, so scrolling never triggers it) or a right-click opens the
+ * menu with Overtime and Leave. The ⋯ button beside it opens the same menu for keyboards and
+ * screen readers.
+ */
+const StatusButton: React.FC<{
+  status: AttendanceStatus | undefined;
+  label: string;
+  name: string;
+  onTap: () => void;
+  onHold: () => void;
+}> = ({ status, label, name, onTap, onHold }) => {
+  const timer = useRef<number | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const held = useRef(false);
+  const cancel = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    start.current = null;
+  };
+  return (
+    <button
+      type="button"
+      className="att-status"
+      data-status={status || 'unmarked'}
+      aria-label={`${name}: ${label}. Tap to change; hold for more`}
+      onPointerDown={e => {
+        held.current = false;
+        start.current = { x: e.clientX, y: e.clientY };
+        timer.current = window.setTimeout(() => { held.current = true; timer.current = null; onHold(); }, LONG_PRESS_MS);
+      }}
+      onPointerMove={e => {
+        if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > LONG_PRESS_SLOP) cancel();
+      }}
+      onPointerUp={cancel}
+      onPointerCancel={cancel}
+      onPointerLeave={cancel}
+      onContextMenu={e => { e.preventDefault(); cancel(); if (!held.current) { held.current = true; onHold(); } }}
+      onClick={() => {
+        if (held.current) { held.current = false; return; } // the hold already opened the menu
+        onTap();
+      }}
+    >
+      {label}
+    </button>
   );
+};
+
+export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, onOpenWorker, onAddWorker, onNotify }) => {
+  const { t, statusLabel } = useLanguage();
+  const project = useProject(siteId);
+  // Every mark on the project, removed ones too, for the correction log.
+  const allMarks = useLiveQuery(() => db.attendance.where('siteId').equals(siteId).toArray(), [siteId]);
+  const today = todayKey();
+  const [date, setDateState] = useState(today);
+  const [query, setQuery] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // What the screen shows straight after a tap, before the database answers: taps stay instant.
+  const [shown, setShown] = useState<Record<string, AttendanceStatus | null>>({});
+  const queue = useRef(new Map<string, Promise<unknown>>());
+  const [menuFor, setMenuFor] = useState<LabourWorker | null>(null);
+  const [reason, setReason] = useState('');
+  const [logOpen, setLogOpen] = useState(false);
+  const [salaryOpen, setSalaryOpen] = useState(false);
+
+  const setDate = (d: string) => { setDateState(d); setShown({}); };
+  const label = (s: AttendanceStatus | undefined | null) => (s ? statusLabel(s) : t('at_not_marked', 'Not marked'));
 
   const dayMarks = useMemo(() => {
     const map = new Map<string, AttendanceStatus>();
@@ -52,76 +102,71 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
     return map;
   }, [project, date]);
 
-  if (project === undefined) return <Page title="Attendance" onBack={onBack}><Loading rows={5} /></Page>;
-  if (project === null || !summary) {
+  const corrections = useMemo(() => buildCorrectionLog(allMarks || [], project?.workers || []), [allMarks, project?.workers]);
+
+  if (project === undefined) return <Page title={t('at_title', 'Attendance')} onBack={onBack}><Loading rows={6} /></Page>;
+  if (project === null) {
     return (
-      <Page title="Attendance" onBack={onBack}>
+      <Page title={t('at_title', 'Attendance')} onBack={onBack}>
         <div className="m-card"><Empty icon={<Users size={26} />} title="Project not found">It may have been moved to the Recycle Bin.</Empty></div>
       </Page>
     );
   }
 
   const { workers, site } = project;
+  const statusOf = (id: string): AttendanceStatus | undefined => {
+    const key = `${date}:${id}`;
+    return key in shown ? (shown[key] ?? undefined) : dayMarks.get(id);
+  };
   const q = query.trim().toLowerCase();
-  const shown = q ? workers.filter(w => `${w.name} ${w.category} ${w.phone}`.toLowerCase().includes(q)) : workers;
+  const rows = q ? workers.filter(w => `${w.name} ${w.category} ${w.phone}`.toLowerCase().includes(q)) : workers;
   const counts = countByStatus(project.attendance.filter(a => a.date === date));
-  const unmarked = workers.filter(w => !dayMarks.has(w.id));
-  const hasLeave = project.attendance.some(a => a.status === 'leave');
+  const unmarked = workers.filter(w => !statusOf(w.id));
+  const isPast = date < today;
 
-  const mark = async (worker: LabourWorker, status: AttendanceStatus) => {
-    if (saving || dayMarks.get(worker.id) === status) return;
-    setSaving(worker.id);
-    const res = await markAttendance(user, siteId, worker, date, status);
-    setSaving(null);
-    if (!res.ok) onNotify(res.error, 'error');
+  /** Saves one change; changes to the same worker are saved in order. */
+  const save = (worker: LabourWorker, status: AttendanceStatus | null, why?: string) => {
+    const key = `${date}:${worker.id}`;
+    const day = date;
+    setShown(m => ({ ...m, [key]: status }));
+    const prev = queue.current.get(worker.id) || Promise.resolve();
+    const next = prev.then(async () => {
+      const res = status ? await markAttendance(user, siteId, worker, day, status, undefined, why) : await clearAttendance(user, siteId, worker.id, day, why);
+      if (!res.ok) {
+        onNotify(res.error, 'error');
+        setShown(m => { const c = { ...m }; delete c[key]; return c; });
+      }
+    });
+    queue.current.set(worker.id, next);
   };
 
-  const markAllUnmarkedPresent = async () => {
+  const tap = (worker: LabourWorker) => save(worker, nextTapStatus(statusOf(worker.id)));
+
+  const markAll = async () => {
     if (bulkBusy || unmarked.length === 0) return;
     setBulkBusy(true);
-    let failed = 0;
-    for (const w of unmarked) {
-      const res = await markAttendance(user, siteId, w, date, 'present');
-      if (!res.ok) failed += 1;
-    }
+    await Promise.all([...queue.current.values()]); // let pending taps land first
+    const res = await markAllPresent(user, siteId, workers, date);
     setBulkBusy(false);
-    if (failed) onNotify(`${failed} worker(s) could not be marked.`, 'error');
-    else onNotify(`${unmarked.length} worker${unmarked.length === 1 ? '' : 's'} marked Present for ${formatDay(date)}`, 'success');
+    if (!res.ok) return onNotify(res.error, 'error');
+    const { marked, kept, failed } = res.value;
+    onNotify(`${marked} marked Present${kept ? ` · ${kept} already marked, kept` : ''}${failed ? ` · ${failed} could not be saved` : ''}`, failed ? 'error' : 'success');
   };
 
-  const choosePolicy = async (leavePaid: boolean) => {
-    const res = await setLeavePolicy(user, siteId, leavePaid);
-    if (res.ok) onNotify(`Leave days are now ${leavePaid ? 'paid' : 'unpaid'} for this project`, 'success');
-    else onNotify(res.error, 'error');
+  const choose = (status: AttendanceStatus | null) => {
+    if (!menuFor) return;
+    save(menuFor, status, reason);
+    setMenuFor(null);
+    setReason('');
   };
 
-  const policyCard = (
-    <div className="m-card m-card-pad" style={{ marginTop: 12 }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>Leave pay rule</div>
-      <p className="is-muted" style={{ fontSize: '0.86rem', marginBottom: 10 }}>
-        {site.leavePaid === undefined
-          ? 'Not chosen yet. Until you choose, Leave days are counted as unpaid.'
-          : site.leavePaid
-          ? 'Leave days are paid as a full day.'
-          : 'Leave days are not paid.'}
-        {' '}Absent days are never paid.
-      </p>
-      <Segmented
-        label="Leave pay rule"
-        value={site.leavePaid === undefined ? 'unset' : site.leavePaid ? 'paid' : 'unpaid'}
-        onChange={v => v !== 'unset' && choosePolicy(v === 'paid')}
-        options={[
-          ...(site.leavePaid === undefined ? [{ value: 'unset' as const, label: 'Not set' }] : []),
-          { value: 'unpaid' as const, label: 'Leave unpaid' },
-          { value: 'paid' as const, label: 'Leave paid' },
-        ]}
-      />
-    </div>
-  );
+  const summary = salaryOpen ? buildSiteLabourSummary(workers, project.attendance, project.advances, project.salaryPayments, { leavePaid: site.leavePaid }) : null;
+  const menuCurrent = menuFor ? statusOf(menuFor.id) : undefined;
 
   return (
     <Page
-      title="Attendance & Salary"
+      className="stk-screen att-screen"
+      title={t('at_title', 'Attendance')}
       subtitle={site.name}
       onBack={onBack}
       right={
@@ -130,15 +175,21 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
         </button>
       }
     >
-      <Segmented
-        label="View"
-        value={tab}
-        onChange={setTab}
-        options={[{ value: 'day', label: 'Daily' }, { value: 'month', label: 'Monthly' }, { value: 'salary', label: 'Salary' }]}
-      />
+      {/* Day: today, yesterday, or any past date. */}
+      <div className="att-dates" role="group" aria-label="Attendance date">
+        <button type="button" className="att-date" aria-pressed={date === today} onClick={() => setDate(today)}>{t('at_today', 'Today')}</button>
+        <button type="button" className="att-date" aria-pressed={date === addDays(today, -1)} onClick={() => setDate(addDays(today, -1))}>{t('at_yesterday', 'Yesterday')}</button>
+        <label className="att-date att-date-pick" data-active={date < addDays(today, -1) ? 'true' : undefined}>
+          <CalendarDays size={18} aria-hidden="true" />
+          <span>{date < addDays(today, -1) ? formatDay(date) : t('at_pick_date', 'Pick date')}</span>
+          <input type="date" value={date} max={today} onChange={e => e.target.value && e.target.value <= today && setDate(e.target.value)} aria-label="Choose any past date" />
+        </label>
+      </div>
+      <p className="att-day">{formatDayLong(date)}</p>
+      {isPast && <div style={{ marginBottom: 8 }}><Note>{t('at_past', 'Past date: every change is kept in the correction log.')}</Note></div>}
 
       {workers.length === 0 ? (
-        <div className="m-card" style={{ marginTop: 14 }}>
+        <div className="m-card">
           <Empty
             icon={<Users size={26} />}
             title="No workers yet"
@@ -147,161 +198,150 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
             Add each worker with their daily wage. Then mark attendance with one tap.
           </Empty>
         </div>
-      ) : tab === 'day' ? (
+      ) : (
         <>
-          <div style={{ marginTop: 12 }}><DayBar value={date} onChange={setDate} /></div>
+          <button type="button" className="m-btn is-primary is-block att-all" onClick={markAll} disabled={bulkBusy || unmarked.length === 0}>
+            <CheckCheck size={20} />
+            {bulkBusy ? 'Marking…' : unmarked.length ? `${t('at_mark_all', 'Mark all present')} (${unmarked.length})` : t('at_all_marked', 'Everyone is marked')}
+          </button>
 
-          <div className="m-stats is-4" style={{ marginTop: 10 }}>
-            <Stat label="Present" value={counts.present + counts.overtime} tone="ok" hint={counts.overtime ? `${counts.overtime} OT` : undefined} />
-            <Stat label="Half day" value={counts.half_day} tone="warn" />
-            <Stat label="Leave" value={counts.leave} tone="info" />
-            <Stat label="Absent" value={counts.absent} tone="bad" />
-          </div>
+          <p className="att-counts" aria-live="polite">
+            <span className="is-ok">{statusLabel('present')} {counts.present + counts.overtime}</span> ·{' '}
+            <span>{statusLabel('half_day')} {counts.half_day}</span> ·{' '}
+            <span className="is-bad">{statusLabel('absent')} {counts.absent}</span>
+            {counts.leave ? <> · <span>{statusLabel('leave')} {counts.leave}</span></> : null}
+            {' '}· <span>{t('at_not_marked', 'Not marked')} {unmarked.length}</span>
+          </p>
 
-          {unmarked.length > 0 && (
-            <button type="button" className="m-btn is-block" style={{ marginTop: 10 }} onClick={markAllUnmarkedPresent} disabled={bulkBusy}>
-              {bulkBusy ? 'Marking…' : `Mark ${unmarked.length} unmarked as Present`}
-            </button>
-          )}
+          <SearchBox value={query} onChange={setQuery} placeholder={t('at_search', 'Search worker')} />
 
-          {workers.length > 5 && <div style={{ marginTop: 10 }}><SearchBox value={query} onChange={setQuery} placeholder="Search worker name" /></div>}
-
-          <div className="m-card m-list" style={{ marginTop: 10 }}>
-            {shown.map(w => {
-              const current = dayMarks.get(w.id);
+          <div className="m-card m-list att-list">
+            {rows.map(w => {
+              const s = statusOf(w.id);
               return (
-                <div key={w.id} className="m-att-row">
-                  <button type="button" className="m-att-top" onClick={() => onOpenWorker(w.id)} aria-label={`Open ${w.name}'s profile`}>
-                    <span className="m-dot" data-status={current || ''} aria-hidden="true" />
-                    <span className="m-att-name">{w.name}</span>
-                    <span className="m-att-meta">{w.category} · {formatINR(w.dailyWage)}</span>
-                    <ChevronRight size={18} className="is-muted" />
+                <div key={w.id} className="att-row">
+                  <button type="button" className="att-who" onClick={() => onOpenWorker(w.id)} aria-label={`Open ${w.name}'s profile`}>
+                    <span className="att-avatar" aria-hidden="true">{(w.name || '?').trim().charAt(0).toUpperCase()}</span>
+                    <span className="att-text">
+                      <span className="att-name">{w.name}</span>
+                      {w.category && <span className="att-role">{w.category}</span>}
+                    </span>
                   </button>
-                  <div className="m-att-btns" role="group" aria-label={`Attendance for ${w.name} on ${formatDay(date)}`}>
-                    {ATTENDANCE_STATUS_ORDER.map(s => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="m-att-btn"
-                        data-status={s}
-                        aria-pressed={current === s}
-                        disabled={saving === w.id}
-                        onClick={() => mark(w, s)}
-                      >
-                        {BUTTON_LABEL[s]}
-                      </button>
-                    ))}
-                  </div>
+                  <StatusButton status={s} label={label(s)} name={w.name} onTap={() => tap(w)} onHold={() => { setReason(''); setMenuFor(w); }} />
+                  <button type="button" className="att-more" onClick={() => { setReason(''); setMenuFor(w); }} aria-label={`More statuses for ${w.name}`}>
+                    <MoreVertical size={20} />
+                  </button>
                 </div>
               );
             })}
-            {shown.length === 0 && <div className="m-row is-muted">No worker matches "{query}".</div>}
+            {rows.length === 0 && <div className="m-row is-muted">No worker matches "{query}".</div>}
           </div>
-          <p className="m-calc-note">
-            Each tap saves straight away. Tap a different status to correct it; the change is logged on the worker's profile.
-          </p>
-        </>
-      ) : tab === 'month' ? (
-        <>
-          <div className="m-daybar" style={{ marginTop: 12 }}>
-            <button type="button" className="m-icon-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Previous month"><ChevronLeft size={24} /></button>
-            <div className="m-daybar-main"><span className="m-daybar-date">{formatMonth(month)}</span></div>
-            <button
-              type="button"
-              className="m-icon-btn"
-              onClick={() => setMonth(addMonths(month, 1))}
-              disabled={month >= monthKeyOf(todayKey())}
-              style={{ opacity: month >= monthKeyOf(todayKey()) ? 0.3 : 1 }}
-              aria-label="Next month"
-            >
-              <ChevronRight size={24} />
+          <p className="m-calc-note">{t('at_hint', 'Tap a status to change it. Hold it (or tap ⋯) for Overtime and Leave.')}</p>
+
+          <div className="m-card m-list" style={{ marginTop: 12 }}>
+            <button type="button" className="m-row" onClick={() => setLogOpen(true)}>
+              <span className="m-row-icon"><History size={20} /></span>
+              <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>{t('at_corrections', 'Correction log')}</span></span>
+              <Badge>{corrections.length}</Badge>
+            </button>
+            <button type="button" className="m-row" onClick={() => setSalaryOpen(true)}>
+              <span className="m-row-icon"><Wallet size={20} /></span>
+              <span className="m-row-main"><span className="m-row-title" style={{ display: 'block' }}>{t('at_salary', 'Salary & leave rule')}</span></span>
             </button>
           </div>
-
-          {(() => {
-            const rows = workers.map(w => ({ w, m: summariseMonth(summary.ledgers.get(w.id)!, month) }));
-            const total = rows.reduce((s, r) => s + r.m.earned, 0);
-            const days = rows.reduce((s, r) => s + r.m.workedDayEquivalents, 0);
-            return (
-              <>
-                <div className="m-stats" style={{ marginTop: 10 }}>
-                  <Stat label="Worked days" value={formatQty(days)} hint="Day equivalents, all workers" />
-                  <Stat label="Wages earned" value={formatINR(total)} hint={formatMonth(month)} />
-                </div>
-                <div className="m-card m-list" style={{ marginTop: 10 }}>
-                  {rows.map(({ w, m }) => (
-                    <button key={w.id} type="button" className="m-row" onClick={() => onOpenWorker(w.id)}>
-                      <span className="m-row-main">
-                        <span className="m-row-title" style={{ display: 'block' }}>{w.name}</span>
-                        <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
-                          <Badge tone="ok">P {m.counts.present}</Badge>
-                          <Badge tone="warn">½ {m.counts.half_day}</Badge>
-                          <Badge tone="info">L {m.counts.leave}</Badge>
-                          <Badge tone="bad">A {m.counts.absent}</Badge>
-                          {m.counts.overtime > 0 && <Badge tone="violet">OT {m.counts.overtime}</Badge>}
-                        </span>
-                      </span>
-                      <span className="m-row-end">
-                        <span className="m-row-amount" style={{ display: 'block' }}>{formatINR(m.earned)}</span>
-                        <span className="m-row-sub">{formatQty(m.workedDayEquivalents)} days</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            );
-          })()}
         </>
-      ) : (
-        <>
-          <div className="m-stats" style={{ marginTop: 12 }}>
-            <Stat label="Salary pending" value={formatINR(summary.pending)} tone={summary.pending > 0 ? 'bad' : 'ok'} hint="Owed to workers now" />
-            <Stat label="Wages earned" value={formatINR(summary.earned)} hint="From attendance, all time" />
-            <Stat label="Salary paid" value={formatINR(summary.salaryPaid)} tone="ok" />
-            <Stat label="Advances" value={formatINR(summary.recoverableAdvances)} hint="Deducted from salary" />
+      )}
+
+      {/* Long press / ⋯: Overtime, Leave, the others, or clear. */}
+      <Sheet open={!!menuFor} title={menuFor?.name || ''} subtitle={`${formatDay(date)} · now ${label(menuCurrent)}`} onClose={() => setMenuFor(null)}>
+        <div className="stk-screen">
+          <div className="att-menu">
+            {LONG_PRESS_STATUSES.map(s => (
+              <button key={s} type="button" className="att-menu-btn" data-status={s} aria-pressed={menuCurrent === s} onClick={() => choose(s)}>
+                <span>{statusLabel(s)}</span>
+                <span className="att-menu-x">{s === 'leave' ? (site.leavePaid ? '× 1 (paid)' : '× 0 (unpaid)') : `× ${ATTENDANCE_STATUS_META[s].multiplier}`}</span>
+              </button>
+            ))}
+            <button type="button" className="att-menu-btn" data-status="unmarked" onClick={() => choose(null)} disabled={!menuCurrent}>
+              <span>{t('at_not_marked', 'Not marked')}</span><span className="att-menu-x">clear</span>
+            </button>
           </div>
-          {summary.overpaid > 0 && (
-            <div style={{ marginTop: 10 }}>
-              <Note>{formatINR(summary.overpaid)} has been paid ahead to workers who have received more than they have earned so far. It is not subtracted from what other workers are owed.</Note>
+          {menuCurrent && (
+            <Field label="Reason for the change (optional)">
+              <input type="text" value={reason} onChange={e => setReason(e.target.value)} maxLength={120} placeholder="e.g. Came after lunch" />
+            </Field>
+          )}
+        </div>
+      </Sheet>
+
+      <Sheet open={logOpen} title={t('at_corrections', 'Correction log')} subtitle={site.name} onClose={() => setLogOpen(false)}>
+        <div className="stk-screen">
+          {corrections.length === 0 ? (
+            <p className="is-muted">No corrections yet. When a saved mark is changed, it shows here with who changed it and when.</p>
+          ) : (
+            <div className="m-card m-list">
+              {corrections.slice(0, 200).map((c, i) => (
+                <div key={`${c.at}-${c.workerId}-${i}`} className="m-row" style={{ alignItems: 'flex-start' }}>
+                  <span className="m-row-main">
+                    <span className="m-row-title" style={{ display: 'block' }}>{c.workerName} · {formatDay(c.date)}</span>
+                    <span className="m-row-sub" style={{ display: 'block' }}>{correctionStatusLabel(c.from)} → {correctionStatusLabel(c.to)}{c.reason ? ` · ${c.reason}` : ''}</span>
+                    <span className="m-row-sub" style={{ display: 'block' }}>{formatDateTime(c.at)}{c.byName ? ` · by ${c.byName}` : ''}</span>
+                  </span>
+                </div>
+              ))}
             </div>
           )}
+        </div>
+      </Sheet>
 
-          <Section title="Workers">
-            <div className="m-card m-list">
+      <Sheet open={salaryOpen} title={t('at_salary', 'Salary & leave rule')} subtitle={site.name} onClose={() => setSalaryOpen(false)}>
+        {summary && (
+          <div className="stk-screen">
+            <div className="stk-summary" style={{ marginTop: 0 }}>
+              <div><span>Pending</span><strong className={summary.pending > 0 ? 'is-bad' : ''}>{formatINR(summary.pending)}</strong></div>
+              <div><span>Earned</span><strong>{formatINR(summary.earned)}</strong></div>
+              <div><span>Paid</span><strong>{formatINR(summary.salaryPaid)}</strong></div>
+            </div>
+            <div className="m-card m-list" style={{ marginTop: 10 }}>
               {workers.map(w => {
                 const l = summary.ledgers.get(w.id)!;
                 return (
-                  <button key={w.id} type="button" className="m-row" onClick={() => onOpenWorker(w.id)}>
+                  <button key={w.id} type="button" className="m-row" onClick={() => { setSalaryOpen(false); onOpenWorker(w.id); }}>
                     <span className="m-row-main">
                       <span className="m-row-title" style={{ display: 'block' }}>{w.name}</span>
-                      <span className="m-row-sub">
-                        {formatQty(l.workedDayEquivalents)} days · earned {formatINR(l.earned)} · paid {formatINR(l.salaryPaid)}
-                      </span>
+                      <span className="m-row-sub">{formatQty(l.workedDayEquivalents)} days · {formatINR(w.dailyWage)}/day</span>
                     </span>
                     <span className="m-row-end">
-                      {l.pending > 0 ? (
-                        <><span className="m-row-amount is-bad" style={{ display: 'block' }}>{formatINR(l.pending)}</span><span className="m-row-sub">pending</span></>
-                      ) : l.overpaid > 0 ? (
-                        <><span className="m-row-amount is-info" style={{ display: 'block' }}>{formatINR(l.overpaid)}</span><span className="m-row-sub">paid ahead</span></>
-                      ) : (
-                        <Badge tone="ok">Settled</Badge>
-                      )}
+                      {l.pending > 0 ? <span className="m-row-amount is-bad">{formatINR(l.pending)}</span>
+                        : l.overpaid > 0 ? <span className="m-row-amount">{formatINR(l.overpaid)} ahead</span> : <Badge tone="ok">Settled</Badge>}
                     </span>
                   </button>
                 );
               })}
             </div>
-          </Section>
-
-          {policyCard}
-          {hasLeave && site.leavePaid === undefined && (
-            <div style={{ marginTop: 10 }}><Note tone="warn">Some workers have Leave days. Choose the leave pay rule above so salary is calculated the way you intend.</Note></div>
-          )}
-          <p className="m-calc-note">
-            Pending = wages earned − salary paid − advances to be deducted. Day values: {ATTENDANCE_STATUS_ORDER.map(s => `${ATTENDANCE_STATUS_META[s].label} ${s === 'leave' ? (site.leavePaid ? 1 : 0) : ATTENDANCE_STATUS_META[s].multiplier}`).join(' · ')}.
-          </p>
-        </>
-      )}
+            <div className="m-card m-card-pad" style={{ marginTop: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Leave pay rule</div>
+              <Segmented
+                label="Leave pay rule"
+                value={site.leavePaid === undefined ? 'unset' : site.leavePaid ? 'paid' : 'unpaid'}
+                onChange={async v => {
+                  if (v === 'unset') return;
+                  const r = await setLeavePolicy(user, siteId, v === 'paid');
+                  onNotify(r.ok ? `Leave days are now ${v === 'paid' ? 'paid' : 'unpaid'}` : r.error, r.ok ? 'success' : 'error');
+                }}
+                options={[
+                  ...(site.leavePaid === undefined ? [{ value: 'unset' as const, label: 'Not set' }] : []),
+                  { value: 'unpaid' as const, label: 'Unpaid' },
+                  { value: 'paid' as const, label: 'Paid' },
+                ]}
+              />
+              <p className="m-calc-note">
+                Day values: {ATTENDANCE_STATUS_ORDER.map(s => `${ATTENDANCE_STATUS_META[s].label} ${s === 'leave' ? (site.leavePaid ? 1 : 0) : ATTENDANCE_STATUS_META[s].multiplier}`).join(' · ')}. Pending = earned − paid − advances.
+              </p>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </Page>
   );
 };
