@@ -41,24 +41,19 @@ describe('Module 2: Tamil Unicode Font Rendering', () => {
 });
 
 describe('Module 3: Zero-Cost Security Auth: Security Questions Account Creation & Password Reset', () => {
-  it('ForgotPasswordModal exists with zero SMS cost security questions challenge', () => {
-    const filePath = path.resolve('src/components/ForgotPasswordModal.tsx');
-    assert.strictEqual(fs.existsSync(filePath), true);
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /உங்களின் முதல் பள்ளி எது/);
-    assert.match(content, /உங்களுக்கு பிடித்த ஊர் எது/);
-    assert.match(content, /உங்கள் தாயாரின் பெயர் என்ன/);
-    assert.match(content, /தவறான பதில்கள்\. மீண்டும் முயற்சிக்கவும்/);
+  // The local-only ForgotPasswordModal / RegistrationModal kept passwords on the device and
+  // let blank recovery answers through; they were removed (security task). Accounts and
+  // passwords live in Supabase Auth; the login page keeps the 3 security questions.
+  it('Local-password modals are gone', () => {
+    assert.strictEqual(fs.existsSync(path.resolve('src/components/ForgotPasswordModal.tsx')), false);
+    assert.strictEqual(fs.existsSync(path.resolve('src/components/RegistrationModal.tsx')), false);
   });
 
-  it('RegistrationModal exists with 3 security question dropdowns in Tamil and English', () => {
-    const filePath = path.resolve('src/components/RegistrationModal.tsx');
-    assert.strictEqual(fs.existsSync(filePath), true);
-    const content = fs.readFileSync(filePath, 'utf-8');
-    assert.match(content, /SECURITY_QUESTIONS_1/);
-    assert.match(content, /SECURITY_QUESTIONS_2/);
-    assert.match(content, /SECURITY_QUESTIONS_3/);
-    assert.match(content, /புதிய கணக்கு பதிவு/);
+  it('Login page keeps 3 security questions and uses Supabase for passwords', () => {
+    const content = fs.readFileSync(path.resolve('src/views/LoginView.tsx'), 'utf-8');
+    assert.match(content, /What is your name\?/);
+    assert.match(content, /requestEmailPasswordReset/);
+    assert.doesNotMatch(content, /passwordHash === password/);
   });
 });
 

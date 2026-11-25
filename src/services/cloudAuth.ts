@@ -16,20 +16,12 @@ interface MemberProfile {
 
 export class InactiveAccountError extends Error {}
 
-export const SUPER_ADMIN_EMAILS = [
-  'tamilthilagan82@gmail.com',
-];
-
-export function isConfiguredSuperAdmin(email?: string): boolean {
-  if (!email) return false;
-  const clean = email.trim().toLowerCase();
-  if (SUPER_ADMIN_EMAILS.includes(clean)) return true;
-  const envAdmin = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_SUPER_ADMIN_EMAIL)?.trim()?.toLowerCase();
-  return Boolean(envAdmin && envAdmin === clean);
-}
-
-function appRole(role: MemberProfile['role'], email?: string): UserRole {
-  if (email && isConfiguredSuperAdmin(email)) return 'SUPER_ADMIN';
+/**
+ * The app role comes only from the account's row in `mistry_members` (written by admins, guarded
+ * by row-level security). An email address, a build setting or `user_metadata` (which any user
+ * can edit for their own account) never grants admin rights.
+ */
+function appRole(role: MemberProfile['role']): UserRole {
   if (role === 'SUPER_ADMIN' || role === 'SUB_ADMIN') return role;
   return 'MISTRY';
 }
@@ -37,7 +29,7 @@ function appRole(role: MemberProfile['role'], email?: string): UserRole {
 async function cacheAuthenticatedProfile(authUser: AuthUser, member: MemberProfile, remember: boolean): Promise<User> {
   const email = (authUser.email || member.email).toLowerCase();
   const local = await db.users.get(authUser.id);
-  const isSuper = isConfiguredSuperAdmin(email) || member.role === 'SUPER_ADMIN' || authUser.user_metadata?.role === 'SUPER_ADMIN';
+  const isSuper = member.role === 'SUPER_ADMIN';
 
   const fullAdminPermissions: Record<string, { read: boolean; write: boolean }> = {
     projects: { read: true, write: true },
@@ -58,7 +50,7 @@ async function cacheAuthenticatedProfile(authUser: AuthUser, member: MemberProfi
     phoneNormalized: local?.phoneNormalized,
     email,
     passwordHash: '',
-    role: isSuper ? 'SUPER_ADMIN' : appRole(member.role, email),
+    role: appRole(member.role),
     permissions: member.permissions,
     isActive: member.is_active,
     createdAt: local?.createdAt || authUser.created_at || new Date().toISOString(),
@@ -135,14 +127,14 @@ export async function resolveAuthenticatedUser(authUser: AuthUser, remember = tr
         // Fall back to user_metadata
       }
 
-      const isSuper = isConfiguredSuperAdmin(authUser.email) || authUser.user_metadata?.role === 'SUPER_ADMIN';
+      // No membership row yet: an ordinary account until an admin grants a role.
       const fallbackMember: MemberProfile = {
         user_id: authUser.id,
         email: authUser.email || '',
         username: String(profName || authUser.user_metadata?.full_name || authUser.phone || authUser.email?.split('@')[0] || 'Builder'),
         full_name: String(profName || authUser.user_metadata?.full_name || authUser.phone || ''),
         mobile: String(profPhone || authUser.phone || authUser.user_metadata?.phone || ''),
-        role: isSuper ? 'SUPER_ADMIN' : 'USER',
+        role: 'USER',
         is_active: true,
         permissions: {},
       };

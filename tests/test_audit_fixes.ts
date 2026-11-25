@@ -240,9 +240,14 @@ async function runAuditFixesTests() {
     throw new Error('ChangeInitialPasswordModal.tsx missing semantic new-password attributes');
   }
 
-  const forgotPwdContent = fs.readFileSync(path.resolve(process.cwd(), 'src/components/ForgotPasswordModal.tsx'), 'utf8');
-  if (!forgotPwdContent.includes('type="email"') || !forgotPwdContent.includes('requestEmailPasswordReset') || forgotPwdContent.includes('fp-otp')) {
-    throw new Error('ForgotPasswordModal.tsx must use email-based Supabase recovery, not a local OTP.');
+  // The unused local-only ForgotPasswordModal (it accepted blank answers and wrote a local
+  // password) was removed; password recovery is the Supabase email reset on the login page.
+  if (fs.existsSync(path.resolve(process.cwd(), 'src/components/ForgotPasswordModal.tsx'))) {
+    throw new Error('ForgotPasswordModal.tsx (local password reset) must stay removed.');
+  }
+  const loginRecovery = fs.readFileSync(path.resolve(process.cwd(), 'src/views/LoginView.tsx'), 'utf8');
+  if (!loginRecovery.includes('id="forgot-email"') || !loginRecovery.includes('requestEmailPasswordReset') || loginRecovery.includes('fp-otp')) {
+    throw new Error('Login page must use email-based Supabase recovery, not a local OTP.');
   }
   console.log('✓ Verified native browser credential autofill and semantic attributes across all login/auth modals.');
 

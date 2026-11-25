@@ -32,6 +32,7 @@ android/keystore.properties
 android/local.properties
 *.jks
 *.keystore
+# Environment files hold the Supabase URL / keys: never commit them (only the empty template).
 .env
 .env.*
 !.env.example
@@ -42,6 +43,3 @@ android/local.properties
 # Other people's projects downloaded for reference; not part of this app
 .github/workflows/Home_View-main/
 .github/workflows/PlaceIt-master/
-
-.vercel
-.env*

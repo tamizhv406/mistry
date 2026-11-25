@@ -19,12 +19,9 @@ export default defineConfig({
   plugins: [react(), ...(servedFromRoot ? [rootLinks] : [])],
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   define: {
-    'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://kfnbabbknhzbjhxcozan.supabase.co'
-    ),
-    'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_hOOf94GN9Z4UuGAnQ30BSg_KiijLvuQ'
-    ),
+    // From the environment only (no built-in project URL or key).
+    'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL || ''),
+    'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''),
   },
   build: {
     target: 'esnext',

@@ -21,13 +21,13 @@ import {
   loginUser,
   registerUser,
   resendConfirmationEmail,
-  setCurrentUser,
   sendPhoneOtp,
   verifyPhoneOtp,
   signInWithGoogle,
 } from '../services/auth';
 import { performFullSync } from '../services/cloudSyncService';
 import { requestEmailPasswordReset } from '../services/emailRecoveryService';
+import { isSupabaseConfigured, supabase, updateSupabasePassword } from '../services/supabase';
 import { db } from '../db/db';
 import type { User as UserType } from '../db/types';
 
@@ -92,49 +92,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setMode(newMode);
     setError('');
     setSuccessMessage('');
-  };
-
-  // Direct Super Admin shortcut for development/admin portal
-  const handleSuperAdminDirectLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const superUser: UserType = {
-        id: 'super-admin-tamizh',
-        username: 'tamizh',
-        fullName: 'Tamizh (Super Admin)',
-        email: 'tamilthilagan82@gmail.com',
-        mobile: '9876543210',
-        passwordHash: 'tamizh406@##',
-        securityQuestions: {
-          nameAnswer: 'Tamizh',
-          cityAnswer: 'Chennai',
-          friendAnswer: 'Mistry',
-        },
-        role: 'SUPER_ADMIN',
-        permissions: {
-          projects: { read: true, write: true },
-          labour: { read: true, write: true },
-          payroll: { read: true, write: true },
-          materials: { read: true, write: true },
-          expenses: { read: true, write: true },
-          floor_plans: { read: true, write: true },
-          estimates: { read: true, write: true },
-          admin: { read: true, write: true },
-        },
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await db.users.put(superUser);
-      localStorage.setItem('mistry_security_questions_' + superUser.email.toLowerCase(), JSON.stringify(superUser.securityQuestions));
-      setCurrentUser(superUser, true);
-      onLoginSuccess(superUser);
-    } catch (err: any) {
-      setError('Super Admin login error: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   // Google OAuth Sign In
@@ -209,27 +166,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setSuccessMessage('');
 
     try {
-      // Super Admin direct login shortcut
-      if (
-        cleanId.toLowerCase() === 'tamilthilagan82@gmail.com' &&
-        password === 'tamizh406@##'
-      ) {
-        await handleSuperAdminDirectLogin();
-        return;
-      }
-
-      // Check local user database first (for users created with security questions)
-      const localMatch = await db.users
-        .filter(u => u.email.toLowerCase() === cleanId.toLowerCase() || u.username.toLowerCase() === cleanId.toLowerCase())
-        .first();
-
-      if (localMatch && localMatch.passwordHash === password) {
-        setCurrentUser(localMatch, remember);
-        onLoginSuccess(localMatch);
-        return;
-      }
-
-      // Supabase cloud login
+      // Sign-in is checked by Supabase Auth only (no local password check, no built-in accounts).
       const res = await loginUser(cleanId, password, remember);
       if (res.success && res.user) {
         onLoginSuccess(res.user);
@@ -303,32 +240,34 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         friendAnswer: friendAns,
       };
 
+      // The account is created in Supabase Auth; it is the only place a password is kept.
+      const cloud = await registerUser(cleanUser, cleanName, regMobile.trim(), cleanEmail, regPassword);
+      if (!cloud.success && !cloud.needsConfirmation) {
+        setError(cloud.error || 'Could not create the account. Please check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Only the recovery questions are kept on this device; never the password.
       const newUser: UserType = {
         id: 'usr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
         username: cleanUser,
         fullName: cleanName || cleanUser,
         email: cleanEmail,
-        mobile: regMobile.trim() || '9876543210',
-        passwordHash: regPassword,
+        mobile: regMobile.trim(),
+        passwordHash: '',
         securityQuestions,
         role: 'MISTRY_USER',
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-
-      // Save to local IndexedDB and localStorage
       await db.users.put(newUser);
       localStorage.setItem('mistry_security_questions_' + cleanEmail, JSON.stringify(securityQuestions));
 
-      // Attempt Supabase cloud registration as well
-      try {
-        await registerUser(cleanUser, cleanName, regMobile.trim(), cleanEmail, regPassword);
-      } catch {
-        // Cloud registration optional; local account ready
-      }
-
-      setSuccessMessage('Account created successfully with your 3 security questions! Please sign in with your email ID.');
+      setSuccessMessage(cloud.needsConfirmation
+        ? 'Account created with your 3 security questions. Check your email to confirm it, then sign in with your email ID.'
+        : 'Account created successfully with your 3 security questions! Please sign in with your email ID.');
       setIdentifier(cleanEmail);
       setMode('login');
     } catch (err: any) {
@@ -385,14 +324,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         if (storedJson) {
           try { storedSec = JSON.parse(storedJson); } catch {}
         }
-      }
-
-      if (!storedSec && cleanEmail === 'tamilthilagan82@gmail.com') {
-        storedSec = {
-          nameAnswer: 'Tamizh',
-          cityAnswer: 'Chennai',
-          friendAnswer: 'Mistry',
-        };
       }
 
       if (!storedSec) {
@@ -479,17 +410,22 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     try {
       const cleanEmail = verifiedEmail.toLowerCase();
-      const user = await db.users.filter(u => u.email.toLowerCase() === cleanEmail).first();
-
-      if (user) {
-        user.passwordHash = resetNewPassword;
-        user.updatedAt = new Date().toISOString();
-        await db.users.put(user);
+      // The password lives in Supabase Auth. It can be changed here only in a recovery session for
+      // this email (opened from the reset link); otherwise the reset link is emailed.
+      const { data } = isSupabaseConfigured() ? await supabase.auth.getSession() : { data: { session: null } };
+      if (data.session?.user?.email?.toLowerCase() === cleanEmail) {
+        const res = await updateSupabasePassword(resetNewPassword);
+        if (!res.success) throw new Error(res.error || 'Could not update the password.');
+        setSuccessMessage('Password reset successfully! You can now log in with your new password.');
+      } else {
+        const res = await requestEmailPasswordReset(cleanEmail);
+        if (!res.success) throw new Error(res.error || res.message);
+        setSuccessMessage(`${res.message} Open the link in that email to set your new password.`);
       }
-
-      setSuccessMessage('Password reset successfully! You can now log in with your new password.');
       setIdentifier(cleanEmail);
       setPassword('');
+      setResetNewPassword('');
+      setResetConfirmPassword('');
       setMode('login');
     } catch (err: any) {
       setError('Failed to update password: ' + err.message);
