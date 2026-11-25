@@ -96,11 +96,11 @@ export const WorkerAttendancePdfModal: React.FC<WorkerAttendancePdfModalProps> =
 
   if (!isOpen) return null;
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     if (!statement) return;
     setBusyAction('download');
     try {
-      const blob = generateWorkerMonthlyAttendancePdfBlob(statement);
+      const blob = await generateWorkerMonthlyAttendancePdfBlob(statement);
       const filename = workerMonthlyPdfFilename(statement);
       downloadFile(blob, filename);
       onNotify?.(`Downloaded ${filename}`, 'success');

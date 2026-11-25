@@ -32,6 +32,8 @@ import '../../styles/materials-mobile.css';
 import { formatDateTime, formatDay, todayKey } from '../../utils/datetime';
 import { formatINR, formatQty, parseAmount, roundMoney } from '../../utils/money';
 import { Badge, CalcLine, Chips, ConfirmSheet, Empty, Field, Loading, Note, Page, SearchBox, Section, Sheet } from '../../components/mobile/kit';
+import { VirtualListSpacer } from '../../components/ui/VirtualSpacers';
+import { useVirtualWindow } from '../../hooks/useVirtualWindow';
 
 type EntryMode = 'purchase' | 'usage' | 'return' | 'adjust' | 'opening';
 
@@ -82,6 +84,21 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
   // The latest purchase of each stock item: its price and supplier are offered again, and a
   // repeat cement purchase keeps the brand, type and grade it was first recorded with.
   const lastPurchase = useMemo(() => latestPurchaseByItem(project?.materials || []), [project]);
+  const q = query.trim().toLowerCase();
+  const shown = useMemo(() => {
+    if (!project) return [];
+    const matches = (s: StockItem) => {
+      if (!q) return true;
+      const g = materialGroup(shelfOf.get(s.key) || 'other');
+      return s.name.toLowerCase().includes(q) || g.label.toLowerCase().includes(q) || g.keywords.includes(q);
+    };
+    return stock.filter(s => (chip === 'all' || stockChipOf(s.category) === chip) && matches(s));
+  }, [project, stock, shelfOf, chip, q]);
+  const stockWindow = useVirtualWindow<HTMLDivElement>({
+    itemCount: shown.length,
+    estimateSize: 68,
+    threshold: 25,
+  });
 
   if (project === undefined) return <Page title="Materials" onBack={onBack}><Loading rows={5} /></Page>;
   if (project === null) {
@@ -90,14 +107,7 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
 
   // The same figures the desktop Materials screen shows.
   const summary = summariseStock(stock, project.materials, project.rodEntries);
-  const q = query.trim().toLowerCase();
-  const matches = (s: StockItem) => {
-    if (!q) return true;
-    const g = materialGroup(shelfOf.get(s.key) || 'other');
-    return s.name.toLowerCase().includes(q) || g.label.toLowerCase().includes(q) || g.keywords.includes(q);
-  };
   const countOf = (c: StockChip) => (c === 'all' ? stock.length : stock.filter(s => stockChipOf(s.category) === c).length);
-  const shown = stock.filter(s => (chip === 'all' || stockChipOf(s.category) === chip) && matches(s));
   const openItem = openKey ? stock.find(s => s.key === openKey) : undefined;
   const suppliers = Array.from(new Set(project.materials.map(m => (m.supplier || '').trim()).filter(Boolean))).slice(0, 30);
 
@@ -159,8 +169,9 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
               </div>
             )}
 
-            <div className="m-card stk-list">
-              {shown.map(item => {
+            <div ref={stockWindow.containerRef} className="m-card stk-list">
+              <VirtualListSpacer height={stockWindow.topSpacerPx} />
+              {shown.slice(stockWindow.startIndex, stockWindow.endIndex).map(item => {
                 const status = stockStatus(item);
                 return (
                   <div key={item.key} className="stk-row">
@@ -187,6 +198,7 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
                   </div>
                 );
               })}
+              <VirtualListSpacer height={stockWindow.bottomSpacerPx} />
               {shown.length === 0 && <div className="m-row is-muted">{t('stk_no_match', 'No material matches.')}</div>}
             </div>
 

@@ -104,10 +104,10 @@ export const SiteStockPurchasePdfModal: React.FC<SiteStockPurchasePdfModalProps>
     }
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     setBusyAction('download');
     try {
-      const blob = generateSiteStockPurchasePdfBlob(statement);
+      const blob = await generateSiteStockPurchasePdfBlob(statement);
       const filename = siteStockPurchasePdfFilename(statement);
       downloadFile(blob, filename);
       onNotify?.(`Downloaded ${filename}`, 'success');

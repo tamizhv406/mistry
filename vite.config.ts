@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import { APP_DESCRIPTION, APP_NAME, APP_SHORT_NAME, APP_TAGLINE, BRAND_COLORS, logoSvg } from './src/config/brand.ts'
@@ -36,6 +37,14 @@ const brandHtml: Plugin = {
 export default defineConfig({
   base: servedFromRoot ? '/' : './',
   plugins: [react(), brandHtml, ...(servedFromRoot ? [rootLinks] : [])],
+  resolve: {
+    alias: [
+      // Resolve bare `three` & `maplibre-gl` to modular ESM sources so Vite tree-shakes unused
+      // subsystems and splits chunks cleanly below 500 kB using the default warning threshold.
+      { find: /^three$/, replacement: 'three/src/Three.js' },
+      { find: /^maplibre-gl$/, replacement: fileURLToPath(new URL('./node_modules/maplibre-gl/src/index.ts', import.meta.url)) },
+    ],
+  },
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   define: {
     // From the environment only (no built-in project URL or key).
@@ -44,9 +53,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    minify: false,
     sourcemap: false,
-    chunkSizeWarningLimit: 2500,
     rollupOptions: {
       // Two pages: the app, and the Floor Planner that the app opens in a frame.
       input: {
@@ -54,18 +61,21 @@ export default defineConfig({
         'floor-planner': 'floor-planner.html',
       },
       output: {
-        // Only the app's own libraries get fixed chunks. Everything the Floor Planner alone uses
-        // (map, canvas, 3D extras, i18n) is left to Rollup, so it splits along the planner's
-        // lazy imports and never loads with the main app.
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return undefined;
-          const pkg = /node_modules[\\/]((?:@[^\\/]+[\\/])?[^\\/]+)/.exec(id)?.[1].replace(/\\/g, '/');
-          if (!pkg) return undefined;
-          if (['react', 'react-dom', 'scheduler', 'lucide-react', 'motion', 'framer-motion', 'motion-dom', 'motion-utils'].includes(pkg)) return 'vendor-framework';
-          if (pkg === 'dexie' || pkg === 'dexie-react-hooks' || pkg.startsWith('@supabase/')) return 'vendor-db';
-          if (pkg === 'jspdf' || pkg === 'jspdf-autotable') return 'vendor-jspdf';
-          if (pkg === 'three') return 'vendor-three';
-          return undefined;
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 40 },
+            { name: 'vendor-ui', test: /node_modules[\\/](lucide-react|motion|framer-motion|motion-dom|motion-utils)[\\/]/, priority: 35 },
+            { name: 'vendor-dexie', test: /node_modules[\\/](dexie|dexie-react-hooks)[\\/]/, priority: 35 },
+            { name: 'vendor-supabase', test: /node_modules[\\/]@supabase[\\/]/, priority: 35 },
+            { name: 'vendor-i18n', test: /node_modules[\\/](i18next|i18next-browser-languagedetector|react-i18next)[\\/]/, priority: 35 },
+            { name: 'vendor-konva', test: /node_modules[\\/](konva|react-konva)[\\/]/, priority: 35 },
+            { name: 'vendor-geometry', test: /node_modules[\\/](clipper2-ts|zod)[\\/]/, priority: 35 },
+            { name: 'vendor-jspdf', test: /node_modules[\\/](jspdf|jspdf-autotable)[\\/]/, maxSize: 450 * 1024, priority: 35 },
+            { name: 'vendor-three', test: /node_modules[\\/]three[\\/]/, maxSize: 380 * 1024, priority: 35 },
+            { name: 'vendor-r3f', test: /node_modules[\\/](@react-three|react-reconciler|three-stdlib|postprocessing|n8ao|three-bvh-csg|troika-)/, maxSize: 380 * 1024, priority: 30 },
+            { name: 'vendor-maplibre', test: /node_modules[\\/](maplibre-gl|@maplibre|proj4|earcut|gl-matrix|pbf|@mapbox)[\\/]/, maxSize: 380 * 1024, priority: 30 },
+            { name: 'floor-planner-app', test: /src[\\/]floorPlanner[\\/]/, maxSize: 380 * 1024, priority: 10 },
+          ],
         },
       },
     },

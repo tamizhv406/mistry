@@ -1044,7 +1044,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             return (
               <article key={plan.id} className="rounded-2xl border border-slate-800 bg-slate-900/90 p-4 space-y-3">
                 {preview ? (
-                  <img src={preview} alt={`${plan.buildingName} ${plan.floorName} floor plan`} className="w-full h-44 object-contain rounded-xl bg-slate-950" />
+                  <img src={preview} alt={`${plan.buildingName} ${plan.floorName} floor plan`} loading="lazy" decoding="async" className="w-full h-44 object-contain rounded-xl bg-slate-950" />
                 ) : (
                   <div className="h-28 rounded-xl bg-slate-950 flex items-center justify-center text-slate-500">
                     <Building2 size={28} />

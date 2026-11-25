@@ -31,6 +31,8 @@ const Badge: React.FC<BadgeProps & { look: ItemIcon }> = ({ look, size = 'sm', p
         src={src}
         alt={title || ''}
         aria-hidden={title ? undefined : true}
+        loading="lazy"
+        decoding="async"
         style={{ ...frame, objectFit: 'cover', background: '#f1f5f9' }}
         onError={() => setFailedSrc(src)}
       />

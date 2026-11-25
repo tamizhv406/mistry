@@ -14,6 +14,8 @@ import { addDays, formatDateTime, formatDay, formatDayLong, monthKeyOf, todayKey
 import { formatINR, formatQty } from '../../utils/money';
 import { Badge, Empty, Field, Loading, Note, Page, SearchBox, Segmented, Sheet } from '../../components/mobile/kit';
 import { WorkerAttendancePdfModal } from '../../components/WorkerAttendancePdfModal';
+import { VirtualListSpacer } from '../../components/ui/VirtualSpacers';
+import { useVirtualWindow } from '../../hooks/useVirtualWindow';
 import '../../styles/materials-mobile.css';
 
 type Notify = (msg: string, type?: 'success' | 'error' | 'info') => void;
@@ -105,6 +107,16 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
   }, [project, date]);
 
   const corrections = useMemo(() => buildCorrectionLog(allMarks || [], project?.workers || []), [allMarks, project?.workers]);
+  const q = query.trim().toLowerCase();
+  const rows = useMemo(() => {
+    const list = project?.workers || [];
+    return q ? list.filter(w => `${w.name} ${w.category} ${w.phone}`.toLowerCase().includes(q)) : list;
+  }, [project?.workers, q]);
+  const workerWindow = useVirtualWindow<HTMLDivElement>({
+    itemCount: rows.length,
+    estimateSize: 64,
+    threshold: 25,
+  });
 
   if (project === undefined) return <Page title={t('at_title', 'Attendance')} onBack={onBack}><Loading rows={6} /></Page>;
   if (project === null) {
@@ -120,8 +132,6 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
     const key = `${date}:${id}`;
     return key in shown ? (shown[key] ?? undefined) : dayMarks.get(id);
   };
-  const q = query.trim().toLowerCase();
-  const rows = q ? workers.filter(w => `${w.name} ${w.category} ${w.phone}`.toLowerCase().includes(q)) : workers;
   const counts = countByStatus(project.attendance.filter(a => a.date === date));
   const unmarked = workers.filter(w => !statusOf(w.id));
   const isPast = date < today;
@@ -217,8 +227,9 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
 
           <SearchBox value={query} onChange={setQuery} placeholder={t('at_search', 'Search worker')} />
 
-          <div className="m-card m-list att-list">
-            {rows.map(w => {
+          <div ref={workerWindow.containerRef} className="m-card m-list att-list">
+            <VirtualListSpacer height={workerWindow.topSpacerPx} />
+            {rows.slice(workerWindow.startIndex, workerWindow.endIndex).map(w => {
               const s = statusOf(w.id);
               return (
                 <div key={w.id} className="att-row">
@@ -236,6 +247,7 @@ export const LabourView: React.FC<LabourViewProps> = ({ user, siteId, onBack, on
                 </div>
               );
             })}
+            <VirtualListSpacer height={workerWindow.bottomSpacerPx} />
             {rows.length === 0 && <div className="m-row is-muted">No worker matches "{query}".</div>}
           </div>
           <p className="m-calc-note">{t('at_hint', 'Tap a status to change it. Hold it (or tap ⋯) for Overtime and Leave.')}</p>

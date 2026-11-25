@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf'
 import { getCanvasStage } from '../canvas/stageRef'
 import { formatLength, type Plan } from '../model'
 import { usePlanStore } from '../store/planStore'
@@ -17,6 +16,7 @@ export async function exportPdfBlueprint(): Promise<boolean> {
   showToast('Generating architectural PDF blueprint...')
 
   try {
+    const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',

@@ -20,7 +20,7 @@ function post(message: Record<string, unknown>) {
 
 // Resolves once no save is running (or after `ms`), so closing never cuts off the last edit.
 async function savesSettled(ms = 3000) {
-  const { useSyncStore } = await import('./storage/sync')
+  const { useSyncStore } = await import('./storage')
   const until = Date.now() + ms
   while (useSyncStore.getState().status === 'saving' && Date.now() < until) {
     await new Promise((r) => setTimeout(r, 50))

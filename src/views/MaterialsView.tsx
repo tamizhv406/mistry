@@ -25,6 +25,8 @@ import { StockOperationModal } from '../components/StockOperationModal';
 import { MaterialIcon } from '../components/ui/CategoryIcon';
 import { BillPhotoThumbnail, BillPhotoViewerModal, type BillPhotoRecordRef } from '../components/BillPhotoComponents';
 import { SiteStockPurchasePdfModal } from '../components/SiteStockPurchasePdfModal';
+import { VirtualTableSpacer } from '../components/ui/VirtualSpacers';
+import { useVirtualWindow } from '../hooks/useVirtualWindow';
 
 export interface MaterialsViewProps {
   user: User;
@@ -201,6 +203,22 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
     return list.sort((a, b) => b.date.localeCompare(a.date));
   }, [materials, rodEntries]);
+
+  const inventoryWindow = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: filteredStock.length,
+    estimateSize: 64,
+    threshold: 30,
+  });
+  const purchasesWindow = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: combinedPurchases.length,
+    estimateSize: 64,
+    threshold: 30,
+  });
+  const movementsWindow = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: movementLog.length,
+    estimateSize: 60,
+    threshold: 30,
+  });
 
   // Quick Action Handlers
   const handleOpenStockOut = (item?: StockItem) => {
@@ -413,7 +431,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                   <th className="is-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={inventoryWindow.containerRef}>
                 {filteredStock.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="erp-empty-cell">
@@ -425,7 +443,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  filteredStock.map(item => {
+                  <>
+                  <VirtualTableSpacer colSpan={7} height={inventoryWindow.topSpacerPx} />
+                  {filteredStock.slice(inventoryWindow.startIndex, inventoryWindow.endIndex).map(item => {
                     const status = stockStatus(item);
                     const isOut = status === 'out' || status === 'negative';
                     const isLow = status === 'low';
@@ -493,7 +513,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         </td>
                       </tr>
                     );
-                  })
+                  })}
+                  <VirtualTableSpacer colSpan={7} height={inventoryWindow.bottomSpacerPx} />
+                  </>
                 )}
               </tbody>
             </table>
@@ -519,7 +541,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                   <th>Bill</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={purchasesWindow.containerRef}>
                 {combinedPurchases.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="erp-empty-cell">
@@ -528,7 +550,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  combinedPurchases.map(p => {
+                  <>
+                  <VirtualTableSpacer colSpan={9} height={purchasesWindow.topSpacerPx} />
+                  {combinedPurchases.slice(purchasesWindow.startIndex, purchasesWindow.endIndex).map(p => {
                     const siteObj = sites.find(s => s.id === p.siteId);
                     const hasPhoto = !!(p.billPhotoPath || p.billPhotoLocalDataUrl);
                     return (
@@ -573,7 +597,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         </td>
                       </tr>
                     );
-                  })
+                  })}
+                  <VirtualTableSpacer colSpan={9} height={purchasesWindow.bottomSpacerPx} />
+                  </>
                 )}
               </tbody>
             </table>
@@ -596,7 +622,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                   <th className="is-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={movementsWindow.containerRef}>
                 {movementLog.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="erp-empty-cell">
@@ -605,7 +631,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  movementLog.map(m => (
+                  <>
+                  <VirtualTableSpacer colSpan={6} height={movementsWindow.topSpacerPx} />
+                  {movementLog.slice(movementsWindow.startIndex, movementsWindow.endIndex).map(m => (
                     <tr key={m.id} className={m.isDeleted ? 'erp-row-voided' : undefined}>
                       <td className="erp-cell-muted">{formatDay(m.eventDate)}</td>
                       <td className="erp-cell-primary">{m.itemName}</td>
@@ -644,7 +672,9 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         )}
                       </td>
                     </tr>
-                  ))
+                  ))}
+                  <VirtualTableSpacer colSpan={6} height={movementsWindow.bottomSpacerPx} />
+                  </>
                 )}
               </tbody>
             </table>

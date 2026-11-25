@@ -1,9 +1,15 @@
 import type { MultiTierEstimateResult } from '../domain/buildingCalculator/multiTierEstimator';
 import type { WorkerMonthlyStatement } from '../domain/salary';
 import type { SiteStockPurchaseStatement } from '../domain/stock';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { APP_NAME } from '../config/brand';
+
+async function loadJsPdfWithAutoTable() {
+  const [{ jsPDF }, autoTableModule] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
+  return { jsPDF, autoTable: autoTableModule.default };
+}
 
 /**
  * Escapes characters for PDF literal strings enclosed in parentheses.
@@ -952,7 +958,8 @@ export function workerMonthlyPdfFilename(statement: Pick<WorkerMonthlyStatement,
  * Generates an A4 PDF report for a single worker's monthly day-by-day attendance and wage settlement.
  * Uses jsPDF + jspdf-autotable with the SiteMistry Orange (#F97316) & Charcoal (#1F2937) theme.
  */
-export function generateWorkerMonthlyAttendancePdfBlob(statement: WorkerMonthlyStatement): Blob {
+export async function generateWorkerMonthlyAttendancePdfBlob(statement: WorkerMonthlyStatement): Promise<Blob> {
+  const { jsPDF, autoTable } = await loadJsPdfWithAutoTable();
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -1380,8 +1387,9 @@ export function printWorkerMonthlyStatement(statement: WorkerMonthlyStatement): 
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
       } catch {
-        const blob = generateWorkerMonthlyAttendancePdfBlob(statement);
-        downloadFile(blob, workerMonthlyPdfFilename(statement));
+        void generateWorkerMonthlyAttendancePdfBlob(statement).then(blob =>
+          downloadFile(blob, workerMonthlyPdfFilename(statement)),
+        );
       } finally {
         setTimeout(() => iframe.remove(), 60_000);
       }
@@ -1389,10 +1397,11 @@ export function printWorkerMonthlyStatement(statement: WorkerMonthlyStatement): 
     document.body.appendChild(iframe);
     return true;
   } catch {
-    const blob = generateWorkerMonthlyAttendancePdfBlob(statement);
-    const url = URL.createObjectURL(blob);
-    const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
-    if (!popup) downloadFile(blob, workerMonthlyPdfFilename(statement));
+    void generateWorkerMonthlyAttendancePdfBlob(statement).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
+      if (!popup) downloadFile(blob, workerMonthlyPdfFilename(statement));
+    });
     return true;
   }
 }
@@ -1414,7 +1423,8 @@ export function siteStockPurchasePdfFilename(
  * Generates an A4 PDF report of site-wise stock purchases for a selected date range,
  * including Date, Item, Quantity, Rate, Supplier, Invoice #, Bill Photo Reference, and Total Cost.
  */
-export function generateSiteStockPurchasePdfBlob(statement: SiteStockPurchaseStatement): Blob {
+export async function generateSiteStockPurchasePdfBlob(statement: SiteStockPurchaseStatement): Promise<Blob> {
+  const { jsPDF, autoTable } = await loadJsPdfWithAutoTable();
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -1698,8 +1708,9 @@ export function printSiteStockPurchaseStatement(statement: SiteStockPurchaseStat
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
       } catch {
-        const blob = generateSiteStockPurchasePdfBlob(statement);
-        downloadFile(blob, siteStockPurchasePdfFilename(statement));
+        void generateSiteStockPurchasePdfBlob(statement).then(blob =>
+          downloadFile(blob, siteStockPurchasePdfFilename(statement)),
+        );
       } finally {
         setTimeout(() => iframe.remove(), 60_000);
       }
@@ -1707,10 +1718,11 @@ export function printSiteStockPurchaseStatement(statement: SiteStockPurchaseStat
     document.body.appendChild(iframe);
     return true;
   } catch {
-    const blob = generateSiteStockPurchasePdfBlob(statement);
-    const url = URL.createObjectURL(blob);
-    const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
-    if (!popup) downloadFile(blob, siteStockPurchasePdfFilename(statement));
+    void generateSiteStockPurchasePdfBlob(statement).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
+      if (!popup) downloadFile(blob, siteStockPurchasePdfFilename(statement));
+    });
     return true;
   }
 }

@@ -681,7 +681,7 @@ const ToolEditSheet: React.FC<{
     >
       {error && <div style={{ marginBottom: 12 }}><Note tone="bad" role="alert">{error}</Note></div>}
       {photo
-        ? <img className="cat-photo-lg" src={photo} alt={`Photo of ${name || 'the tool'}`} />
+        ? <img className="cat-photo-lg" src={photo} alt={`Photo of ${name || 'the tool'}`} loading="lazy" decoding="async" />
         : <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0' }}><ToolIcon size="xl" name={name} /></div>}
       <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={pickPhoto} style={{ display: 'none' }} />
       <div className="m-btn-row" style={{ margin: '8px 0 14px' }}>

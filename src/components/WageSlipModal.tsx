@@ -79,8 +79,8 @@ export const WageSlipModal: React.FC<WageSlipModalProps> = ({
     printWorkerMonthlyStatement(monthlyStatement);
   };
 
-  const handleDownloadPdf = () => {
-    const blob = generateWorkerMonthlyAttendancePdfBlob(monthlyStatement);
+  const handleDownloadPdf = async () => {
+    const blob = await generateWorkerMonthlyAttendancePdfBlob(monthlyStatement);
     downloadFile(blob, workerMonthlyPdfFilename(monthlyStatement));
   };
 

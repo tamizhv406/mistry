@@ -259,7 +259,7 @@ async function run() {
 
   // 3. Real PDF Blob generation (populated + empty range)
   console.log('\n3. Real PDF Blob generation (%PDF-, size, %%EOF)');
-  const populatedPdf = generateSiteStockPurchasePdfBlob(novStatement);
+  const populatedPdf = await generateSiteStockPurchasePdfBlob(novStatement);
   const popBytes = new Uint8Array(await populatedPdf.arrayBuffer());
   const popText = new TextDecoder('latin1').decode(popBytes);
   check(populatedPdf.type === 'application/pdf', 'Populated PDF Blob has application/pdf MIME type');
@@ -274,7 +274,7 @@ async function run() {
     rods,
   });
   check(emptyStatement.totalPurchases === 0 && emptyStatement.totalCost === 0, 'Empty date range yields zero purchases and ₹0');
-  const emptyPdf = generateSiteStockPurchasePdfBlob(emptyStatement);
+  const emptyPdf = await generateSiteStockPurchasePdfBlob(emptyStatement);
   const emptyBytes = new Uint8Array(await emptyPdf.arrayBuffer());
   const emptyText = new TextDecoder('latin1').decode(emptyBytes);
   check(emptyBytes.length > 1500 && emptyText.startsWith('%PDF-') && emptyText.trimEnd().endsWith('%%EOF'), 'Empty-range purchase PDF builds cleanly without errors');

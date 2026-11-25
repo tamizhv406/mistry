@@ -334,7 +334,7 @@ async function run() {
 
   // 3. Real PDF Blob output for populated & empty months
   console.log('\n3. Real PDF Blob generation (%PDF header, valid size, %%EOF)');
-  const populatedPdf = generateWorkerMonthlyAttendancePdfBlob(unpaidStatement);
+  const populatedPdf = await generateWorkerMonthlyAttendancePdfBlob(unpaidStatement);
   const populatedBytes = new Uint8Array(await populatedPdf.arrayBuffer());
   const populatedText = new TextDecoder('latin1').decode(populatedBytes);
   check(populatedPdf.type === 'application/pdf', 'Populated PDF Blob has application/pdf MIME type');
@@ -342,7 +342,7 @@ async function run() {
   check(populatedText.startsWith('%PDF-'), 'Populated PDF starts with %PDF- signature');
   check(populatedText.trimEnd().endsWith('%%EOF'), 'Populated PDF ends with %%EOF trailer');
 
-  const emptyPdf = generateWorkerMonthlyAttendancePdfBlob(nov30);
+  const emptyPdf = await generateWorkerMonthlyAttendancePdfBlob(nov30);
   const emptyBytes = new Uint8Array(await emptyPdf.arrayBuffer());
   const emptyText = new TextDecoder('latin1').decode(emptyBytes);
   check(emptyPdf.type === 'application/pdf', 'Zero-attendance PDF Blob has application/pdf MIME type');

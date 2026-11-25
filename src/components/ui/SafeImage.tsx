@@ -143,6 +143,7 @@ export const SafeImage: React.FC<SafeImageProps> = ({
       className={className}
       style={style}
       loading={props.loading || 'lazy'}
+      decoding={props.decoding || 'async'}
       onError={e => {
         if (!hasError && src) {
           setFailedSrc(src);

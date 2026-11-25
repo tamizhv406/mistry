@@ -1,40 +1,75 @@
-import React, { useState, useEffect, useReducer } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useReducer } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronRight, X, Download, Building2 } from 'lucide-react';
 import { db } from './db/db';
 import { MobileBottomNav, ProjectSwitcher } from './components/mobile/MobileChrome';
-import { HomeView, type AppView as HomeTarget, type QuickAction } from './views/mobile/HomeView';
+import type { AppView as HomeTarget, QuickAction } from './views/mobile/HomeView';
 import { pickStartProject, readLastProject, rememberLastProject } from './domain/dashboard';
-import { LabourView } from './views/mobile/LabourView';
-import { WorkerProfileView } from './views/mobile/WorkerProfileView';
-import { StockView } from './views/mobile/StockView';
 import { useIsPhone } from './hooks/useIsPhone';
-import { ToolRoomView } from './views/mobile/ToolRoomView';
-import { ExpensesView } from './views/mobile/ExpensesView';
-import { ReportsView } from './views/mobile/ReportsView';
 import { Toast, type ToastMessage } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { AppShell } from './components/AppShell';
 
 import { LoginView, type AuthNotice } from './views/LoginView';
 import { SplashScreen } from './components/auth/SplashScreen';
-import { DashboardView } from './views/DashboardView';
-import { ProjectsView } from './views/ProjectsView';
-import { SiteDetailView } from './views/SiteDetailView';
-import { TrashView } from './views/TrashView';
-import { BackupView } from './views/BackupView';
-import { SettingsView } from './views/SettingsView';
-import { EstimatorView } from './views/EstimatorView';
-import { AdminDashboardView } from './views/AdminDashboardView';
-import { FloorPlanListView } from './views/FloorPlanListView';
-import { FloorPlannerHostView } from './views/FloorPlannerHostView';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { MaterialsView } from './views/MaterialsView';
-import { AttendanceSalaryView } from './views/AttendanceSalaryView';
 import { ChangeInitialPasswordModal } from './components/ChangeInitialPasswordModal';
 import { ResetPasswordModal } from './components/ResetPasswordModal';
 import { checkPasswordRecoveryUrl, isSupabaseConfigured, supabase } from './services/supabase';
 import { runCloudSync } from './services/cloudSync';
+
+// Code-split every primary and secondary screen so initial load stays small & fast.
+const HomeView = lazy(() => import('./views/mobile/HomeView').then(m => ({ default: m.HomeView })));
+const LabourView = lazy(() => import('./views/mobile/LabourView').then(m => ({ default: m.LabourView })));
+const WorkerProfileView = lazy(() => import('./views/mobile/WorkerProfileView').then(m => ({ default: m.WorkerProfileView })));
+const StockView = lazy(() => import('./views/mobile/StockView').then(m => ({ default: m.StockView })));
+const ToolRoomView = lazy(() => import('./views/mobile/ToolRoomView').then(m => ({ default: m.ToolRoomView })));
+const ExpensesView = lazy(() => import('./views/mobile/ExpensesView').then(m => ({ default: m.ExpensesView })));
+const ReportsView = lazy(() => import('./views/mobile/ReportsView').then(m => ({ default: m.ReportsView })));
+const DashboardView = lazy(() => import('./views/DashboardView').then(m => ({ default: m.DashboardView })));
+const ProjectsView = lazy(() => import('./views/ProjectsView').then(m => ({ default: m.ProjectsView })));
+const SiteDetailView = lazy(() => import('./views/SiteDetailView').then(m => ({ default: m.SiteDetailView })));
+const TrashView = lazy(() => import('./views/TrashView').then(m => ({ default: m.TrashView })));
+const BackupView = lazy(() => import('./views/BackupView').then(m => ({ default: m.BackupView })));
+const SettingsView = lazy(() => import('./views/SettingsView').then(m => ({ default: m.SettingsView })));
+const EstimatorView = lazy(() => import('./views/EstimatorView').then(m => ({ default: m.EstimatorView })));
+const AdminDashboardView = lazy(() => import('./views/AdminDashboardView').then(m => ({ default: m.AdminDashboardView })));
+const FloorPlanListView = lazy(() => import('./views/FloorPlanListView').then(m => ({ default: m.FloorPlanListView })));
+const FloorPlannerHostView = lazy(() => import('./views/FloorPlannerHostView').then(m => ({ default: m.FloorPlannerHostView })));
+const MaterialsView = lazy(() => import('./views/MaterialsView').then(m => ({ default: m.MaterialsView })));
+const AttendanceSalaryView = lazy(() => import('./views/AttendanceSalaryView').then(m => ({ default: m.AttendanceSalaryView })));
+
+const ViewLoadingFallback: React.FC = () => (
+  <div
+    role="status"
+    aria-label="Loading screen"
+    style={{
+      minHeight: '50vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 12,
+      padding: 24,
+      backgroundColor: 'var(--color-bg, #FAFAF9)',
+      color: 'var(--color-charcoal, #1F2937)',
+      fontSize: 15,
+      fontWeight: 600,
+    }}
+  >
+    <div
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: '50%',
+        border: '3px solid var(--color-border, #E7E5E4)',
+        borderTopColor: 'var(--color-primary, #F97316)',
+        animation: 'spin 0.8s linear infinite',
+      }}
+    />
+    <span>Loading…</span>
+  </div>
+);
 
 import { SiteModal } from './components/SiteModal';
 import { MaterialModal } from './components/MaterialModal';
@@ -730,6 +765,7 @@ function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, o
       >
         {/* Main View Router */}
         <main>
+        <Suspense fallback={<ViewLoadingFallback />}>
         {/* Phones: today's numbers and quick actions for the open project. */}
         {currentView === 'dashboard' && isPhone && (
           <HomeView
@@ -1048,6 +1084,7 @@ function Workspace({ user, justSignedIn, recoveryRequested, onRecoveryHandled, o
             signingOut={signingOut}
           />
         )}
+        </Suspense>
       </main>
       </AppShell>
 

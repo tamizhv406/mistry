@@ -1,5 +1,7 @@
 import { addDays, todayKey } from '../../utils/datetime';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useVirtualWindow } from '../../hooks/useVirtualWindow';
+import { VirtualTableSpacer } from '../../components/ui/VirtualSpacers';
 import {
   Coffee,
   Sparkles,
@@ -130,6 +132,28 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
     if (teaFilter === 'month') return t.date.startsWith(currentMonthStr);
     return true;
   });
+
+  const sortedFilteredTea = useMemo(
+    () => [...filteredTea].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [filteredTea],
+  );
+  const sortedOtherExpenses = useMemo(
+    () => [...otherExpenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [otherExpenses],
+  );
+
+  const teaVirtual = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: sortedFilteredTea.length,
+    estimateSize: 56,
+    threshold: 30,
+  });
+  const otherVirtual = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: sortedOtherExpenses.length,
+    estimateSize: 56,
+    threshold: 30,
+  });
+  const visibleTeaRows = sortedFilteredTea.slice(teaVirtual.startIndex, teaVirtual.endIndex);
+  const visibleOtherRows = sortedOtherExpenses.slice(otherVirtual.startIndex, otherVirtual.endIndex);
 
   const totalFilteredTeaCost = filteredTea.reduce((acc, t) => acc + t.totalAmount, 0);
   const totalFilteredTeaPaid = filteredTea.reduce((acc, t) => acc + t.paidAmount, 0);
@@ -900,10 +924,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredTea
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .map(item => (
+                <tbody ref={teaVirtual.containerRef}>
+                  <VirtualTableSpacer colSpan={11} height={teaVirtual.topSpacerPx} />
+                  {visibleTeaRows.map(item => (
                       <tr
                         key={item.id}
                         onClick={() => openTeaDetail(item)}
@@ -986,6 +1009,8 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
                         </td>
                       </tr>
                     ))}
+
+                  <VirtualTableSpacer colSpan={11} height={teaVirtual.bottomSpacerPx} />
 
                   {filteredTea.length === 0 && (
                     <tr>
@@ -1169,10 +1194,9 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {otherExpenses
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                    .map(oth => (
+                <tbody ref={otherVirtual.containerRef}>
+                  <VirtualTableSpacer colSpan={9} height={otherVirtual.topSpacerPx} />
+                  {visibleOtherRows.map(oth => (
                       <tr
                         key={oth.id}
                         onClick={() => openOtherDetail(oth)}
@@ -1255,6 +1279,8 @@ export const DailyExpensesTab: React.FC<DailyExpensesTabProps> = ({
                         </td>
                       </tr>
                     ))}
+
+                  <VirtualTableSpacer colSpan={9} height={otherVirtual.bottomSpacerPx} />
 
                   {otherExpenses.length === 0 && (
                     <tr>

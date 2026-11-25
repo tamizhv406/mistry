@@ -142,6 +142,8 @@ export const BillPhotoPicker: React.FC<BillPhotoPickerProps> = ({
             src={previewUrl}
             alt="Selected bill preview"
             className="bph-preview-thumb"
+            loading="lazy"
+            decoding="async"
           />
           <div className="bph-preview-meta">
             <span className="bph-preview-name">{previewName}</span>
@@ -236,7 +238,7 @@ export const BillPhotoThumbnail: React.FC<BillPhotoThumbnailProps> = ({
       }}
     >
       {url ? (
-        <img src={url} alt={record.billPhotoName || 'Bill photo'} className="bph-thumb-img" />
+        <img src={url} alt={record.billPhotoName || 'Bill photo'} className="bph-thumb-img" loading="lazy" decoding="async" />
       ) : offlineUnavailable ? (
         <span className="bph-thumb-fallback" title="Saved in cloud — connect to view">
           <CloudOff size={18} aria-hidden="true" />
@@ -402,6 +404,7 @@ export const BillPhotoViewerModal: React.FC<BillPhotoViewerModalProps> = ({
               src={url}
               alt={record.billPhotoName || record.title}
               className={`bph-lightbox-img ${zoomed ? 'is-zoomed' : ''}`}
+              decoding="async"
               onClick={() => setZoomed(z => !z)}
             />
           ) : (

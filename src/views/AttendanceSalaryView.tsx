@@ -48,7 +48,9 @@ import { WageSlipModal } from '../components/WageSlipModal';
 import { WorkerAttendancePdfModal } from '../components/WorkerAttendancePdfModal';
 import { useLanguage } from '../services/i18n';
 import { AttendanceMatrix } from '../components/attendance/AttendanceMatrix';
+import { VirtualListSpacer, VirtualTableSpacer } from '../components/ui/VirtualSpacers';
 import { APP_NAME } from '../config/brand';
+import { useVirtualWindow } from '../hooks/useVirtualWindow';
 
 export interface AttendanceSalaryViewProps {
   user: User;
@@ -210,6 +212,27 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
       return true;
     });
   }, [workers, searchQuery, statusFilter, dayMarks]);
+
+  const dailyWorkerWindow = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: filteredWorkers.length,
+    estimateSize: 64,
+    threshold: 25,
+  });
+  const dailyMobileWindow = useVirtualWindow<HTMLDivElement>({
+    itemCount: filteredWorkers.length,
+    estimateSize: 132,
+    threshold: 25,
+  });
+  const salaryWorkerWindow = useVirtualWindow<HTMLTableSectionElement>({
+    itemCount: workers.length,
+    estimateSize: 64,
+    threshold: 25,
+  });
+  const salaryMobileWindow = useVirtualWindow<HTMLDivElement>({
+    itemCount: workers.length,
+    estimateSize: 190,
+    threshold: 25,
+  });
 
   // Single Worker Mark Attendance
   const handleMarkStatus = async (worker: LabourWorker, status: AttendanceStatus) => {
@@ -542,7 +565,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                   <th className="is-right">Daily Status ({formatDay(selectedDate)})</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={dailyWorkerWindow.containerRef}>
                 {filteredWorkers.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="erp-empty-cell">
@@ -552,7 +575,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  filteredWorkers.map(w => {
+                  <>
+                  <VirtualTableSpacer colSpan={4} height={dailyWorkerWindow.topSpacerPx} />
+                  {filteredWorkers.slice(dailyWorkerWindow.startIndex, dailyWorkerWindow.endIndex).map(w => {
                     const mark = dayMarks.get(w.id);
                     const status = mark?.status;
                     const isSaving = savingWorkerId === w.id;
@@ -624,21 +649,25 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                         </td>
                       </tr>
                     );
-                  })
+                  })}
+                  <VirtualTableSpacer colSpan={4} height={dailyWorkerWindow.bottomSpacerPx} />
+                  </>
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Simplified Mobile Worker Roster Cards (< 768px) */}
-          <div className="attendance-mobile-roster">
+          <div ref={dailyMobileWindow.containerRef} className="attendance-mobile-roster">
             {filteredWorkers.length === 0 ? (
               <div className="erp-empty-cell">
                 <Users size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
                 <div className="erp-cell-primary">No personnel enrolled</div>
               </div>
             ) : (
-              filteredWorkers.map(w => {
+              <>
+              <VirtualListSpacer height={dailyMobileWindow.topSpacerPx} />
+              {filteredWorkers.slice(dailyMobileWindow.startIndex, dailyMobileWindow.endIndex).map(w => {
                 const mark = dayMarks.get(w.id);
                 const status = mark?.status;
                 const isSaving = savingWorkerId === w.id;
@@ -705,7 +734,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     </div>
                   </div>
                 );
-              })
+              })}
+              <VirtualListSpacer height={dailyMobileWindow.bottomSpacerPx} />
+              </>
             )}
           </div>
         </div>
@@ -729,7 +760,7 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                   <th className="is-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={salaryWorkerWindow.containerRef}>
                 {workers.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="erp-empty-cell">
@@ -738,7 +769,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     </td>
                   </tr>
                 ) : (
-                  workers.map(w => {
+                  <>
+                  <VirtualTableSpacer colSpan={7} height={salaryWorkerWindow.topSpacerPx} />
+                  {workers.slice(salaryWorkerWindow.startIndex, salaryWorkerWindow.endIndex).map(w => {
                     const workerAttendance = attendance.filter(a => a.workerId === w.id);
                     const workerAdvances = advances.filter(a => a.workerId === w.id);
                     const workerPayments = salaryPayments.filter(s => s.workerId === w.id);
@@ -834,20 +867,24 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                         </td>
                       </tr>
                     );
-                  })
+                  })}
+                  <VirtualTableSpacer colSpan={7} height={salaryWorkerWindow.bottomSpacerPx} />
+                  </>
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Mobile Card View (<= 768px - Requirement 4) */}
-          <div className="attendance-mobile-cards">
+          <div ref={salaryMobileWindow.containerRef} className="attendance-mobile-cards">
             {workers.length === 0 ? (
               <div className="erp-empty-cell">
                 No worker salary records available
               </div>
             ) : (
-              workers.map(w => {
+              <>
+              <VirtualListSpacer height={salaryMobileWindow.topSpacerPx} />
+              {workers.slice(salaryMobileWindow.startIndex, salaryMobileWindow.endIndex).map(w => {
                 const workerAttendance = attendance.filter(a => a.workerId === w.id);
                 const workerAdvances = advances.filter(a => a.workerId === w.id);
                 const workerPayments = salaryPayments.filter(s => s.workerId === w.id);
@@ -952,7 +989,9 @@ export const AttendanceSalaryView: React.FC<AttendanceSalaryViewProps> = ({
                     </div>
                   </div>
                 );
-              })
+              })}
+              <VirtualListSpacer height={salaryMobileWindow.bottomSpacerPx} />
+              </>
             )}
           </div>
         </div>
