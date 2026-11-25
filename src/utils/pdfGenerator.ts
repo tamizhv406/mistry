@@ -1,5 +1,6 @@
 import type { MultiTierEstimateResult } from '../domain/buildingCalculator/multiTierEstimator';
 import type { WorkerMonthlyStatement } from '../domain/salary';
+import type { SiteStockPurchaseStatement } from '../domain/stock';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { APP_NAME } from '../config/brand';
@@ -1392,6 +1393,324 @@ export function printWorkerMonthlyStatement(statement: WorkerMonthlyStatement): 
     const url = URL.createObjectURL(blob);
     const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
     if (!popup) downloadFile(blob, workerMonthlyPdfFilename(statement));
+    return true;
+  }
+}
+
+export function siteStockPurchasePdfFilename(
+  statement: Pick<SiteStockPurchaseStatement, 'projectName' | 'startDate' | 'endDate'>,
+): string {
+  const safeSite = (statement.projectName || 'site')
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32) || 'site';
+  const from = (statement.startDate || '').replace(/[^0-9-]/g, '') || 'start';
+  const to = (statement.endDate || '').replace(/[^0-9-]/g, '') || 'all';
+  return `${APP_NAME}_Stock_Purchases_${safeSite}_${from}_${to}.pdf`;
+}
+
+/**
+ * Generates an A4 PDF report of site-wise stock purchases for a selected date range,
+ * including Date, Item, Quantity, Rate, Supplier, Invoice #, Bill Photo Reference, and Total Cost.
+ */
+export function generateSiteStockPurchasePdfBlob(statement: SiteStockPurchaseStatement): Blob {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 28;
+  const contentWidth = pageWidth - margin * 2;
+  const generatedStr = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+
+  // Top Header Banner (Charcoal #1F2937 + Orange #F97316 accent bar)
+  doc.setFillColor(31, 41, 55);
+  doc.rect(margin, margin, contentWidth, 56, 'F');
+  doc.setFillColor(249, 115, 22);
+  doc.rect(margin, margin, contentWidth, 4, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text(`${APP_NAME.toUpperCase()} - SITE STOCK PURCHASE REPORT`, margin + 14, margin + 24);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(229, 231, 235);
+  doc.text(`Project: ${statement.projectName}  |  Period: ${statement.dateRangeLabel}`, margin + 14, margin + 40);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(249, 115, 22);
+  doc.text(`Generated: ${generatedStr}`, pageWidth - margin - 14, margin + 40, { align: 'right' });
+
+  // KPI Summary Strip
+  let y = margin + 68;
+  const kpis: Array<{ label: string; value: string; color: [number, number, number] }> = [
+    { label: 'Purchase Entries', value: String(statement.totalPurchases), color: [31, 41, 55] },
+    { label: 'With Bill Photo', value: String(statement.purchasesWithBillPhoto), color: [22, 163, 74] },
+    { label: 'Total Cost', value: formatPdfMoney(statement.totalCost), color: [249, 115, 22] },
+    {
+      label: 'Balance Due',
+      value: formatPdfMoney(statement.totalBalanceDue),
+      color: statement.totalBalanceDue > 0 ? [220, 38, 38] : [22, 163, 74],
+    },
+  ];
+  const gap = 8;
+  const boxW = (contentWidth - gap * (kpis.length - 1)) / kpis.length;
+  kpis.forEach((kpi, idx) => {
+    const bx = margin + idx * (boxW + gap);
+    doc.setFillColor(250, 250, 249);
+    doc.setDrawColor(231, 229, 228);
+    doc.roundedRect(bx, y, boxW, 38, 4, 4, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(87, 83, 78);
+    doc.text(kpi.label, bx + boxW / 2, y + 13, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(kpi.color[0], kpi.color[1], kpi.color[2]);
+    doc.text(kpi.value, bx + boxW / 2, y + 29, { align: 'center' });
+  });
+
+  // Itemized Purchase Table
+  y += 48;
+  const bodyRows: string[][] =
+    statement.rows.length > 0
+      ? statement.rows.map(r => [
+          formatDayShortForPdf(r.date),
+          r.itemName,
+          r.quantityDisplay,
+          formatPdfMoney(r.rate),
+          r.supplier,
+          r.invoiceNumber,
+          r.billPhotoReference,
+          formatPdfMoney(r.totalCost),
+        ])
+      : [['-', 'No stock purchases recorded in this date range.', '-', '-', '-', '-', '-', '-']];
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin, top: margin, bottom: 48 },
+    head: [['Date', 'Item', 'Qty', 'Rate', 'Supplier', 'Invoice #', 'Bill Photo Ref', 'Total']],
+    body: bodyRows,
+    foot: statement.rows.length > 0
+      ? [[
+          'TOTAL',
+          `${statement.totalPurchases} entries`,
+          '',
+          '',
+          `Paid: ${formatPdfMoney(statement.totalPaid)}`,
+          `Due: ${formatPdfMoney(statement.totalBalanceDue)}`,
+          `${statement.purchasesWithBillPhoto} bill(s)`,
+          formatPdfMoney(statement.totalCost),
+        ]]
+      : undefined,
+    styles: {
+      font: 'helvetica',
+      fontSize: 7.4,
+      cellPadding: { top: 3.5, right: 4, bottom: 3.5, left: 4 },
+      textColor: [31, 41, 55],
+      lineColor: [231, 229, 228],
+      lineWidth: 0.4,
+      overflow: 'linebreak',
+    },
+    headStyles: {
+      fillColor: [31, 41, 55],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 7.8,
+    },
+    footStyles: {
+      fillColor: [255, 247, 237],
+      textColor: [154, 52, 18],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    alternateRowStyles: {
+      fillColor: [250, 250, 249],
+    },
+    columnStyles: {
+      0: { cellWidth: 54 },
+      1: { cellWidth: 92 },
+      2: { cellWidth: 52, halign: 'right' },
+      3: { cellWidth: 52, halign: 'right' },
+      4: { cellWidth: 74 },
+      5: { cellWidth: 54 },
+      6: { cellWidth: 92 },
+      7: { cellWidth: 69, halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell: hookData => {
+      if (hookData.section !== 'body' || statement.rows.length === 0) return;
+      if (hookData.column.index === 6) {
+        const row = statement.rows[hookData.row.index];
+        if (!row) return;
+        if (!row.hasBillPhoto) {
+          hookData.cell.styles.textColor = [120, 113, 108];
+        } else if (row.billPhotoSyncStatus === 'pending' || row.billPhotoSyncStatus === 'failed') {
+          hookData.cell.styles.textColor = [180, 83, 9];
+          hookData.cell.styles.fontStyle = 'bold';
+        } else {
+          hookData.cell.styles.textColor = [22, 163, 74];
+          hookData.cell.styles.fontStyle = 'bold';
+        }
+      }
+    },
+  });
+
+  const endY = (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y + 120;
+  let sigY = Math.max(endY + 28, pageHeight - 78);
+  if (sigY + 42 > pageHeight - 28) {
+    doc.addPage();
+    sigY = margin + 32;
+  }
+
+  doc.setDrawColor(156, 163, 175);
+  doc.line(margin + 12, sigY + 22, margin + 195, sigY + 22);
+  doc.line(pageWidth - margin - 195, sigY + 22, pageWidth - margin - 12, sigY + 22);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(31, 41, 55);
+  doc.text('Site Storekeeper / Manager', margin + 103, sigY + 34, { align: 'center' });
+  doc.text('Accounts / Authorized Signatory', pageWidth - margin - 103, sigY + 34, { align: 'center' });
+
+  const totalPages = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(120, 113, 108);
+    doc.text(
+      `${APP_NAME} · ${statement.projectName} · Generated ${generatedStr}`,
+      margin,
+      pageHeight - 16,
+    );
+    doc.text(`Page ${p} of ${totalPages}`, pageWidth - margin, pageHeight - 16, { align: 'right' });
+  }
+
+  return doc.output('blob');
+}
+
+/**
+ * Builds standalone printable A4 HTML matching `generateSiteStockPurchasePdfBlob`.
+ */
+export function buildSiteStockPurchasePrintHtml(statement: SiteStockPurchaseStatement): string {
+  const generatedStr = new Date().toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const inr = (n: number) => `₹${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+  const rowsHtml =
+    statement.rows.length > 0
+      ? statement.rows
+          .map(
+            r => `
+        <tr>
+          <td>${escapeHtml(formatDayShortForPdf(r.date))}</td>
+          <td>${escapeHtml(r.itemName)}</td>
+          <td style="text-align:right">${escapeHtml(r.quantityDisplay)}</td>
+          <td style="text-align:right">${escapeHtml(inr(r.rate))}</td>
+          <td>${escapeHtml(r.supplier)}</td>
+          <td>${escapeHtml(r.invoiceNumber)}</td>
+          <td style="font-weight:${r.hasBillPhoto ? '700' : '400'};color:${!r.hasBillPhoto ? '#78716C' : r.billPhotoSyncStatus === 'pending' || r.billPhotoSyncStatus === 'failed' ? '#B45309' : '#16A34A'}">${escapeHtml(r.billPhotoReference)}</td>
+          <td style="text-align:right;font-weight:700">${escapeHtml(inr(r.totalCost))}</td>
+        </tr>`,
+          )
+          .join('')
+      : `<tr><td colspan="8" style="text-align:center;color:#57534E;padding:18px">No stock purchases recorded in this date range.</td></tr>`;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(siteStockPurchasePdfFilename(statement))}</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1F2937; margin: 0; background: #fff; font-size: 11px; }
+  .banner { background: #1F2937; color: #fff; padding: 14px 16px; border-top: 4px solid #F97316; border-radius: 6px 6px 0 0; }
+  .banner h1 { margin: 0; font-size: 15px; letter-spacing: 0.4px; }
+  .banner p { margin: 4px 0 0; font-size: 11px; color: #E5E7EB; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 12px; }
+  .kpi { border: 1px solid #E7E5E4; background: #FAFAF9; border-radius: 6px; padding: 8px; text-align: center; }
+  .kpi small { display: block; font-size: 10px; color: #57534E; }
+  .kpi strong { font-size: 14px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  th, td { border: 1px solid #E7E5E4; padding: 5px 6px; font-size: 10.5px; text-align: left; }
+  th { background: #1F2937; color: #fff; }
+  tbody tr:nth-child(even) { background: #FAFAF9; }
+  tfoot td { background: #FFF7ED; color: #9A3412; font-weight: 800; }
+  .sigs { display: flex; justify-content: space-between; margin-top: 34px; page-break-inside: avoid; }
+  .sig { width: 200px; text-align: center; border-top: 1px solid #9CA3AF; padding-top: 6px; font-weight: 700; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="banner">
+    <h1>${escapeHtml(APP_NAME.toUpperCase())} — SITE STOCK PURCHASE REPORT</h1>
+    <p>Project: ${escapeHtml(statement.projectName)} · Period: ${escapeHtml(statement.dateRangeLabel)} · Generated: ${escapeHtml(generatedStr)}</p>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><small>Purchase Entries</small><strong>${statement.totalPurchases}</strong></div>
+    <div class="kpi"><small>With Bill Photo</small><strong style="color:#16A34A">${statement.purchasesWithBillPhoto}</strong></div>
+    <div class="kpi"><small>Total Cost</small><strong style="color:#F97316">${escapeHtml(inr(statement.totalCost))}</strong></div>
+    <div class="kpi"><small>Balance Due</small><strong style="color:${statement.totalBalanceDue > 0 ? '#DC2626' : '#16A34A'}">${escapeHtml(inr(statement.totalBalanceDue))}</strong></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Rate</th><th>Supplier</th><th>Invoice #</th><th>Bill Photo Ref</th><th style="text-align:right">Total</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
+    ${statement.rows.length > 0 ? `<tfoot><tr><td colspan="4">TOTAL (${statement.totalPurchases} entries)</td><td>Paid: ${escapeHtml(inr(statement.totalPaid))}</td><td>Due: ${escapeHtml(inr(statement.totalBalanceDue))}</td><td>${statement.purchasesWithBillPhoto} bill(s)</td><td style="text-align:right">${escapeHtml(inr(statement.totalCost))}</td></tr></tfoot>` : ''}
+  </table>
+  <div class="sigs">
+    <div class="sig">Site Storekeeper / Manager</div>
+    <div class="sig">Accounts / Authorized Signatory</div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Prints the site stock purchase report cleanly via hidden iframe with PDF download/open fallback.
+ */
+export function printSiteStockPurchaseStatement(statement: SiteStockPurchaseStatement): boolean {
+  if (typeof document === 'undefined') return false;
+  const html = buildSiteStockPurchasePrintHtml(statement);
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.srcdoc = html;
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        const blob = generateSiteStockPurchasePdfBlob(statement);
+        downloadFile(blob, siteStockPurchasePdfFilename(statement));
+      } finally {
+        setTimeout(() => iframe.remove(), 60_000);
+      }
+    };
+    document.body.appendChild(iframe);
+    return true;
+  } catch {
+    const blob = generateSiteStockPurchasePdfBlob(statement);
+    const url = URL.createObjectURL(blob);
+    const popup = typeof window !== 'undefined' ? window.open(url, '_blank', 'noopener,noreferrer') : null;
+    if (!popup) downloadFile(blob, siteStockPurchasePdfFilename(statement));
     return true;
   }
 }

@@ -18,6 +18,7 @@ import type {
 } from '../../db/types';
 import { APP_NAME } from '../../config/brand';
 import { WorkerAttendancePdfModal } from '../../components/WorkerAttendancePdfModal';
+import { SiteStockPurchasePdfModal } from '../../components/SiteStockPurchasePdfModal';
 
 interface ReportsTabProps {
   site: Site;
@@ -57,6 +58,7 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isWorkerPdfOpen, setIsWorkerPdfOpen] = useState(false);
+  const [isPurchasePdfOpen, setIsPurchasePdfOpen] = useState(false);
 
   const handlePrint = () => {
     window.print();
@@ -256,6 +258,10 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => setIsPurchasePdfOpen(true)} style={{ minHeight: '44px' }}>
+            <FileText size={16} />
+            <span>Stock Purchase PDF</span>
+          </button>
           {workers.length > 0 && (
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setIsWorkerPdfOpen(true)} style={{ minHeight: '44px' }}>
               <FileText size={16} />
@@ -651,6 +657,16 @@ export const ReportsTab: React.FC<ReportsTabProps> = ({
         attendance={attendance}
         advances={advances}
         salaryPayments={salaryPayments}
+      />
+
+      <SiteStockPurchasePdfModal
+        isOpen={isPurchasePdfOpen}
+        onClose={() => setIsPurchasePdfOpen(false)}
+        sites={[site]}
+        initialSiteId={site.id}
+        allowAllSites={false}
+        materials={materials}
+        rodEntries={rodEntries}
       />
     </div>
   );

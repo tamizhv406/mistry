@@ -1474,4 +1474,115 @@
   .wpdf-kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .spdf-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .spdf-dates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------------------ Site Stock Purchase PDF Modal (Task 7) */
+.spdf-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.spdf-preset-btn {
+  min-height: 44px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong, #D6D3D1);
+  background: var(--color-surface, #FFFFFF);
+  color: var(--color-charcoal, #1F2937);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.spdf-preset-btn.is-active {
+  background: var(--color-primary, #F97316);
+  border-color: var(--color-primary, #F97316);
+  color: var(--color-on-primary, #1F2937);
+}
+
+.spdf-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.spdf-dates input[type='date'] {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-strong, #D6D3D1);
+  background: var(--color-surface, #FFFFFF);
+  color: var(--color-charcoal, #1F2937);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.spdf-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.spdf-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border, #E7E5E4);
+  font-size: 14px;
+}
+
+.spdf-row:last-child {
+  border-bottom: 0;
+}
+
+.spdf-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.spdf-row-top strong {
+  color: var(--color-charcoal, #1F2937);
+  overflow-wrap: anywhere;
+}
+
+.spdf-row-total {
+  flex: 0 0 auto;
+  font-weight: 800;
+  color: var(--color-charcoal, #1F2937);
+}
+
+.spdf-row-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 14px;
+  color: var(--color-text-muted, #57534E);
+}
+
+.spdf-row-photo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--color-text-muted, #57534E);
+  overflow-wrap: anywhere;
+}
+
+.spdf-row-photo.has-photo {
+  color: var(--color-success-text, #166534);
+  font-weight: 600;
 }

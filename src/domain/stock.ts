@@ -578,3 +578,239 @@ export function compatibleUnits(category: string, itemUnit: string, offered: rea
   const units = Array.from(new Set(offered.filter(u => unitDefinition(category, u).family === family)));
   return units.length ? units : [itemUnit];
 }
+
+export interface SiteStockPurchaseRow {
+  id: string;
+  recordTable: 'materials' | 'rodEntries';
+  siteId: string;
+  date: string;
+  dateFormatted: string;
+  createdAt: string;
+  itemName: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  quantityDisplay: string;
+  rate: number;
+  supplier: string;
+  invoiceNumber: string;
+  billPhotoReference: string;
+  hasBillPhoto: boolean;
+  billPhotoSyncStatus?: BillPhotoSyncStatus;
+  billPhotoPath?: string;
+  billPhotoLocalDataUrl?: string;
+  billPhotoName?: string;
+  totalCost: number;
+  paidAmount: number;
+  balanceDue: number;
+  extraPaid: number;
+}
+
+export interface SiteStockPurchaseStatement {
+  projectId: string;
+  projectName: string;
+  startDate: string;
+  endDate: string;
+  dateRangeLabel: string;
+  rows: SiteStockPurchaseRow[];
+  totalPurchases: number;
+  purchasesWithBillPhoto: number;
+  totalCost: number;
+  totalPaid: number;
+  totalBalanceDue: number;
+  totalExtraPaid: number;
+  excludedVoidedCount: number;
+}
+
+export function formatBillPhotoReference(record: {
+  billPhotoPath?: string;
+  billPhotoLocalDataUrl?: string;
+  billPhotoSyncStatus?: BillPhotoSyncStatus;
+  billPhotoName?: string;
+}): { hasBillPhoto: boolean; billPhotoReference: string } {
+  const path = (record.billPhotoPath || '').trim();
+  const local = (record.billPhotoLocalDataUrl || '').trim();
+  const name = (record.billPhotoName || '').trim();
+
+  if (!path && !local) {
+    return { hasBillPhoto: false, billPhotoReference: 'None' };
+  }
+
+  if (path) {
+    const fileRef = path.split('/').pop() || path;
+    if (name && name !== fileRef) {
+      return { hasBillPhoto: true, billPhotoReference: `${name} (${fileRef})` };
+    }
+    return { hasBillPhoto: true, billPhotoReference: `Cloud: ${fileRef}` };
+  }
+
+  const syncLabel = record.billPhotoSyncStatus === 'failed' ? 'Retry needed' : 'Pending sync';
+  return {
+    hasBillPhoto: true,
+    billPhotoReference: name ? `${name} (${syncLabel})` : `Attached (${syncLabel})`,
+  };
+}
+
+/**
+ * Builds a deterministic site-wise stock purchase statement for `[startDate, endDate]`.
+ * Includes both standard materials and steel/rod entries, excluding soft-deleted / voided records
+ * from active cost totals so figures match the Stock & Materials ledger 100%.
+ */
+export function buildSiteStockPurchaseStatement(params: {
+  projectId: string;
+  projectName: string;
+  startDate?: string;
+  endDate?: string;
+  materials: Material[];
+  rods: RodEntry[];
+}): SiteStockPurchaseStatement {
+  const { projectId, projectName } = params;
+  const startDate = (params.startDate || '').trim().slice(0, 10);
+  const endDate = (params.endDate || '').trim().slice(0, 10);
+
+  const inSite = (siteId: string | undefined) =>
+    !projectId || projectId === 'all' || siteId === projectId;
+  const inDateRange = (date: string) => {
+    if (startDate && (!date || date < startDate)) return false;
+    if (endDate && (!date || date > endDate)) return false;
+    return true;
+  };
+  const isVoidedOrDeleted = (row: { isDeleted?: boolean; voided?: boolean }) =>
+    Boolean(row.isDeleted || row.voided);
+
+  const rows: SiteStockPurchaseRow[] = [];
+  let excludedVoidedCount = 0;
+
+  for (const m of params.materials) {
+    if (!inSite(m.siteId)) continue;
+    const date = purchaseDay(m.purchaseDate, m.createdAt);
+    if (!inDateRange(date)) continue;
+    if (isVoidedOrDeleted(m as Material & { voided?: boolean })) {
+      excludedVoidedCount += 1;
+      continue;
+    }
+
+    const baseName = (m.materialName || m.category || 'Material').trim();
+    const brand = (m.brand || '').trim();
+    const itemName = brand && !baseName.toLowerCase().includes(brand.toLowerCase())
+      ? `${brand} ${baseName}`
+      : baseName;
+
+    const quantity = round3(Number(m.quantity) || 0);
+    const unit = (m.unit || 'Unit').trim();
+    const rate = round2(Number(m.rate ?? (m as { unitPrice?: number }).unitPrice) || 0);
+    const totalCost = round2(purchaseAmount(m.totalAmount, m.quantity, rate));
+    const paidAmount = round2(Math.max(0, Number(m.paidAmount) || 0));
+    const balanceDue = round2(
+      Number.isFinite(Number(m.balance))
+        ? Math.max(0, Number(m.balance))
+        : Math.max(0, totalCost - paidAmount),
+    );
+    const extraPaid = round2(Math.max(0, Number(m.extraPaid) || 0));
+    const photoRef = formatBillPhotoReference(m);
+
+    rows.push({
+      id: m.id,
+      recordTable: 'materials',
+      siteId: m.siteId,
+      date,
+      dateFormatted: date ? formatDay(date) : '—',
+      createdAt: m.createdAt || '',
+      itemName,
+      category: m.category,
+      quantity,
+      unit,
+      quantityDisplay: `${quantity.toLocaleString('en-IN', { maximumFractionDigits: 3 })} ${unit}`.trim(),
+      rate,
+      supplier: (m.supplier || '').trim() || '—',
+      invoiceNumber: (m.invoiceNumber || '').trim() || '—',
+      billPhotoReference: photoRef.billPhotoReference,
+      hasBillPhoto: photoRef.hasBillPhoto,
+      billPhotoSyncStatus: m.billPhotoSyncStatus,
+      billPhotoPath: m.billPhotoPath,
+      billPhotoLocalDataUrl: m.billPhotoLocalDataUrl,
+      billPhotoName: m.billPhotoName,
+      totalCost,
+      paidAmount,
+      balanceDue,
+      extraPaid,
+    });
+  }
+
+  for (const r of params.rods) {
+    if (!inSite(r.siteId)) continue;
+    const date = purchaseDay(r.purchaseDate, r.createdAt);
+    if (!inDateRange(date)) continue;
+    if (isVoidedOrDeleted(r as RodEntry & { voided?: boolean })) {
+      excludedVoidedCount += 1;
+      continue;
+    }
+
+    const quantity = round3(Number(r.weightKg) || 0);
+    const unit = 'kg';
+    const rate = round2(Number(r.ratePerKg ?? (r as { pricePerKg?: number }).pricePerKg) || 0);
+    const totalCost = round2(purchaseAmount(r.totalAmount, r.weightKg, rate));
+    const paidAmount = round2(Math.max(0, Number(r.paidAmount) || 0));
+    const balanceDue = round2(
+      Number.isFinite(Number(r.balance))
+        ? Math.max(0, Number(r.balance))
+        : Math.max(0, totalCost - paidAmount),
+    );
+    const extraPaid = round2(Math.max(0, Number(r.extraPaid) || 0));
+    const photoRef = formatBillPhotoReference(r);
+
+    rows.push({
+      id: r.id,
+      recordTable: 'rodEntries',
+      siteId: r.siteId,
+      date,
+      dateFormatted: date ? formatDay(date) : '—',
+      createdAt: r.createdAt || '',
+      itemName: rodItemName(r),
+      category: 'rod',
+      quantity,
+      unit,
+      quantityDisplay: `${quantity.toLocaleString('en-IN', { maximumFractionDigits: 3 })} kg`,
+      rate,
+      supplier: (r.supplier || '').trim() || '—',
+      invoiceNumber: (r.invoiceNumber || '').trim() || '—',
+      billPhotoReference: photoRef.billPhotoReference,
+      hasBillPhoto: photoRef.hasBillPhoto,
+      billPhotoSyncStatus: r.billPhotoSyncStatus,
+      billPhotoPath: r.billPhotoPath,
+      billPhotoLocalDataUrl: r.billPhotoLocalDataUrl,
+      billPhotoName: r.billPhotoName,
+      totalCost,
+      paidAmount,
+      balanceDue,
+      extraPaid,
+    });
+  }
+
+  rows.sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+
+  const dateRangeLabel =
+    startDate && endDate
+      ? `${formatDay(startDate)} to ${formatDay(endDate)}`
+      : startDate
+        ? `From ${formatDay(startDate)}`
+        : endDate
+          ? `Up to ${formatDay(endDate)}`
+          : 'All Dates';
+
+  return {
+    projectId,
+    projectName: projectName || (projectId === 'all' ? 'All Projects (Combined)' : 'Project'),
+    startDate,
+    endDate,
+    dateRangeLabel,
+    rows,
+    totalPurchases: rows.length,
+    purchasesWithBillPhoto: rows.filter(r => r.hasBillPhoto).length,
+    totalCost: round2(rows.reduce((s, r) => s + r.totalCost, 0)),
+    totalPaid: round2(rows.reduce((s, r) => s + r.paidAmount, 0)),
+    totalBalanceDue: round2(rows.reduce((s, r) => s + r.balanceDue, 0)),
+    totalExtraPaid: round2(rows.reduce((s, r) => s + r.extraPaid, 0)),
+    excludedVoidedCount,
+  };
+}

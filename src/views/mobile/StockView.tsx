@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, ChevronDown, ChevronRight, MoreHorizontal,
+  ArrowDownCircle, ArrowLeft, ArrowUpCircle, BookOpen, ChevronDown, ChevronRight, FileText, MoreHorizontal,
   Package, Plus, RotateCcw, SlidersHorizontal, Trash2,
 } from 'lucide-react';
 import { db } from '../../db/db';
@@ -22,6 +22,7 @@ import {
   BillPhotoViewerModal,
   type BillPhotoRecordRef,
 } from '../../components/BillPhotoComponents';
+import { SiteStockPurchasePdfModal } from '../../components/SiteStockPurchasePdfModal';
 import { attachBillPhotoToPurchase, type CompressedBillPhoto } from '../../services/billPhotoService';
 import {
   ensureCatalogSeeded, recordPurchase, recordStockMovement, removeCatalogItem, saveCatalogItem, setLowStockLevel, voidStockMovement,
@@ -62,6 +63,10 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
   const [chooser, setChooser] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [purchasePdfOpen, setPurchasePdfOpen] = useState(false);
+  const allSites = useLiveQuery(() => db.sites.filter(s => !s.isDeleted).toArray(), []);
+  const allMaterials = useLiveQuery(() => db.materials.filter(m => !m.isDeleted).toArray(), []);
+  const allRods = useLiveQuery(() => db.rodEntries.filter(r => !r.isDeleted).toArray(), []);
 
   useEffect(() => {
     ensureCatalogSeeded().catch(() => onNotify('Could not load the material catalog.', 'error'));
@@ -105,9 +110,14 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
       className="stk-screen"
       onBack={onBack}
       right={
-        <button type="button" className="m-icon-btn is-bordered" onClick={() => setCatalogOpen(true)} aria-label="Material catalog">
-          <BookOpen size={20} />
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="m-icon-btn is-bordered" onClick={() => setPurchasePdfOpen(true)} aria-label="Stock purchase PDF">
+            <FileText size={20} />
+          </button>
+          <button type="button" className="m-icon-btn is-bordered" onClick={() => setCatalogOpen(true)} aria-label="Material catalog">
+            <BookOpen size={20} />
+          </button>
+        </div>
       }
     >
       <div className="stk-page">
@@ -184,6 +194,9 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
               <button type="button" className="m-btn" onClick={() => setEntry({ mode: 'purchase' })}><Plus size={18} /> {t('stk_new_material', 'New material')}</button>
               <button type="button" className="m-btn" onClick={() => setChooser(true)}><MoreHorizontal size={18} /> {t('stk_other_entries', 'Other entries')}</button>
             </div>
+            <button type="button" className="m-btn is-block" style={{ marginTop: 8 }} onClick={() => setPurchasePdfOpen(true)}>
+              <FileText size={18} /> Stock Purchase PDF
+            </button>
           </>
         )}
 
@@ -242,6 +255,16 @@ export const StockView: React.FC<StockViewProps> = ({ user, siteId, onBack, onOp
         )}
 
         <CatalogSheet open={catalogOpen} user={user} catalog={catalog || []} onClose={() => setCatalogOpen(false)} onNotify={onNotify} />
+
+        <SiteStockPurchasePdfModal
+          isOpen={purchasePdfOpen}
+          onClose={() => setPurchasePdfOpen(false)}
+          sites={allSites && allSites.length > 0 ? allSites : [project.site]}
+          initialSiteId={siteId}
+          materials={allMaterials || project.materials}
+          rodEntries={allRods || project.rodEntries}
+          onNotify={onNotify}
+        />
       </div>
     </Page>
   );

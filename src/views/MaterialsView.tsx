@@ -24,6 +24,7 @@ import { RecordPurchaseModal } from '../components/RecordPurchaseModal';
 import { StockOperationModal } from '../components/StockOperationModal';
 import { MaterialIcon } from '../components/ui/CategoryIcon';
 import { BillPhotoThumbnail, BillPhotoViewerModal, type BillPhotoRecordRef } from '../components/BillPhotoComponents';
+import { SiteStockPurchasePdfModal } from '../components/SiteStockPurchasePdfModal';
 
 export interface MaterialsViewProps {
   user: User;
@@ -59,6 +60,11 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   const [stockOpItem, setStockOpItem] = useState<StockItem | null>(null);
   const [stockOpMode, setStockOpMode] = useState<'usage' | 'opening' | 'return' | 'adjust_in' | 'adjust_out' | 'transfer'>('usage');
   const [selectedBillPhoto, setSelectedBillPhoto] = useState<BillPhotoRecordRef | null>(null);
+  const [isPurchasePdfOpen, setIsPurchasePdfOpen] = useState(false);
+
+  // Full un-filtered site data so switching project inside the Purchase PDF modal works without refetching
+  const allMaterialsQuery = useLiveQuery(() => db.materials.filter(m => !m.isDeleted).toArray(), []);
+  const allRodEntriesQuery = useLiveQuery(() => db.rodEntries.filter(r => !r.isDeleted).toArray(), []);
 
   // Live queries for active data
   const materialsQuery = useLiveQuery(async () => {
@@ -256,6 +262,14 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
         {/* Global Action Buttons */}
         <div className="erp-view-actions">
+          <button
+            onClick={() => setIsPurchasePdfOpen(true)}
+            className="erp-btn-secondary"
+          >
+            <FileText size={16} color="var(--color-primary)" />
+            <span>Purchase PDF</span>
+          </button>
+
           <button
             onClick={handleExportPDF}
             className="erp-btn-secondary"
@@ -698,6 +712,16 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         record={selectedBillPhoto}
         onClose={() => setSelectedBillPhoto(null)}
         onDeleted={() => onNotify('Bill photo removed.', 'info')}
+      />
+
+      <SiteStockPurchasePdfModal
+        isOpen={isPurchasePdfOpen}
+        onClose={() => setIsPurchasePdfOpen(false)}
+        sites={sites}
+        initialSiteId={selectedSiteId}
+        materials={allMaterialsQuery || materials}
+        rodEntries={allRodEntriesQuery || rodEntries}
+        onNotify={onNotify}
       />
     </div>
   );
